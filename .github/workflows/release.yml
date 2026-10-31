@@ -1,476 +1,709 @@
-# Assemble artifacts from successful main CI on the exact annotated tag commit.
-# Registry publication, public GitHub Releases and tag mutation remain disabled.
-name: Release candidate
+# Staged Cargo and PyPI release mode. Publishers require the exact verified candidate.
+name: Publish packages
 
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing annotated vX.Y.Z tag with a verified candidate artifact
+        required: true
+        type: string
+      action:
+        description: Prepare only, publish Cargo, publish PyPI, or publish both after all candidate gates pass
+        required: true
+        default: prepare-only
+        type: choice
+        options:
+          - prepare-only
+          - cargo
+          - pypi
+          - cargo-and-pypi
+      confirmation:
+        description: For publication, enter exactly PUBLISH vX.Y.Z
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-candidate-${{ github.ref }}
+  group: package-publication
   cancel-in-progress: false
 
-env:
-  PYTHON_VERSION: "3.12.13"
-
 jobs:
-  candidate:
-    name: Verify immutable tag, exact CI evidence and package bundle
+  prepare:
+    name: Verify the exact candidate and registry state
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       actions: read
       contents: read
+    outputs:
+      tag: ${{ steps.candidate.outputs.tag }}
+      commit: ${{ steps.candidate.outputs.commit }}
+      version: ${{ steps.candidate.outputs.version }}
+      run-id: ${{ steps.candidate.outputs.run-id }}
+      artifact-id: ${{ steps.candidate.outputs.artifact-id }}
+      artifact-digest: ${{ steps.candidate.outputs.artifact-digest }}
+      publish-lifecycle: ${{ steps.registry.outputs.publish-lifecycle }}
+      publish-uvicorn-rs: ${{ steps.registry.outputs.publish-uvicorn-rs }}
+      publish-pypi: ${{ steps.registry.outputs.publish-pypi }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.tag }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: Verify remote annotated tag and synchronized versions
-        id: tag
+          python-version: "3.12.13"
+      - name: Verify the annotated tag, main ancestry, versions and explicit authorization
+        id: source
         env:
-          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_ACTION: ${{ inputs.action }}
+          RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          tag_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${GITHUB_REF_NAME}")"
-          object_type="$(jq -r '.object.type' <<< "$tag_json")"
-          object_sha="$(jq -r '.object.sha' <<< "$tag_json")"
-          test "$object_type" = tag
-          [[ "$object_sha" =~ ^[0-9a-f]{40}$ ]]
-          tag_commit="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${object_sha}" --jq '.object | select(.type == "commit") | .sha')"
-          commit="$(git rev-parse HEAD)"
-          test "$tag_commit" = "$commit"
-          # Validate the remote object even if checkout only materialized its
-          # peeled commit. Never create or move a tag to repair verification.
-          version="${GITHUB_REF_NAME#v}"
-          python scripts/check_release_version.py "$version"
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          version="${RELEASE_TAG#v}"
+          test "$(git cat-file -t "$RELEASE_TAG")" = tag
+          tag_object="$(git rev-parse "$RELEASE_TAG")"
+          remote_tag_object="$(git ls-remote --refs origin "refs/tags/$RELEASE_TAG" | awk 'NR == 1 {print $1}')"
+          test -n "$remote_tag_object"
+          test "$remote_tag_object" = "$tag_object"
+          commit="$(git rev-parse "$RELEASE_TAG^{commit}")"
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$commit" refs/remotes/origin/main
           test -z "$(git status --porcelain --untracked-files=all)"
+          python scripts/check_release_version.py "$version"
+          if [[ "$RELEASE_ACTION" != prepare-only ]]; then
+            test "$RELEASE_CONFIRMATION" = "PUBLISH $RELEASE_TAG"
+          fi
+          echo "tag-object=$tag_object" >> "$GITHUB_OUTPUT"
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
-          echo "tag-object-sha=$object_sha" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-      - name: Require successful complete main CI for this exact commit
-        id: ci-run
+      - name: Locate the one successful release-candidate run for this tag
+        id: candidate
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_COMMIT: ${{ steps.tag.outputs.commit }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          python scripts/coverage_mcp_handoff.py select-ci \
-            --repository "$GITHUB_REPOSITORY" \
-            --source "$RELEASE_COMMIT" \
-            --github-output "$GITHUB_OUTPUT"
-      - name: Select exact successful performance matrix and retained artifact
-        id: performance-run
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_COMMIT: ${{ steps.tag.outputs.commit }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_COMMIT: ${{ steps.source.outputs.commit }}
         run: |
           python - <<'PY'
           import json
           import os
           import re
-          import subprocess
           from pathlib import Path
+          from urllib.error import HTTPError
+          from urllib.request import Request, urlopen
 
           repository = os.environ["GITHUB_REPOSITORY"]
+          tag = os.environ["RELEASE_TAG"]
           commit = os.environ["RELEASE_COMMIT"]
+          token = os.environ["GH_TOKEN"]
 
-          def api(path):
-              result = subprocess.run(["gh", "api", path], check=True, capture_output=True, text=True)
-              return json.loads(result.stdout)
+          def get(path):
+              request = Request(
+                  f"https://api.github.com/repos/{repository}/{path}",
+                  headers={"Accept": "application/vnd.github+json",
+                           "Authorization": f"Bearer {token}",
+                           "X-GitHub-Api-Version": "2022-11-28"},
+              )
+              with urlopen(request, timeout=30) as response:
+                  return json.load(response)
 
-          endpoint = (f"repos/{repository}/actions/workflows/benchmark-categories.yml/runs"
-                      f"?head_sha={commit}&per_page=100")
-          runs = api(endpoint).get("workflow_runs", [])
-          runs = sorted(
-              (run for run in runs if run.get("head_sha") == commit and run.get("event") == "push"
-               and run.get("head_branch") == "main" and run.get("status") == "completed"
-               and type(run.get("run_attempt")) is int and run["run_attempt"] > 0),
-              key=lambda run: run.get("updated_at", ""), reverse=True)
-          required_jobs = {
-              "linux-x86_64 · parity and sequential categories",
-              "linux-aarch64 · parity and sequential categories",
-              "macos-arm64 · parity and sequential categories",
-              "Validate and render the multi-system evidence",
-          }
-          rejected = []
-          selected = None
+          runs = get("actions/workflows/candidate.yml/runs?per_page=100").get("workflow_runs", [])
+          candidates = []
+          artifact_name = f"uvicorn-rs-candidate-{tag}"
           for run in runs:
-              run_id = run.get("id")
-              attempt = run["run_attempt"]
-              jobs = api(f"repos/{repository}/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100").get("jobs", [])
-              successful = {job.get("name") for job in jobs
-                            if job.get("status") == "completed" and job.get("conclusion") == "success"}
-              if not required_jobs <= successful:
-                  rejected.append(f"{run_id}/{attempt}: required category or aggregate job failed")
+              if (run.get("head_sha") != commit or run.get("event") != "push"
+                      or run.get("status") != "completed" or run.get("conclusion") != "success"):
                   continue
-              artifacts = api(f"repos/{repository}/actions/runs/{run_id}/artifacts?per_page=100").get("artifacts", [])
-              expected_name = f"asgi-benchmark-matrix-{run_id}-{attempt}"
-              matches = [artifact for artifact in artifacts
-                         if artifact.get("name") == expected_name and artifact.get("expired") is False]
+              run_id = run.get("id")
+              if type(run_id) is not int or run_id <= 0:
+                  continue
+              artifacts = get(f"actions/runs/{run_id}/artifacts?per_page=100").get("artifacts", [])
+              matches = [item for item in artifacts
+                         if item.get("name") == artifact_name and item.get("expired") is False]
               if len(matches) != 1:
-                  rejected.append(f"{run_id}/{attempt}: exact aggregate artifact is missing, expired, or duplicated")
                   continue
               artifact = matches[0]
               digest = artifact.get("digest")
-              size = artifact.get("size_in_bytes")
               if (type(artifact.get("id")) is not int or artifact["id"] <= 0
-                      or type(size) is not int or size <= 0
-                      or not isinstance(digest, str) or re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is None):
-                  rejected.append(f"{run_id}/{attempt}: aggregate artifact metadata is incomplete")
+                      or not isinstance(digest, str)
+                      or re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is None):
                   continue
-              selected = {"run-id": run_id, "run-attempt": attempt,
-                          "artifact-id": artifact["id"], "artifact-name": expected_name,
-                          "artifact-size": size, "artifact-digest": digest}
-              break
+              candidates.append((run, artifact))
 
-          if selected is None:
-              detail = "; ".join(rejected[:8]) or "no completed exact-commit benchmark run was found"
-              raise SystemExit(f"no successful exact-commit three-system performance evidence: {detail}")
+          if len(candidates) != 1:
+              raise SystemExit(
+                  f"expected one successful, retained {artifact_name} artifact for {commit}; "
+                  f"found {len(candidates)}"
+              )
+          run, artifact = candidates[0]
+          values = {
+              "tag": tag,
+              "commit": commit,
+              "version": tag.removeprefix("v"),
+              "run-id": run["id"],
+              "artifact-id": artifact["id"],
+              "artifact-digest": artifact["digest"],
+          }
           with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
-              for key, value in selected.items():
+              for key, value in values.items():
                   output.write(f"{key}={value}\n")
-          print(json.dumps(selected, sort_keys=True))
+          print(json.dumps(values, sort_keys=True))
           PY
-      - name: Download the exact retained performance artifact by ID
+      - name: Download the exact candidate artifact and verify its digest
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
-          run-id: ${{ steps.performance-run.outputs.run-id }}
-          artifact-ids: ${{ steps.performance-run.outputs.artifact-id }}
-          path: target/release-candidate/evidence/performance
+          run-id: ${{ steps.candidate.outputs.run-id }}
+          artifact-ids: ${{ steps.candidate.outputs.artifact-id }}
           digest-mismatch: error
-      - name: Download package artifacts from exact successful main CI
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          github-token: ${{ github.token }}
-          run-id: ${{ steps.ci-run.outputs.run-id }}
-          pattern: uvicorn-rs-candidate-*
-          merge-multiple: true
-          path: target/release-candidate/packages
-      - name: Download normal public parity and seam-exclusion evidence
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          github-token: ${{ github.token }}
-          run-id: ${{ steps.ci-run.outputs.run-id }}
-          name: uvicorn-rs-public-parity
-          path: target/release-candidate/evidence/public
-      - name: Download the exact raw unified coverage artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ steps.ci-run.outputs.run-id }}
-          artifact-ids: ${{ steps.ci-run.outputs.artifact-id }}
-          digest-mismatch: error
-          path: target/coverage-handoff/ci-raw
-      - name: Select exactly one reviewed handoff for this source and CI attempt
-        id: coverage-handoff
+          path: target/release-candidate
+      - name: Verify candidate checksums, source and package consumers
         env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_COMMIT: ${{ steps.tag.outputs.commit }}
-          CI_RUN_ID: ${{ steps.ci-run.outputs.run-id }}
-          CI_RUN_ATTEMPT: ${{ steps.ci-run.outputs.run-attempt }}
+          RELEASE_COMMIT: ${{ steps.candidate.outputs.commit }}
+          RELEASE_VERSION: ${{ steps.candidate.outputs.version }}
+          RELEASE_ACTION: ${{ inputs.action }}
+        shell: bash
         run: |
           set -euo pipefail
-          python scripts/coverage_mcp_handoff.py select-handoff \
-            --repository "$GITHUB_REPOSITORY" \
-            --source "$RELEASE_COMMIT" \
-            --ci-run-id "$CI_RUN_ID" \
-            --ci-attempt "$CI_RUN_ATTEMPT" \
-            --github-output "$GITHUB_OUTPUT"
-      - name: Download the exact reviewed Coverage-MCP artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ steps.coverage-handoff.outputs.run-id }}
-          artifact-ids: ${{ steps.coverage-handoff.outputs.artifact-id }}
-          digest-mismatch: error
-          path: target
-      - name: Download Python minimum consumer evidence
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          github-token: ${{ github.token }}
-          run-id: ${{ steps.ci-run.outputs.run-id }}
-          name: uvicorn-rs-python-floor
-          path: target/release-candidate/evidence/python-floor
-      - name: Verify Python packages, native Rust crates and exact artifact identities
-        env:
-          RELEASE_COMMIT: ${{ steps.tag.outputs.commit }}
-          RELEASE_VERSION: ${{ steps.tag.outputs.version }}
-        run: >-
-          python scripts/verify_release_candidate.py target/release-candidate/packages
-          "$RELEASE_VERSION" "$RELEASE_COMMIT"
-          --evidence-directory target/release-candidate/evidence
-      - name: Verify raw and reviewed coverage artifacts, then run the strict offline gate
-        env:
-          RELEASE_COMMIT: ${{ steps.tag.outputs.commit }}
-          CI_RUN_ID: ${{ steps.ci-run.outputs.run-id }}
-          CI_RUN_ATTEMPT: ${{ steps.ci-run.outputs.run-attempt }}
-          RAW_ARTIFACT_ID: ${{ steps.ci-run.outputs.artifact-id }}
-          RAW_ARTIFACT_NAME: ${{ steps.ci-run.outputs.artifact-name }}
-          RAW_ARTIFACT_SIZE: ${{ steps.ci-run.outputs.artifact-size }}
-          RAW_ARTIFACT_DIGEST: ${{ steps.ci-run.outputs.artifact-digest }}
-          HANDOFF_RUN_ID: ${{ steps.coverage-handoff.outputs.run-id }}
-          HANDOFF_RUN_ATTEMPT: ${{ steps.coverage-handoff.outputs.run-attempt }}
-          HANDOFF_ARTIFACT_ID: ${{ steps.coverage-handoff.outputs.artifact-id }}
-          HANDOFF_ARTIFACT_NAME: ${{ steps.coverage-handoff.outputs.artifact-name }}
-          HANDOFF_ARTIFACT_SIZE: ${{ steps.coverage-handoff.outputs.artifact-size }}
-          HANDOFF_ARTIFACT_DIGEST: ${{ steps.coverage-handoff.outputs.artifact-digest }}
-        run: |
-          set -euo pipefail
-          mkdir -p target/release-candidate/evidence/coverage
-          python scripts/coverage_mcp_handoff.py verify \
-            --manifest target/coverage-handoff/handoff.json \
-            --source "$RELEASE_COMMIT" \
-            --ci-run-id "$CI_RUN_ID" \
-            --ci-attempt "$CI_RUN_ATTEMPT" \
-            --raw-artifact-id "$RAW_ARTIFACT_ID" \
-            --raw-artifact-name "$RAW_ARTIFACT_NAME" \
-            --raw-artifact-size "$RAW_ARTIFACT_SIZE" \
-            --raw-artifact-digest "$RAW_ARTIFACT_DIGEST" \
-            --ci-raw-root target/coverage-handoff/ci-raw \
-            --review-root target/asgi-coverage \
-            --handoff-run-id "$HANDOFF_RUN_ID" \
-            --handoff-attempt "$HANDOFF_RUN_ATTEMPT" \
-            --handoff-artifact-id "$HANDOFF_ARTIFACT_ID" \
-            --handoff-artifact-name "$HANDOFF_ARTIFACT_NAME" \
-            --handoff-artifact-size "$HANDOFF_ARTIFACT_SIZE" \
-            --handoff-artifact-digest "$HANDOFF_ARTIFACT_DIGEST" \
-            --selection-output target/release-candidate/evidence/coverage/handoff-selection.json
+          cd target/release-candidate
+          sha256sum --check --strict SHA256SUMS
+          cd ../..
+          mkdir -p target/asgi-coverage
+          cp -a target/release-candidate/evidence/coverage/reviewed/. target/asgi-coverage/
           python scripts/check_ci_evidence.py coverage \
             target/asgi-coverage/coverage-report.json --offline --require-clean
-          cp -a target/asgi-coverage \
-            target/release-candidate/evidence/coverage/reviewed
-          cp target/coverage-handoff/raw-inventory.json \
-            target/release-candidate/evidence/coverage/raw-inventory.json
-          cp target/coverage-handoff/handoff.json \
-            target/release-candidate/evidence/coverage/handoff.json
-      - name: Enforce exact-source performance acceptance
-        env:
-          RELEASE_COMMIT: ${{ steps.tag.outputs.commit }}
-          PERFORMANCE_RUN_ID: ${{ steps.performance-run.outputs.run-id }}
-          PERFORMANCE_RUN_ATTEMPT: ${{ steps.performance-run.outputs.run-attempt }}
-          PERFORMANCE_ARTIFACT_ID: ${{ steps.performance-run.outputs.artifact-id }}
-          PERFORMANCE_ARTIFACT_NAME: ${{ steps.performance-run.outputs.artifact-name }}
-          PERFORMANCE_ARTIFACT_SIZE: ${{ steps.performance-run.outputs.artifact-size }}
-          PERFORMANCE_ARTIFACT_DIGEST: ${{ steps.performance-run.outputs.artifact-digest }}
-        run: |
-          set -euo pipefail
-          native_sha="$(python -c 'import json; from pathlib import Path; print(json.loads(Path("target/release-candidate/evidence/public/normal-audit/receipt.json").read_text())["native_extension_sha256"])')"
-          python scripts/verify_performance_acceptance.py \
-            target/release-candidate/evidence/performance \
-            docs/performance-acceptance.json \
-            --repository "$GITHUB_REPOSITORY" \
-            --expected-commit "$RELEASE_COMMIT" \
-            --run-id "$PERFORMANCE_RUN_ID" \
-            --run-attempt "$PERFORMANCE_RUN_ATTEMPT" \
-            --artifact-id "$PERFORMANCE_ARTIFACT_ID" \
-            --artifact-name "$PERFORMANCE_ARTIFACT_NAME" \
-            --artifact-size "$PERFORMANCE_ARTIFACT_SIZE" \
-            --artifact-digest "$PERFORMANCE_ARTIFACT_DIGEST" \
-            --expected-native-sha256 "$native_sha" \
-            --receipt target/release-candidate/performance-acceptance.json
-      - name: Recheck retained complete coverage and parity evidence
-        run: |
-          python scripts/check_ci_evidence.py parity target/release-candidate/evidence/public/asgi-parity/result.json --offline --require-clean
-      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # reviewed Rust toolchain action
-        with:
-          toolchain: "1.85.0"
-      - name: Build the extracted Cargo archives as a standalone HTTP/3 consumer
-        env:
-          RELEASE_COMMIT: ${{ steps.tag.outputs.commit }}
-          RELEASE_VERSION: ${{ steps.tag.outputs.version }}
-        run: >-
-          python scripts/run_standalone_h3_consumer.py
-          target/release-candidate/packages "$RELEASE_VERSION" "$RELEASE_COMMIT"
-          target/release-candidate/evidence/standalone-h3-consumer.json
-      - name: Confirm CI was not rerun during candidate assembly
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_COMMIT: ${{ steps.tag.outputs.commit }}
-          RELEASE_CI_RUN: ${{ steps.ci-run.outputs.run-id }}
-          RELEASE_CI_ATTEMPT: ${{ steps.ci-run.outputs.run-attempt }}
-        run: |
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RELEASE_CI_RUN}" > "$RUNNER_TEMP/uvicorn-rs-ci-run.json"
-          python - <<'PY'
+          python - "$RELEASE_VERSION" "$RELEASE_COMMIT" <<'PY'
+          import hashlib
           import json
           import os
+          import sys
           from pathlib import Path
-          run = json.loads((Path(os.environ["RUNNER_TEMP"]) / "uvicorn-rs-ci-run.json").read_text())
-          expected = {"id": int(os.environ["RELEASE_CI_RUN"]), "run_attempt": int(os.environ["RELEASE_CI_ATTEMPT"]),
-                      "head_sha": os.environ["RELEASE_COMMIT"], "event": "push", "head_branch": "main",
-                      "status": "completed", "conclusion": "success"}
-          if any(run.get(key) != value for key, value in expected.items()):
-              raise SystemExit("CI identity/status changed during candidate assembly")
-          PY
-      - name: Revalidate the selected performance run and artifact
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_COMMIT: ${{ steps.tag.outputs.commit }}
-          PERFORMANCE_RUN_ID: ${{ steps.performance-run.outputs.run-id }}
-          PERFORMANCE_RUN_ATTEMPT: ${{ steps.performance-run.outputs.run-attempt }}
-          PERFORMANCE_ARTIFACT_ID: ${{ steps.performance-run.outputs.artifact-id }}
-          PERFORMANCE_ARTIFACT_NAME: ${{ steps.performance-run.outputs.artifact-name }}
-          PERFORMANCE_ARTIFACT_SIZE: ${{ steps.performance-run.outputs.artifact-size }}
-          PERFORMANCE_ARTIFACT_DIGEST: ${{ steps.performance-run.outputs.artifact-digest }}
-        run: |
-          python - <<'PY'
-          import json
-          import os
-          import subprocess
 
-          repository = os.environ["GITHUB_REPOSITORY"]
+          version, commit = sys.argv[1:]
+          candidate = json.loads(Path("target/release-candidate/candidate.json").read_text())
+          if (candidate.get("schema") != "uvicorn-rs-release-candidate@3"
+                  or candidate.get("state") != "verified candidate; publication disabled"
+                  or candidate.get("version") != version
+                  or candidate.get("commit") != commit
+                  or candidate.get("tag") != f"v{version}"):
+              raise SystemExit("candidate manifest does not bind the requested tag, version and source commit")
 
-          def api(path):
-              result = subprocess.run(["gh", "api", path], check=True, capture_output=True, text=True)
-              return json.loads(result.stdout)
-
-          run_id = os.environ["PERFORMANCE_RUN_ID"]
-          attempt = int(os.environ["PERFORMANCE_RUN_ATTEMPT"])
-          run = api(f"repos/{repository}/actions/runs/{run_id}")
-          expected_run = {"id": int(run_id), "run_attempt": attempt,
-                          "head_sha": os.environ["RELEASE_COMMIT"], "event": "push",
-                          "head_branch": "main", "status": "completed"}
-          if any(run.get(key) != value for key, value in expected_run.items()):
-              raise SystemExit("selected performance run identity changed during candidate assembly")
-
-          jobs = api(f"repos/{repository}/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100").get("jobs", [])
-          expected_jobs = {
-              "linux-x86_64 · parity and sequential categories",
-              "linux-aarch64 · parity and sequential categories",
-              "macos-arm64 · parity and sequential categories",
-              "Validate and render the multi-system evidence",
+          root = Path("target/release-candidate/evidence")
+          selection_path = root / "coverage/handoff-selection.json"
+          selection = json.loads(selection_path.read_text())
+          coverage = candidate.get("coverage", {})
+          expected_coverage = {
+              "selection_sha256": hashlib.sha256(selection_path.read_bytes()).hexdigest(),
+              "handoff_manifest_sha256": selection.get("handoff_manifest_sha256"),
+              "reviewed_report_sha256": selection.get("reviewed_report_sha256"),
+              "coverage_mcp_receipt_sha256": selection.get("coverage_mcp_receipt_sha256"),
+              "handoff_artifact": selection.get("handoff_artifact"),
           }
-          successful = {job.get("name") for job in jobs
-                        if job.get("status") == "completed" and job.get("conclusion") == "success"}
-          if not expected_jobs <= successful:
-              raise SystemExit("selected performance run no longer has successful platform and aggregate jobs")
-
-          artifacts = api(f"repos/{repository}/actions/runs/{run_id}/artifacts?per_page=100").get("artifacts", [])
-          matches = [item for item in artifacts if item.get("id") == int(os.environ["PERFORMANCE_ARTIFACT_ID"])]
-          expected_artifact = {
-              "name": os.environ["PERFORMANCE_ARTIFACT_NAME"],
-              "size_in_bytes": int(os.environ["PERFORMANCE_ARTIFACT_SIZE"]),
-              "digest": os.environ["PERFORMANCE_ARTIFACT_DIGEST"],
-              "expired": False,
-          }
-          if len(matches) != 1 or any(matches[0].get(key) != value for key, value in expected_artifact.items()):
-              raise SystemExit("selected performance artifact metadata changed during candidate assembly")
-          print(json.dumps({"run_id": run_id, "run_attempt": attempt,
-                            "artifact_id": matches[0]["id"], "digest": matches[0]["digest"]}, sort_keys=True))
+          if (selection.get("schema") != "uvicorn-rs-coverage-mcp-selection@1"
+                  or selection.get("source_commit") != commit
+                  or selection.get("ci_run") != {"id": int(candidate["ci_run_id"]),
+                                                  "attempt": int(candidate["ci_run_attempt"]),
+                                                  "branch": "main", "event": "push"}
+                  or coverage != expected_coverage):
+              raise SystemExit("candidate Coverage-MCP evidence is missing or differs from its selection receipt")
+          receipt_path = root / "standalone-h3-consumer.json"
+          cargo_requested = os.environ["RELEASE_ACTION"] in {"cargo", "cargo-and-pypi"}
+          if cargo_requested and receipt_path.is_file():
+              receipt = json.loads(receipt_path.read_text())
+              archive = Path("target/release-candidate/packages") / f"uvicorn-rs-{version}.crate"
+              import hashlib
+              archive_sha256 = hashlib.sha256(archive.read_bytes()).hexdigest()
+              required = {
+                  "schema": "uvicorn-rs-standalone-h3-consumer@1",
+                  "status": "passed",
+                  "source_commit": commit,
+                  "source_dirty": False,
+                  "crate_sha256": archive_sha256,
+                  "archive_sha256s": {
+                      f"{package}-{version}.crate": hashlib.sha256(
+                          (Path("target/release-candidate/packages") / f"{package}-{version}.crate").read_bytes()
+                      ).hexdigest()
+                      for package in ("asgi-lifespan-protocol-rs", "uvicorn-rs")
+                  },
+                  "input_case_id": "http3.truncated-data-frame-recovery-after-protocol-error",
+                  "registry_dependencies": ["asgi-lifespan-protocol-rs"],
+                  "dependency_source": "exact-candidate-crate-archives",
+                  "workspace_h3_patch": False,
+                  "expected_h3_error_code": 262,
+                  "observed_h3_error_code": 262,
+                  "follow_up_connection_reused": False,
+                  "follow_up_request_status": 200,
+              }
+              if any(receipt.get(key) != value for key, value in required.items()):
+                  raise SystemExit("standalone H3 consumer receipt is incomplete or mismatched")
+          elif cargo_requested and os.environ["RELEASE_ACTION"] != "prepare-only":
+              raise SystemExit("publication is blocked: exact-archive standalone H3 consumer evidence is missing")
+          elif not cargo_requested and os.environ["RELEASE_ACTION"] != "prepare-only":
+              print("Cargo was not selected; standalone H3 archive evidence is not a PyPI gate")
           PY
-      - name: Bind the assembled bundle to the successful CI run
+          rm -rf target/publication-recheck
+          mkdir -p target/publication-recheck/packages target/publication-recheck/evidence
+          cp -R target/release-candidate/packages/. target/publication-recheck/packages/
+          cp -R target/release-candidate/evidence/. target/publication-recheck/evidence/
+          python scripts/verify_release_candidate.py \
+            target/publication-recheck/packages "$RELEASE_VERSION" "$RELEASE_COMMIT" \
+            --evidence-directory target/publication-recheck/evidence
+      - name: Check immutable registry versions without credentials
+        id: registry
         env:
-          RELEASE_COMMIT: ${{ steps.tag.outputs.commit }}
-          RELEASE_VERSION: ${{ steps.tag.outputs.version }}
-          RELEASE_TAG_OBJECT: ${{ steps.tag.outputs.tag-object-sha }}
-          RELEASE_CI_RUN: ${{ steps.ci-run.outputs.run-id }}
-          RELEASE_CI_ATTEMPT: ${{ steps.ci-run.outputs.run-attempt }}
-          PERFORMANCE_RUN_ID: ${{ steps.performance-run.outputs.run-id }}
-          PERFORMANCE_RUN_ATTEMPT: ${{ steps.performance-run.outputs.run-attempt }}
-          PERFORMANCE_ARTIFACT_ID: ${{ steps.performance-run.outputs.artifact-id }}
+          RELEASE_ACTION: ${{ inputs.action }}
+          RELEASE_VERSION: ${{ steps.candidate.outputs.version }}
         run: |
           python - <<'PY'
           import hashlib
           import json
           import os
           from pathlib import Path
+          from urllib.error import HTTPError
+          from urllib.request import Request, urlopen
+
+          action = os.environ["RELEASE_ACTION"]
+          version = os.environ["RELEASE_VERSION"]
           root = Path("target/release-candidate")
-          performance_path = root / "performance-acceptance.json"
-          performance = json.loads(performance_path.read_text())
-          coverage_selection_path = root / "evidence/coverage/handoff-selection.json"
-          coverage = json.loads(coverage_selection_path.read_text())
-          if (performance.get("status") != "verified"
-                  or performance.get("workflow_run_id") != os.environ["PERFORMANCE_RUN_ID"]
-                  or performance.get("workflow_run_attempt") != int(os.environ["PERFORMANCE_RUN_ATTEMPT"])
-                  or performance.get("artifact_id") != int(os.environ["PERFORMANCE_ARTIFACT_ID"])):
-              raise SystemExit("performance receipt differs from the selected exact-run artifact")
-          if (coverage.get("schema") != "uvicorn-rs-coverage-mcp-selection@1"
-                  or coverage.get("source_commit") != os.environ["RELEASE_COMMIT"]
-                  or coverage.get("ci_run") != {"id": int(os.environ["RELEASE_CI_RUN"]),
-                                                 "attempt": int(os.environ["RELEASE_CI_ATTEMPT"]),
-                                                 "branch": "main", "event": "push"}
-                  or coverage.get("reviewed_report_sha256") is None
-                  or coverage.get("coverage_mcp_receipt_sha256") is None):
-              raise SystemExit("coverage selection receipt differs from the exact source or CI artifact")
-          record = {"schema": "uvicorn-rs-release-candidate@3", "state": "verified candidate; publication disabled",
-                    "commit": os.environ["RELEASE_COMMIT"], "version": os.environ["RELEASE_VERSION"],
-                    "ci_run_id": os.environ["RELEASE_CI_RUN"], "ci_run_attempt": os.environ["RELEASE_CI_ATTEMPT"],
-                    "tag": os.environ["GITHUB_REF_NAME"],
-                    "tag_object_sha": os.environ["RELEASE_TAG_OBJECT"],
-                    "coverage": {"selection_sha256": hashlib.sha256(coverage_selection_path.read_bytes()).hexdigest(),
-                                 "handoff_manifest_sha256": coverage["handoff_manifest_sha256"],
-                                 "reviewed_report_sha256": coverage["reviewed_report_sha256"],
-                                 "coverage_mcp_receipt_sha256": coverage["coverage_mcp_receipt_sha256"],
-                                 "handoff_artifact": coverage["handoff_artifact"]},
-                    "performance": {"decision": performance["decision"],
-                                    "receipt_sha256": hashlib.sha256(performance_path.read_bytes()).hexdigest(),
-                                    "review_sha256": performance["review_sha256"],
-                                    "workflow_run_id": performance["workflow_run_id"],
-                                    "workflow_run_attempt": performance["workflow_run_attempt"],
-                                    "artifact_id": performance["artifact_id"],
-                                    "artifact_tree_sha256": performance["artifact_tree_sha256"]}}
-          (root / "candidate.json").write_text(json.dumps(record, indent=2) + "\n")
-          files = sorted(path for path in root.rglob("*") if path.is_file())
-          (root / "SHA256SUMS").write_text("".join(
-              f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(root).as_posix()}\n"
-              for path in files))
+          packages = root / "packages"
+          crate_names = (
+              "asgi-lifespan-protocol-rs", "uvicorn-rs",
+          )
+
+          def remote_json(url, user_agent):
+              request = Request(url, headers={"User-Agent": user_agent, "Accept": "application/json"})
+              try:
+                  with urlopen(request, timeout=30) as response:
+                      return response.status, json.load(response)
+              except HTTPError as error:
+                  if error.code == 404:
+                      return 404, None
+                  raise
+
+          def check_crate(name):
+              archive = packages / f"{name}-{version}.crate"
+              digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+              status, payload = remote_json(
+                  f"https://crates.io/api/v1/crates/{name}/{version}",
+                  "uvicorn-rs-release-preflight",
+              )
+              if status == 404:
+                  return True
+              actual = payload.get("version", {}).get("checksum") if payload else None
+              if actual != digest:
+                  raise SystemExit(f"crates.io already contains {name} {version} with different bytes")
+              return False
+
+          def check_crate_exists(name):
+              status, payload = remote_json(
+                  f"https://crates.io/api/v1/crates/{name}",
+                  "uvicorn-rs-release-preflight",
+              )
+              if status == 404:
+                  return False
+              actual_name = payload.get("crate", {}).get("id") if payload else None
+              if actual_name != name:
+                  raise SystemExit(f"crates.io returned an unexpected package identity for {name}")
+              return True
+
+          def check_pypi():
+              expected = {}
+              for path in packages.iterdir():
+                  if path.suffix == ".whl" or path.name.endswith(".tar.gz"):
+                      expected[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
+              if len(expected) != 4:
+                  raise SystemExit(f"expected exactly three wheels and one sdist, found {len(expected)}")
+              status, payload = remote_json(
+                  f"https://pypi.org/pypi/uvicorn-rs/{version}/json",
+                  "uvicorn-rs-release-preflight",
+              )
+              if status == 404:
+                  return True
+              files = payload.get("urls", []) if payload else []
+              actual = {item.get("filename"): item.get("digests", {}).get("sha256") for item in files}
+              if actual != expected:
+                  raise SystemExit("PyPI already contains this version with a partial or different distribution set")
+              return False
+
+          cargo_selected = action in {"cargo", "cargo-and-pypi"}
+          pypi_selected = action in {"pypi", "cargo-and-pypi"}
+          inspect_all = action == "prepare-only"
+          crate_absent = {}
+          crate_exists = {}
+          pypi_absent = None
+          if cargo_selected or inspect_all:
+              crate_exists = {name: check_crate_exists(name) for name in crate_names}
+              crate_absent = {name: check_crate(name) for name in crate_names}
+          if pypi_selected or inspect_all:
+              pypi_absent = check_pypi()
+
+          first_crates = [name for name in crate_names if not crate_exists[name]]
+          if cargo_selected and first_crates:
+              names = ", ".join(first_crates)
+              raise SystemExit(
+                  f"{names} require a first crates.io publication. Trusted Publishing "
+                  "cannot create a crate's initial version. Publish the exact CI-verified "
+                  "crate locally from a clean checkout with a short-lived publish-new "
+                  "token; after registry visibility, rerun this workflow and verify "
+                  "the exact crate checksum before any automated upload."
+              )
+
+          publish_lifecycle = cargo_selected and crate_absent[crate_names[0]]
+          publish_server = cargo_selected and crate_absent[crate_names[1]]
+          publish_pypi = pypi_selected and pypi_absent
+          registry_state = {
+              "version": version,
+              "crates_io": {
+                  "packages": {
+                      name: ("exists" if exists else "first_publish_required")
+                      for name, exists in crate_exists.items()
+                  },
+                  "versions": {
+                      name: ("version_absent" if absent else "published_identical")
+                      for name, absent in crate_absent.items()
+                  },
+              } if crate_absent else "not_checked",
+              "pypi": ("version_absent" if pypi_absent else "published_identical")
+              if pypi_absent is not None else "not_checked",
+          }
+          print("Registry preflight: " + json.dumps(registry_state, sort_keys=True))
+          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
+              summary.write("### Candidate registry state\n\n")
+              summary.write("```json\n")
+              summary.write(json.dumps(registry_state, indent=2, sort_keys=True))
+              summary.write("\n```\n")
+              if action == "prepare-only":
+                  summary.write("\nPrepare-only checks registry identity and hashes; publisher jobs remain disabled.\n")
+          values = {
+              "publish-lifecycle": str(publish_lifecycle).lower(),
+              "publish-uvicorn-rs": str(publish_server).lower(),
+              "publish-pypi": str(publish_pypi).lower(),
+          }
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              for key, value in values.items():
+                  output.write(f"{key}={value}\n")
+          print(json.dumps(values, sort_keys=True))
           PY
-      - name: Revalidate selected Coverage-MCP run and artifact before upload
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_COMMIT: ${{ steps.tag.outputs.commit }}
-          CI_RUN_ID: ${{ steps.ci-run.outputs.run-id }}
-          CI_RUN_ATTEMPT: ${{ steps.ci-run.outputs.run-attempt }}
-          HANDOFF_RUN_ID: ${{ steps.coverage-handoff.outputs.run-id }}
-          HANDOFF_RUN_ATTEMPT: ${{ steps.coverage-handoff.outputs.run-attempt }}
-          HANDOFF_ARTIFACT_ID: ${{ steps.coverage-handoff.outputs.artifact-id }}
-          HANDOFF_ARTIFACT_NAME: ${{ steps.coverage-handoff.outputs.artifact-name }}
-          HANDOFF_ARTIFACT_SIZE: ${{ steps.coverage-handoff.outputs.artifact-size }}
-          HANDOFF_ARTIFACT_DIGEST: ${{ steps.coverage-handoff.outputs.artifact-digest }}
-        run: |
-          set -euo pipefail
-          python scripts/coverage_mcp_handoff.py validate-handoff \
-            --repository "$GITHUB_REPOSITORY" \
-            --source "$RELEASE_COMMIT" \
-            --ci-run-id "$CI_RUN_ID" \
-            --ci-attempt "$CI_RUN_ATTEMPT" \
-            --handoff-run-id "$HANDOFF_RUN_ID" \
-            --handoff-attempt "$HANDOFF_RUN_ATTEMPT" \
-            --artifact-id "$HANDOFF_ARTIFACT_ID" \
-            --artifact-name "$HANDOFF_ARTIFACT_NAME" \
-            --artifact-size "$HANDOFF_ARTIFACT_SIZE" \
-            --artifact-digest "$HANDOFF_ARTIFACT_DIGEST"
-      - name: Revalidate the remote annotated tag immediately before upload
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_COMMIT: ${{ steps.tag.outputs.commit }}
-          RELEASE_TAG_OBJECT: ${{ steps.tag.outputs.tag-object-sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          tag_json="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${GITHUB_REF_NAME}")"
-          object_type="$(jq -r '.object.type' <<< "$tag_json")"
-          object_sha="$(jq -r '.object.sha' <<< "$tag_json")"
-          test "$object_type" = tag
-          test "$object_sha" = "$RELEASE_TAG_OBJECT"
-          tag_commit="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${object_sha}" --jq '.object | select(.type == "commit") | .sha')"
-          test "$tag_commit" = "$RELEASE_COMMIT"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+
+  publish-lifecycle:
+    name: Publish asgi-lifespan-protocol-rs to crates.io
+    needs: prepare
+    if: needs.prepare.outputs.publish-lifecycle == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: crates-io
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          name: uvicorn-rs-candidate-${{ github.ref_name }}
-          path: target/release-candidate/
-          if-no-files-found: error
-          retention-days: 90
+          ref: ${{ needs.prepare.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: "1.85.0"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.prepare.outputs.run-id }}
+          artifact-ids: ${{ needs.prepare.outputs.artifact-id }}
+          digest-mismatch: error
+          path: target/release-candidate
+      - name: Verify package identity and exact archive bytes
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd target/release-candidate
+          sha256sum --check --strict SHA256SUMS
+          cd ../..
+          cargo package -p asgi-lifespan-protocol-rs --no-verify --locked
+          cmp "target/package/asgi-lifespan-protocol-rs-$RELEASE_VERSION.crate" \
+            "target/release-candidate/packages/asgi-lifespan-protocol-rs-$RELEASE_VERSION.crate"
+      - uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+        id: auth
+      - name: Publish the exact reviewed crate
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        # Candidate CI checked the packaged archive in a clean consumer. This
+        # job repacks it and compares exact bytes before requesting OIDC; skip
+        # repeating that build after the short-lived credential is available.
+        run: cargo publish -p asgi-lifespan-protocol-rs --no-verify --locked
+
+  publish-uvicorn-rs:
+    name: Publish uvicorn-rs to crates.io
+    needs: [prepare, publish-lifecycle]
+    if: >-
+      always() &&
+      needs.prepare.result == 'success' &&
+      needs.prepare.outputs.publish-uvicorn-rs == 'true' &&
+      (needs.publish-lifecycle.result == 'success' ||
+       needs.publish-lifecycle.result == 'skipped')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: crates-io
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: "1.85.0"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.prepare.outputs.run-id }}
+          artifact-ids: ${{ needs.prepare.outputs.artifact-id }}
+          digest-mismatch: error
+          path: target/release-candidate
+      - name: Verify package identity and exact archive bytes
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd target/release-candidate
+          sha256sum --check --strict SHA256SUMS
+          cd ../..
+          cargo package -p uvicorn-rs --no-verify --locked
+          cmp "target/package/uvicorn-rs-$RELEASE_VERSION.crate" \
+            "target/release-candidate/packages/uvicorn-rs-$RELEASE_VERSION.crate"
+      - name: Wait for the exact lifecycle crate in the crates.io index
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import time
+          from urllib.error import HTTPError, URLError
+          from urllib.request import Request, urlopen
+
+          name = "asgi-lifespan-protocol-rs"
+          version = os.environ["RELEASE_VERSION"]
+          archive = Path("target/release-candidate/packages") / f"{name}-{version}.crate"
+          expected_checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
+          # Cargo's sparse-index path for names with at least four characters
+          # is {first-two}/{next-two}/{name}.
+          url = f"https://index.crates.io/{name[:2]}/{name[2:4]}/{name}"
+          deadline = time.monotonic() + 300
+          last_reason = "the exact version is not indexed yet"
+
+          while True:
+              request = Request(url, headers={"User-Agent": "uvicorn-rs-release-index-check"})
+              try:
+                  with urlopen(request, timeout=10) as response:
+                      entries = [json.loads(line) for line in response.read().splitlines() if line]
+              except HTTPError as error:
+                  if error.code not in {404, 429} and error.code < 500:
+                      raise SystemExit(f"crates.io sparse-index request failed: HTTP {error.code}")
+                  entries = []
+                  last_reason = f"sparse-index request returned HTTP {error.code}"
+              except (URLError, TimeoutError) as error:
+                  entries = []
+                  last_reason = f"sparse-index request failed: {error}"
+
+              entry = next((row for row in entries if row.get("vers") == version), None)
+              if entry is not None:
+                  if entry.get("yanked") is True:
+                      raise SystemExit(f"crates.io lifecycle dependency {name} {version} is yanked")
+                  actual_checksum = entry.get("cksum")
+                  if actual_checksum != expected_checksum:
+                      raise SystemExit(
+                          f"crates.io index checksum for {name} {version} differs from the verified candidate"
+                      )
+                  print(json.dumps({
+                      "package": name,
+                      "version": version,
+                      "checksum": actual_checksum,
+                      "index": "https://index.crates.io",
+                  }, sort_keys=True))
+                  break
+
+              remaining = deadline - time.monotonic()
+              if remaining <= 0:
+                  raise SystemExit(
+                      f"timed out waiting for {name} {version} in the crates.io index: {last_reason}"
+                  )
+              time.sleep(min(15, remaining))
+          PY
+      - uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+        id: auth
+      - name: Publish the exact reviewed crate
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        # Candidate CI checked the packaged archive in a clean consumer. This
+        # job repacks it and compares exact bytes before requesting OIDC; skip
+        # repeating that build after the short-lived credential is available.
+        run: cargo publish -p uvicorn-rs --no-verify --locked
+
+  publish-pypi:
+    name: Publish uvicorn-rs to PyPI
+    needs: [prepare, publish-lifecycle, publish-uvicorn-rs]
+    if: >-
+      always() &&
+      needs.prepare.result == 'success' &&
+      needs.prepare.outputs.publish-pypi == 'true' &&
+      (inputs.action != 'cargo-and-pypi' ||
+       ((needs.publish-lifecycle.result == 'success' ||
+         needs.publish-lifecycle.result == 'skipped') &&
+        (needs.publish-uvicorn-rs.result == 'success' ||
+         needs.publish-uvicorn-rs.result == 'skipped')))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: pypi
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.prepare.outputs.run-id }}
+          artifact-ids: ${{ needs.prepare.outputs.artifact-id }}
+          digest-mismatch: error
+          path: target/release-candidate
+      - name: Stage only the four verified Python distributions
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd target/release-candidate
+          sha256sum --check --strict SHA256SUMS
+          cd packages
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          cp -- *.whl "uvicorn_rs-$RELEASE_VERSION.tar.gz" "$GITHUB_WORKSPACE/dist/"
+          test "$(find "$GITHUB_WORKSPACE/dist" -maxdepth 1 -type f | wc -l | tr -d ' ')" = 4
+      - name: Publish the reviewed distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: dist
+
+  verify-publication:
+    name: Verify registry bytes against the candidate
+    needs:
+      - prepare
+      - publish-lifecycle
+      - publish-uvicorn-rs
+      - publish-pypi
+    if: >-
+      !cancelled() && inputs.action != 'prepare-only' &&
+      needs.prepare.result == 'success' &&
+      (needs.publish-lifecycle.result == 'success' || needs.publish-lifecycle.result == 'skipped') &&
+      (needs.publish-uvicorn-rs.result == 'success' || needs.publish-uvicorn-rs.result == 'skipped') &&
+      (needs.publish-pypi.result == 'success' || needs.publish-pypi.result == 'skipped')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.prepare.outputs.run-id }}
+          artifact-ids: ${{ needs.prepare.outputs.artifact-id }}
+          digest-mismatch: error
+          path: target/release-candidate
+      - name: Confirm published registry checksums match the candidate
+        env:
+          RELEASE_ACTION: ${{ inputs.action }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import time
+          from pathlib import Path
+          from urllib.error import HTTPError
+          from urllib.request import Request, urlopen
+
+          action = os.environ["RELEASE_ACTION"]
+          version = os.environ["RELEASE_VERSION"]
+          packages = Path("target/release-candidate/packages")
+
+          def remote_json(url):
+              request = Request(url, headers={
+                  "User-Agent": "uvicorn-rs-release-verification",
+                  "Accept": "application/json",
+              })
+              try:
+                  with urlopen(request, timeout=20) as response:
+                      return json.load(response)
+              except HTTPError as error:
+                  if error.code == 404:
+                      return None
+                  raise
+
+          def check_registry(check, description):
+              last_error = None
+              for attempt in range(12):
+                  try:
+                      check()
+                      print(f"verified {description}")
+                      return
+                  except LookupError as error:
+                      last_error = error
+                      if attempt < 11:
+                          time.sleep(10)
+              raise SystemExit(f"registry did not expose {description}: {last_error}")
+
+          def verify_crate(name):
+              archive = packages / f"{name}-{version}.crate"
+              expected = hashlib.sha256(archive.read_bytes()).hexdigest()
+              payload = remote_json(f"https://crates.io/api/v1/crates/{name}/{version}")
+              actual = payload.get("version", {}).get("checksum") if payload else None
+              if actual is None:
+                  raise LookupError(f"{name} {version} not visible yet")
+              if actual != expected:
+                  raise SystemExit(f"published {name} checksum differs from the candidate")
+
+          def verify_pypi():
+              expected = {
+                  path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+                  for path in packages.iterdir()
+                  if path.suffix == ".whl" or path.name.endswith(".tar.gz")
+              }
+              payload = remote_json(f"https://pypi.org/pypi/uvicorn-rs/{version}/json")
+              if payload is None:
+                  raise LookupError(f"uvicorn-rs {version} not visible yet")
+              actual = {
+                  item.get("filename"): item.get("digests", {}).get("sha256")
+                  for item in payload.get("urls", [])
+              }
+              if actual != expected:
+                  raise SystemExit("published PyPI files differ from the candidate filenames or checksums")
+
+          if action in {"cargo", "cargo-and-pypi"}:
+              for crate in (
+                  "asgi-lifespan-protocol-rs", "uvicorn-rs",
+              ):
+                  check_registry(lambda crate=crate: verify_crate(crate), f"{crate} {version}")
+          if action in {"pypi", "cargo-and-pypi"}:
+              check_registry(verify_pypi, f"uvicorn-rs {version}")
+          PY

@@ -2,15 +2,31 @@ name: CI
 
 on:
   push:
-    branches: [main, "codex/**"]
+    branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Run the full CI matrix or selected parity cases on Linux or Windows
+        required: true
+        type: choice
+        default: full
+        options:
+          - full
+          - focused-windows-parity
+          - focused-linux-parity
+      parity_case_ids:
+        description: Comma-separated case IDs for a focused parity mode (up to 20)
+        required: false
+        type: string
+        default: python-api.module-cli-two-workers-serve-request
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  # Let selected parity runs proceed while the full coverage matrix is active.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}-${{ inputs.mode || 'full' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -18,11 +34,12 @@ env:
   RUST_TOOLCHAIN: "1.98.1"
   MSRV_TOOLCHAIN: "1.85.0"
   PYTHON_VERSION: "3.12.13"
-  WHEEL_PYTHON_VERSION: "3.12.10"
+  WHEEL_PYTHON_VERSION: "3.12.13"
   UV_VERSION: "0.11.29"
+  GUNICORN_VERSION: "23.0.0"
   MATURIN_VERSION: "1.14.1"
   STARLETTE_RS_REVISION: "738c43362938896c268ca29b9a9a2a5942df510c"
-  NATIVE_FASTAPI_RS_REVISION: "e5a6e91cb02b3229f9fbdfce1b00171c6913ccfe"
+  NATIVE_FASTAPI_RS_REVISION: "0afccce9f35447f38ebb5e94d0e67fd338ea7ea4"
   NATIVE_STARLETTE_RS_REVISION: "4139a72449bf5751e8902fb1c7175ee7f191d338"
   RUSTC_WRAPPER: ""
   RUSTC_WORKSPACE_WRAPPER: ""
@@ -33,6 +50,7 @@ env:
 
 jobs:
   release-evidence-contracts:
+    if: github.event_name != 'workflow_dispatch' || inputs.mode == 'full'
     name: Release artifact and Coverage-MCP handoff contract
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -44,9 +62,13 @@ jobs:
         with:
           python-version: "3.12.13"
       - name: Exercise exact-run handoff and fail-closed receipt cases
-        run: python scripts/test_coverage_mcp_handoff.py
+        run: |
+          python scripts/check_release_version.py
+          python scripts/test_coverage_mcp_handoff.py
 
   rust:
+    needs: release-evidence-contracts
+    if: github.event_name != 'workflow_dispatch' || inputs.mode == 'full'
     name: Rust formatting, lints, feature builds and documentation
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -61,13 +83,14 @@ jobs:
       - name: Check formatting and lints
         run: |
           cargo fmt --all -- --check
-          # Keep strict Clippy on project-owned Rust crates. The maintained H3
-          # forks retain upstream code with an existing Clippy baseline; Cargo
-          # still compiles them as dependencies, and their protocol behavior is
-          # checked by the focused black-box parity cases.
-          cargo clippy --workspace --exclude uvicorn-rs-h3 --exclude uvicorn-rs-h3-quinn --no-deps --lib --all-features --locked -- -D warnings
+          # Keep project-written Rust under strict Clippy. The vendored H3
+          # protocol follows the upstream lint baseline; its feature-on build
+          # is compiled separately below.
+          cargo clippy -p asgi-lifespan-protocol-rs --lib --locked -- -D warnings
+          cargo clippy -p uvicorn-rs --lib --no-default-features --locked -- -D warnings
+          cargo clippy -p uvicorn-rs-py --lib --no-deps --all-features --locked -- -D warnings
           env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="--cfg coverage" \
-            cargo clippy -p uvicorn-rs --no-deps --all-targets --all-features --locked -- -D warnings
+            cargo clippy -p uvicorn-rs --no-deps --all-targets --no-default-features --locked -- -D warnings
           cargo fmt --manifest-path tools/http3-probe/Cargo.toml --all -- --check
           cargo clippy --manifest-path tools/http3-probe/Cargo.toml --no-deps --all-targets --all-features --locked -- -D warnings
       - name: Compile feature modes (behavior is checked through live ASGI cases)
@@ -75,10 +98,10 @@ jobs:
           cargo check --lib --locked
           cargo check --lib --no-default-features --locked
           cargo check --lib --all-features --locked
-          cargo check -p uvicorn-rs-h3 --lib --all-features --locked
-          cargo check -p uvicorn-rs-h3-quinn --lib --all-features --locked
+          cargo check -p uvicorn-rs --lib --no-default-features --locked
+          cargo check -p uvicorn-rs --lib --features http3 --locked
           env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="--cfg coverage" \
-            cargo check -p uvicorn-rs --all-targets --locked
+            cargo check -p uvicorn-rs --all-targets --features http3 --locked
           cargo check --manifest-path tools/http3-probe/Cargo.toml --bins --locked
       - name: Build Rust API documentation
         env:
@@ -108,7 +131,7 @@ jobs:
           mkdir -p target/native-contracts
           python3 scripts/select_native_contracts.py
           env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="--cfg coverage" \
-            cargo run -p uvicorn-rs --example native_core_contracts --locked -- \
+            cargo run -p uvicorn-rs --example native_core_contracts --features http3 --locked -- \
             target/native-contracts/normal-inputs.json 2>&1 | tee target/native-contracts/normal-run.log
       - name: Retain native normal-lane inputs, selection and outcomes
         if: always()
@@ -121,6 +144,8 @@ jobs:
           overwrite: true
 
   native-framework-composition:
+    needs: release-evidence-contracts
+    if: github.event_name != 'workflow_dispatch' || inputs.mode == 'full'
     name: Pinned native FastAPI-RS composition inputs
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -190,6 +215,8 @@ jobs:
             --locked -- "$workspace/uvicorn-rs/examples/native-fastapi-contracts/manifest.json"
 
   msrv:
+    needs: release-evidence-contracts
+    if: github.event_name != 'workflow_dispatch' || inputs.mode == 'full'
     name: Compile the exact Rust minimum
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -205,9 +232,11 @@ jobs:
           cargo check --lib --no-default-features --locked
           cargo check --lib --all-features --locked
           env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS="--cfg coverage" \
-            cargo check -p uvicorn-rs --all-targets --locked
+            cargo check -p uvicorn-rs --all-targets --features http3 --locked
 
   python-package:
+    needs: release-evidence-contracts
+    if: github.event_name != 'workflow_dispatch' || inputs.mode == 'full'
     name: Complete public parity on the installed normal wheel
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -227,15 +256,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          uv sync --python "$PYTHON_VERSION" --group benchmark --frozen --no-install-project
+          uv sync --python "$PYTHON_VERSION" --group benchmark --extra standard --frozen --no-install-project
           uvx --from "maturin==$MATURIN_VERSION" maturin build --release --locked --interpreter "$GITHUB_WORKSPACE/.venv/bin/python" --out target/normal-wheels
           wheels=(target/normal-wheels/*.whl)
           test "${#wheels[@]}" -eq 1
           uv pip install --python .venv/bin/python --no-deps "${wheels[0]}"
+          uv pip install --python .venv/bin/python "gunicorn==$GUNICORN_VERSION"
           .venv/bin/python scripts/check_installed_wheel.py --wheel "${wheels[0]}" --output target/asgi-parity/wheel-consumer.json
           oracle_environment="$RUNNER_TEMP/uvicorn-rs-uvicorn-oracle"
           UV_PROJECT_ENVIRONMENT="$oracle_environment" uv sync --python "$PYTHON_VERSION" \
             --only-group benchmark --only-group uvicorn-oracle --no-install-project --frozen
+          uv pip install --python "$oracle_environment/bin/python" "gunicorn==$GUNICORN_VERSION"
       - name: Compare the installed wheel with Uvicorn on upstream Starlette
         shell: bash
         run: |
@@ -269,6 +300,7 @@ jobs:
 
           lines = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").splitlines()
           detail = "\n".join(lines[-30:])[-3000:]
+          detail = detail.encode("ascii", "backslashreplace").decode("ascii")
           encoded = detail.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
           print(f"::error title=Upstream Starlette integration failure::{encoded}")
           PY
@@ -332,6 +364,7 @@ jobs:
 
           lines = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").splitlines()
           detail = "\n".join(lines[-30:])[-3000:]
+          detail = detail.encode("ascii", "backslashreplace").decode("ascii")
           encoded = detail.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
           print(f"::error file=.github/workflows/ci.yml,line=126,title=Starlette integration failure::{encoded}")
           PY
@@ -358,6 +391,7 @@ jobs:
 
           lines = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").splitlines()
           detail = "\n".join(lines[-30:])[-3000:]
+          detail = detail.encode("ascii", "backslashreplace").decode("ascii")
           encoded = detail.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
           print(f"::error file=.github/workflows/ci.yml,line=157,title=systemd deployment probe failure::{encoded}")
           PY
@@ -365,6 +399,7 @@ jobs:
           fi
           tail -n 5 "$systemd_log"
       - name: Execute complete current public input matrix
+        id: public_parity
         shell: bash
         run: |
           set -euo pipefail
@@ -373,7 +408,20 @@ jobs:
             --oracle-python "$RUNNER_TEMP/uvicorn-rs-uvicorn-oracle/bin/python" \
             --installed-candidate \
             --output target/asgi-parity/result.json 2>&1 | tee target/asgi-parity/run.log
-          .venv/bin/python scripts/check_ci_evidence.py parity target/asgi-parity/result.json
+          .venv/bin/python scripts/check_ci_evidence.py parity \
+            target/asgi-parity/result.json --offline --require-clean
+      - name: Trace the Hypercorn HTTP/3 case after a public parity failure
+        if: ${{ failure() && steps.public_parity.outcome == 'failure' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python scripts/run_parity.py \
+            --oracle-python "$RUNNER_TEMP/uvicorn-rs-uvicorn-oracle/bin/python" \
+            --installed-candidate \
+            --case-id http3.early-response-with-open-upload \
+            --trace-hypercorn-h3-events \
+            --output target/asgi-parity/h3-early-response-diagnostic.json \
+            2>&1 | tee target/asgi-parity/h3-early-response-diagnostic.log
       - name: Verify normal fault-seam exclusion with existing public cases
         run: >-
           .venv/bin/python scripts/audit_normal_build.py
@@ -388,12 +436,15 @@ jobs:
           name: uvicorn-rs-public-parity
           path: |
             target/asgi-parity/
+            target/normal-wheels/*.whl
             target/normal-audit/
           if-no-files-found: error
           retention-days: 90
           overwrite: true
 
   unified-coverage:
+    needs: release-evidence-contracts
+    if: github.event_name != 'workflow_dispatch' || inputs.mode == 'full'
     name: All parity and fault contracts, 100% native regions and lines
     runs-on: ubuntu-24.04
     timeout-minutes: 150
@@ -412,13 +463,15 @@ jobs:
           enable-cache: true
       - name: Install locked references and pinned coverage tools
         run: |
-          uv sync --python "$PYTHON_VERSION" --group benchmark --frozen
+          uv sync --python "$PYTHON_VERSION" --group benchmark --extra standard --frozen
+          uv pip install --python .venv/bin/python "gunicorn==$GUNICORN_VERSION"
           cargo install cargo-llvm-cov --version 0.8.7 --locked
       - name: Prepare the isolated stock Uvicorn oracle
         run: |
           oracle_environment="$RUNNER_TEMP/uvicorn-rs-coverage-oracle"
           UV_PROJECT_ENVIRONMENT="$oracle_environment" uv sync --python "$PYTHON_VERSION" \
             --only-group benchmark --only-group uvicorn-oracle --no-install-project --frozen
+          uv pip install --python "$oracle_environment/bin/python" "gunicorn==$GUNICORN_VERSION"
       - name: Attribute every indexed case and repeat the complete matrix three times
         shell: bash
         run: |
@@ -478,8 +531,12 @@ jobs:
           overwrite: true
 
   release-candidate:
+    if: github.event_name != 'workflow_dispatch' || inputs.mode == 'full'
     name: Build and verify ${{ matrix.platform }} package artifacts
-    needs: [rust, msrv, python-package, unified-coverage, release-evidence-contracts]
+    # Platform builds and their installed-wheel parity are independent evidence.
+    # Run them beside unified coverage; the candidate/release handoff still
+    # requires this entire CI run to succeed, including the coverage gate.
+    needs: [rust, msrv, python-package, release-evidence-contracts]
     strategy:
       fail-fast: false
       matrix:
@@ -503,15 +560,46 @@ jobs:
         with:
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: runner.os == 'Linux'
         with:
           python-version: ${{ env.WHEEL_PYTHON_VERSION }}
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        if: runner.os != 'Linux'
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.WHEEL_PYTHON_VERSION }}
+          enable-cache: true
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        if: runner.os == 'Linux'
+        with:
+          version: ${{ env.UV_VERSION }}
+      - name: Install and resolve the exact managed Python for macOS and Windows
+        if: runner.os != 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv python install --managed-python "$WHEEL_PYTHON_VERSION"
+          interpreter="$(uv python find --managed-python "$WHEEL_PYTHON_VERSION")"
+          if [ "$RUNNER_OS" = 'Windows' ]; then
+            interpreter="$(cygpath --unix "$interpreter")"
+          fi
+          echo "WHEEL_PYTHON=$interpreter" >> "$GITHUB_ENV"
+      - name: Resolve the hosted Python on Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: echo "WHEEL_PYTHON=$(command -v python)" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
-      - name: Install pinned build frontend and verify metadata
+      - name: Verify release metadata
+        shell: bash
         run: |
-          python -m pip install --disable-pip-version-check --no-input maturin==${{ env.MATURIN_VERSION }}
-          python scripts/check_release_version.py
+          "$WHEEL_PYTHON" scripts/check_release_version.py
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        if: runner.os == 'Linux'
+        with:
+          name: uvicorn-rs-public-parity
+          path: target/public-parity
       - name: Build abi3 wheel and install the exact artifact
         shell: bash
         run: |
@@ -520,22 +608,46 @@ jobs:
           set +e
           (
             set -euo pipefail
-            maturin build --release --locked --interpreter python --out dist
+            mkdir -p dist
+            if [ "$RUNNER_OS" = 'Linux' ]; then
+              wheels=(target/public-parity/normal-wheels/*.whl)
+              test "${#wheels[@]}" -eq 1
+              test -s target/public-parity/asgi-parity/result.json
+              cp "${wheels[0]}" dist/
+              cp target/public-parity/asgi-parity/result.json dist/parity-linux-x86_64.json
+            else
+              uvx --from "maturin==$MATURIN_VERSION" maturin build \
+                --release --locked --interpreter "$WHEEL_PYTHON" --out dist
+            fi
             wheels=(dist/*.whl)
             test "${#wheels[@]}" -eq 1
-            python scripts/check_replacement_install.py --wheel "${wheels[0]}"
-            python -m pip install --disable-pip-version-check --no-input --no-deps "${wheels[0]}"
-            python scripts/check_installed_wheel.py --wheel "${wheels[0]}" --output dist/consumer-${{ matrix.platform }}.json
+            "$WHEEL_PYTHON" scripts/check_replacement_install.py --wheel "${wheels[0]}"
+            if [ "$RUNNER_OS" = 'Linux' ]; then
+              cp target/public-parity/asgi-parity/wheel-consumer.json dist/consumer-linux-x86_64.json
+            else
+              consumer_environment="$RUNNER_TEMP/uvicorn-rs-artifact-consumer"
+              UV_PROJECT_ENVIRONMENT="$consumer_environment" uv sync \
+                --python "$WHEEL_PYTHON_VERSION" \
+                --group benchmark --extra standard --no-install-project --frozen
+              if [ "$RUNNER_OS" = 'Windows' ]; then
+                consumer_python="$consumer_environment/Scripts/python.exe"
+              else
+                consumer_python="$consumer_environment/bin/python"
+              fi
+              uv pip install --python "$consumer_python" --no-deps "${wheels[0]}"
+              "$consumer_python" scripts/check_installed_wheel.py --wheel "${wheels[0]}" --output dist/consumer-${{ matrix.platform }}.json
+            fi
           ) >"$log" 2>&1
           status=$?
           set -e
           if [ "$status" -ne 0 ]; then
-            python - "$log" <<'PY'
+            "$WHEEL_PYTHON" - "$log" <<'PY'
           from pathlib import Path
           import sys
 
           lines = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").splitlines()
           detail = "\n".join(lines[-30:])[-3000:]
+          detail = detail.encode("ascii", "backslashreplace").decode("ascii")
           encoded = detail.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
           print(f"::error title=Package wheel build or consumer failure::{encoded}")
           PY
@@ -543,13 +655,91 @@ jobs:
             exit "$status"
           fi
           cat "$log"
+      - name: Run all indexed platform-applicable parity inputs on the ${{ matrix.platform }} candidate wheel
+        if: runner.os != 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate_environment="$RUNNER_TEMP/uvicorn-rs-candidate-parity"
+          oracle_environment="$RUNNER_TEMP/uvicorn-rs-upstream-oracle"
+          UV_PROJECT_ENVIRONMENT="$candidate_environment" uv sync \
+            --python "$WHEEL_PYTHON_VERSION" \
+            --group benchmark --extra standard --no-install-project --frozen
+          UV_PROJECT_ENVIRONMENT="$oracle_environment" uv sync \
+            --python "$WHEEL_PYTHON_VERSION" \
+            --only-group benchmark --only-group uvicorn-oracle \
+            --no-install-project --frozen
+          wheels=(dist/*.whl)
+          test "${#wheels[@]}" -eq 1
+          if [ "$RUNNER_OS" = 'Windows' ]; then
+            candidate_python="$candidate_environment/Scripts/python.exe"
+            oracle_python="$oracle_environment/Scripts/python.exe"
+          else
+            candidate_python="$candidate_environment/bin/python"
+            oracle_python="$oracle_environment/bin/python"
+            uv pip install --python "$candidate_python" "gunicorn==$GUNICORN_VERSION"
+            uv pip install --python "$oracle_python" "gunicorn==$GUNICORN_VERSION"
+          fi
+          uv pip install --python "$candidate_python" --no-deps "${wheels[0]}"
+          parity_args=()
+          if [ "$RUNNER_OS" = 'Windows' ]; then
+            # These inputs require Unix-domain sockets, inherited POSIX
+            # descriptors, a Unix-only transfer race, or POSIX-only signals.
+            parity_args+=(
+              --exclude-case-id python-api.module-cli-posix-unresponsive-worker-healthcheck-restarts
+              --exclude-case-id python-api.module-cli-inherited-fd-from-uvicorn-environment
+              --exclude-case-id python-api.module-cli-serves-request-on-inherited-fd
+              --exclude-case-id python-api.module-cli-serves-request-on-inherited-ipv6-fd
+              --exclude-case-id python-api.module-cli-two-workers-serves-inherited-ipv6-fd-request
+              --exclude-case-id python-api.module-cli-two-workers-serves-inherited-fd-request
+              --exclude-case-id python-api.server-serves-request-on-prebound-socket
+              --exclude-case-id python-api.server-serves-request-on-multiple-prebound-sockets
+              --exclude-case-id python-api.server-serves-request-on-multiple-prebound-tls-sockets
+              --exclude-case-id python-api.server-sockets-serves-request-on-multiple-inherited-fds
+              --exclude-case-id python-api.config-server-serves-request-on-inherited-fd
+              --exclude-case-id python-api.run-serves-request-on-inherited-fd
+              --exclude-case-id python-api.server-startup-honors-preexisting-exit-request
+              --exclude-case-id cli.invalid-file-descriptor-is-rejected
+              --exclude-case-id python-api.run-websocket-over-unix-domain-socket
+              --exclude-case-id python-api.server-startup-uds-replaces-existing-socket-and-shuts-down-lifespan
+              --exclude-case-id python-api.run-applies-concurrency-limit-unix-socket
+              --exclude-case-id python-api.module-cli-serves-unix-domain-socket-request
+              --exclude-case-id python-api.config-server-serves-unix-domain-socket-request
+              --exclude-case-id python-api.module-cli-serves-tls-over-unix-domain-socket
+              --exclude-case-id python-api.cancel-startup-during-prebound-listener-transfer
+              --exclude-case-id python-api.cancel-startup-during-prebound-transfer-without-lifespan
+              --exclude-case-id cli.uds-startup-and-clean-exit
+              --exclude-case-id cli.uds-from-environment-starts-and-cleans
+              --exclude-case-id python-api.module-cli-two-workers-scale-with-ttin-ttou
+              --exclude-case-id python-api.module-cli-two-workers-restart-on-sighup
+              --exclude-case-id python-api.module-cli-sighup-keeps-workers-after-replacement-startup-failure
+            )
+          fi
+          run_platform_parity() {
+            "$candidate_python" scripts/run_parity.py \
+              --oracle-python "$oracle_python" \
+              --installed-candidate "$@" \
+              --output "target/parity-${{ matrix.platform }}.json"
+            "$candidate_python" scripts/check_ci_evidence.py parity \
+              "target/parity-${{ matrix.platform }}.json" \
+              --offline --require-clean "$@"
+          }
+          if [ "$RUNNER_OS" = 'Windows' ]; then
+            run_platform_parity "${parity_args[@]}"
+          else
+            run_platform_parity
+          fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always() && runner.os != 'Linux'
+        with:
+          name: uvicorn-rs-platform-parity-${{ matrix.platform }}
+          path: |
+            target/parity-${{ matrix.platform }}.json
+          if-no-files-found: warn
+          retention-days: 90
       - name: Build source distribution
         if: runner.os == 'Linux'
-        run: maturin sdist --out dist
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
-        if: runner.os == 'Linux'
-        with:
-          version: ${{ env.UV_VERSION }}
+        run: uvx --from "maturin==$MATURIN_VERSION" maturin sdist --out dist
       - name: Rebuild extracted source archive and consume its wheel
         if: runner.os == 'Linux'
         shell: bash
@@ -559,40 +749,21 @@ jobs:
           test "${#sdists[@]}" -eq 1
           python scripts/check_sdist_build.py --sdist "${sdists[0]}" --output-dir target/sdist-consumer
           cp target/sdist-consumer/result.json dist/consumer-sdist.json
-      - name: Package the Python-free server, shared lifecycle, and HTTP/3 crates
+      - name: Package the Python-free server and shared lifecycle contract
         if: runner.os == 'Linux'
         env:
           CARGO_TARGET_DIR: target/native-package
         run: |
           set -euo pipefail
-          cargo package -p native-app-contract --no-verify --locked --offline
-          cargo package -p uvicorn-rs-h3 --no-verify --locked --offline
-          cargo package -p uvicorn-rs-h3-quinn --no-verify --locked --offline \
-            --config 'patch.crates-io.uvicorn-rs-h3.path="crates/uvicorn-rs-h3"'
-          cargo package -p uvicorn-rs --no-verify --locked --offline \
-            --config 'patch.crates-io.native-app-contract.path="crates/native-app-contract"' \
-            --config 'patch.crates-io.uvicorn-rs-h3.path="crates/uvicorn-rs-h3"' \
-            --config 'patch.crates-io.uvicorn-rs-h3-quinn.path="crates/uvicorn-rs-h3-quinn"'
+          cargo package -p asgi-lifespan-protocol-rs --no-verify --locked --offline
+          cargo package -p uvicorn-rs --no-verify --locked \
+            --config 'patch.crates-io.asgi-lifespan-protocol-rs.path="crates/asgi-lifespan-protocol-rs"'
           packages=(target/native-package/package/*.crate)
-          test "${#packages[@]}" -eq 4
+          test "${#packages[@]}" -eq 2
           cp "${packages[@]}" dist/
-      - name: Run complete public parity on the exact Linux candidate wheel
+      - name: Revalidate the reused exact-source Linux parity receipt
         if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          set -euo pipefail
-          uv sync --python "$WHEEL_PYTHON_VERSION" --group benchmark --frozen --no-install-project
-          wheels=(dist/*.whl)
-          test "${#wheels[@]}" -eq 1
-          uv pip install --python .venv/bin/python --no-deps "${wheels[0]}"
-          oracle_environment="$RUNNER_TEMP/uvicorn-rs-release-oracle"
-          UV_PROJECT_ENVIRONMENT="$oracle_environment" uv sync --python "$WHEEL_PYTHON_VERSION" \
-            --only-group benchmark --only-group uvicorn-oracle --no-install-project --frozen
-          .venv/bin/python scripts/run_parity.py \
-            --oracle-python "$oracle_environment/bin/python" \
-            --installed-candidate \
-            --output dist/parity-linux-x86_64.json
-          .venv/bin/python scripts/check_ci_evidence.py parity dist/parity-linux-x86_64.json
+        run: python scripts/check_ci_evidence.py parity dist/parity-linux-x86_64.json --offline --require-clean
       - name: Record source, build, license and artifact identities
         shell: bash
         run: |
@@ -611,6 +782,7 @@ jobs:
 
           lines = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").splitlines()
           detail = "\n".join(lines[-80:])[-5000:]
+          detail = detail.encode("ascii", "backslashreplace").decode("ascii")
           encoded = detail.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
           print(f"::error title=Release evidence recording failure::{encoded}")
           PY
@@ -627,6 +799,7 @@ jobs:
           overwrite: true
 
   python-floor:
+    if: github.event_name != 'workflow_dispatch' || inputs.mode == 'full'
     name: Install abi3 wheel on the declared Python floor
     needs: release-candidate
     runs-on: ubuntu-24.04
@@ -658,3 +831,155 @@ jobs:
           if-no-files-found: error
           retention-days: 90
           overwrite: true
+
+  focused-windows-parity:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'focused-windows-parity'
+    name: Selected Windows parity cases
+    runs-on: windows-2022
+    timeout-minutes: 35
+    env:
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: core.longpaths
+      GIT_CONFIG_VALUE_0: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # reviewed stable action
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - name: Build and run only the selected Windows cases
+        shell: bash
+        env:
+          PARITY_CASE_IDS: ${{ inputs.parity_case_ids }}
+          UVICORN_RS_SHUTDOWN_TRACE: "1"
+          UVICORN_RS_SHUTDOWN_TRACE_OUTPUT: target/focused-windows/shutdown-trace.log
+          UVICORN_RS_TRACE_ORACLE_SIGNAL: "1"
+        run: |
+          set -euo pipefail
+          uv sync --python "$PYTHON_VERSION" --group benchmark --extra standard \
+            --no-install-project --frozen
+          wheel_python="$(uv python find --managed-python "$PYTHON_VERSION")"
+          wheel_python="$(cygpath --unix "$wheel_python")"
+          mkdir -p target/focused-windows/wheels
+          uvx --from "maturin==$MATURIN_VERSION" maturin build --release --locked \
+            --interpreter "$wheel_python" --out target/focused-windows/wheels
+          wheels=(target/focused-windows/wheels/*.whl)
+          test "${#wheels[@]}" -eq 1
+
+          candidate_environment="$RUNNER_TEMP/uvicorn-rs-focused-candidate"
+          oracle_environment="$RUNNER_TEMP/uvicorn-rs-focused-oracle"
+          UV_PROJECT_ENVIRONMENT="$candidate_environment" uv sync \
+            --python "$PYTHON_VERSION" --group benchmark --extra standard \
+            --no-install-project --frozen
+          UV_PROJECT_ENVIRONMENT="$oracle_environment" uv sync \
+            --python "$PYTHON_VERSION" --only-group benchmark \
+            --only-group uvicorn-oracle --no-install-project --frozen
+
+          candidate_python="$candidate_environment/Scripts/python.exe"
+          oracle_python="$oracle_environment/Scripts/python.exe"
+          uv pip install --python "$candidate_python" --no-deps "${wheels[0]}"
+
+          IFS=',' read -r -a case_ids <<< "$PARITY_CASE_IDS"
+          if (( ${#case_ids[@]} == 0 || ${#case_ids[@]} > 20 )); then
+            echo "Select between 1 and 20 case IDs" >&2
+            exit 2
+          fi
+          parity_args=()
+          for case_id in "${case_ids[@]}"; do
+            case_id="${case_id#"${case_id%%[![:space:]]*}"}"
+            case_id="${case_id%"${case_id##*[![:space:]]}"}"
+            if [[ ! "$case_id" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
+              echo "Invalid parity case ID: $case_id" >&2
+              exit 2
+            fi
+            parity_args+=(--case-id "$case_id")
+          done
+          mkdir -p target/focused-windows
+          "$candidate_python" scripts/run_parity.py \
+            --oracle-python "$oracle_python" \
+            --installed-candidate \
+            "${parity_args[@]}" \
+            --output target/focused-windows/parity.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: uvicorn-rs-focused-windows-parity
+          path: target/focused-windows/
+          if-no-files-found: error
+          retention-days: 30
+
+  focused-linux-parity:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'focused-linux-parity'
+    name: Selected Linux parity cases
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # reviewed stable action
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - name: Build and run only the selected Linux cases
+        shell: bash
+        env:
+          PARITY_CASE_IDS: ${{ inputs.parity_case_ids }}
+          UVICORN_RS_SHUTDOWN_TRACE: "1"
+          UVICORN_RS_SHUTDOWN_TRACE_OUTPUT: target/focused-linux/shutdown-trace.log
+        run: |
+          set -euo pipefail
+          uv sync --python "$PYTHON_VERSION" --group benchmark --extra standard \
+            --no-install-project --frozen
+          mkdir -p target/focused-linux/wheels
+          uvx --from "maturin==$MATURIN_VERSION" maturin build --release --locked \
+            --interpreter .venv/bin/python --out target/focused-linux/wheels
+          wheels=(target/focused-linux/wheels/*.whl)
+          test "${#wheels[@]}" -eq 1
+          uv pip install --python .venv/bin/python --no-deps "${wheels[0]}"
+          .venv/bin/python scripts/check_installed_wheel.py \
+            --wheel "${wheels[0]}" --output target/focused-linux/wheel-consumer.json
+
+          oracle_environment="$RUNNER_TEMP/uvicorn-rs-focused-linux-oracle"
+          UV_PROJECT_ENVIRONMENT="$oracle_environment" uv sync \
+            --python "$PYTHON_VERSION" --only-group benchmark \
+            --only-group uvicorn-oracle --no-install-project --frozen
+          oracle_python="$oracle_environment/bin/python"
+
+          IFS=',' read -r -a case_ids <<< "$PARITY_CASE_IDS"
+          if (( ${#case_ids[@]} == 0 || ${#case_ids[@]} > 20 )); then
+            echo "Select between 1 and 20 case IDs" >&2
+            exit 2
+          fi
+          parity_args=()
+          for case_id in "${case_ids[@]}"; do
+            case_id="${case_id#"${case_id%%[![:space:]]*}"}"
+            case_id="${case_id%"${case_id##*[![:space:]]}"}"
+            if [[ ! "$case_id" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
+              echo "Invalid parity case ID: $case_id" >&2
+              exit 2
+            fi
+            parity_args+=(--case-id "$case_id")
+          done
+          .venv/bin/python scripts/run_parity.py \
+            --oracle-python "$oracle_python" \
+            --installed-candidate \
+            "${parity_args[@]}" \
+            --output target/focused-linux/parity.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: uvicorn-rs-focused-linux-parity
+          path: target/focused-linux/
+          if-no-files-found: error
+          retention-days: 30

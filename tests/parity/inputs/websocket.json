@@ -1,6 +1,22 @@
 {
-  "schema": "uvicorn-rs-parity/input@33",
+  "schema": "uvicorn-rs-parity/input@47",
   "cases": [
+    {
+      "case_id": "websocket.none-selector-dispatches-upgrade-as-http",
+      "profile": "websocket",
+      "operation": "websocket.handshake-rejected",
+      "covers": [
+        "websocket.handshake-rejected"
+      ],
+      "server_options": {
+        "ws": "none"
+      },
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [],
+        "messages": []
+      }
+    },
     {
       "case_id": "websocket.client-drop-during-pending-upgrade",
       "profile": "websocket",
@@ -29,6 +45,31 @@
         "messages": [],
         "shutdown": true,
         "shutdown_during_upgrade": true
+      }
+    },
+    {
+      "case_id": "websocket.custom-protocol-class-upgrade-and-lifespan-state",
+      "profile": "websocket",
+      "operation": "websocket.message-exchange",
+      "covers": [
+        "websocket.message-exchange"
+      ],
+      "server_options": {
+        "ws": "custom_websocket:ParityCustomWebSocketProtocol"
+      },
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [],
+        "messages": [
+          {
+            "kind": "text",
+            "value": "custom-protocol-text"
+          },
+          {
+            "kind": "binary_base64",
+            "value": "AAEC/3BhcnR5"
+          }
+        ]
       }
     },
     {
@@ -73,6 +114,33 @@
           {
             "kind": "text",
             "value": "12345"
+          }
+        ],
+        "send_only": true,
+        "expect_close": true
+      }
+    },
+    {
+      "case_id": "websocket.compressed-size-limit-drains-peer-data-and-close",
+      "profile": "websocket",
+      "operation": "websocket.message-size-limit",
+      "covers": [
+        "websocket.message-size-limit"
+      ],
+      "server_options": {
+        "ws_max_size": 4
+      },
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [],
+        "messages": [
+          {
+            "kind": "text",
+            "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          },
+          {
+            "kind": "text",
+            "value": "after-overflow"
           }
         ],
         "send_only": true,
@@ -349,6 +417,34 @@
       }
     },
     {
+      "case_id": "websocket.http-response-early-hint-event-rejected",
+      "profile": "websocket",
+      "operation": "websocket.app-error",
+      "covers": [
+        "websocket.app-error"
+      ],
+      "websocket": {
+        "path": "/ws-send-http-response-early-hint",
+        "subprotocols": [],
+        "messages": [],
+        "expect_close": true
+      }
+    },
+    {
+      "case_id": "websocket.http-response-trailers-event-rejected",
+      "profile": "websocket",
+      "operation": "websocket.app-error",
+      "covers": [
+        "websocket.app-error"
+      ],
+      "websocket": {
+        "path": "/ws-send-http-response-trailers",
+        "subprotocols": [],
+        "messages": [],
+        "expect_close": true
+      }
+    },
+    {
       "case_id": "websocket.server-app-completion-close",
       "profile": "websocket",
       "operation": "websocket.server-close",
@@ -556,6 +652,45 @@
       }
     },
     {
+      "case_id": "websocket.duplicate-key-handshake-rejected",
+      "profile": "websocket",
+      "operation": "websocket.handshake-rejected",
+      "covers": [
+        "websocket.handshake-rejected"
+      ],
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [],
+        "messages": [],
+        "headers": [
+          [
+            "Sec-WebSocket-Key",
+            "dGhlIHNhbXBsZSBub25jZQ=="
+          ]
+        ]
+      }
+    },
+    {
+      "case_id": "websocket.invalid-permessage-deflate-offer-parity",
+      "profile": "websocket",
+      "operation": "websocket.invalid-extension-offer",
+      "covers": [
+        "websocket.invalid-extension-offer"
+      ],
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [],
+        "messages": [],
+        "disable_compression": true,
+        "headers": [
+          [
+            "Sec-WebSocket-Extensions",
+            "permessage-deflate; client_max_window_bits=99"
+          ]
+        ]
+      }
+    },
+    {
       "case_id": "websocket.accepted-default-close",
       "profile": "websocket",
       "operation": "websocket.server-close",
@@ -649,6 +784,42 @@
       }
     },
     {
+      "case_id": "websocket.server-keepalive-mismatched-pong-times-out",
+      "profile": "websocket",
+      "operation": "websocket.server-keepalive-mismatched-pong",
+      "covers": [
+        "websocket.server-keepalive-mismatched-pong"
+      ],
+      "server_options": {
+        "ws_ping_interval": 0.1,
+        "ws_ping_timeout": 0.3
+      },
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [],
+        "messages": [],
+        "second_pong_payload_base64": "bWlzbWF0Y2g="
+      }
+    },
+    {
+      "case_id": "websocket.server-keepalive-ignores-unsolicited-pong",
+      "profile": "websocket",
+      "operation": "websocket.server-keepalive-unsolicited-pong",
+      "covers": [
+        "websocket.server-keepalive-unsolicited-pong"
+      ],
+      "server_options": {
+        "ws_ping_interval": 1.0,
+        "ws_ping_timeout": 0.3
+      },
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [],
+        "messages": [],
+        "unsolicited_pong_payload_base64": "b3JwaGFuZWQ="
+      }
+    },
+    {
       "case_id": "websocket.abrupt-client-disconnect",
       "profile": "websocket",
       "operation": "websocket.abrupt-disconnect",
@@ -675,6 +846,143 @@
         "subprotocols": [],
         "messages": [],
         "raw_frame_base64": "g4ABAgME",
+        "followup_path": "/scope"
+      }
+    },
+    {
+      "case_id": "websocket.frame-after-close-is-rejected",
+      "profile": "websocket",
+      "operation": "websocket.raw-frame-disconnect",
+      "covers": [
+        "websocket.raw-frame-disconnect"
+      ],
+      "websocket": {
+        "path": "/ws-wait-for-disconnect",
+        "subprotocols": [],
+        "messages": [],
+        "headers": [
+          [
+            "Sec-WebSocket-Extensions",
+            "permessage-deflate"
+          ]
+        ],
+        "raw_frame_base64": "iIIBAgMEAuqBgQUGBwh9",
+        "followup_path": "/scope"
+      }
+    },
+    {
+      "case_id": "websocket.unoffered-subprotocol-selection",
+      "profile": "websocket",
+      "operation": "websocket.raw-frame-disconnect",
+      "covers": [
+        "websocket.raw-frame-disconnect"
+      ],
+      "websocket": {
+        "path": "/ws-unoffered-subprotocol",
+        "subprotocols": [
+          "client-v1"
+        ],
+        "messages": [],
+        "raw_frame_base64": "g4ABAgME",
+        "followup_path": "/state"
+      }
+    },
+    {
+      "case_id": "websocket.compressed-session-rejects-stray-continuation-frame",
+      "profile": "websocket",
+      "operation": "websocket.raw-frame-disconnect",
+      "covers": [
+        "websocket.raw-frame-disconnect"
+      ],
+      "websocket": {
+        "path": "/ws-wait-for-disconnect",
+        "subprotocols": [],
+        "messages": [],
+        "headers": [
+          [
+            "Sec-WebSocket-Extensions",
+            "permessage-deflate"
+          ]
+        ],
+        "raw_frame_base64": "gIABAgME",
+        "followup_path": "/scope"
+      }
+    },
+    {
+      "case_id": "websocket.fragmented-text-message-is-reassembled",
+      "profile": "websocket",
+      "operation": "websocket.fragmented-message-reassembly",
+      "covers": [
+        "websocket.fragmented-message-reassembly"
+      ],
+      "websocket": {
+        "path": "/ws-fragmented-message",
+        "subprotocols": [],
+        "messages": [],
+        "raw_frame_base64": "AYQBAgMEZ3BiY4CGBQYHCGhjaXxgYg==",
+        "followup_path": "/scope"
+      }
+    },
+    {
+      "case_id": "websocket.fragmented-compressed-text-message-is-reassembled",
+      "profile": "websocket",
+      "operation": "websocket.fragmented-compressed-message-reassembly",
+      "covers": [
+        "websocket.fragmented-compressed-message-reassembly"
+      ],
+      "websocket": {
+        "path": "/ws-fragmented-message",
+        "subprotocols": [],
+        "messages": [],
+        "headers": [
+          [
+            "Sec-WebSocket-Extensions",
+            "permessage-deflate"
+          ]
+        ],
+        "raw_frame_base64": "QYYBAgMESylJSM5PgIYFBgcIyC1ORQQG",
+        "followup_path": "/scope"
+      }
+    },
+    {
+      "case_id": "websocket.raw-oversize-message-reports-size-close",
+      "profile": "websocket",
+      "operation": "websocket.raw-size-limit-close",
+      "covers": [
+        "websocket.raw-size-limit-close"
+      ],
+      "server_options": {
+        "ws_max_size": 4
+      },
+      "websocket": {
+        "path": "/ws-wait-for-disconnect",
+        "subprotocols": [],
+        "messages": [],
+        "headers": [
+          [
+            "Sec-WebSocket-Extensions",
+            "permessage-deflate"
+          ]
+        ],
+        "raw_frame_base64": "gYYBAgMEMDAwMDQ0",
+        "followup_path": "/scope"
+      }
+    },
+    {
+      "case_id": "websocket.raw-oversize-message-without-compression-reports-size-close",
+      "profile": "websocket",
+      "operation": "websocket.raw-size-limit-close-uncompressed",
+      "covers": [
+        "websocket.raw-size-limit-close-uncompressed"
+      ],
+      "server_options": {
+        "ws_max_size": 4
+      },
+      "websocket": {
+        "path": "/ws-wait-for-disconnect",
+        "subprotocols": [],
+        "messages": [],
+        "raw_frame_base64": "gYYBAgMEMDAwMDQ0",
         "followup_path": "/scope"
       }
     },
@@ -788,6 +1096,173 @@
         "messages": [],
         "expect_close": true,
         "followup_path": "/scope"
+      }
+    },
+    {
+      "case_id": "fault.websocket.yawc-unexpected-continuation-frame",
+      "profile": "websocket",
+      "operation": "websocket.fault-contract",
+      "covers": [
+        "websocket.fault-contract"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.yawc.unexpected-continuation-frame",
+        "contract": "websocket-teardown-and-followup-200"
+      },
+      "websocket": {
+        "path": "/ws-echo",
+        "subprotocols": [],
+        "messages": [
+          {
+            "kind": "text",
+            "value": "coverage-probe"
+          }
+        ],
+        "headers": [
+          [
+            "Sec-WebSocket-Extensions",
+            "permessage-deflate"
+          ]
+        ],
+        "expect_close": true,
+        "followup_path": "/state"
+      }
+    },
+    {
+      "case_id": "fault.websocket.yawc-invalid-text-frame",
+      "profile": "websocket",
+      "operation": "websocket.fault-contract",
+      "covers": [
+        "websocket.fault-contract"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.yawc.invalid-text-frame",
+        "contract": "websocket-teardown-and-followup-200"
+      },
+      "websocket": {
+        "path": "/ws-echo",
+        "subprotocols": [],
+        "messages": [
+          {
+            "kind": "text",
+            "value": "coverage-probe"
+          }
+        ],
+        "headers": [
+          [
+            "Sec-WebSocket-Extensions",
+            "permessage-deflate"
+          ]
+        ],
+        "expect_close": true,
+        "followup_path": "/state"
+      }
+    },
+    {
+      "case_id": "fault.websocket.yawc-invalid-close-reason",
+      "profile": "websocket",
+      "operation": "websocket.fault-contract",
+      "covers": [
+        "websocket.fault-contract"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.yawc.invalid-close-reason",
+        "contract": "websocket-teardown-and-followup-200"
+      },
+      "websocket": {
+        "path": "/ws-echo",
+        "subprotocols": [],
+        "messages": [
+          {
+            "kind": "text",
+            "value": "coverage-probe"
+          }
+        ],
+        "headers": [
+          [
+            "Sec-WebSocket-Extensions",
+            "permessage-deflate"
+          ]
+        ],
+        "expect_close": true,
+        "followup_path": "/state"
+      }
+    },
+    {
+      "case_id": "fault.websocket.yawc-close-reply-flush-error",
+      "profile": "websocket",
+      "operation": "websocket.fault-contract",
+      "covers": [
+        "websocket.fault-contract"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.yawc.close-reply-flush-error",
+        "contract": "websocket-teardown-and-followup-200"
+      },
+      "server_options": {
+        "ws": "websockets-sansio"
+      },
+      "websocket": {
+        "path": "/ws-echo",
+        "subprotocols": [],
+        "messages": [
+          {
+            "kind": "text",
+            "value": "coverage-probe"
+          }
+        ],
+        "headers": [
+          [
+            "Sec-WebSocket-Extensions",
+            "permessage-deflate"
+          ]
+        ],
+        "client_close": {
+          "code": 1000,
+          "reason": "coverage-probe"
+        },
+        "followup_path": "/state"
+      }
+    },
+    {
+      "case_id": "fault.websocket.yawc-close-reply-flush-unexpected-frame",
+      "profile": "websocket",
+      "operation": "websocket.fault-contract",
+      "covers": [
+        "websocket.fault-contract"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.yawc.close-reply-flush-unexpected-frame",
+        "contract": "websocket-teardown-and-followup-200"
+      },
+      "server_options": {
+        "ws": "websockets-sansio"
+      },
+      "websocket": {
+        "path": "/ws-echo",
+        "subprotocols": [],
+        "messages": [
+          {
+            "kind": "text",
+            "value": "coverage-probe"
+          }
+        ],
+        "headers": [
+          [
+            "Sec-WebSocket-Extensions",
+            "permessage-deflate"
+          ]
+        ],
+        "client_close": {
+          "code": 1000,
+          "reason": "coverage-probe"
+        },
+        "followup_path": "/state"
       }
     },
     {
@@ -1761,6 +2236,30 @@
       }
     },
     {
+      "case_id": "fault.websocket.keepalive-ping-send-error-followup-200",
+      "profile": "websocket",
+      "operation": "websocket.fault-contract",
+      "covers": [
+        "websocket.fault-contract"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.driver.send-error",
+        "contract": "websocket-driver-send-error-followup-200"
+      },
+      "server_options": {
+        "ws_ping_interval": 0.1,
+        "ws_ping_timeout": 0.3
+      },
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [],
+        "messages": [],
+        "expect_close": true,
+        "followup_path": "/state"
+      }
+    },
+    {
       "case_id": "fault.websocket.peer-read-failed-wait-complete",
       "profile": "websocket",
       "operation": "websocket.fault-contract",
@@ -1867,6 +2366,25 @@
       "verification": "fault-contract",
       "fault": {
         "point": "websocket.native-upgrade.missing",
+        "contract": "websocket-handshake-error-followup-200"
+      },
+      "websocket": {
+        "path": "/ws-echo",
+        "subprotocols": [],
+        "messages": [],
+        "followup_path": "/state"
+      }
+    },
+    {
+      "case_id": "fault.websocket.native-upgrade-extension-removed-after-dispatch-returns-500",
+      "profile": "websocket",
+      "operation": "websocket.fault-contract",
+      "covers": [
+        "websocket.fault-contract"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.native-upgrade.extension-removed-after-dispatch",
         "contract": "websocket-handshake-error-followup-200"
       },
       "websocket": {
@@ -2012,17 +2530,12 @@
       }
     },
     {
-      "case_id": "support.websocket.accept-header-capacity-error-recovers",
+      "case_id": "websocket.accept-response-header-capacity-delivery",
       "profile": "websocket",
-      "operation": "websocket.fault-contract",
+      "operation": "websocket.response-header-capacity-delivery",
       "covers": [
-        "websocket.fault-contract"
+        "websocket.response-header-capacity-delivery"
       ],
-      "verification": "fault-contract",
-      "fault": {
-        "point": "public.websocket-accept-header-capacity",
-        "contract": "websocket-header-capacity-error-followup-200"
-      },
       "websocket": {
         "path": "/ws-header-capacity?count=32769",
         "subprotocols": [],
@@ -2109,6 +2622,29 @@
         ],
         "messages": [],
         "expect_close": true
+      }
+    },
+    {
+      "case_id": "fault.websocket.keepalive-close-send-error-followup-200",
+      "profile": "websocket",
+      "operation": "websocket.keepalive-close-transport-error",
+      "covers": [
+        "websocket.keepalive-close-transport-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.keepalive.close-send-error",
+        "contract": "websocket-keepalive-close-error-followup-200"
+      },
+      "server_options": {
+        "ws_ping_interval": 0.1,
+        "ws_ping_timeout": 0.3
+      },
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [],
+        "messages": [],
+        "followup_path": "/state"
       }
     }
   ]

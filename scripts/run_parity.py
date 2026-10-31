@@ -10,6 +10,7 @@ import errno
 import hashlib
 import http.client
 import importlib
+import ipaddress
 import io
 import json
 import logging
@@ -27,20 +28,36 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 import uuid
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
-from typing import Any
+from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
+from typing import Any, Iterator
 from urllib.parse import parse_qs, urlsplit
 
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 import psutil
 from h2.config import H2Configuration
 from h2.connection import H2Connection
-from h2.events import DataReceived, ResponseReceived, StreamEnded, StreamReset
+from h2.events import (
+    ConnectionTerminated,
+    DataReceived,
+    InformationalResponseReceived,
+    ResponseReceived,
+    StreamEnded,
+    StreamReset,
+    TrailersReceived,
+)
 from h2.errors import ErrorCodes
+from h2.settings import SettingCodes
 from websockets.exceptions import ConnectionClosed, InvalidHandshake, InvalidStatus
 from websockets.sync.client import connect as websocket_connect
+from parity_identity import runtime_source_digest, runtime_source_hashes
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,13 +65,32 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@33"
-RESULT_SCHEMA = "uvicorn-rs-parity/result@4"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@47"
+RESULT_SCHEMA = "uvicorn-rs-parity/result@5"
+MAX_PARITY_HTTP2_RESPONSE_HEADER_LIST_SIZE = 2_097_152
 ORACLE_PYTHON = Path(sys.executable)
 # Normal-wheel parity must exercise the installed wheel built for this run.
 # Source-tree parity leaves this disabled so its Python adapter is loaded from
 # the checkout beside the instrumented native extension.
 INSTALLED_CANDIDATE_MODE = False
+TRACE_HYPERCORN_H3_EVENTS = False
+
+
+def _is_import_path(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    module, separator, attribute = value.partition(":")
+    if not separator:
+        module, separator, attribute = value.rpartition(".")
+    return bool(
+        separator
+        and module
+        and attribute
+        and all(part.isidentifier() for part in module.split("."))
+        and all(part.isidentifier() for part in attribute.split("."))
+    )
+
+
 # These messages authorize one deliberately injected panic per attempted
 # coverage fault case. They never authorize ordinary target/reference panics
 # or a failing process exit. The hook event, not a repeated JoinError log,
@@ -64,6 +100,7 @@ COVERAGE_PANIC_MESSAGES = {
     "http3.native-app-task.panic-before-response-start": "coverage-injected ASGI request task panic",
     "python.task-future.panic-after-completion": "coverage-injected ASGI app task panic after final response body",
     "websocket.handshake.mutex.poison": "coverage-injected WebSocket handshake mutex poison",
+    "http.response.trailers.mutex.poison": "coverage-injected response trailers mutex poison",
     "http3.connection-task.panic": "coverage-injected HTTP/3 connection task panic",
     "http3.connection-task.panic-during-shutdown": "coverage-injected HTTP/3 connection task panic during shutdown",
     "http3.request-task.panic": "coverage-injected HTTP/3 request task panic",
@@ -75,6 +112,12 @@ RUST_PANIC_HEADER = re.compile(
     r"^thread '[^'\n]*'(?: \([0-9]+\))? panicked at "
     r"(?P<source>.+):[0-9]+:[0-9]+:$"
 )
+TLS_INITIALIZATION_FAILURES = {
+    "tls.traditional-key.cipher-init-error": "could not initialize traditional private-key cipher with validated lengths",
+    "tls.provider.empty-cipher-suites": "invalid TLS cipher selection:",
+    "tls.client-verifier.empty-roots": "invalid client CA configuration:",
+    "tls.quic.invalid-identity": "invalid HTTP/3 TLS identity:",
+}
 FAULT_POINTS = {
     "python.task-future.defer-task-transfer",
     "python.task-cancel.cancel.getattr",
@@ -105,12 +148,43 @@ FAULT_POINTS = {
     "python.asgi-receive.borrow-conflict",
     "server.control.shutdown.borrow-conflict",
     "server.serve.control.borrow-conflict",
+    "server.concurrency-limit.callback",
     "server.graceful-timeout.overflow",
+    "server.connection.invalid-default-header.source-chain",
+    "server.default-header.response-finalization",
     "server.python-locals.get-current",
+    "server.startup.after-bind.pause",
     "python.task-completion.allocate",
     "http.request.empty-body.channel-closed",
     "websocket.app-task.panic-before-handshake",
+    "websocket.native-upgrade.extension-removed-after-dispatch",
     "server.quic-tls.config-error",
+    # Keep this set literal: the normal-wheel audit reads it with
+    # ast.literal_eval so registry extraction never executes runner code.
+    "tls.traditional-key.cipher-init-error",
+    "tls.provider.empty-cipher-suites",
+    "tls.client-verifier.empty-roots",
+    "tls.quic.invalid-identity",
+    "tls.provider.unavailable",
+    "python.ssl.ca-verifier.import",
+    "python.ssl.ca-verifier.protocol",
+    "python.ssl.ca-verifier.context",
+    "python.ssl.ca-verifier.create-context",
+    "python.ssl.ca-verifier.verify-mode",
+    "python.ssl.ca-verifier.create-verify-mode",
+    "python.ssl.ca-verifier.set-verify-mode",
+    "python.ssl.ca-verifier.rust-parse-error",
+    "python.ssl.keyfile-error.import",
+    "python.ssl.keyfile-error.protocol",
+    "python.ssl.keyfile-error.context",
+    "python.ssl.keyfile-error.create-context",
+    "python.ssl.keyfile.rust-decrypt-error",
+    "python.pkcs12.reader.outer-too-long",
+    "python.pkcs12.reader.outer-sequence-decode",
+    "python.pkcs12.reader.outer-finish",
+    "python.pkcs12.reader.encrypted-info-too-long",
+    "python.pkcs12.reader.algorithm-too-long",
+    "python.pkcs12.reader.parameters-too-long",
     "native.module.wrap-function.serve",
     "native.runtime.build.error",
     "server.websocket-task.shutdown-panic",
@@ -133,14 +207,32 @@ FAULT_POINTS = {
     "http.asgi.send.type.get-item",
     "http.response.start.status.get-item",
     "http.response.start.status.extract",
+    "http.response.start.trailers.get-item",
+    "http.response.start.trailers.extract",
     "http.response.start.headers.get-item",
     "http.response.start.headers.extract",
+    "http.response.date-header.invalid-value",
     "http.response.body.body.get-item",
     "http.response.body.body.extract",
     "http.response.body.more-body.get-item",
     "http.response.body.more-body.extract",
     "http.response.start.channel-closed",
     "http.response.body.channel-closed",
+    "http.response.early-hint.disconnected",
+    "http.response.early-hint.channel-closed",
+    "asgi.event-type.http-response-early-hint.eq",
+    "http.response.early-hint.links.get-item",
+    "http.response.early-hint.links.extract",
+    "http.response.trailers.disconnected",
+    "http.response.trailers.channel-closed",
+    "http.response.trailers.channel-full",
+    "http.response.trailers.full-send-closed",
+    "asgi.event-type.http-response-trailers.eq",
+    "http.response.trailers.headers.get-item",
+    "http.response.trailers.headers.extract",
+    "http.response.trailers.more-trailers.get-item",
+    "http.response.trailers.more-trailers.extract",
+    "http.response.trailers.mutex.poison",
     "http.response.body-consumer.pause",
     "http.response.body-poll.receiver-pending.pause",
     "http.app-task.panic-before-response-start",
@@ -201,6 +293,9 @@ FAULT_POINTS = {
     "scope.http.headers.set-item",
     "scope.http.client.set-item",
     "scope.http.server.set-item",
+    "scope.http2.extensions.early-hint.set-item",
+    "scope.http2.extensions.response-trailers.set-item",
+    "scope.http2.extensions.set-item",
     "scope.state.copy",
     "scope.state.set-item",
     "request.http.type.set-item",
@@ -220,11 +315,37 @@ FAULT_POINTS = {
     "http.asgi.app-invoke",
     "server.listener.accept-error",
     "server.listener.local-addr-error",
+    "server.unix-listener.set-permissions-error",
+    "server.prebound-transfer.bind-error",
+    "server.prebound-transfer.accept-error",
+    "server.prebound-transfer.read-error",
+    "server.prebound-transfer.recv-error",
+    "server.prebound-transfer.missing-marker",
+    "server.prebound-transfer.unexpected-ancillary",
+    "server.prebound-transfer.control-truncated",
+    "server.prebound-transfer.get-descriptor-flags-error",
+    "server.prebound-transfer.set-descriptor-flags-error",
+    "server.prebound-transfer.listen-error",
+    "server.prebound-transfer.nonblocking-error",
+    "server.prebound-transfer.tcp-listener-conversion-error",
+    "server.prebound-transfer.no-listener",
+    "server.prebound-transfer.listener-marker-invalid-count",
+    "server.prebound-transfer.end-marker-has-descriptor",
+    "server.prebound-transfer.invalid-marker",
+    "server.tcp-address-lookup.empty",
+    "server.tcp-socket.create-error",
+    "server.tcp-socket.reuseaddr-error",
+    "server.tcp-socket.bind-error",
+    "server.tcp-socket.listen-error",
     "server.http3-endpoint.bind-error",
     "server.http3-task.shutdown-hang",
     "server.websocket-task.shutdown-hang",
     "lifespan.io.allocate",
     "lifespan.app-invoke",
+    "lifespan.log-info.import-logging",
+    "lifespan.log-info.get-logger",
+    "lifespan.log-info.call-get-logger",
+    "lifespan.log-info.call-info",
     "websocket.io.allocate",
     "websocket.app-invoke",
     "websocket.native-upgrade.missing",
@@ -313,6 +434,11 @@ FAULT_POINTS = {
     "websocket.receive.closed-reason.set-item",
     "websocket.receive.channel-closed",
     "websocket.receive.connection-closed",
+    "websocket.yawc.unexpected-continuation-frame",
+    "websocket.yawc.invalid-text-frame",
+    "websocket.yawc.invalid-close-reason",
+    "websocket.yawc.close-reply-flush-error",
+    "websocket.yawc.close-reply-flush-unexpected-frame",
     "websocket.driver.connection-closed",
     "websocket.peer-read-failed.wait-complete",
     "websocket.peer-read-failed.unavailable",
@@ -323,17 +449,19 @@ FAULT_POINTS = {
     "websocket.driver.incoming-binary-receiver-closed",
     "websocket.driver.outgoing-channel-closed",
     "websocket.driver.send-error",
+    "websocket.keepalive.close-send-error",
     "websocket.driver.drain-send-error",
 }
 PUBLIC_INPUT_CONTRACT_POINTS = {
     "public.http-response-header-capacity",
-    "public.websocket-accept-header-capacity",
+    "public.http2-response-trailer-capacity",
 }
 ASGI_SCOPE_SUPPORT_CONTRACT_POINTS = {"public.asgi-spec-version"}
 # These selectors describe real protocol/application input. They are never
 # native injection points and must not arm the coverage fault control.
 HARNESS_FAULT_POINTS = (
     {
+        "harness.server.startup-acknowledgement.drop",
         "http3.client.abort-after-body",
         "http3.client.peer-stop-before-response-headers",
         "http3.client.peer-stop-after-request-body-complete",
@@ -402,10 +530,25 @@ EAGER_REGISTRATION_CLEANUP_CONTRACTS = (
 )
 FAULT_CONTRACTS = {
     "asgi-spec-version-2.5",
+    "server-connection-invalid-default-header-source-chain",
+    "server-default-header-finalization-error-closes-connection",
+    "server-concurrency-callback-error-preserves-503",
+    "http2-response-event-fault-consumed-and-status-observed",
+    "python-ssl-ca-verifier-error-propagates",
+    "python-ssl-ca-verifier-success-fallback-propagates",
+    "python-ssl-keyfile-error-propagates",
+    "python-ssl-keyfile-rust-decrypt-error-propagates",
+    "python-tls-initialization-error-propagates",
+    "python-tls-provider-fallback-serves",
+    "python-pkcs12-reader-error-propagates",
     "http3-request-trailers-drained-as-body-only",
     "http-response-reset-cancels-deferred-task",
     "server-cancellation-schedule-error-bounded-shutdown",
+    "server-startup-cancellation-shutdown-error-propagates",
+    "server-startup-cancelled-after-bind",
+    "server-startup-bind-shutdown-error-logged",
     "http-500-then-followup-200",
+    "http-response-build-error-closes-connection-followup-200",
     "http-callback-error-followup-200",
     "http-original-task-start-error-followup-200",
     "http-callback-error-cleans-task-followup-200",
@@ -425,8 +568,8 @@ FAULT_CONTRACTS = {
     "http-body-pump-shutdown-aborts-hung-pump",
     "http-body-pump-shutdown-completes-task-before-abort",
     "http-request-body-conversion-error-caught",
-    "http-response-header-capacity-recovery-followup-200",
-    "websocket-header-capacity-error-followup-200",
+    "server-startup-acknowledgement-drop-cleans-listener",
+    "http-response-header-overflow-delivery-followup-200",
     "http-start-error-close-followup-200",
     "http-response-body-error-followup-200",
     "http-response-backpressure-body-preserved-followup-200",
@@ -441,6 +584,7 @@ FAULT_CONTRACTS = {
     "http3-legacy-peer-close-unknown-code-ignored",
     "http3-legacy-peer-close-classification-error",
     "http3-stream-reset-on-runtime-error",
+    "http3-legacy-default-header-error-resets-stream",
     "http3-request-task-error-before-peer-close-followup-200",
     "http3-body-pump-early-exit-500",
     "http3-upload-body-pump-preserves-data",
@@ -478,16 +622,46 @@ FAULT_CONTRACTS = {
     "http-connection-lifetime-closed-disconnect-followup-200",
     "http-immediate-disconnect-message-error-followup-200",
     "server-startup-failure",
+    "server-unix-listener-permission-error-startup-propagates",
     "server-lifespan-startup-auto-fallback",
+    "server-lifespan-startup-auto-fallback-logger-failure-ignored",
     "server-shutdown-failure",
     "server-lifespan-task-cancel",
     "server-native-connection-error-during-shutdown",
     "websocket-server-shutdown-force-abort",
     "websocket-driver-send-error-followup-200",
+    "websocket-keepalive-close-error-followup-200",
     "websocket-driver-send-error-cancels-app",
     "websocket-registration-failure-cancels-app-followup-200",
     "websocket-handshake-error-followup-200",
     "websocket-teardown-and-followup-200",
+}
+PYTHON_SSL_CA_VERIFIER_FAULT_POINTS = {
+    "python.ssl.ca-verifier.import",
+    "python.ssl.ca-verifier.protocol",
+    "python.ssl.ca-verifier.context",
+    "python.ssl.ca-verifier.create-context",
+    "python.ssl.ca-verifier.verify-mode",
+    "python.ssl.ca-verifier.create-verify-mode",
+    "python.ssl.ca-verifier.set-verify-mode",
+}
+PYTHON_SSL_CA_VERIFIER_RUST_PARSE_FAULT_POINT = (
+    "python.ssl.ca-verifier.rust-parse-error"
+)
+PYTHON_SSL_KEYFILE_ERROR_FAULT_POINTS = {
+    "python.ssl.keyfile-error.import",
+    "python.ssl.keyfile-error.protocol",
+    "python.ssl.keyfile-error.context",
+    "python.ssl.keyfile-error.create-context",
+}
+PYTHON_SSL_KEYFILE_RUST_DECRYPT_FAULT_POINT = "python.ssl.keyfile.rust-decrypt-error"
+PKCS12_PARSER_FAULT_POINTS = {
+    "python.pkcs12.reader.outer-too-long",
+    "python.pkcs12.reader.outer-sequence-decode",
+    "python.pkcs12.reader.outer-finish",
+    "python.pkcs12.reader.encrypted-info-too-long",
+    "python.pkcs12.reader.algorithm-too-long",
+    "python.pkcs12.reader.parameters-too-long",
 }
 WEBSOCKET_FAULT_POINTS = {
     "asgi.event-type.websocket-send.eq",
@@ -502,6 +676,11 @@ WEBSOCKET_FAULT_POINTS = {
     "websocket.send.bytes.extract",
     "websocket.receive.channel-closed",
     "websocket.receive.connection-closed",
+    "websocket.yawc.unexpected-continuation-frame",
+    "websocket.yawc.invalid-text-frame",
+    "websocket.yawc.invalid-close-reason",
+    "websocket.yawc.close-reply-flush-error",
+    "websocket.yawc.close-reply-flush-unexpected-frame",
     "websocket.driver.connection-closed",
     "websocket.peer-read-failed.unavailable",
     "websocket.peer-read-failed.watch-fallback",
@@ -541,6 +720,7 @@ WEBSOCKET_HANDSHAKE_FAULT_POINTS = {
     "websocket.io.allocate",
     "websocket.app-invoke",
     "websocket.native-upgrade.missing",
+    "websocket.native-upgrade.extension-removed-after-dispatch",
     "websocket.native-upgrade.register-closed",
     "websocket.accept-key.header-value-error",
     "websocket.peer-read-failed.wait-complete",
@@ -555,6 +735,12 @@ LIFESPAN_STARTUP_AUTO_FALLBACK_FAULT_POINTS = {
     "lifespan.startup.failed.message.get-item",
     "lifespan.startup.failed.message.extract",
     "lifespan.send.event-channel-closed",
+}
+LIFESPAN_INFO_LOG_FAILURE_FAULT_POINTS = {
+    "lifespan.log-info.import-logging",
+    "lifespan.log-info.get-logger",
+    "lifespan.log-info.call-get-logger",
+    "lifespan.log-info.call-info",
 }
 LIFESPAN_SHUTDOWN_FAILURE_FAULT_POINTS = {
     "lifespan.shutdown.task-join-error",
@@ -583,9 +769,16 @@ HTTP_RESPONSE_BODY_BACKPRESSURE_FAULT_POINTS = {
 HTTP_RESPONSE_START_ERROR_FAULT_POINTS = {
     "http.response.start.status.get-item",
     "http.response.start.status.extract",
+    "http.response.start.trailers.get-item",
+    "http.response.start.trailers.extract",
     "http.response.start.headers.get-item",
     "http.response.start.headers.extract",
     "http.response.start.channel-closed",
+}
+HTTP2_SCOPE_FAULT_POINTS = {
+    "scope.http2.extensions.early-hint.set-item",
+    "scope.http2.extensions.response-trailers.set-item",
+    "scope.http2.extensions.set-item",
 }
 
 
@@ -743,11 +936,23 @@ def validate_load_input(case: dict[str, Any], kind: str) -> None:
         raise ParityError(f"{case['case_id']}: HTTP load profile and operation do not match")
 
 
+def load_contract_json(path: Path) -> Any:
+    def unique_fields(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        value: dict[str, Any] = {}
+        for name, item in pairs:
+            if name in value:
+                raise ParityError(f"duplicate JSON field in {path}: {name}")
+            value[name] = item
+        return value
+
+    return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique_fields)
+
+
 def load_contract(
     manifest_path: Path = MANIFEST_PATH,
     fixture_root: Path = FIXTURES,
 ) -> tuple[dict[str, Any], dict[str, Any], list[Path]]:
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = load_contract_json(manifest_path)
     exact_keys(
         manifest,
         {
@@ -791,11 +996,26 @@ def load_contract(
             raise ParityError(f"{oracle['id']}: protocols must be a non-empty array")
         component_ids = set()
         for component in oracle["components"]:
-            exact_keys(component, {"id", "version"}, f"{oracle['id']} oracle component")
+            component_keys = {"id", "version"}
+            if "platforms" in component:
+                component_keys.add("platforms")
+            exact_keys(component, component_keys, f"{oracle['id']} oracle component")
             if not isinstance(component["id"], str) or not component["id"] or component["id"] in component_ids:
                 raise ParityError(f"{oracle['id']}: missing or duplicate component ID")
             if not isinstance(component["version"], str) or not component["version"]:
                 raise ParityError(f"{oracle['id']}/{component['id']}: component version is required")
+            if "platforms" in component:
+                platforms = component["platforms"]
+                if (
+                    not isinstance(platforms, list)
+                    or not platforms
+                    or any(not isinstance(platform_id, str) for platform_id in platforms)
+                    or len(platforms) != len(set(platforms))
+                    or any(platform_id not in {"linux", "macos", "windows"} for platform_id in platforms)
+                ):
+                    raise ParityError(
+                        f"{oracle['id']}/{component['id']}: platforms must be unique supported platform IDs"
+                    )
             component_ids.add(component["id"])
     for profile in manifest["profiles"]:
         exact_keys(profile, {"id", "oracle", "protocol", "oracle_config"}, "manifest profile")
@@ -803,18 +1023,26 @@ def load_contract(
         raise ParityError("duplicate profile ID")
     observation_fields = {
         "status", "content_type", "body_bytes", "ordered_body_bytes", "early_body_bytes",
+        "early_hints", "early_hint_before_final_start", "response_trailers",
         "message_received",
         "ordered_response_headers", "response_header_values_by_name",
         "server_header_values", "date_header_present",
         "streamed_before_completion", "disconnect_event", "followup_response",
         "handshake_status", "handshake_established", "handshake_accept_valid", "frame_sent",
+        "application_header_count", "application_header_sha256",
         "disconnect_code", "followup_status", "subprotocol", "ordered_messages", "state_response",
         "ordered_message_payload_bytes", "last_ordered_message",
         "process_terminated", "process_exit_code", "application_events", "close_code", "close_reason",
         "connection_closed", "listener_closed_before_release", "idle_connection_closed",
         "startup_failed", "startup_error_observed", "responses", "pong_received",
+        "response_trailer_count", "response_trailer_sha256",
+        "response_stream_terminal", "response_stream_reset_error_code",
+        "connection_reused",
+        "bind_error_logged",
         "first_server_ping_received", "first_server_ping_payload_length", "pong_sent",
+        "unsolicited_pong_sent",
         "second_server_ping_received", "second_server_ping_payload_length",
+        "second_pong_sent", "second_pong_payload_matches_ping",
         "timeout_close_received", "timeout_close_code", "timeout_close_reason",
         "resource_rounds", "resource_stable", "task_count_stable",
         "active_tasks_zero", "load_reached", "followup_healthy",
@@ -835,15 +1063,28 @@ def load_contract(
         "body_stream_error", "trigger_error", "shutdown_clean",
         "exit_code", "stdout_base64", "stderr_base64",
         "response_received", "response_status", "response_content_type",
-        "response_body_base64", "listener_responses", "shutdown_signal_sent", "process_timed_out",
-        "server_log_events", "request_limit_response_count",
+        "response_body_base64", "listener_responses", "shutdown_signal_sent", "shutdown_signals_sent", "process_timed_out",
+        "raw_connection_open_after_timeout",
+        "graceful_shutdown_cancellation_observed",
+        "server_log_events", "worker_replacement_observed", "request_limit_response_count",
         "request_limit_range_satisfied",
         "server_started_before_shutdown", "serve_task_finished_before_shutdown",
-        "serve_raised", "serve_timed_out", "server_exit_code",
+        "server_started",
+        "startup_failure_wait_result", "dropped_control_wait_result", "dropped_readiness_wait_result",
+        "serve_raised", "serve_timed_out", "server_exit_code", "listener_released",
+        "serve_exception_class", "serve_exception_message",
+        "client_certificate_rejected", "negotiated_tls_version", "negotiated_tls_cipher",
+        "tls_alert_level", "tls_alert_description",
+        "supported_tls_client_hello_admitted",
         "process_stderr_has_unhandled_task_warning",
         "first_response_body_base64", "second_response_body_base64", "reload_observed",
         "process_stdout_base64", "process_stderr_base64",
-        "workers_ignored_warning",
+        "workers_ignored_warning", "excluded_change_reloaded",
+        "included_change_reloaded", "scope_observation", "compression_negotiated",
+        "server_ping_observed",
+        "lifespan_startup_entered_before_cancel", "server_started_before_cancel",
+        "serve_cancelled", "serve_task_finished",
+        "listener_accepting_after_cancel", "listener_transfer_blocked",
     }
     for operation in manifest["operations"]:
         expected_operation_keys = {"id", "kind", "observe"}
@@ -862,10 +1103,15 @@ def load_contract(
                 f"{operation.get('id')}.comparison_normalization",
             )
             if (
-                operation.get("id") != "cli.process"
-                or normalizations["stderr_base64"]
-                != "python-traceback-exception-chain"
-            ):
+                operation.get("id"),
+                normalizations["stderr_base64"],
+            ) not in {
+                ("cli.process", "python-process-diagnostics"),
+                (
+                    "python.api.server-lifespan-auto-fallback",
+                    "uvicorn-rs-shutdown-trace",
+                ),
+            }:
                 raise ParityError(
                     f"{operation.get('id')}: unsupported comparison normalization"
                 )
@@ -934,7 +1180,7 @@ def load_contract(
     profile_case_counts = {profile_id: 0 for profile_id in profiles}
     input_cases = []
     for input_path in indexed_paths:
-        input_document = json.loads(input_path.read_text(encoding="utf-8"))
+        input_document = load_contract_json(input_path)
         exact_keys(input_document, {"schema", "cases"}, f"parity input {input_path.name}")
         if input_document["schema"] != INPUT_SCHEMA:
             raise ParityError(f"unsupported input schema in {input_path.name}: {input_document['schema']!r}")
@@ -975,18 +1221,19 @@ def load_contract(
                 raise ParityError(f"{case_id}: fault point is not allow-listed: {fault['point']!r}")
             if not isinstance(fault["contract"], str) or fault["contract"] not in FAULT_CONTRACTS:
                 raise ParityError(f"{case_id}: unsupported fault contract: {fault['contract']!r}")
-            if fault["contract"] == "http-response-header-capacity-recovery-followup-200":
+            if fault["contract"] == "http-response-header-overflow-delivery-followup-200":
                 requests = case.get("request_sequence", [])
                 if (
-                    case.get("profile") != "http1"
-                    or case.get("operation") != "http.keepalive-sequence"
+                    case_id != "support.http1.response-header-overflow-delivers"
+                    or case.get("profile") != "http1"
+                    or case.get("operation") != "http.response-header-capacity-many-above-map-limit"
                     or fault["point"] != "public.http-response-header-capacity"
                     or len(requests) != 2
                     or requests[0].get("path") != "/response-header-capacity?count=32769"
                     or requests[1].get("path") != "/scope"
                 ):
                     raise ParityError(
-                        f"{case_id}: public HTTP header capacity requires its finite response and recovery sequence"
+                        f"{case_id}: public HTTP header overflow requires 32,769 fields and a same-connection follow-up"
                     )
             elif fault["contract"] == "asgi-spec-version-2.5":
                 http_path = case.get("request", {}).get("path")
@@ -1024,6 +1271,7 @@ def load_contract(
             elif fault["contract"] in {
                 "http-500-then-followup-200", "http-callback-error-followup-200",
                 "http-original-task-start-error-followup-200",
+                "http-response-build-error-closes-connection-followup-200",
             }:
                 if (
                     case.get("profile") != "http1"
@@ -1173,11 +1421,24 @@ def load_contract(
                         "http3.response.non-data-frame",
                         "http3.response.body-send-error",
                         "http3.response.finish-error",
+                        "server.default-header.response-finalization",
                     }
                     or case.get("request", {}).get("expect_response_error") is not True
                 ):
                     raise ParityError(
                         f"{case_id}: HTTP/3 stream-error faults require the reset-observation workflow"
+                    )
+            elif fault["contract"] == "http3-legacy-default-header-error-resets-stream":
+                if (
+                    case.get("profile") != "http3"
+                    or case.get("operation") != "http3.injected-stream-error"
+                    or fault["point"] != "http3.legacy-path.selection"
+                    or case.get("server_options", {}).get("headers") != ["invalid name: value"]
+                    or case.get("request", {}).get("path") != "/state"
+                    or case.get("request", {}).get("expect_response_error") is not True
+                ):
+                    raise ParityError(
+                        f"{case_id}: HTTP/3 legacy default-header failure requires the invalid-header stream-reset workflow"
                     )
             elif fault["contract"] == "http3-peer-close-classification-defensive-error":
                 if (
@@ -1240,7 +1501,7 @@ def load_contract(
                     or request.get("path") not in {"/return-before-response-start", "/h3-upload-disconnect"}
                     or request.get("method") != "POST"
                     or (final_message_send_error and (
-                        request.get("path") != "/return-before-response-start"
+                        request.get("path") != "/h3-upload-disconnect"
                         or request.get("body_base64") != ""
                     ))
                     or (not final_message_send_error and not request.get("body_base64"))
@@ -1426,14 +1687,21 @@ def load_contract(
                         f"{case_id}: endpoint accept closure requires startup plus an HTTP/1 follow-up"
                     )
             elif fault["contract"] == "http2-500-generic-error-body":
+                is_application_panic = (
+                    fault["point"] == "http.app-task.panic-before-response-start"
+                    and case.get("operation") == "http.application-error"
+                )
+                is_scope_construction_error = (
+                    fault["point"] in HTTP2_SCOPE_FAULT_POINTS
+                    and case.get("operation") == "http.application-status"
+                )
                 if (
                     case.get("profile") != "http2"
-                    or case.get("operation") != "http.application-error"
-                    or fault["point"] != "http.app-task.panic-before-response-start"
+                    or not (is_application_panic or is_scope_construction_error)
                     or case.get("request", {}).get("path") != "/state"
                 ):
                     raise ParityError(
-                        f"{case_id}: HTTP/2 panic injection requires the pre-response application-failure workflow"
+                        f"{case_id}: HTTP/2 pre-response failures require a generic-error request to /state"
                     )
             elif fault["contract"] == "http3-client-abort-disconnect-followup":
                 if (
@@ -2022,10 +2290,16 @@ def load_contract(
                         or fault["point"] in {"lifespan.startup.task-join-error", "lifespan.startup.send-closed"}
                         or fault["point"].startswith("native.module.")
                         or fault["point"] == "native.runtime.build.error"
+                        or fault["point"].startswith("server.prebound-transfer.")
                         or fault["point"] in {
                             "server.quic-tls.config-error",
                             "server.listener.accept-error",
                             "server.listener.local-addr-error",
+                            "server.tcp-address-lookup.empty",
+                            "server.tcp-socket.create-error",
+                            "server.tcp-socket.reuseaddr-error",
+                            "server.tcp-socket.bind-error",
+                            "server.tcp-socket.listen-error",
                             "server.http3-endpoint.bind-error",
                         }
                     )
@@ -2047,6 +2321,19 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: lifespan startup faults require the auto-fallback workflow"
                     )
+            elif fault["contract"] == "server-lifespan-startup-auto-fallback-logger-failure-ignored":
+                if (
+                    case.get("profile") not in {
+                        "lifespan-fault-receive-startup",
+                        "lifespan-no-support-error",
+                    }
+                    or case.get("operation") != "lifespan.startup-auto-fallback"
+                    or fault["point"] not in LIFESPAN_INFO_LOG_FAILURE_FAULT_POINTS
+                    or case.get("startup_fallback", {}).get("followup_path") != "/state"
+                ):
+                    raise ParityError(
+                        f"{case_id}: logger failures require the startup auto-fallback follow-up workflow"
+                    )
             elif fault["contract"] == "server-shutdown-failure":
                 if (
                     not (
@@ -2059,6 +2346,69 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: lifespan shutdown fault requires the shutdown-failure workflow"
+                    )
+            elif fault["contract"] == "server-startup-acknowledgement-drop-cleans-listener":
+                if (
+                    case.get("profile") != "python-api"
+                    or case.get("operation") != "python.api.server-startup-acknowledgement-drop"
+                    or fault["point"] != "harness.server.startup-acknowledgement.drop"
+                    or case.get("api", {}).get("server_startup_acknowledgement_drop", {}).get("shutdown") not in {"complete", "failed"}
+                ):
+                    raise ParityError(f"{case_id}: acknowledgement loss requires the controller-drop workflow")
+            elif fault["contract"] == "server-startup-cancelled-after-bind":
+                flags = {
+                    "python.api.server-startup-cancel-after-listener": "server_startup_cancel_after_listener",
+                    "python.api.server-startup-cancel-after-listener-without-lifespan": "server_startup_cancel_after_listener_without_lifespan",
+                }
+                flag = flags.get(case.get("operation"))
+                if (
+                    case.get("profile") != "python-api"
+                    or fault["point"] != "server.startup.after-bind.pause"
+                    or flag is None
+                    or case.get("api", {}).get(flag) is not True
+                ):
+                    raise ParityError(f"{case_id}: bound-listener pause requires the cancellation workflow")
+            elif fault["contract"] == "server-startup-cancellation-shutdown-error-propagates":
+                if (
+                    case.get("profile") != "python-api"
+                    or case.get("operation")
+                    != "python.api.server-startup-cancel-shutdown-error"
+                    or fault["point"] != "lifespan.shutdown.task-join-error"
+                    or case.get("api", {}).get(
+                        "server_startup_cancel_before_listener"
+                    )
+                    is not True
+                ):
+                    raise ParityError(
+                        f"{case_id}: shutdown join fault requires startup cancellation before listener bind"
+                    )
+            elif fault["contract"] == "server-startup-bind-shutdown-error-logged":
+                if (
+                    case.get("profile") != "python-api"
+                    or case.get("operation")
+                    != "python.api.server-startup-bind-shutdown-error-log"
+                    or fault["point"] != "lifespan.shutdown.task-join-error"
+                    or case.get("api", {}).get(
+                        "server_startup_bind_failure_lifespan_cleanup"
+                    )
+                    is not True
+                ):
+                    raise ParityError(
+                        f"{case_id}: shutdown join fault requires the listener-bind-failure workflow"
+                    )
+            elif fault["contract"] == "server-unix-listener-permission-error-startup-propagates":
+                if (
+                    case.get("profile") != "python-api"
+                    or case.get("operation")
+                    != "python.api.server-startup-uds-socket-replacement-lifespan-cleanup"
+                    or fault["point"] != "server.unix-listener.set-permissions-error"
+                    or case.get("api", {}).get(
+                        "server_startup_uds_socket_replacement_lifespan_cleanup"
+                    )
+                    is not True
+                ):
+                    raise ParityError(
+                        f"{case_id}: Unix socket permission failures require the UDS startup and lifespan workflow"
                     )
             elif fault["contract"] == "server-lifespan-task-cancel":
                 if (
@@ -2083,6 +2433,191 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: native connection write faults require a held response during graceful shutdown"
                     )
+            elif fault["contract"] in {
+                "python-tls-initialization-error-propagates",
+                "python-tls-provider-fallback-serves",
+            }:
+                run_http = case.get("api", {}).get("run_http", {})
+                point = fault["point"]
+                failure = fault["contract"] == "python-tls-initialization-error-propagates"
+                if (
+                    case.get("profile") != "python-api"
+                    or case.get("operation") != "python.api.run-http"
+                    or (point not in TLS_INITIALIZATION_FAILURES if failure
+                        else point != "tls.provider.unavailable")
+                    or run_http.get("invocation") != "config-server"
+                    or run_http.get("tls") is not True
+                    or (point == "tls.traditional-key.cipher-init-error" and (
+                        run_http.get("ssl_keyfile_format") != "traditional-rsa-aes128"
+                        or not run_http.get("ssl_keyfile_password")
+                    ))
+                    or (point == "tls.client-verifier.empty-roots" and (
+                        run_http.get("ssl_ca_certs") != "generated-ca"
+                        or run_http.get("ssl_cert_reqs") != 2
+                    ))
+                ):
+                    raise ParityError(
+                        f"{case_id}: TLS boundary faults require their declared TLS startup workflow"
+                    )
+            elif fault["contract"] == "python-ssl-ca-verifier-error-propagates":
+                run_http = case.get("api", {}).get("run_http", {})
+                if (
+                    case.get("profile") != "python-api"
+                    or case.get("operation") != "python.api.run-http"
+                    or fault["point"] not in PYTHON_SSL_CA_VERIFIER_FAULT_POINTS
+                    or run_http.get("invocation") != "config-server"
+                    or run_http.get("tls") is not True
+                    or run_http.get("ssl_ca_certs") != "malformed-ca"
+                    or run_http.get("ssl_cert_reqs") != 2
+                ):
+                    raise ParityError(
+                        f"{case_id}: Python SSL CA helper faults require malformed-CA Config/Server startup"
+                    )
+            elif fault["contract"] == "python-ssl-ca-verifier-success-fallback-propagates":
+                run_http = case.get("api", {}).get("run_http", {})
+                if (
+                    case.get("profile") != "python-api"
+                    or case.get("operation") != "python.api.run-http"
+                    or fault["point"]
+                    != PYTHON_SSL_CA_VERIFIER_RUST_PARSE_FAULT_POINT
+                    or run_http.get("invocation") != "config-server"
+                    or run_http.get("tls") is not True
+                    or run_http.get("ssl_ca_certs") != "generated-ca"
+                    or run_http.get("ssl_cert_reqs") != 2
+                ):
+                    raise ParityError(
+                        f"{case_id}: Rust CA parser faults require a generated-CA Config/Server startup case"
+                    )
+            elif fault["contract"] == "python-ssl-keyfile-error-propagates":
+                run_http = case.get("api", {}).get("run_http", {})
+                if (
+                    case.get("profile") != "python-api"
+                    or case.get("operation") != "python.api.run-http"
+                    or fault["point"] not in PYTHON_SSL_KEYFILE_ERROR_FAULT_POINTS
+                    or run_http.get("invocation") != "config-server"
+                    or run_http.get("tls") is not True
+                    or run_http.get("ssl_keyfile_format")
+                    != "pkcs12-pbe-sha1-3des-invalid-decrypted-key"
+                    or not run_http.get("ssl_keyfile_password")
+                    or run_http.get("ssl_cert_reqs") != 2
+                ):
+                    raise ParityError(
+                        f"{case_id}: Python SSL keyfile helper faults require the invalid-decrypted-key Config/Server case"
+                    )
+            elif fault["contract"] == "python-ssl-keyfile-rust-decrypt-error-propagates":
+                run_http = case.get("api", {}).get("run_http", {})
+                if (
+                    case.get("profile") != "python-api"
+                    or case.get("operation") != "python.api.run-http"
+                    or fault["point"] != PYTHON_SSL_KEYFILE_RUST_DECRYPT_FAULT_POINT
+                    or run_http.get("invocation") != "config-server"
+                    or run_http.get("tls") is not True
+                    or run_http.get("ssl_keyfile_format") != "traditional-rsa-des-ede3"
+                    or not run_http.get("ssl_keyfile_password")
+                    or run_http.get("ssl_cert_reqs") != 2
+                ):
+                    raise ParityError(
+                        f"{case_id}: Rust keyfile decryption fault requires a valid encrypted RSA key"
+                    )
+            elif fault["contract"] == "python-pkcs12-reader-error-propagates":
+                run_http = case.get("api", {}).get("run_http", {})
+                if (
+                    case.get("profile") != "python-api"
+                    or case.get("operation") != "python.api.run-http"
+                    or fault["point"] not in PKCS12_PARSER_FAULT_POINTS
+                    or run_http.get("invocation") != "config-server"
+                    or run_http.get("tls") is not True
+                    or run_http.get("ssl_keyfile_format") != "pkcs12-pbe-sha1-3des"
+                    or not run_http.get("ssl_keyfile_password")
+                ):
+                    raise ParityError(
+                        f"{case_id}: PKCS#12 reader faults require password-protected PKCS#12 Config/Server startup"
+                    )
+            elif fault["contract"] == "server-connection-invalid-default-header-source-chain":
+                run_http = case.get("api", {}).get("run_http", {})
+                if (
+                    case.get("profile") != "python-api"
+                    or case.get("operation") != "python.api.run-http"
+                    or fault["point"]
+                    != "server.connection.invalid-default-header.source-chain"
+                    or run_http.get("invocation") != "api"
+                    or run_http.get("headers") != [["Invalid Header", "value"]]
+                ):
+                    raise ParityError(
+                        f"{case_id}: source-chain filtering requires an invalid default-header API request"
+                    )
+            elif fault["contract"] == "server-concurrency-callback-error-preserves-503":
+                if (
+                    case.get("profile") != "http1"
+                    or case.get("operation") != "http.concurrency-limit-callback-failure"
+                    or fault["point"] != "server.concurrency-limit.callback"
+                    or case.get("server_options", {}).get("limit_concurrency") != 1
+                    or case.get("request", {}).get("method") != "GET"
+                ):
+                    raise ParityError(f"{case_id}: concurrency callback failures require a rejected HTTP/1 request")
+            elif fault["contract"] == "server-default-header-finalization-error-closes-connection":
+                headers = case.get("server_options", {}).get("headers", [])
+                request = case.get("request", {})
+                if (
+                    case.get("profile") != "http1"
+                    or case.get("operation") != "http.invalid-response-header"
+                    or fault["point"] != "server.default-header.response-finalization"
+                    or len(headers) != 1
+                    or not (
+                        headers[0].startswith("Invalid Header:")
+                        or (
+                            headers[0].startswith("X-Invalid: bad")
+                            and any(ord(character) < 32 for character in headers[0])
+                        )
+                    )
+                    or request.get("method") != "GET"
+                    or request.get("path") != "/state"
+                ):
+                    raise ParityError(
+                        f"{case_id}: default-header finalization faults require one invalid configured header and a /state request"
+                    )
+            elif fault["contract"] == "http2-response-event-fault-consumed-and-status-observed":
+                point = fault["point"]
+                request = case.get("request", {})
+                early_hint_fault = point in {
+                    "http.response.early-hint.disconnected",
+                    "http.response.early-hint.channel-closed",
+                    "asgi.event-type.http-response-early-hint.eq",
+                    "http.response.early-hint.links.get-item",
+                    "http.response.early-hint.links.extract",
+                }
+                trailer_fault = point in {
+                    "http.response.trailers.disconnected",
+                    "http.response.trailers.channel-closed",
+                    "http.response.trailers.channel-full",
+                    "http.response.trailers.full-send-closed",
+                    "asgi.event-type.http-response-trailers.eq",
+                    "http.response.trailers.headers.get-item",
+                    "http.response.trailers.headers.extract",
+                    "http.response.trailers.more-trailers.get-item",
+                    "http.response.trailers.more-trailers.extract",
+                    "http.response.trailers.mutex.poison",
+                }
+                has_trailer_negotiation = any(
+                    name.lower() == "te" and value.lower() == "trailers"
+                    for name, value in request.get("headers", [])
+                )
+                if (
+                    case.get("profile") != "http2"
+                    or case.get("operation") != "http.invalid-asgi-message-status"
+                    or request.get("method") != "GET"
+                    or request.get("body_base64") != ""
+                    or not (
+                        early_hint_fault
+                        and request.get("path") == "/response-early-hints"
+                        or trailer_fault
+                        and request.get("path") == "/response-trailers"
+                        and has_trailer_negotiation
+                    )
+                ):
+                    raise ParityError(
+                        f"{case_id}: HTTP/2 response-event faults require their declared early-hint or negotiated-trailer route"
+                    )
             elif fault["contract"] == "websocket-server-shutdown-force-abort":
                 if (
                     case.get("profile") != "websocket"
@@ -2094,6 +2629,22 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: WebSocket shutdown timeout requires the held-session cancellation workflow"
                     )
+            elif fault["contract"] == "websocket-keepalive-close-error-followup-200":
+                websocket = case.get("websocket", {})
+                options = case.get("server_options", {})
+                if (
+                    case.get("profile") != "websocket"
+                    or case.get("operation") != "websocket.keepalive-close-transport-error"
+                    or fault["point"] != "websocket.keepalive.close-send-error"
+                    or websocket.get("path") != "/ws"
+                    or websocket.get("messages") != []
+                    or websocket.get("followup_path") != "/state"
+                    or options.get("ws_ping_interval") != 0.1
+                    or options.get("ws_ping_timeout") != 0.3
+                ):
+                    raise ParityError(
+                        f"{case_id}: keepalive close errors require the bounded idle-session and follow-up workflow"
+                    )
             elif fault["contract"] in {
                 "websocket-driver-send-error-followup-200",
                 "websocket-driver-send-error-cancels-app",
@@ -2103,6 +2654,24 @@ def load_contract(
                     if fault["contract"] == "websocket-driver-send-error-followup-200"
                     else "/ws-send-and-hold"
                 )
+                websocket = case.get("websocket", {})
+                server_options = case.get("server_options", {})
+                if type(server_options) is not dict:
+                    server_options = {}
+                ping_interval = server_options.get("ws_ping_interval")
+                ping_timeout = server_options.get("ws_ping_timeout")
+                ping_send_error = (
+                    fault["contract"] == "websocket-driver-send-error-followup-200"
+                    and fault["point"] == "websocket.driver.send-error"
+                    and websocket.get("path") == "/ws"
+                    and websocket.get("messages") == []
+                    and type(ping_interval) in {int, float}
+                    and math.isfinite(ping_interval)
+                    and ping_interval > 0
+                    and type(ping_timeout) in {int, float}
+                    and math.isfinite(ping_timeout)
+                    and ping_timeout > 0
+                )
                 if (
                     case.get("profile") != "websocket"
                     or case.get("operation") != "websocket.fault-contract"
@@ -2110,24 +2679,14 @@ def load_contract(
                         "websocket.driver.send-error",
                         "websocket.driver.drain-send-error",
                     }
-                    or case.get("websocket", {}).get("path") != expected_path
-                    or case.get("websocket", {}).get("expect_close") is not True
+                    or (
+                        websocket.get("path") != expected_path
+                        and not ping_send_error
+                    )
+                    or websocket.get("expect_close") is not True
                 ):
                     raise ParityError(
                         f"{case_id}: WebSocket send-error contracts require their matching outbound-send workflow"
-                    )
-            elif fault["contract"] == "websocket-header-capacity-error-followup-200":
-                specification = case.get("websocket", {})
-                if (
-                    case.get("profile") != "websocket"
-                    or case.get("operation") != "websocket.fault-contract"
-                    or fault["point"] != "public.websocket-accept-header-capacity"
-                    or specification.get("path") != "/ws-header-capacity?count=32769"
-                    or specification.get("followup_path") != "/scope"
-                    or specification.get("messages") != []
-                ):
-                    raise ParityError(
-                        f"{case_id}: public WebSocket header capacity requires its finite handshake and recovery workflow"
                     )
             elif fault["contract"] == "websocket-registration-failure-cancels-app-followup-200":
                 specification = case.get("websocket", {})
@@ -2168,6 +2727,8 @@ def load_contract(
                             "websocket.receive.disconnect-type.set-item",
                             "websocket.receive.disconnect-code.set-item",
                             "websocket.receive.disconnect-reason.set-item",
+                            "websocket.yawc.close-reply-flush-error",
+                            "websocket.yawc.close-reply-flush-unexpected-frame",
                         }
                         and "client_close" in case["websocket"]
                     )
@@ -2207,10 +2768,9 @@ def load_contract(
             arguments = process["arguments"]
             if (
                 not isinstance(arguments, list)
-                or not arguments
                 or any(not isinstance(argument, str) or "\x00" in argument for argument in arguments)
             ):
-                raise ParityError(f"{case_id}: process arguments must be non-empty NUL-free strings")
+                raise ParityError(f"{case_id}: process arguments must be a list of NUL-free strings")
             environment = process["environment"]
             if not isinstance(environment, dict):
                 raise ParityError(f"{case_id}: process environment must be an object")
@@ -2229,17 +2789,163 @@ def load_contract(
             if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= 60:
                 raise ParityError(f"{case_id}: process timeout must be between 1 and 60 seconds")
         elif kind == "python-api" and "api" in case:
-            exact_case_keys(case, {"case_id", "profile", "operation", "covers", "api"}, case_id)
+            python_api_case_keys = {
+                "case_id", "profile", "operation", "covers", "api"
+            }
+            if "required_observations" in case:
+                python_api_case_keys.add("required_observations")
+            if case.get("verification") == "fault-contract":
+                python_api_case_keys.update({"verification", "fault"})
+            exact_case_keys(case, python_api_case_keys, case_id)
+            if "required_observations" in case:
+                required_observations = case["required_observations"]
+                observed_fields = operations[case["operation"]]["observe"]
+                if (
+                    type(required_observations) is not dict
+                    or not set(required_observations).issubset(observed_fields)
+                ):
+                    raise ParityError(
+                        f"{case_id}.required_observations must use declared observation fields"
+                    )
+            if case.get("verification") == "fault-contract":
+                fault = case["fault"]
+                run_http = case.get("api", {}).get("run_http", {})
+                helper_error_case = (
+                    fault["contract"] == "python-ssl-ca-verifier-error-propagates"
+                    and fault["point"] in PYTHON_SSL_CA_VERIFIER_FAULT_POINTS
+                    and run_http.get("ssl_ca_certs") == "malformed-ca"
+                )
+                fallback_error_case = (
+                    fault["contract"]
+                    == "python-ssl-ca-verifier-success-fallback-propagates"
+                    and fault["point"]
+                    == PYTHON_SSL_CA_VERIFIER_RUST_PARSE_FAULT_POINT
+                    and run_http.get("ssl_ca_certs") == "generated-ca"
+                )
+                pkcs12_parser_error_case = (
+                    fault["contract"] == "python-pkcs12-reader-error-propagates"
+                    and fault["point"] in PKCS12_PARSER_FAULT_POINTS
+                    and run_http.get("ssl_keyfile_format") == "pkcs12-pbe-sha1-3des"
+                )
+                keyfile_error_case = (
+                    fault["contract"] == "python-ssl-keyfile-error-propagates"
+                    and fault["point"] in PYTHON_SSL_KEYFILE_ERROR_FAULT_POINTS
+                    and run_http.get("ssl_keyfile_format")
+                    == "pkcs12-pbe-sha1-3des-invalid-decrypted-key"
+                )
+                keyfile_rust_decrypt_error_case = (
+                    fault["contract"] == "python-ssl-keyfile-rust-decrypt-error-propagates"
+                    and fault["point"] == PYTHON_SSL_KEYFILE_RUST_DECRYPT_FAULT_POINT
+                    and run_http.get("ssl_keyfile_format") == "traditional-rsa-des-ede3"
+                )
+                default_header_source_chain_case = (
+                    fault["contract"]
+                    == "server-connection-invalid-default-header-source-chain"
+                    and fault["point"]
+                    == "server.connection.invalid-default-header.source-chain"
+                    and run_http.get("headers") == [["Invalid Header", "value"]]
+                )
+                startup_shutdown_error_case = (
+                    fault["contract"]
+                    == "server-startup-cancellation-shutdown-error-propagates"
+                    and fault["point"] == "lifespan.shutdown.task-join-error"
+                    and case["operation"]
+                    == "python.api.server-startup-cancel-shutdown-error"
+                    and case.get("api", {}).get(
+                        "server_startup_cancel_before_listener"
+                    )
+                    is True
+                )
+                startup_bind_shutdown_error_case = (
+                    fault["contract"] == "server-startup-bind-shutdown-error-logged"
+                    and fault["point"] == "lifespan.shutdown.task-join-error"
+                    and case["operation"]
+                    == "python.api.server-startup-bind-shutdown-error-log"
+                    and case.get("api", {}).get(
+                        "server_startup_bind_failure_lifespan_cleanup"
+                    )
+                    is True
+                )
+                uds_permission_error_case = (
+                    fault["contract"]
+                    == "server-unix-listener-permission-error-startup-propagates"
+                    and fault["point"] == "server.unix-listener.set-permissions-error"
+                    and case["operation"]
+                    == "python.api.server-startup-uds-socket-replacement-lifespan-cleanup"
+                    and case.get("api", {}).get(
+                        "server_startup_uds_socket_replacement_lifespan_cleanup"
+                    )
+                    is True
+                )
+                if (
+                    not startup_shutdown_error_case
+                    and not startup_bind_shutdown_error_case
+                    and not uds_permission_error_case
+                    and fault["contract"] not in {
+                        "server-startup-cancelled-after-bind",
+                        "server-startup-acknowledgement-drop-cleans-listener",
+                    }
+                    and fault["contract"] not in {
+                        "python-tls-initialization-error-propagates",
+                        "python-tls-provider-fallback-serves",
+                    }
+                    and (
+                        case["operation"] != "python.api.run-http"
+                        or not (
+                            helper_error_case
+                            or fallback_error_case
+                            or keyfile_error_case
+                            or keyfile_rust_decrypt_error_case
+                            or default_header_source_chain_case
+                            or pkcs12_parser_error_case
+                        )
+                        or (
+                            not (
+                                default_header_source_chain_case
+                                or pkcs12_parser_error_case
+                            )
+                            and (
+                                run_http.get("invocation") != "config-server"
+                                or run_http.get("tls") is not True
+                                or run_http.get("ssl_cert_reqs") != 2
+                            )
+                        )
+                    )
+                ):
+                    raise ParityError(
+                        f"{case_id}: Python adapter fault requires its declared public workflow"
+                    )
             readiness_operations = {
                 "python.api.server-readiness": "server_readiness",
+                "python.api.server-callback-notify": "server_callback_notify",
                 "python.api.server-startup-failure-state": "server_startup_failure",
+                "python.api.server-startup-bind-failure-lifespan-cleanup": "server_startup_bind_failure_lifespan_cleanup",
+                "python.api.server-startup-uds-socket-replacement-lifespan-cleanup": "server_startup_uds_socket_replacement_lifespan_cleanup",
+                "python.api.server-startup-failure-waiter": "server_startup_failure_waiter",
+                "python.api.server-startup-acknowledgement-drop": "server_startup_acknowledgement_drop",
+                "python.api.server-startup-cancel-before-listener": "server_startup_cancel_before_listener",
+                "python.api.server-startup-cancel-after-listener": "server_startup_cancel_after_listener",
+                "python.api.server-startup-cancel-after-listener-without-lifespan": "server_startup_cancel_after_listener_without_lifespan",
+                "python.api.server-startup-cancel-shutdown-error": "server_startup_cancel_before_listener",
+                "python.api.server-startup-cancel-without-lifespan": "server_startup_cancel_without_lifespan",
+                "python.api.server-startup-cancel-during-prebound-transfer": "server_startup_cancel_during_prebound_transfer",
+                "python.api.server-startup-cancel-during-prebound-transfer-without-lifespan": "server_startup_cancel_during_prebound_transfer_without_lifespan",
+                "python.api.server-startup-bind-shutdown-error-log": "server_startup_bind_failure_lifespan_cleanup",
             }
-            if case["operation"] == "python.api.run-http-reload":
+            if case["operation"] in {
+                "python.api.run-http-reload",
+                "python.api.run-http-reload-filters",
+            }:
                 exact_keys(case["api"], {"run_http_reload"}, f"{case_id}.api")
                 reload_request = case["api"]["run_http_reload"]
+                reload_request_keys = {"timeout_seconds", "reload_delay", "workers"}
+                if case["operation"] == "python.api.run-http-reload-filters":
+                    reload_request_keys.update({"reload_include", "reload_exclude"})
+                    if "environment" in reload_request:
+                        reload_request_keys.add("environment")
                 exact_keys(
                     reload_request,
-                    {"timeout_seconds", "reload_delay", "workers"},
+                    reload_request_keys,
                     f"{case_id}.api.run_http_reload",
                 )
                 timeout_seconds = reload_request["timeout_seconds"]
@@ -2261,11 +2967,54 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}.api.run_http_reload.workers must be from 1 through 16"
                     )
+                if case["operation"] == "python.api.run-http-reload-filters":
+                    environment = reload_request.get("environment", {})
+                    if not isinstance(environment, dict):
+                        raise ParityError(
+                            f"{case_id}.api.run_http_reload.environment must be an object"
+                        )
+                    allowed_environment = {
+                        "UVICORN_RELOAD_INCLUDES",
+                        "UVICORN_RELOAD_EXCLUDES",
+                    }
+                    if set(environment) - allowed_environment or any(
+                        not isinstance(value, str) or "\x00" in value
+                        for value in environment.values()
+                    ):
+                        raise ParityError(
+                            f"{case_id}.api.run_http_reload.environment supports only string reload include/exclude values"
+                        )
+                    for field in ("reload_include", "reload_exclude"):
+                        patterns = reload_request[field]
+                        environment_name = {
+                            "reload_include": "UVICORN_RELOAD_INCLUDES",
+                            "reload_exclude": "UVICORN_RELOAD_EXCLUDES",
+                        }[field]
+                        if (
+                            not isinstance(patterns, list)
+                            or len(patterns) > 16
+                            or (not patterns and environment_name not in environment)
+                            or any(
+                                not isinstance(pattern, str)
+                                or not pattern
+                                or len(pattern) > 512
+                                or "\x00" in pattern
+                                for pattern in patterns
+                            )
+                        ):
+                            raise ParityError(
+                                f"{case_id}.api.run_http_reload.{field} must be a non-empty array of bounded glob strings"
+                            )
             elif case["operation"] in {
                 "python.api.run-http",
+                "python.api.run-http-incomplete-header",
+                "python.api.run-http-signal-sequence",
+                "python.api.run-http-graceful-timeout",
                 "python.api.run-http-request-limit",
                 "python.api.run-http-asgi-scope-contract",
                 "python.api.run-http-concurrency",
+                "python.api.run-http-bind-conflict",
+                "python.api.run-http-uds-bind-conflict",
             }:
                 exact_keys(case["api"], {"run_http"}, f"{case_id}.api")
                 run_http = case["api"]["run_http"]
@@ -2276,7 +3025,12 @@ def load_contract(
                     "application_interface",
                     "environment",
                     "request_headers",
+                    "request_body_base64",
+                    "request_body_chunks_base64",
+                    "http_version",
+                    "http_backend",
                     "observe_scope",
+                    "observe_tls",
                     "proxy_headers",
                     "forwarded_allow_ips",
                     "limit_concurrency",
@@ -2286,18 +3040,45 @@ def load_contract(
                     "log_config",
                     "emit_level_logs",
                     "access_log",
+                    "server_header",
+                    "date_header",
                     "use_colors",
                     "factory",
+                    "callable_instance",
+                    "implicit_factory",
                     "backlog",
                     "timeout_keep_alive",
+                    "timeout_graceful_shutdown",
+                    "root_path_from_environment",
+                    "host_from_environment",
+                    "port_from_environment",
                     "keep_alive_probe_delay_seconds",
                     "workers",
                     "timeout_worker_healthcheck",
                     "uds",
+                    "tls",
+                    "ssl_keyfile_password",
+                    "ssl_keyfile_format",
+                    "ssl_ca_certs",
+                    "ssl_cert_reqs",
+                    "ssl_version",
+                    "ssl_ciphers",
+                    "client_tls",
                     "observe_unix_scope",
+                    "host",
                     "fd",
                     "prebound_socket_count",
+                    "client_timeout_seconds",
+                    "h11_max_incomplete_event_size",
+                    "incomplete_request_buffer_length",
+                    "post_response_settle_seconds",
                     "reset_contextvars",
+                    "bind_conflict",
+                    "required_observations",
+                    "shutdown_signal_sequence",
+                    "custom_http_protocol",
+                    "custom_http_protocol_import_path",
+                    "ssl_context_factory",
                 } & set(run_http)
                 exact_keys(
                     run_http,
@@ -2312,6 +3093,61 @@ def load_contract(
                     } | optional_run_http_keys,
                     f"{case_id}.api.run_http",
                 )
+                if "required_observations" in run_http:
+                    required = run_http["required_observations"]
+                    allowed_required = {
+                        "response_received",
+                        "response_status",
+                        "shutdown_signal_sent",
+                        "shutdown_signals_sent",
+                        "process_exit_code",
+                        "process_timed_out",
+                        "worker_replacement_observed",
+                        "raw_connection_open_after_timeout",
+                    }
+                    if type(required) is not dict or not set(required).issubset(
+                        allowed_required
+                    ):
+                        raise ParityError(
+                            f"{case_id}.api.run_http.required_observations has unsupported fields"
+                        )
+                    for field in (
+                        "response_received",
+                        "shutdown_signal_sent",
+                        "process_timed_out",
+                        "worker_replacement_observed",
+                        "raw_connection_open_after_timeout",
+                    ):
+                        if field in required and type(required[field]) is not bool:
+                            raise ParityError(
+                                f"{case_id}.api.run_http.required_observations.{field} must be a boolean"
+                            )
+                    if "shutdown_signals_sent" in required and (
+                        not isinstance(required["shutdown_signals_sent"], list)
+                        or not required["shutdown_signals_sent"]
+                        or any(
+                            not isinstance(signal_name, str)
+                            or signal_name not in {"SIGINT", "SIGTERM"}
+                            for signal_name in required["shutdown_signals_sent"]
+                        )
+                    ):
+                        raise ParityError(
+                            f"{case_id}.api.run_http.required_observations.shutdown_signals_sent must be a signal-name array"
+                        )
+                    if "response_status" in required and (
+                        required["response_status"] is not None
+                        and type(required["response_status"]) is not int
+                    ):
+                        raise ParityError(
+                            f"{case_id}.api.run_http.required_observations.response_status must be an integer or null"
+                        )
+                    if "process_exit_code" in required and (
+                        required["process_exit_code"] is not None
+                        and type(required["process_exit_code"]) is not int
+                    ):
+                        raise ParityError(
+                            f"{case_id}.api.run_http.required_observations.process_exit_code must be an integer or null"
+                        )
                 if run_http["invocation"] not in {
                     "api",
                     "module-cli",
@@ -2321,9 +3157,88 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}.api.run_http.invocation must be api, module-cli, config-server, or server-sockets"
                     )
+                if "http_backend" in run_http:
+                    if type(run_http["http_backend"]) is not str or run_http[
+                        "http_backend"
+                    ] not in {"auto", "h11", "httptools", "zttp"}:
+                        raise ParityError(
+                            f"{case_id}.api.run_http.http_backend must be auto, h11, httptools, or zttp"
+                        )
+                    if run_http["invocation"] != "module-cli":
+                        raise ParityError(
+                            f"{case_id}.api.run_http.http_backend requires module-cli invocation"
+                        )
+                h11_max_incomplete_event_size = run_http.get(
+                    "h11_max_incomplete_event_size"
+                )
+                if h11_max_incomplete_event_size is not None and (
+                    type(h11_max_incomplete_event_size) is not int
+                    or not 1 <= h11_max_incomplete_event_size <= 65536
+                    or run_http["invocation"] != "module-cli"
+                    or run_http.get("http_backend") != "h11"
+                ):
+                    raise ParityError(
+                        f"{case_id}: h11_max_incomplete_event_size requires a bounded integer and module-cli h11"
+                    )
+                incomplete_request_buffer_length = run_http.get(
+                    "incomplete_request_buffer_length"
+                )
+                if incomplete_request_buffer_length is not None and (
+                    type(incomplete_request_buffer_length) is not int
+                    or not 64 <= incomplete_request_buffer_length <= 65536
+                    or case["operation"]
+                    != "python.api.run-http-incomplete-header"
+                    or h11_max_incomplete_event_size is None
+                    or incomplete_request_buffer_length
+                    not in {
+                        h11_max_incomplete_event_size,
+                        h11_max_incomplete_event_size + 1,
+                    }
+                ):
+                    raise ParityError(
+                        f"{case_id}: incomplete request buffer length must equal the h11 maximum or one byte over"
+                    )
+                if case["operation"] == "python.api.run-http-incomplete-header" and (
+                    incomplete_request_buffer_length is None
+                    or h11_max_incomplete_event_size is None
+                    or run_http["invocation"] != "module-cli"
+                    or run_http.get("http_backend") != "h11"
+                ):
+                    raise ParityError(
+                        f"{case_id}: h11 incomplete-header operation requires the module CLI and both size fields"
+                    )
                 if "factory" in run_http and type(run_http["factory"]) is not bool:
                     raise ParityError(
                         f"{case_id}.api.run_http.factory must be a boolean"
+                    )
+                if "callable_instance" in run_http and type(
+                    run_http["callable_instance"]
+                ) is not bool:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.callable_instance must be a boolean"
+                    )
+                if "implicit_factory" in run_http and type(
+                    run_http["implicit_factory"]
+                ) is not bool:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.implicit_factory must be a boolean"
+                    )
+                if run_http.get("callable_instance") and (
+                    run_http.get("factory", False)
+                    or run_http.get("application_interface", "asgi3") != "asgi3"
+                    or run_http["invocation"] not in {"api", "module-cli"}
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.callable_instance requires an ASGI3 api or module-cli input without factory mode"
+                    )
+                if run_http.get("implicit_factory") and (
+                    run_http.get("factory", False)
+                    or run_http.get("callable_instance", False)
+                    or run_http.get("application_interface", "asgi3") != "asgi3"
+                    or run_http["invocation"] not in {"api", "module-cli"}
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.implicit_factory requires an ASGI3 api or module-cli input without explicit factory mode"
                     )
                 if "reset_contextvars" in run_http and type(
                     run_http["reset_contextvars"]
@@ -2333,8 +3248,154 @@ def load_contract(
                     )
                 if "uds" in run_http and type(run_http["uds"]) is not bool:
                     raise ParityError(f"{case_id}.api.run_http.uds must be a boolean")
+                if "tls" in run_http and type(run_http["tls"]) is not bool:
+                    raise ParityError(f"{case_id}.api.run_http.tls must be a boolean")
+                if "ssl_keyfile_password" in run_http and (
+                    not isinstance(run_http["ssl_keyfile_password"], str)
+                    or not run_http["ssl_keyfile_password"]
+                    or not run_http.get("tls")
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.ssl_keyfile_password must be a non-empty string and requires tls=true"
+                    )
+                if "ssl_keyfile_format" in run_http and (
+                    run_http["ssl_keyfile_format"] not in {
+                        "unencrypted-rsa-with-password",
+                        "pkcs12-pbe-sha1-2des",
+                        "pkcs12-pbe-sha1-3des",
+                        "pkcs12-pbe-sha1-3des-zero-iterations",
+                        "pkcs12-pbe-sha1-3des-short-ciphertext",
+                        "pkcs12-pbe-sha1-3des-invalid-decrypted-key",
+                        "pkcs12-pbe-sha1-3des-malformed-outer-sequence",
+                        "pkcs12-pbe-sha1-3des-trailing-outer-data",
+                        "pkcs12-pbe-sha1-3des-missing-algorithm",
+                        "pkcs12-pbe-sha1-3des-invalid-encrypted-data-type",
+                        "pkcs12-pbe-sha1-3des-trailing-encrypted-info-field",
+                        "pkcs12-pbe-sha1-3des-invalid-algorithm-oid-type",
+                        "pkcs12-pbe-sha1-3des-missing-parameters",
+                        "pkcs12-pbe-sha1-3des-trailing-algorithm-field",
+                        "pkcs12-pbe-sha1-3des-invalid-salt-type",
+                        "pkcs12-pbe-sha1-3des-missing-iterations",
+                        "pkcs12-pbe-sha1-3des-trailing-parameters-field",
+                        "traditional-rsa-aes128",
+                        "traditional-rsa-aes192",
+                        "traditional-rsa-aes256",
+                        "traditional-rsa-des-ede3",
+                        "traditional-ec-aes256",
+                        "traditional-rsa-aes256-invalid-proc-type",
+                        "traditional-rsa-aes256-unknown-header",
+                        "traditional-rsa-aes256-missing-proc-type",
+                        "traditional-rsa-aes256-missing-dek-info",
+                        "traditional-rsa-aes256-malformed-dek-info",
+                        "traditional-rsa-aes256-short-iv",
+                        "traditional-rsa-aes256-missing-body",
+                        "traditional-rsa-aes256-missing-end-marker",
+                        "traditional-rsa-aes256-invalid-base64",
+                        "traditional-rsa-aes256-empty-body",
+                        "traditional-rsa-aes256-short-ciphertext",
+                        "traditional-rsa-unsupported-cipher",
+                        "traditional-rsa-malformed-begin-line",
+                        "traditional-rsa-empty-key",
+                        "traditional-rsa-invalid-utf8",
+                        "traditional-dsa-encrypted",
+                        "traditional-rsa-malformed-begin-suffix",
+                        "traditional-rsa-aes256-high-nonhex-iv",
+                        "traditional-rsa-aes256-odd-iv",
+                        "traditional-rsa-aes256-nonhex-iv",
+                    }
+                    or not run_http.get("tls")
+                    or not run_http.get("ssl_keyfile_password")
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.ssl_keyfile_format must select a supported key fixture and requires tls=true with a password"
+                    )
+                if "ssl_ca_certs" in run_http and (
+                    run_http["ssl_ca_certs"]
+                    not in {
+                        "generated-ca",
+                        "trusted-ca",
+                        "empty-ca",
+                        "missing-ca",
+                        "directory-ca",
+                        "malformed-ca",
+                        "invalid-der-ca",
+                        "non-utf8-ca",
+                        "",
+                    }
+                    or not run_http.get("tls")
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.ssl_ca_certs must select generated-ca, trusted-ca, empty-ca, missing-ca, directory-ca, malformed-ca, invalid-der-ca, non-utf8-ca, or an empty path and requires tls=true"
+                    )
+                if "ssl_cert_reqs" in run_http and (
+                    type(run_http["ssl_cert_reqs"]) is not int
+                    or not run_http.get("tls")
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.ssl_cert_reqs must be an integer and requires tls=true"
+                    )
+                if "ssl_ciphers" in run_http and (
+                    not isinstance(run_http["ssl_ciphers"], str)
+                    or not run_http["ssl_ciphers"]
+                    or not run_http.get("tls")
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.ssl_ciphers must be a nonempty string and requires tls=true"
+                    )
+                if "ssl_version" in run_http and (
+                    type(run_http["ssl_version"]) is not int
+                    or run_http["ssl_version"] != ssl.PROTOCOL_TLSv1_2
+                    or not run_http.get("tls")
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.ssl_version must select TLS 1.2 and requires tls=true"
+                    )
+                if "client_tls" in run_http and type(run_http["client_tls"]) is not bool:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.client_tls must be a boolean"
+                    )
+                if run_http.get("client_tls") and (
+                    not run_http.get("tls")
+                    or run_http.get("ssl_cert_reqs") not in {1, 2}
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.client_tls requires TLS and ssl_cert_reqs 1 or 2"
+                    )
+                if "host" in run_http and (
+                    not isinstance(run_http["host"], str)
+                    or not run_http["host"]
+                    or "\x00" in run_http["host"]
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.host must be a non-empty NUL-free string"
+                    )
                 if "fd" in run_http and type(run_http["fd"]) is not bool:
                     raise ParityError(f"{case_id}.api.run_http.fd must be a boolean")
+                if "bind_conflict" in run_http and type(run_http["bind_conflict"]) is not bool:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.bind_conflict must be a boolean"
+                    )
+                if case["operation"] == "python.api.run-http-bind-conflict" and (
+                    run_http.get("bind_conflict") is not True
+                    or run_http["invocation"] != "api"
+                    or run_http.get("host", "127.0.0.1") != "127.0.0.1"
+                    or run_http.get("uds")
+                    or run_http.get("fd")
+                    or run_http.get("tls")
+                ):
+                    raise ParityError(
+                        f"{case_id}: bind-conflict requires the public API, an occupied IPv4 loopback port, and no inherited or TLS listener"
+                    )
+                if case["operation"] == "python.api.run-http-uds-bind-conflict" and (
+                    run_http.get("bind_conflict") is not True
+                    or run_http["invocation"] != "api"
+                    or run_http.get("uds") is not True
+                    or run_http.get("fd")
+                    or run_http.get("tls")
+                ):
+                    raise ParityError(
+                        f"{case_id}: Unix bind-conflict requires the public API, an occupied Unix socket path, and no inherited or TLS listener"
+                    )
                 if "prebound_socket_count" in run_http:
                     count = run_http["prebound_socket_count"]
                     if type(count) is not int or not 1 <= count <= 8:
@@ -2369,6 +3430,19 @@ def load_contract(
                 if "timeout_keep_alive" in run_http and type(run_http["timeout_keep_alive"]) is not int:
                     raise ParityError(
                         f"{case_id}.api.run_http.timeout_keep_alive must be an integer"
+                    )
+                if "timeout_graceful_shutdown" in run_http and type(
+                    run_http["timeout_graceful_shutdown"]
+                ) is not int:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.timeout_graceful_shutdown must be an integer"
+                    )
+                if (
+                    "timeout_graceful_shutdown" in run_http
+                    and run_http["invocation"] != "module-cli"
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.timeout_graceful_shutdown currently requires module-cli invocation"
                     )
                 if "workers" in run_http and type(run_http["workers"]) is not int:
                     raise ParityError(f"{case_id}.api.run_http.workers must be an integer")
@@ -2406,8 +3480,123 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}.api.run_http.application_interface must be asgi2, asgi3, or wsgi"
                     )
-                if run_http["method"] != "GET":
-                    raise ParityError(f"{case_id}: run_http currently supports the GET method")
+                if "custom_http_protocol" in run_http:
+                    if type(run_http["custom_http_protocol"]) is not bool:
+                        raise ParityError(
+                            f"{case_id}.api.run_http.custom_http_protocol must be boolean"
+                        )
+                    if run_http["custom_http_protocol"] and (
+                        run_http["invocation"] != "config-server"
+                        or run_http.get("application_interface", "asgi3")
+                        not in {"asgi2", "asgi3"}
+                    ):
+                        raise ParityError(
+                            f"{case_id}: custom HTTP Protocol input requires Config/Server with an ASGI 2 or ASGI 3 app"
+                        )
+                for field in (
+                    "custom_http_protocol_import_path",
+                    "ssl_context_factory",
+                ):
+                    if field in run_http and type(run_http[field]) is not bool:
+                        raise ParityError(
+                            f"{case_id}.api.run_http.{field} must be boolean"
+                        )
+                if run_http.get("custom_http_protocol_import_path") and not run_http.get(
+                    "custom_http_protocol"
+                ):
+                    raise ParityError(
+                        f"{case_id}: custom HTTP import-path input requires a custom HTTP protocol"
+                    )
+                if run_http.get("ssl_context_factory") and (
+                    not run_http.get("tls")
+                ):
+                    raise ParityError(
+                        f"{case_id}: TLS context-factory input requires TLS"
+                    )
+                if not isinstance(run_http["method"], str) or run_http["method"] not in {
+                    "GET",
+                    "POST",
+                }:
+                    raise ParityError(f"{case_id}: run_http supports GET and WSGI POST requests")
+                if run_http["method"] == "POST":
+                    if run_http.get("application_interface") != "wsgi":
+                        raise ParityError(
+                            f"{case_id}: run_http POST currently requires the WSGI probe app"
+                        )
+                    has_single_body = "request_body_base64" in run_http
+                    has_chunked_body = "request_body_chunks_base64" in run_http
+                    if has_single_body == has_chunked_body:
+                        raise ParityError(
+                            f"{case_id}: POST requires exactly one of request_body_base64 or request_body_chunks_base64"
+                        )
+                    if has_single_body:
+                        encoded_body = run_http["request_body_base64"]
+                        if not isinstance(encoded_body, str) or not encoded_body:
+                            raise ParityError(
+                                f"{case_id}.api.run_http.request_body_base64 must be a non-empty base64 string"
+                            )
+                        try:
+                            decoded_body = base64.b64decode(encoded_body, validate=True)
+                        except (ValueError, TypeError) as error:
+                            raise ParityError(
+                                f"{case_id}.api.run_http.request_body_base64 must be valid base64"
+                            ) from error
+                        if not decoded_body or len(decoded_body) > 1024 * 1024:
+                            raise ParityError(
+                                f"{case_id}.api.run_http.request_body_base64 must encode 1 byte through 1 MiB"
+                            )
+                    else:
+                        encoded_chunks = run_http["request_body_chunks_base64"]
+                        if (
+                            not isinstance(encoded_chunks, list)
+                            or not 2 <= len(encoded_chunks) <= 64
+                            or any(not isinstance(chunk, str) or not chunk for chunk in encoded_chunks)
+                        ):
+                            raise ParityError(
+                                f"{case_id}.api.run_http.request_body_chunks_base64 must contain 2 through 64 non-empty base64 chunks"
+                            )
+                        try:
+                            decoded_chunks = [
+                                base64.b64decode(chunk, validate=True)
+                                for chunk in encoded_chunks
+                            ]
+                        except (ValueError, TypeError) as error:
+                            raise ParityError(
+                                f"{case_id}.api.run_http.request_body_chunks_base64 must contain valid base64"
+                            ) from error
+                        if any(not chunk for chunk in decoded_chunks):
+                            raise ParityError(
+                                f"{case_id}.api.run_http.request_body_chunks_base64 must encode non-empty chunks"
+                            )
+                        if sum(map(len, decoded_chunks)) > 1024 * 1024:
+                            raise ParityError(
+                                f"{case_id}.api.run_http.request_body_chunks_base64 must encode at most 1 MiB total"
+                            )
+                        headers = run_http.get("request_headers", [])
+                        has_chunked_transfer_encoding = any(
+                            isinstance(header, list)
+                            and len(header) == 2
+                            and isinstance(header[0], str)
+                            and header[0].lower() == "transfer-encoding"
+                            and isinstance(header[1], str)
+                            and header[1].strip().lower() == "chunked"
+                            for header in headers
+                        )
+                        has_content_length = any(
+                            isinstance(header, list)
+                            and len(header) == 2
+                            and isinstance(header[0], str)
+                            and header[0].lower() == "content-length"
+                            for header in headers
+                        )
+                        if not has_chunked_transfer_encoding or has_content_length:
+                            raise ParityError(
+                                f"{case_id}: request_body_chunks_base64 requires Transfer-Encoding: chunked and no Content-Length"
+                            )
+                elif "request_body_base64" in run_http or "request_body_chunks_base64" in run_http:
+                    raise ParityError(
+                        f"{case_id}: request body fields are only valid for WSGI POST inputs"
+                    )
                 if (
                     not isinstance(run_http["path"], str)
                     or not run_http["path"].startswith("/")
@@ -2415,8 +3604,34 @@ def load_contract(
                     or "\n" in run_http["path"]
                 ):
                     raise ParityError(f"{case_id}.api.run_http.path must be an origin-form path")
-                if run_http["shutdown_signal"] != "SIGINT":
-                    raise ParityError(f"{case_id}: run_http currently supports the SIGINT stimulus")
+                if run_http["shutdown_signal"] not in {"SIGINT", "SIGTERM"}:
+                    raise ParityError(
+                        f"{case_id}: run_http supports SIGINT and SIGTERM shutdown stimuli"
+                    )
+                shutdown_signal_sequence = run_http.get("shutdown_signal_sequence")
+                if shutdown_signal_sequence is not None:
+                    if (
+                        not isinstance(shutdown_signal_sequence, list)
+                        or len(shutdown_signal_sequence) < 2
+                        or len(shutdown_signal_sequence) > 4
+                        or any(
+                            not isinstance(signal_name, str)
+                            or signal_name not in {"SIGINT", "SIGTERM"}
+                            for signal_name in shutdown_signal_sequence
+                        )
+                        or shutdown_signal_sequence[-1] != run_http["shutdown_signal"]
+                    ):
+                        raise ParityError(
+                            f"{case_id}.api.run_http.shutdown_signal_sequence must contain at least two supported signals and end with shutdown_signal"
+                        )
+                    if (
+                        run_http["invocation"] not in {"api", "module-cli"}
+                        or run_http["path"]
+                        != "/python-api-second-signal-escalation"
+                    ):
+                        raise ParityError(
+                            f"{case_id}.api.run_http repeated signal input requires the public escalation fixture path"
+                        )
                 if run_http["lifespan"] not in {"auto", "on", "off"}:
                     raise ParityError(f"{case_id}.api.run_http.lifespan must be auto, on, or off")
                 log_level = run_http.get("log_level")
@@ -2450,8 +3665,30 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}.api.run_http.use_colors must be a boolean"
                     )
+                for field in ("server_header", "date_header"):
+                    if field in run_http and type(run_http[field]) is not bool:
+                        raise ParityError(
+                            f"{case_id}.api.run_http.{field} must be a boolean"
+                        )
+                    if field in run_http and run_http["invocation"] != "module-cli":
+                        raise ParityError(
+                            f"{case_id}.api.run_http.{field} currently requires module-cli invocation"
+                        )
                 if not isinstance(run_http["root_path"], str):
                     raise ParityError(f"{case_id}.api.run_http.root_path must be a string")
+                if "root_path_from_environment" in run_http:
+                    if type(run_http["root_path_from_environment"]) is not bool:
+                        raise ParityError(
+                            f"{case_id}.api.run_http.root_path_from_environment must be a boolean"
+                        )
+                    if run_http["root_path_from_environment"] and (
+                        run_http["invocation"] != "module-cli"
+                        or run_http.get("environment", {}).get("UVICORN_ROOT_PATH")
+                        != run_http["root_path"]
+                    ):
+                        raise ParityError(
+                            f"{case_id}: root_path_from_environment requires module-cli invocation and a matching UVICORN_ROOT_PATH"
+                        )
                 for field in ("headers", "request_headers", "observe_headers"):
                     if field not in run_http:
                         continue
@@ -2493,9 +3730,20 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}.api.run_http.observe_scope must be a boolean"
                     )
-                if run_http.get("observe_scope") and run_http["invocation"] != "api":
+                if run_http.get("observe_scope") and run_http["invocation"] not in {
+                    "api",
+                    "config-server",
+                }:
                     raise ParityError(
-                        f"{case_id}.api.run_http.observe_scope is supported only for direct API invocation"
+                        f"{case_id}.api.run_http.observe_scope requires a Python API server invocation"
+                    )
+                if "observe_tls" in run_http and type(run_http["observe_tls"]) is not bool:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.observe_tls must be a boolean"
+                    )
+                if run_http.get("observe_tls") and not run_http.get("tls"):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.observe_tls requires tls=true"
                     )
                 if "observe_loop" in run_http and type(run_http["observe_loop"]) is not bool:
                     raise ParityError(
@@ -2505,13 +3753,30 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}.api.run_http.observe_loop requires a programmatic invocation"
                     )
-                if "loop" in run_http and (
-                    type(run_http["loop"]) is not str
-                    or run_http["loop"] not in {"auto", "asyncio", "uvloop"}
-                ):
-                    raise ParityError(
-                        f"{case_id}.api.run_http.loop must be auto, asyncio, or uvloop"
-                    )
+                if "loop" in run_http:
+                    loop = run_http["loop"]
+                    custom_factory_path = False
+                    if type(loop) is str and run_http["invocation"] in {
+                        "api",
+                        "config-server",
+                        "server-sockets",
+                    }:
+                        module, separator, attribute = loop.partition(":")
+                        custom_factory_path = (
+                            separator == ":"
+                            and bool(module)
+                            and bool(attribute)
+                            and all(part.isidentifier() for part in module.split("."))
+                            and all(part.isidentifier() for part in attribute.split("."))
+                        )
+                    if type(loop) is not str or (
+                        loop not in {"auto", "asyncio", "uvloop"}
+                        and not custom_factory_path
+                    ):
+                        raise ParityError(
+                            f"{case_id}.api.run_http.loop must be auto, asyncio, uvloop, "
+                            "or a programmatic module:factory import path"
+                        )
                 if "proxy_headers" in run_http and type(run_http["proxy_headers"]) is not bool:
                     raise ParityError(
                         f"{case_id}.api.run_http.proxy_headers must be a boolean"
@@ -2529,18 +3794,35 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}.api.run_http.limit_concurrency must be a non-negative integer"
                     )
-                if (
-                    case["operation"] == "python.api.run-http-concurrency"
-                ) != ("limit_concurrency" in run_http):
+                if "http_version" in run_http and run_http["http_version"] not in {
+                    "1.0",
+                    "1.1",
+                }:
                     raise ParityError(
-                        f"{case_id}: run-http-concurrency requires exactly one limit_concurrency input"
+                        f"{case_id}.api.run_http.http_version must be 1.0 or 1.1"
+                    )
+                environment = run_http.get("environment", {})
+                if not isinstance(environment, dict):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.environment must be an object"
+                    )
+                concurrency_environment_value = environment.get(
+                    "UVICORN_LIMIT_CONCURRENCY"
+                )
+                has_concurrency_environment = (
+                    concurrency_environment_value is not None
+                )
+                has_concurrency_argument = "limit_concurrency" in run_http
+                is_concurrency_operation = (
+                    case["operation"] == "python.api.run-http-concurrency"
+                )
+                if is_concurrency_operation != (
+                    has_concurrency_argument or has_concurrency_environment
+                ):
+                    raise ParityError(
+                        f"{case_id}: run-http-concurrency requires a limit_concurrency argument or UVICORN_LIMIT_CONCURRENCY environment value"
                     )
                 if "environment" in run_http:
-                    environment = run_http["environment"]
-                    if not isinstance(environment, dict):
-                        raise ParityError(
-                            f"{case_id}.api.run_http.environment must be an object"
-                        )
                     for name, value in environment.items():
                         invalid_name = (
                             not isinstance(name, str)
@@ -2555,6 +3837,53 @@ def load_contract(
                             raise ParityError(
                                 f"{case_id}.api.run_http.environment entries must be valid strings or null"
                             )
+                if environment.get("UVICORN_FD") not in (None, "@probe-fd"):
+                    raise ParityError(
+                        f"{case_id}: run_http UVICORN_FD must use @probe-fd for inherited-listener parity"
+                    )
+                if environment.get("UVICORN_FD") == "@probe-fd" and (
+                    run_http["invocation"] != "module-cli" or not run_http.get("fd")
+                ):
+                    raise ParityError(
+                        f"{case_id}: UVICORN_FD=@probe-fd requires module-cli invocation and fd=true"
+                    )
+                if has_concurrency_environment:
+                    if run_http["invocation"] != "module-cli":
+                        raise ParityError(
+                            f"{case_id}: UVICORN_LIMIT_CONCURRENCY requires module-cli invocation"
+                        )
+                    if not has_concurrency_argument:
+                        try:
+                            environment_limit = int(concurrency_environment_value)
+                        except (TypeError, ValueError) as error:
+                            raise ParityError(
+                                f"{case_id}: UVICORN_LIMIT_CONCURRENCY must be an integer when no explicit CLI override is present"
+                            ) from error
+                        if environment_limit < 0:
+                            raise ParityError(
+                                f"{case_id}: UVICORN_LIMIT_CONCURRENCY must be non-negative"
+                            )
+                environment = run_http.get("environment", {})
+                if environment.get("UVICORN_HOST") is not None:
+                    if run_http["invocation"] != "module-cli":
+                        raise ParityError(
+                            f"{case_id}: UVICORN_HOST listener inputs require module-cli invocation"
+                        )
+                    expected_host = run_http.get("host", "127.0.0.1")
+                    if environment.get("UVICORN_HOST") != expected_host:
+                        raise ParityError(
+                            f"{case_id}: UVICORN_HOST must match host when testing its environment binding"
+                        )
+                if environment.get("UVICORN_PORT") not in (None, "@probe-port"):
+                    raise ParityError(
+                        f"{case_id}: run_http UVICORN_PORT must use @probe-port for dynamic listener parity"
+                    )
+                if environment.get("UVICORN_PORT") == "@probe-port" and run_http[
+                    "invocation"
+                ] != "module-cli":
+                    raise ParityError(
+                        f"{case_id}: UVICORN_PORT listener inputs require module-cli invocation"
+                    )
                 if case["operation"] == "python.api.run-http-request-limit":
                     environment = run_http.get("environment", {})
                     try:
@@ -2579,6 +3908,24 @@ def load_contract(
                 timeout_seconds = run_http["timeout_seconds"]
                 if type(timeout_seconds) is not int or not 2 <= timeout_seconds <= 60:
                     raise ParityError(f"{case_id}.api.run_http.timeout_seconds must be from 2 through 60")
+                client_timeout_seconds = run_http.get("client_timeout_seconds")
+                if client_timeout_seconds is not None and (
+                    type(client_timeout_seconds) is not int
+                    or not 1 <= client_timeout_seconds <= timeout_seconds
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.client_timeout_seconds must be from 1 through timeout_seconds"
+                    )
+                post_response_settle_seconds = run_http.get(
+                    "post_response_settle_seconds"
+                )
+                if post_response_settle_seconds is not None and (
+                    type(post_response_settle_seconds) not in {int, float}
+                    or not 0 < post_response_settle_seconds <= 2
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.post_response_settle_seconds must be greater than 0 and at most 2"
+                    )
                 shutdown_delay_values = [
                     value
                     for name, value in run_http.get("request_headers", [])
@@ -2597,7 +3944,16 @@ def load_contract(
                         raise ParityError(
                             f"{case_id}: lifespan shutdown delay must be one module-CLI header from 11 through 30 seconds, with three seconds of probe margin"
                         )
-            elif case["operation"] == "python.api.run-websocket":
+            elif case["operation"] in {
+                "python.api.run-websocket",
+                "python.api.run-websocket-keepalive-no-timeout",
+                "python.api.run-websocket-keepalive-unbounded-timeout",
+                "python.api.run-websocket-keepalive-infinite-interval",
+                "python.api.run-websocket-keepalive-nan-interval",
+                "python.api.run-websocket-keepalive-nan-timeout",
+                "python.api.run-websocket-keepalive-disabled",
+                "python.api.run-websocket-keepalive-negative-timeout",
+            }:
                 exact_keys(case["api"], {"run_websocket"}, f"{case_id}.api")
                 run_websocket = case["api"]["run_websocket"]
                 run_websocket_keys = {
@@ -2606,8 +3962,25 @@ def load_contract(
                     "ws_max_size",
                     "timeout_seconds",
                 }
-                if "ws_max_queue" in run_websocket:
-                    run_websocket_keys.add("ws_max_queue")
+                run_websocket_keys.update(
+                    key
+                    for key in (
+                        "invocation",
+                        "ws_backend",
+                        "send_count",
+                        "ws_max_queue",
+                        "uds",
+                        "observe_scope",
+                        "observe_server_pings",
+                        "suppress_server_pongs",
+                        "ws_ping_interval",
+                        "ws_ping_timeout",
+                        "keepalive_idle_seconds",
+                        "ws_per_message_deflate",
+                        "observe_compression",
+                    )
+                    if key in run_websocket
+                )
                 exact_keys(
                     run_websocket,
                     run_websocket_keys,
@@ -2632,17 +4005,262 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}.api.run_websocket.ws_max_queue must be an integer"
                     )
+                if run_websocket.get("invocation", "api") not in {"api", "module-cli"}:
+                    raise ParityError(
+                        f"{case_id}.api.run_websocket.invocation must be api or module-cli"
+                    )
+                if "ws_backend" in run_websocket and (
+                    run_websocket.get("invocation") != "module-cli"
+                    or run_websocket["ws_backend"]
+                    not in {"auto", "websockets", "websockets-sansio", "wsproto"}
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_websocket.ws_backend requires module-cli and a supported selector"
+                    )
+                if "send_count" in run_websocket and (
+                    type(run_websocket["send_count"]) is not int
+                    or not 1 <= run_websocket["send_count"] <= 32
+                    or run_websocket.get("path") != "/ws-queue-delayed-reader"
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_websocket.send_count is limited to 1 through 32 on the delayed-reader fixture"
+                    )
+                if "observe_server_pings" in run_websocket and (
+                    type(run_websocket["observe_server_pings"]) is not bool
+                    or run_websocket.get("invocation") != "module-cli"
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_websocket.observe_server_pings requires module-cli"
+                    )
+                if run_websocket.get("suppress_server_pongs", False) and (
+                    run_websocket.get("observe_server_pings") is not True
+                    or run_websocket.get("invocation") != "module-cli"
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_websocket.suppress_server_pongs requires observed module-CLI server pings"
+                    )
+                for key in (
+                    "uds",
+                    "observe_scope",
+                    "observe_server_pings",
+                    "suppress_server_pongs",
+                    "ws_per_message_deflate",
+                    "observe_compression",
+                ):
+                    if key in run_websocket and type(run_websocket[key]) is not bool:
+                        raise ParityError(
+                            f"{case_id}.api.run_websocket.{key} must be a boolean"
+                        )
+                for key in ("ws_ping_interval", "ws_ping_timeout"):
+                    value = run_websocket.get(key)
+                    nan_interval_marker = (
+                        key == "ws_ping_interval"
+                        and case["operation"] == "python.api.run-websocket-keepalive-nan-interval"
+                        and value == {"$float": "nan"}
+                    )
+                    nan_timeout_marker = (
+                        key == "ws_ping_timeout"
+                        and case["operation"] == "python.api.run-websocket-keepalive-nan-timeout"
+                        and value == {"$float": "nan"}
+                    )
+                    infinite_interval_marker = (
+                        key == "ws_ping_interval"
+                        and case["operation"] == "python.api.run-websocket-keepalive-infinite-interval"
+                        and value == {"$float": "inf"}
+                    )
+                    if key in run_websocket and value is not None and (
+                        not (
+                            nan_interval_marker
+                            or nan_timeout_marker
+                            or infinite_interval_marker
+                        )
+                        and (
+                            type(value) not in {int, float}
+                            or (type(value) is float and math.isnan(value))
+                            or (key == "ws_ping_interval" and value < 0)
+                        )
+                    ):
+                        raise ParityError(
+                            f"{case_id}.api.run_websocket.{key} must be null or a number other than NaN, with a non-negative ping interval"
+                        )
+                if "keepalive_idle_seconds" in run_websocket and (
+                    type(run_websocket["keepalive_idle_seconds"]) not in {int, float}
+                    or not math.isfinite(run_websocket["keepalive_idle_seconds"])
+                    or not 0 < run_websocket["keepalive_idle_seconds"] <= 2
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_websocket.keepalive_idle_seconds must be positive and at most 2 seconds"
+                    )
+                if run_websocket.get("observe_server_pings"):
+                    interval = run_websocket.get("ws_ping_interval")
+                    idle_seconds = run_websocket.get("keepalive_idle_seconds")
+                    if (
+                        type(interval) not in {int, float}
+                        or not math.isfinite(interval)
+                        or interval <= 0
+                        or type(idle_seconds) not in {int, float}
+                        or idle_seconds < 2 * interval
+                    ):
+                        raise ParityError(
+                            f"{case_id}: server Ping observation requires a positive finite interval and at least two intervals of idle time"
+                        )
+                if case["operation"] == "python.api.run-websocket-keepalive-no-timeout":
+                    interval = run_websocket.get("ws_ping_interval")
+                    idle_seconds = run_websocket.get("keepalive_idle_seconds")
+                    if (
+                        type(interval) not in {int, float}
+                        or run_websocket.get("ws_ping_timeout", "missing") is not None
+                        or type(idle_seconds) not in {int, float}
+                        or idle_seconds < interval * 2
+                    ):
+                        raise ParityError(
+                            f"{case_id}: no-timeout keepalive requires an interval, a null ping timeout, and an idle period of at least two intervals"
+                        )
+                if case["operation"] == "python.api.run-websocket-keepalive-unbounded-timeout":
+                    interval = run_websocket.get("ws_ping_interval")
+                    timeout = run_websocket.get("ws_ping_timeout")
+                    idle_seconds = run_websocket.get("keepalive_idle_seconds")
+                    if (
+                        type(interval) not in {int, float}
+                        or interval <= 0
+                        or type(timeout) not in {int, float}
+                        or timeout <= 1e20
+                        or type(idle_seconds) not in {int, float}
+                        or idle_seconds < interval * 2
+                    ):
+                        raise ParityError(
+                            f"{case_id}: unbounded-timeout keepalive requires a positive interval, a timeout beyond Rust Duration range, and an idle period of at least two intervals"
+                        )
+                if case["operation"] == "python.api.run-websocket-keepalive-infinite-interval":
+                    interval = run_websocket.get("ws_ping_interval")
+                    timeout = run_websocket.get("ws_ping_timeout")
+                    idle_seconds = run_websocket.get("keepalive_idle_seconds")
+                    if (
+                        interval != {"$float": "inf"}
+                        or type(timeout) not in {int, float}
+                        or not math.isfinite(timeout)
+                        or type(idle_seconds) not in {int, float}
+                        or not 0 < idle_seconds <= 2
+                    ):
+                        raise ParityError(
+                            f"{case_id}: infinite-interval keepalive requires a positive infinite interval, finite ping timeout, and idle period from 0 through 2 seconds"
+                        )
+                if case["operation"] == "python.api.run-websocket-keepalive-nan-interval":
+                    if (
+                        run_websocket.get("ws_ping_interval") != {"$float": "nan"}
+                        or type(run_websocket.get("ws_ping_timeout")) not in {int, float}
+                        or not math.isfinite(run_websocket["ws_ping_timeout"])
+                        or run_websocket["ws_ping_timeout"] <= 0
+                    ):
+                        raise ParityError(
+                            f"{case_id}: NaN-interval keepalive requires the explicit NaN marker and a positive finite ping timeout"
+                        )
+                if case["operation"] == "python.api.run-websocket-keepalive-nan-timeout":
+                    interval = run_websocket.get("ws_ping_interval")
+                    idle_seconds = run_websocket.get("keepalive_idle_seconds")
+                    if (
+                        type(interval) not in {int, float}
+                        or interval <= 0
+                        or run_websocket.get("ws_ping_timeout") != {"$float": "nan"}
+                        or type(idle_seconds) not in {int, float}
+                        or idle_seconds < interval * 2
+                    ):
+                        raise ParityError(
+                            f"{case_id}: NaN-timeout keepalive requires a positive interval, the explicit NaN marker, and an idle period of at least two intervals"
+                        )
+                if case["operation"] == "python.api.run-websocket-keepalive-disabled" and (
+                    run_websocket.get("ws_ping_interval", "missing") is not None
+                    or run_websocket.get("ws_ping_timeout", "missing") is not None
+                ):
+                    raise ParityError(
+                        f"{case_id}: disabled keepalive requires explicit null ping interval and timeout settings"
+                    )
+                if case["operation"] == "python.api.run-websocket-keepalive-negative-timeout" and (
+                    type(run_websocket.get("ws_ping_interval")) not in {int, float}
+                    or run_websocket["ws_ping_interval"] <= 0
+                    or type(run_websocket.get("ws_ping_timeout")) not in {int, float}
+                    or run_websocket["ws_ping_timeout"] >= 0
+                    or type(run_websocket.get("keepalive_idle_seconds")) not in {int, float}
+                    or run_websocket["keepalive_idle_seconds"] < run_websocket["ws_ping_interval"] * 2
+                ):
+                    raise ParityError(
+                        f"{case_id}: negative-timeout keepalive requires a positive interval, negative timeout, and idle period of at least two intervals"
+                    )
                 timeout_seconds = run_websocket["timeout_seconds"]
                 if type(timeout_seconds) is not int or not 2 <= timeout_seconds <= 8:
                     raise ParityError(
                         f"{case_id}.api.run_websocket.timeout_seconds must be from 2 through 8"
                     )
+            elif case["operation"] == "python.api.server-serve-cancellation":
+                exact_keys(case["api"], {"server_serve_cancellation"}, f"{case_id}.api")
+                cancellation = case["api"]["server_serve_cancellation"]
+                exact_keys(
+                    cancellation,
+                    {"phase"},
+                    f"{case_id}.api.server_serve_cancellation",
+                )
+                if cancellation["phase"] not in {"after-startup", "during-startup"}:
+                    raise ParityError(
+                        f"{case_id}.api.server_serve_cancellation.phase must be after-startup or during-startup"
+                    )
             elif case["operation"] in readiness_operations:
                 input_name = readiness_operations[case["operation"]]
+                if input_name in {
+                    "server_startup_acknowledgement_drop",
+                    "server_startup_cancel_after_listener",
+                    "server_startup_cancel_after_listener_without_lifespan",
+                } and case.get("verification") != "fault-contract":
+                    raise ParityError(
+                        f"{case_id}: the bound-listener pause requires target-only fault verification"
+                    )
                 exact_keys(case["api"], {input_name}, f"{case_id}.api")
-                if case["api"][input_name] is not True:
+                if input_name == "server_startup_acknowledgement_drop":
+                    drop = case["api"][input_name]
+                    exact_keys(drop, {"shutdown"}, f"{case_id}.api.{input_name}")
+                    if drop["shutdown"] not in {"complete", "failed"}:
+                        raise ParityError(f"{case_id}: acknowledgement-loss shutdown must be complete or failed")
+                elif case["api"][input_name] is not True:
                     raise ParityError(f"{case_id}.api.{input_name} must be true")
-            elif case["operation"] == "python.api.server-lifespan-startup":
+            elif case["operation"] == "python.api.server-lifespan-mode-validation":
+                exact_keys(case["api"], {"server_lifespan_mode"}, f"{case_id}.api")
+                mode = case["api"]["server_lifespan_mode"]
+                mode_keys = {"mode"}
+                if mode.get("mode") == "boolean-disabled":
+                    mode_keys.update(
+                        {"prebound_listener", "limit_max_requests", "limit_max_requests_jitter"}
+                    )
+                exact_keys(mode, mode_keys, f"{case_id}.api.server_lifespan_mode")
+                if mode["mode"] not in {
+                    "boolean-disabled",
+                    "boolean-enabled",
+                    "invalid-string",
+                    "invalid-type",
+                }:
+                    raise ParityError(
+                        f"{case_id}.api.server_lifespan_mode.mode must be boolean-disabled, boolean-enabled, invalid-string, or invalid-type"
+                    )
+                if mode["mode"] == "boolean-disabled":
+                    if mode["prebound_listener"] is not True:
+                        raise ParityError(
+                            f"{case_id}.api.server_lifespan_mode.prebound_listener must be true"
+                        )
+                    if type(mode["limit_max_requests"]) is not int or mode["limit_max_requests"] < 1:
+                        raise ParityError(
+                            f"{case_id}.api.server_lifespan_mode.limit_max_requests must be a positive integer"
+                        )
+                    if (
+                        type(mode["limit_max_requests_jitter"]) is not int
+                        or mode["limit_max_requests_jitter"] < 1
+                    ):
+                        raise ParityError(
+                            f"{case_id}.api.server_lifespan_mode.limit_max_requests_jitter must be a positive integer"
+                        )
+            elif case["operation"] in {
+                "python.api.server-lifespan-startup",
+                "python.api.server-lifespan-auto-fallback",
+                "python.api.server-lifespan-early-return",
+                "python.api.server-lifespan-shutdown-exception",
+            }:
                 exact_keys(case["api"], {"server_lifespan_startup"}, f"{case_id}.api")
                 startup = case["api"]["server_lifespan_startup"]
                 exact_keys(
@@ -2650,13 +4268,35 @@ def load_contract(
                     {"lifespan", "app_lifespan", "timeout_seconds"},
                     f"{case_id}.api.server_lifespan_startup",
                 )
-                if startup["lifespan"] != "on":
+                expected_lifespan = {
+                    "python.api.server-lifespan-startup": {"on"},
+                    "python.api.server-lifespan-auto-fallback": {"auto"},
+                    "python.api.server-lifespan-early-return": {"auto", "on"},
+                    "python.api.server-lifespan-shutdown-exception": {"on"},
+                }[case["operation"]]
+                if startup["lifespan"] not in expected_lifespan:
                     raise ParityError(
-                        f"{case_id}.api.server_lifespan_startup.lifespan must be on"
+                        f"{case_id}.api.server_lifespan_startup.lifespan must be one of {sorted(expected_lifespan)}"
                     )
-                if startup["app_lifespan"] != "raises-before-startup":
+                expected_app_lifespan = {
+                    "python.api.server-lifespan-startup": {
+                        "raises-before-startup",
+                        "unexpected-startup-event",
+                    },
+                    "python.api.server-lifespan-auto-fallback": {
+                        "raises-before-startup",
+                        "unexpected-startup-event",
+                    },
+                    "python.api.server-lifespan-early-return": {
+                        "returns-before-startup-event",
+                    },
+                    "python.api.server-lifespan-shutdown-exception": {
+                        "raises-during-shutdown",
+                    },
+                }[case["operation"]]
+                if startup["app_lifespan"] not in expected_app_lifespan:
                     raise ParityError(
-                        f"{case_id}.api.server_lifespan_startup.app_lifespan must be raises-before-startup"
+                        f"{case_id}.api.server_lifespan_startup.app_lifespan must be one of {sorted(expected_app_lifespan)}"
                     )
                 timeout_seconds = startup["timeout_seconds"]
                 if type(timeout_seconds) is not int or not 2 <= timeout_seconds <= 8:
@@ -2688,6 +4328,14 @@ def load_contract(
                 api_keys = {"imports", "signatures"}
                 if "calls" in case["api"]:
                     api_keys.add("calls")
+                if "config_probes" in case["api"]:
+                    api_keys.add("config_probes")
+                if "server_on_tick" in case["api"]:
+                    api_keys.add("server_on_tick")
+                if "server_lifecycle" in case["api"]:
+                    api_keys.add("server_lifecycle")
+                if "server_signals" in case["api"]:
+                    api_keys.add("server_signals")
                 exact_keys(case["api"], api_keys, f"{case_id}.api")
                 for field in ("imports", "signatures"):
                     paths = case["api"][field]
@@ -2741,6 +4389,101 @@ def load_contract(
                                     raise ParityError(
                                         f"{case_id}.api.calls[{index}].method_calls[{method_index}] has invalid method inputs"
                                     )
+                if "config_probes" in case["api"]:
+                    probes = case["api"]["config_probes"]
+                    if not isinstance(probes, list) or not probes:
+                        raise ParityError(
+                            f"{case_id}.api.config_probes must be a non-empty array"
+                        )
+                    for index, probe in enumerate(probes):
+                        probe_context = f"{case_id}.api.config_probes[{index}]"
+                        exact_keys(
+                            probe,
+                            {"app", "options", "properties", "methods"},
+                            probe_context,
+                        )
+                        if (
+                            not isinstance(probe["app"], str)
+                            or not probe["app"]
+                            or "\x00" in probe["app"]
+                            or not isinstance(probe["options"], dict)
+                        ):
+                            raise ParityError(
+                                f"{probe_context} has invalid Config constructor inputs"
+                            )
+                        for field in ("properties", "methods"):
+                            names = probe[field]
+                            if (
+                                not isinstance(names, list)
+                                or any(
+                                    not isinstance(name, str)
+                                    or not name.isidentifier()
+                                    or name.startswith("_")
+                                    for name in names
+                                )
+                                or len(names) != len(set(names))
+                            ):
+                                raise ParityError(
+                                    f"{probe_context}.{field} must be a unique public-name list"
+                                )
+                if "server_on_tick" in case["api"]:
+                    probe = case["api"]["server_on_tick"]
+                    probe_context = f"{case_id}.api.server_on_tick"
+                    exact_keys(
+                        probe,
+                        {
+                            "options",
+                            "counter",
+                            "total_requests",
+                            "callback_notify",
+                        },
+                        probe_context,
+                    )
+                    if (
+                        not isinstance(probe["options"], dict)
+                        or type(probe["counter"]) is not int
+                        or probe["counter"] < 0
+                        or type(probe["total_requests"]) is not int
+                        or probe["total_requests"] < 0
+                        or type(probe["callback_notify"]) is not bool
+                    ):
+                        raise ParityError(
+                            f"{probe_context} has invalid server tick inputs"
+                        )
+                if "server_lifecycle" in case["api"]:
+                    probe = case["api"]["server_lifecycle"]
+                    probe_context = f"{case_id}.api.server_lifecycle"
+                    exact_keys(
+                        probe,
+                        {"stop_phase"},
+                        probe_context,
+                    )
+                    if probe["stop_phase"] not in {"before_startup", "after_startup"}:
+                        raise ParityError(
+                            f"{probe_context}.stop_phase must be before_startup or after_startup"
+                        )
+                if "server_signals" in case["api"]:
+                    probe = case["api"]["server_signals"]
+                    probe_context = f"{case_id}.api.server_signals"
+                    exact_keys(probe, {"sequences"}, probe_context)
+                    sequences = probe["sequences"]
+                    if not isinstance(sequences, list) or not sequences:
+                        raise ParityError(
+                            f"{probe_context}.sequences must be a non-empty array"
+                        )
+                    for sequence_index, sequence in enumerate(sequences):
+                        if (
+                            not isinstance(sequence, list)
+                            or not sequence
+                            or any(
+                                not isinstance(signal_name, str)
+                                or signal_name not in {"SIGINT", "SIGTERM"}
+                                for signal_name in sequence
+                            )
+                        ):
+                            raise ParityError(
+                                f"{probe_context}.sequences[{sequence_index}] must contain supported signal names"
+                            )
             else:
                 raise ParityError(f"{case_id}: unsupported Python API operation {case['operation']!r}")
         elif kind in http_profile_ids and "response_stream" in case:
@@ -2943,6 +4686,17 @@ def load_contract(
                 stream_keys.add("send_all_before_read")
                 if stream["send_all_before_read"] is not True:
                     raise ParityError(f"{case_id}: send_all_before_read must be true when present")
+            if "send_body_concurrently_with_response_read" in stream:
+                stream_keys.add("send_body_concurrently_with_response_read")
+                if (
+                    stream["send_body_concurrently_with_response_read"] is not True
+                    or kind != "http1"
+                    or stream.get("send_all_before_read") is True
+                    or stream.get("send_remaining_after_response") is True
+                ):
+                    raise ParityError(
+                        f"{case_id}: concurrent request-body sending requires an HTTP/1.1 streaming input"
+                    )
             if "send_remaining_after_response" in stream:
                 stream_keys.add("send_remaining_after_response")
                 if (
@@ -3067,7 +4821,11 @@ def load_contract(
             or (profile_protocols == {"http/1.1", "lifespan"} and not kind.endswith("-tls"))
         ):
             if kind == "http2" and case["operation"] not in {
-                "http.concurrent-streams", "http.concurrent-stream-load"
+                "http.concurrent-streams", "http.concurrent-stream-load",
+                "http2.response-header-capacity-delivery",
+                "http2.response-trailer-capacity-delivery",
+                "http2.response-trailer-capacity-one-over-parity",
+                "http2.response-trailer-capacity-large-parity",
             }:
                 raise ParityError(f"{case_id}: HTTP/2 request sequences require the concurrent-streams operation")
             if kind == "http3" and case["operation"] not in {
@@ -3076,6 +4834,45 @@ def load_contract(
             }:
                 raise ParityError(f"{case_id}: HTTP/3 sequences require a declared sequence operation")
             sequence_keys = {"case_id", "profile", "operation", "covers", "request_sequence"}
+            if case["operation"] in {
+                "http.response-header-capacity-delivery",
+                "http.response-header-capacity-one-above-map-limit",
+                "http.response-header-capacity-many-above-map-limit",
+            }:
+                requests = case["request_sequence"]
+                expected_count, expected_case_ids = {
+                    "http.response-header-capacity-delivery": (
+                        24575,
+                        {"http1.response-header-capacity-at-map-limit"},
+                    ),
+                    "http.response-header-capacity-one-above-map-limit": (
+                        24576,
+                        {"http1.response-header-capacity-one-above-map-limit"},
+                    ),
+                    "http.response-header-capacity-many-above-map-limit": (
+                        32769,
+                        {
+                            "http1.response-header-capacity-many-above-map-limit",
+                            "support.http1.response-header-overflow-delivers",
+                        },
+                    ),
+                }[case["operation"]]
+                if (
+                    kind != "http1"
+                    or case_id not in expected_case_ids
+                    or not isinstance(requests, list)
+                    or len(requests) != 2
+                    or any(not isinstance(request, dict) for request in requests)
+                    or requests[0].get("path")
+                    != f"/response-header-capacity?count={expected_count}"
+                    or requests[1].get("path") != "/scope"
+                    or any(request.get("method") != "GET" for request in requests)
+                    or any(request.get("headers") != [] for request in requests)
+                    or any(request.get("body_base64") != "" for request in requests)
+                ):
+                    raise ParityError(
+                        f"{case_id}: HTTP/1 response-header boundary requires {expected_count:,} application names and a same-connection follow-up"
+                    )
             if "load" in case:
                 sequence_keys.add("load")
                 validate_load_input(case, "http")
@@ -3092,6 +4889,57 @@ def load_contract(
                     raise ParityError(f"{case_id}: h3_grease must be a boolean")
             exact_case_keys(case, sequence_keys, case_id)
             requests = case["request_sequence"]
+            if kind == "http2" and case["operation"] in {
+                "http2.response-header-capacity-delivery",
+            }:
+                if (
+                    not isinstance(requests, list)
+                    or len(requests) != 2
+                    or any(not isinstance(request, dict) for request in requests)
+                    or requests[0].get("method") != "GET"
+                    or requests[0].get("path") != "/response-header-capacity?count=24576"
+                    or requests[0].get("headers") != []
+                    or requests[0].get("body_base64") != ""
+                    or requests[1].get("method") != "GET"
+                    or requests[1].get("path") != "/scope"
+                    or requests[1].get("headers") != []
+                    or requests[1].get("body_base64") != ""
+                    or case.get("verification", "oracle-parity") != "oracle-parity"
+                    or "fault" in case
+                ):
+                    raise ParityError(
+                        f"{case_id}: HTTP/2 response-header overflow requires 24,576 distinct fields and a same-connection follow-up"
+                    )
+            if kind == "http2" and case["operation"] in {
+                "http2.response-trailer-capacity-delivery",
+                "http2.response-trailer-capacity-one-over-parity",
+                "http2.response-trailer-capacity-large-parity",
+            }:
+                expected_count = {
+                    "http2.response-trailer-capacity-delivery": 24576,
+                    "http2.response-trailer-capacity-one-over-parity": 24577,
+                    "http2.response-trailer-capacity-large-parity": 32769,
+                }[case["operation"]]
+                verification = case.get("verification", "oracle-parity")
+                if (
+                    not isinstance(requests, list)
+                    or len(requests) != 2
+                    or any(not isinstance(request, dict) for request in requests)
+                    or requests[0].get("method") != "GET"
+                    or requests[0].get("path")
+                    != f"/response-trailers-capacity?count={expected_count}"
+                    or requests[0].get("headers") != [["te", "trailers"]]
+                    or requests[0].get("body_base64") != ""
+                    or requests[1].get("method") != "GET"
+                    or requests[1].get("path") != "/scope"
+                    or requests[1].get("headers") != []
+                    or requests[1].get("body_base64") != ""
+                    or verification != "oracle-parity"
+                    or "fault" in case
+                ):
+                    raise ParityError(
+                        f"{case_id}: HTTP/2 trailer capacity requires its exact finite boundary input and same-connection follow-up"
+                    )
             if "load" in case:
                 if (
                     not isinstance(requests, list)
@@ -3171,6 +5019,16 @@ def load_contract(
                     raise ParityError(f"{case_id}: request-sequence headers must be pairs of strings")
         elif "request" in case and supports_http_request:
             case_keys = {"case_id", "profile", "operation", "covers", "request"}
+            if "tls_client_hello" in case:
+                case_keys.add("tls_client_hello")
+                if (
+                    kind != "http1-tls"
+                    or case["operation"] != "tls.reject-obsolete-version"
+                    or case["tls_client_hello"] not in {"TLSv1.0", "TLSv1.1"}
+                ):
+                    raise ParityError(f"{case_id}: obsolete TLS probe requires a TLS 1.0 or 1.1 ClientHello")
+            elif case["operation"] == "tls.reject-obsolete-version":
+                raise ParityError(f"{case_id}: obsolete TLS probe requires tls_client_hello")
             if "server_options" in case:
                 case_keys.add("server_options")
                 server_options = case["server_options"]
@@ -3182,13 +5040,34 @@ def load_contract(
                 }
                 if kind == "http1":
                     allowed_options.add("http")
+                    allowed_options.add("h11_max_incomplete_event_size")
+                    allowed_options.add("ws")
                 if kind in {"http1", "http2"}:
                     allowed_options.add("reset_contextvars")
+                if kind == "http1-tls":
+                    allowed_options.update({"ssl_ca_certs", "ssl_cert_reqs", "ssl_version", "ssl_ciphers"})
                 unknown_options = set(server_options) - allowed_options
                 if unknown_options:
                     raise ParityError(
                         f"{case_id}: unsupported HTTP server options: "
                         f"{', '.join(sorted(unknown_options))}"
+                    )
+                if "ws" in server_options and (
+                    not isinstance(server_options["ws"], str)
+                    or (
+                        server_options["ws"]
+                        not in {
+                            "auto",
+                            "none",
+                            "websockets",
+                            "websockets-sansio",
+                            "wsproto",
+                        }
+                        and not _is_import_path(server_options["ws"])
+                    )
+                ):
+                    raise ParityError(
+                        f"{case_id}: server_options.ws must select a built-in backend or a protocol import path"
                     )
                 if "proxy_headers" in server_options and type(
                     server_options["proxy_headers"]
@@ -3232,6 +5111,46 @@ def load_contract(
                 }:
                     raise ParityError(
                         f"{case_id}: server_options.http must select auto, h11, or httptools"
+                    )
+                if "h11_max_incomplete_event_size" in server_options and type(
+                    server_options["h11_max_incomplete_event_size"]
+                ) is not int:
+                    raise ParityError(
+                        f"{case_id}: server_options.h11_max_incomplete_event_size must be an integer"
+                    )
+                if (
+                    "ssl_ca_certs" in server_options
+                    and server_options["ssl_ca_certs"] != "generated-ca"
+                ):
+                    raise ParityError(
+                        f"{case_id}: server_options.ssl_ca_certs must select the generated parity CA"
+                    )
+                if "ssl_cert_reqs" in server_options and (
+                    type(server_options["ssl_cert_reqs"]) is not int
+                    or server_options["ssl_cert_reqs"] not in {0, 1, 2}
+                ):
+                    raise ParityError(
+                        f"{case_id}: server_options.ssl_cert_reqs must be 0, 1, or 2"
+                    )
+                if "ssl_version" in server_options and (
+                    type(server_options["ssl_version"]) is not int
+                    or server_options["ssl_version"] != ssl.PROTOCOL_TLSv1_2
+                ):
+                    raise ParityError(
+                        f"{case_id}: server_options.ssl_version must select TLS 1.2"
+                    )
+                if "ssl_ciphers" in server_options and (
+                    not isinstance(server_options["ssl_ciphers"], str)
+                    or not server_options["ssl_ciphers"]
+                ):
+                    raise ParityError(
+                        f"{case_id}: server_options.ssl_ciphers must be a non-empty string"
+                    )
+            if "client_tls" in case:
+                case_keys.add("client_tls")
+                if kind != "http1-tls" or case["client_tls"] is not True:
+                    raise ParityError(
+                        f"{case_id}: client_tls is only supported as true for HTTP/1.1 TLS parity"
                     )
             exact_case_keys(case, case_keys, case_id)
             request = case["request"]
@@ -3545,8 +5464,21 @@ def load_contract(
                 base64.b64decode(request["body_base64"], validate=True)
             except (ValueError, TypeError) as error:
                 raise ParityError(f"{case_id}: invalid request body base64") from error
-            if not isinstance(request["path"], str) or not request["path"].startswith("/"):
-                raise ParityError(f"{case_id}: request path must be origin-form")
+            authority_form = False
+            if kind == "http1" and request["method"] == "CONNECT" and isinstance(request["path"], str):
+                try:
+                    authority = urlsplit("//" + request["path"])
+                    authority_form = bool(
+                        authority.netloc == request["path"] and authority.hostname
+                        and authority.port is not None and 1 <= authority.port <= 65535
+                        and authority.username is None and authority.password is None
+                        and not authority.path and not authority.query and not authority.fragment
+                        and request["path"].isascii()
+                    )
+                except ValueError:
+                    pass
+            if not isinstance(request["path"], str) or not (request["path"].startswith("/") or authority_form):
+                raise ParityError(f"{case_id}: request path must be origin-form or an HTTP/1 CONNECT authority")
             if not isinstance(request["headers"], list) or any(
                 not isinstance(header, list)
                 or len(header) != 2
@@ -3554,7 +5486,9 @@ def load_contract(
                 for header in request["headers"]
             ):
                 raise ParityError(f"{case_id}: headers must be pairs of strings")
-        elif kind in {"websocket", "websocket-tls"}:
+        elif kind in {
+            "websocket", "websocket-tls", "websocket-websockets", "websocket-wsproto"
+        }:
             case_keys = {"case_id", "profile", "operation", "covers", "websocket"}
             if "server_options" in case:
                 case_keys.add("server_options")
@@ -3563,6 +5497,8 @@ def load_contract(
                     raise ParityError(f"{case_id}: server_options must be an object")
                 unknown_options = set(server_options) - {
                     "ws_max_size",
+                    "ws_max_queue",
+                    "ws",
                     "ws_ping_interval",
                     "ws_ping_timeout",
                     "proxy_headers",
@@ -3574,12 +5510,37 @@ def load_contract(
                         f"{case_id}: unsupported WebSocket server options: "
                         f"{sorted(unknown_options)!r}"
                     )
+                if "ws" in server_options and (
+                    not isinstance(server_options["ws"], str)
+                    or (
+                        server_options["ws"]
+                        not in {
+                            "auto",
+                            "none",
+                            "websockets",
+                            "websockets-sansio",
+                            "wsproto",
+                        }
+                        and not _is_import_path(server_options["ws"])
+                    )
+                ):
+                    raise ParityError(
+                        f"{case_id}: server_options.ws must select a built-in backend or a protocol import path"
+                    )
                 if "ws_max_size" in server_options and (
                     type(server_options["ws_max_size"]) is not int
                     or server_options["ws_max_size"] < 0
                 ):
                     raise ParityError(
                         f"{case_id}: server_options.ws_max_size must be a non-negative integer"
+                    )
+                if "ws_max_queue" in server_options and (
+                    case.get("profile") != "websocket-websockets"
+                    or type(server_options["ws_max_queue"]) is not int
+                    or server_options["ws_max_queue"] < 0
+                ):
+                    raise ParityError(
+                        f"{case_id}: server_options.ws_max_queue requires the legacy websockets profile and a non-negative integer"
                     )
                 for option in ("ws_ping_interval", "ws_ping_timeout"):
                     if option in server_options and (
@@ -3618,7 +5579,26 @@ def load_contract(
             exact_case_keys(case, case_keys, case_id)
             websocket = case["websocket"]
             websocket_keys = {"path", "subprotocols", "messages"}
-            if case["operation"] == "websocket.raw-frame-disconnect":
+            if case["operation"] == "websocket.response-header-capacity-delivery":
+                websocket_keys.add("followup_path")
+                if (
+                    case["profile"] != "websocket"
+                    or websocket.get("path") != "/ws-header-capacity?count=32769"
+                    or websocket.get("messages") != []
+                    or websocket.get("subprotocols") != []
+                    or websocket.get("followup_path") != "/scope"
+                    or "fault" in case
+                ):
+                    raise ParityError(
+                        f"{case_id}: WebSocket response-header overflow requires the bounded 32,769-field handshake and follow-up"
+                    )
+            if case["operation"] in {
+                "websocket.raw-frame-disconnect",
+                "websocket.fragmented-message-reassembly",
+                "websocket.fragmented-compressed-message-reassembly",
+                "websocket.raw-size-limit-close",
+                "websocket.raw-size-limit-close-uncompressed",
+            }:
                 websocket_keys.add("raw_frame_base64")
                 if (
                     case["profile"] != "websocket"
@@ -3637,7 +5617,7 @@ def load_contract(
                     raise ParityError(f"{case_id}: raw WebSocket frame must not be empty")
             elif "raw_frame_base64" in websocket:
                 raise ParityError(
-                    f"{case_id}: raw_frame_base64 requires websocket.raw-frame-disconnect"
+                    f"{case_id}: raw_frame_base64 requires a raw WebSocket frame operation"
                 )
             if case.get("operation") == "websocket.concurrent-session-load":
                 if websocket.get("path") != "/ws/load" or websocket.get("messages") != []:
@@ -3657,6 +5637,68 @@ def load_contract(
                         f"{case_id}: server keepalive requires the /ws idle-session workflow "
                         "and explicit ping interval and timeout settings"
                     )
+            if case.get("operation") == "websocket.server-keepalive-mismatched-pong":
+                if (
+                    case.get("profile") != "websocket"
+                    or websocket.get("path") != "/ws"
+                    or websocket.get("messages") != []
+                    or not {"ws_ping_interval", "ws_ping_timeout"}.issubset(
+                        case.get("server_options", {})
+                    )
+                    or "second_pong_payload_base64" not in websocket
+                ):
+                    raise ParityError(
+                        f"{case_id}: mismatched-Pong coverage requires the /ws idle-session workflow, "
+                        "explicit keepalive settings, and a second Pong payload"
+                    )
+                websocket_keys.add("second_pong_payload_base64")
+                try:
+                    second_pong_payload = base64.b64decode(
+                        websocket["second_pong_payload_base64"], validate=True
+                    )
+                except (ValueError, TypeError) as error:
+                    raise ParityError(
+                        f"{case_id}: second_pong_payload_base64 must be valid base64"
+                    ) from error
+                if not 1 <= len(second_pong_payload) <= 125 or len(second_pong_payload) == 4:
+                    raise ParityError(
+                        f"{case_id}: second Pong must be a control-frame payload whose length differs from the four-byte server Ping"
+                    )
+            elif "second_pong_payload_base64" in websocket:
+                raise ParityError(
+                    f"{case_id}: second_pong_payload_base64 requires the mismatched-Pong operation"
+                )
+            if case.get("operation") == "websocket.server-keepalive-unsolicited-pong":
+                if (
+                    case.get("profile") != "websocket"
+                    or websocket.get("path") != "/ws"
+                    or websocket.get("messages") != []
+                    or not {"ws_ping_interval", "ws_ping_timeout"}.issubset(
+                        case.get("server_options", {})
+                    )
+                    or "unsolicited_pong_payload_base64" not in websocket
+                ):
+                    raise ParityError(
+                        f"{case_id}: unsolicited-Pong coverage requires the /ws idle-session workflow, "
+                        "explicit keepalive settings, and a Pong payload"
+                    )
+                websocket_keys.add("unsolicited_pong_payload_base64")
+                try:
+                    unsolicited_pong_payload = base64.b64decode(
+                        websocket["unsolicited_pong_payload_base64"], validate=True
+                    )
+                except (ValueError, TypeError) as error:
+                    raise ParityError(
+                        f"{case_id}: unsolicited_pong_payload_base64 must be valid base64"
+                    ) from error
+                if not 1 <= len(unsolicited_pong_payload) <= 125:
+                    raise ParityError(
+                        f"{case_id}: unsolicited Pong payload must fit a control frame"
+                    )
+            elif "unsolicited_pong_payload_base64" in websocket:
+                raise ParityError(
+                    f"{case_id}: unsolicited_pong_payload_base64 requires the unsolicited-Pong operation"
+                )
             if "shutdown" in websocket:
                 websocket_keys.add("shutdown")
                 if websocket["shutdown"] is not True:
@@ -3701,6 +5743,10 @@ def load_contract(
                     for header in websocket["headers"]
                 ):
                     raise ParityError(f"{case_id}: WebSocket headers must be pairs of strings")
+            if "disable_compression" in websocket:
+                websocket_keys.add("disable_compression")
+                if websocket["disable_compression"] is not True:
+                    raise ParityError(f"{case_id}: disable_compression must be true when present")
             if "followup_path" in websocket:
                 websocket_keys.add("followup_path")
                 if not isinstance(websocket["followup_path"], str) or not websocket["followup_path"].startswith("/"):
@@ -3825,11 +5871,11 @@ def load_contract(
             if "idle_transport_prefix_base64" in case["lifecycle"]:
                 lifecycle_keys.add("idle_transport_prefix_base64")
                 if (
-                    case["profile"] not in {"lifecycle", "lifecycle-tls"}
+                    case["profile"] != "lifecycle"
                     or case["operation"] != "lifespan.active-stream-graceful-drain"
                 ):
                     raise ParityError(
-                        f"{case_id}: idle transport prefix requires the HTTP/1.1 or TLS graceful-drain workflow"
+                        f"{case_id}: idle transport prefix requires the HTTP/1.1 graceful-drain workflow"
                     )
                 try:
                     prefix = base64.b64decode(
@@ -3864,7 +5910,7 @@ def load_contract(
                 )
             if case["operation"] == "lifespan.active-stream-graceful-drain":
                 if (
-                    case["profile"] not in {"lifecycle", "lifecycle-tls"}
+                    case["profile"] != "lifecycle"
                     or case["lifecycle"].get("stream_path") != "/stream-shutdown-hold"
                     or "hold_path" in case["lifecycle"]
                     or "keep_alive_state_connection" in case["lifecycle"]
@@ -3873,6 +5919,18 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: active-stream graceful drain requires the dedicated held-stream workflow"
+                    )
+            elif case["operation"] == "lifespan.active-stream-tls-graceful-drain":
+                if (
+                    case["profile"] != "lifecycle-tls"
+                    or case["lifecycle"].get("stream_path") != "/stream-shutdown-hold"
+                    or "hold_path" in case["lifecycle"]
+                    or "keep_alive_state_connection" in case["lifecycle"]
+                    or "reset_connection_after_shutdown" in case["lifecycle"]
+                    or "idle_transport_prefix_base64" in case["lifecycle"]
+                ):
+                    raise ParityError(
+                        f"{case_id}: TLS active-stream graceful drain must isolate the held TLS stream"
                     )
             elif case["operation"] == "lifespan.concurrent-stream-zero-timeout-shutdown":
                 if (
@@ -3926,7 +5984,29 @@ def load_contract(
                 )
             exact_keys(case["lifecycle"], lifecycle_keys, f"{case_id}.lifecycle")
         elif "startup_failure" in case:
-            exact_case_keys(case, {"case_id", "profile", "operation", "covers", "startup_failure"}, case_id)
+            case_keys = {"case_id", "profile", "operation", "covers", "startup_failure"}
+            if "server_options" in case:
+                case_keys.add("server_options")
+                server_options = case["server_options"]
+                if (
+                    type(server_options) is not dict
+                    or not set(server_options) <= {"inherited_fd", "host"}
+                    or (
+                        "inherited_fd" in server_options
+                        and type(server_options["inherited_fd"]) is not bool
+                    )
+                    or (
+                        "host" in server_options
+                        and (
+                            not isinstance(server_options["host"], str)
+                            or server_options["host"] not in {"127.0.0.1", "::1"}
+                        )
+                    )
+                ):
+                    raise ParityError(
+                        f"{case_id}: startup-failure server options only support a boolean inherited_fd and a loopback host"
+                    )
+            exact_case_keys(case, case_keys, case_id)
             exact_keys(case["startup_failure"], {"expect_failed"}, f"{case_id}.startup_failure")
             if case["startup_failure"]["expect_failed"] is not True:
                 raise ParityError(f"{case_id}: startup-failure workflow must expect failure")
@@ -3954,9 +6034,14 @@ def load_contract(
 def runtime_identity(manifest: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     actual = {}
     requirements = []
+    platform_id = current_platform_id()
     for oracle in manifest["oracles"]:
         requirements.append((oracle["id"], oracle["version"]))
-        requirements.extend((component["id"], component["version"]) for component in oracle["components"])
+        requirements.extend(
+            (component["id"], component["version"])
+            for component in oracle["components"]
+            if "platforms" not in component or platform_id in component["platforms"]
+        )
     oracle_uvicorn = None
     if any(oracle["id"] == "uvicorn" for oracle in manifest["oracles"]):
         probe = subprocess.run(
@@ -3989,7 +6074,7 @@ def runtime_identity(manifest: dict[str, Any]) -> tuple[dict[str, Any], dict[str
             details = json.dumps(oracle_uvicorn, sort_keys=True)
             raise ParityError(
                 "the oracle interpreter does not import genuine Uvicorn 0.54.0; "
-                "pass --oracle-python for an environment without uvicorn-rs-py: "
+                "pass --oracle-python for an environment without the uvicorn-rs distribution: "
                 f"{details}"
             )
     requirement_names = sorted({distribution for distribution, _ in requirements})
@@ -4061,6 +6146,7 @@ def runtime_identity(manifest: dict[str, Any]) -> tuple[dict[str, Any], dict[str
         native_extension_path = str(native_extension.relative_to(ROOT))
     except ValueError:
         native_extension_path = str(native_extension)
+    source_files = runtime_source_hashes(ROOT)
     return (
         {
             "python": platform.python_version(),
@@ -4077,13 +6163,34 @@ def runtime_identity(manifest: dict[str, Any]) -> tuple[dict[str, Any], dict[str
                 "sha256": sha256(native_extension),
             },
             "cargo_lock_sha256": sha256(ROOT / "Cargo.lock"),
-            "source_sha256": sha256(ROOT / "src/lib.rs"),
+            "source_files": source_files,
+            "source_sha256": runtime_source_digest(source_files),
         },
     )
 
 
+def current_platform_id() -> str:
+    return parity_platform_id(platform.system())
+
+
+def parity_platform_id(platform_name: str) -> str:
+    normalized = platform_name.lower()
+    if normalized.startswith(("windows", "win32")):
+        return "windows"
+    if normalized.startswith(("macos", "darwin")):
+        return "macos"
+    if normalized.startswith("linux"):
+        return "linux"
+    raise ParityError(f"unsupported parity platform: {platform_name}")
+
+
+def default_event_loop() -> str:
+    return "asyncio" if current_platform_id() == "windows" else "uvloop"
+
+
 def free_port(*, tcp_and_udp: bool = False) -> int:
-    for _ in range(128):
+    last_error: OSError | None = None
+    for _ in range(512):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp:
             try:
                 tcp.bind(("127.0.0.1", 0))
@@ -4092,9 +6199,12 @@ def free_port(*, tcp_and_udp: bool = False) -> int:
                     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as udp:
                         udp.bind(("127.0.0.1", port))
                 return port
-            except OSError:
+            except OSError as error:
+                last_error = error
                 continue
-    raise OSError("could not find an available test port")
+    raise OSError(
+        f"could not find an available test port after 512 attempts: {last_error}"
+    )
 
 
 def make_certificate(directory: Path) -> tuple[Path, Path, Path]:
@@ -4102,59 +6212,175 @@ def make_certificate(directory: Path) -> tuple[Path, Path, Path]:
     certificate = directory / "server-chain.pem"
     key = directory / "server-key.pem"
     ca_certificate = directory / "parity-ca.pem"
-    ca_key = directory / "parity-ca-key.pem"
-    csr = directory / "server.csr"
-    extensions = directory / "server-extensions.cnf"
-    extensions.write_text(
-        "[server]\n"
-        "basicConstraints=critical,CA:FALSE\n"
-        "keyUsage=critical,digitalSignature,keyEncipherment\n"
-        "extendedKeyUsage=serverAuth\n"
-        "subjectAltName=DNS:localhost,IP:127.0.0.1\n"
-        "subjectKeyIdentifier=hash\n"
-        "authorityKeyIdentifier=keyid,issuer\n",
-        encoding="utf-8",
+    ca_key_path = directory / "parity-ca-key.pem"
+    ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    server_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    ca_name = x509.Name(
+        [x509.NameAttribute(NameOID.COMMON_NAME, "uvicorn-rs parity test CA")]
     )
-    subprocess.run(
-        [
-            "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "2",
-            "-keyout", str(ca_key), "-out", str(ca_certificate),
-            "-subj", "/CN=uvicorn-rs parity test CA",
-            "-addext", "basicConstraints=critical,CA:TRUE",
-            "-addext", "keyUsage=critical,keyCertSign,cRLSign",
-            "-addext", "subjectKeyIdentifier=hash",
-        ],
-        cwd=ROOT,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=True,
-        timeout=30,
+    server_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")])
+    not_before = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1)
+    not_after = not_before + timedelta(days=2)
+    ca = (
+        x509.CertificateBuilder()
+        .subject_name(ca_name)
+        .issuer_name(ca_name)
+        .public_key(ca_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(not_before)
+        .not_valid_after(not_after)
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=False,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=True,
+                crl_sign=True,
+                encipher_only=None,
+                decipher_only=None,
+            ),
+            critical=True,
+        )
+        .add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), critical=False
+        )
+        .sign(ca_key, hashes.SHA256())
     )
-    subprocess.run(
-        [
-            "openssl", "req", "-new", "-newkey", "rsa:2048", "-nodes",
-            "-keyout", str(key), "-out", str(csr), "-subj", "/CN=localhost",
-        ],
-        cwd=ROOT,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=True,
-        timeout=30,
+    server = (
+        x509.CertificateBuilder()
+        .subject_name(server_name)
+        .issuer_name(ca_name)
+        .public_key(server_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(not_before)
+        .not_valid_after(not_after)
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True,
+                content_commitment=False,
+                key_encipherment=True,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=False,
+                crl_sign=False,
+                encipher_only=None,
+                decipher_only=None,
+            ),
+            critical=True,
+        )
+        .add_extension(
+            x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False
+        )
+        .add_extension(
+            x509.SubjectAlternativeName(
+                [
+                    x509.DNSName("localhost"),
+                    x509.IPAddress(ipaddress.ip_address("127.0.0.1")),
+                ]
+            ),
+            critical=False,
+        )
+        .add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(server_key.public_key()),
+            critical=False,
+        )
+        .add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()),
+            critical=False,
+        )
+        .sign(ca_key, hashes.SHA256())
     )
-    subprocess.run(
-        [
-            "openssl", "x509", "-req", "-in", str(csr), "-CA", str(ca_certificate),
-            "-CAkey", str(ca_key), "-CAcreateserial", "-out", str(leaf_certificate),
-            "-days", "2", "-sha256", "-extfile", str(extensions), "-extensions", "server",
-        ],
-        cwd=ROOT,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=True,
-        timeout=30,
+    ca_pem = ca.public_bytes(serialization.Encoding.PEM)
+    leaf_pem = server.public_bytes(serialization.Encoding.PEM)
+    ca_key_path.write_bytes(
+        ca_key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
     )
-    certificate.write_bytes(leaf_certificate.read_bytes() + ca_certificate.read_bytes())
+    key.write_bytes(
+        server_key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+    )
+    ca_certificate.write_bytes(ca_pem)
+    leaf_certificate.write_bytes(leaf_pem)
+    certificate.write_bytes(leaf_pem + ca_pem)
     return certificate, key, ca_certificate
+
+
+def make_client_certificate(directory: Path) -> tuple[Path, Path]:
+    """Create a short-lived client identity signed by the parity TLS CA."""
+    ca_certificate = directory / "parity-ca.pem"
+    ca_key_path = directory / "parity-ca-key.pem"
+    client_certificate = directory / "client-leaf.pem"
+    client_key = directory / "client-key.pem"
+    ca = x509.load_pem_x509_certificate(ca_certificate.read_bytes())
+    ca_key = serialization.load_pem_private_key(ca_key_path.read_bytes(), password=None)
+    client_signing_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    client_name = x509.Name(
+        [x509.NameAttribute(NameOID.COMMON_NAME, "uvicorn-rs parity client")]
+    )
+    not_before = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1)
+    not_after = not_before + timedelta(days=2)
+    client = (
+        x509.CertificateBuilder()
+        .subject_name(client_name)
+        .issuer_name(ca.subject)
+        .public_key(client_signing_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(not_before)
+        .not_valid_after(not_after)
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=False,
+                crl_sign=False,
+                encipher_only=None,
+                decipher_only=None,
+            ),
+            critical=True,
+        )
+        .add_extension(
+            x509.ExtendedKeyUsage([ExtendedKeyUsageOID.CLIENT_AUTH]), critical=False
+        )
+        .add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(client_signing_key.public_key()),
+            critical=False,
+        )
+        .add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()),
+            critical=False,
+        )
+        .sign(ca_key, hashes.SHA256())
+    )
+    client_certificate.write_bytes(client.public_bytes(serialization.Encoding.PEM))
+    client_key.write_bytes(
+        client_signing_key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        )
+    )
+    return client_certificate, client_key
+
+
+def h3_client_executable_path(*, windows: bool | None = None) -> Path:
+    is_windows = os.name == "nt" if windows is None else windows
+    executable = "parity-http3.exe" if is_windows else "parity-http3"
+    return ROOT / "target" / "release" / executable
 
 
 def build_h3_client() -> Path:
@@ -4167,11 +6393,11 @@ def build_h3_client() -> Path:
         check=True,
         timeout=300,
     )
-    return ROOT / "target" / "release" / "parity-http3"
+    return h3_client_executable_path()
 
 
 def prebuilt_h3_client() -> Path:
-    client = ROOT / "target" / "release" / "parity-http3"
+    client = h3_client_executable_path()
     if not client.is_file():
         raise ParityError(f"prebuild the HTTP/3 parity client before freezing identity: {client}")
     return client
@@ -4193,8 +6419,15 @@ def start_server(
     async_cleanup_delay_seconds: float = 0.5,
     observe_connection_errors: bool = False,
     server_options: dict[str, Any] | None = None,
+    trust_anchor: Path | None = None,
+    client_certificate: Path | None = None,
+    client_key: Path | None = None,
 ) -> dict[str, Any]:
     profile_id = profile["id"]
+    websocket_selector = (server_options or {}).get("ws") or {
+        "websocket-websockets": "websockets",
+        "websocket-wsproto": "wsproto",
+    }.get(profile_id, "auto")
     env = os.environ.copy()
     if server_id == "uvicorn":
         # Coverage runs add the project Python source to PYTHONPATH so the
@@ -4217,6 +6450,11 @@ def start_server(
             env["PYTHONPATH"] = os.pathsep.join(
                 path for path in (source_python_path, env.get("PYTHONPATH")) if path
             )
+    if _is_import_path(websocket_selector):
+        parity_fixture_path = str(ROOT / "tests" / "parity")
+        env["PYTHONPATH"] = os.pathsep.join(
+            path for path in (parity_fixture_path, env.get("PYTHONPATH")) if path
+        )
     # Shutdown workflows restart a profile in the same temporary directory.
     # Readiness and request checkpoints must belong to the new process.
     events_path.write_text("", encoding="utf-8")
@@ -4284,15 +6522,21 @@ def start_server(
     if profile_id == "lifespan-fault-asgi-shutdown-task-join-after-complete":
         lifespan_mode = "shutdown-complete-pending"
     env["ASGI_PARITY_LIFESPAN_MODE"] = lifespan_mode_override or lifespan_mode
-    common = ["--host", "127.0.0.1", "--port", str(port)]
-    header_policy_args = (
-        [
-            "--header", "x-asgi-cli: alpha:beta",
-            "--no-server-header", "--no-date-header",
-        ]
-        if profile_id == "http1-header-policy"
-        else []
-    )
+    common = [
+        "--host",
+        str((server_options or {}).get("host", "127.0.0.1")),
+        "--port",
+        str(port),
+    ]
+    inherited_listener = None
+    inherited_listener_fds: tuple[int, ...] = ()
+    if (server_options or {}).get("inherited_fd"):
+        inherited_listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        inherited_listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        inherited_listener.set_inheritable(True)
+        inherited_listener.bind(("127.0.0.1", port))
+        inherited_listener.listen()
+        inherited_listener_fds = (inherited_listener.fileno(),)
     startup_api_profiles = {
         "startup-partial-tls-api",
         "startup-missing-certificate",
@@ -4303,6 +6547,19 @@ def start_server(
         "startup-empty-private-key",
         "startup-invalid-private-key-pem",
         "startup-mismatched-private-key",
+        "startup-encrypted-private-key-wrong-password",
+        "startup-encrypted-private-key-invalid-utf8",
+        "startup-encrypted-private-key-malformed-pem",
+        "startup-encrypted-private-key-wrong-label",
+        "startup-encrypted-private-key-invalid-der",
+        "startup-traditional-encrypted-private-key-unsupported-cipher",
+        "startup-traditional-encrypted-private-key-missing-dek-info",
+        "startup-traditional-encrypted-private-key-invalid-dek-info",
+        "startup-traditional-encrypted-private-key-invalid-proc-type",
+        "startup-traditional-encrypted-private-key-missing-body",
+        "startup-traditional-encrypted-private-key-invalid-body-base64",
+        "startup-traditional-encrypted-private-key-missing-end-marker",
+        "startup-traditional-unencrypted-private-key-invalid-base64",
     }
     if profile_id in startup_api_profiles:
         server_python = str(ORACLE_PYTHON) if server_id == "uvicorn" else sys.executable
@@ -4314,9 +6571,11 @@ def start_server(
             str(certificate or ""),
             str(key or ""),
         ]
-    elif profile_id in {"lifecycle-owned-loop", "lifecycle-owned-loop-eager"} or (
-        server_id == "uvicorn-rs" and profile_id == "lifecycle-server-api"
-    ):
+    elif profile_id in {
+        "lifecycle-owned-loop",
+        "lifecycle-owned-loop-eager",
+        "lifecycle-server-api",
+    }:
         server_python = str(ORACLE_PYTHON) if server_id == "uvicorn" else sys.executable
         api_control_path = events_path.with_suffix(".shutdown")
         api_control_path.unlink(missing_ok=True)
@@ -4327,8 +6586,14 @@ def start_server(
             str(graceful_timeout_seconds),
             str(api_control_path),
         ]
-        if profile_id == "lifecycle-server-api" and server_id == "uvicorn-rs":
-            command.append("--uvicorn-compat-api")
+        if profile_id == "lifecycle-server-api":
+            command.extend(
+                ["--server", "uvicorn" if server_id == "uvicorn" else "uvicorn-rs"]
+            )
+            if server_id == "uvicorn-rs":
+                # Use Server.should_exit on both sides for this lifecycle case;
+                # task-cancellation behavior has separate programmatic cases.
+                command.append("--uvicorn-compat-api")
         if profile_id in {"lifecycle-owned-loop", "lifecycle-owned-loop-eager"}:
             api_snapshot_path = events_path.with_suffix(".server-api-snapshot.json")
             api_snapshot_path.unlink(missing_ok=True)
@@ -4345,14 +6610,15 @@ def start_server(
         # instead of the protocol/lifecycle behavior under comparison.
         command = [
             sys.executable, "-m", "uvicorn", APP, *common,
-            "--loop", "uvloop", "--interface", "asgi3",
+            "--loop", default_event_loop(), "--interface", "asgi3", "--ws", websocket_selector,
         ]
+        if profile_id == "startup-fault-lifespan-send-closed-on":
+            command.extend(["--lifespan", "on"])
         if profile_id == "http2":
             command.extend(["--http", "zttp", "--http2"])
         if certificate and key:
             command.extend(["--ssl-certfile", str(certificate), "--ssl-keyfile", str(key)])
         command.extend(["--timeout-graceful-shutdown", str(graceful_timeout_seconds)])
-        command.extend(header_policy_args)
     elif server_id == "uvicorn":
         server_python = str(ORACLE_PYTHON)
         http_implementation = (server_options or {}).get(
@@ -4365,12 +6631,10 @@ def start_server(
             and env.get("ASGI_PARITY_UVICORN_WEBSOCKET_DEBUG") == "1"
         )
         command = [
-            server_python, "-m", "uvicorn", APP, *common, "--loop", "uvloop",
-            # Follow Uvicorn's stock selector for the pinned reference version.
-            # Since Uvicorn 0.50, `auto` selects its maintained SansIO adapter
-            # when websockets is installed; forcing `websockets` uses the
-            # deprecated legacy adapter and changes the reference behavior.
-            "--http", http_implementation, "--interface", "asgi3", "--ws", "auto",
+            server_python, "-m", "uvicorn", APP, *common, "--loop", default_event_loop(),
+            # The default profile follows Uvicorn's maintained auto/SansIO
+            # path; the wsproto profile selects its pinned backend explicitly.
+            "--http", http_implementation, "--interface", "asgi3", "--ws", websocket_selector,
             "--lifespan", "auto",
             "--log-level", "debug" if websocket_tls_debug else "error",
             "--timeout-graceful-shutdown",
@@ -4380,16 +6644,21 @@ def start_server(
             command.append("--http2")
         if certificate and key:
             command.extend(["--ssl-certfile", str(certificate), "--ssl-keyfile", str(key)])
-        command.extend(header_policy_args)
     elif server_id == "hypercorn":
         command = [
             sys.executable, "-m", "hypercorn", f"asgi:{APP}", "--bind", f"127.0.0.1:{port}",
-            "--worker-class", "uvloop", "--log-level",
-            "error" if observe_connection_errors else "critical", "--access-logfile", "/dev/null",
+            "--worker-class", default_event_loop(), "--log-level",
+            "error" if observe_connection_errors else "critical", "--access-logfile", os.devnull,
             "--certfile", str(certificate), "--keyfile", str(key), "--config", str(config_path),
         ]
         if profile_id == "http3":
             command.extend(["--quic-bind", f"127.0.0.1:{port}"])
+            if TRACE_HYPERCORN_H3_EVENTS:
+                command = [
+                    sys.executable,
+                    str(ROOT / "scripts" / "trace_hypercorn_h3.py"),
+                    *command[3:],
+                ]
     else:
         raise ParityError(f"unknown server adapter: {server_id}")
 
@@ -4398,12 +6667,23 @@ def start_server(
             raise ParityError(
                 f"server options are not supported by the {server_id} parity adapter"
             )
+        if server_options.get("inherited_fd"):
+            command.extend(["--fd", str(inherited_listener_fds[0])])
         if "root_path" in server_options:
             command.extend(["--root-path", server_options["root_path"]])
         if "http" in server_options and server_id == "uvicorn-rs":
             command.extend(["--http", server_options["http"]])
+        if "h11_max_incomplete_event_size" in server_options:
+            command.extend(
+                [
+                    "--h11-max-incomplete-event-size",
+                    str(server_options["h11_max_incomplete_event_size"]),
+                ]
+            )
         if "ws_max_size" in server_options:
             command.extend(["--ws-max-size", str(server_options["ws_max_size"])])
+        if "ws_max_queue" in server_options:
+            command.extend(["--ws-max-queue", str(server_options["ws_max_queue"])])
         if "ws_ping_interval" in server_options:
             command.extend(
                 ["--ws-ping-interval", str(server_options["ws_ping_interval"])]
@@ -4425,9 +6705,21 @@ def start_server(
                 else "--no-proxy-headers"
             )
         if "forwarded_allow_ips" in server_options:
-            command.extend(
-                ["--forwarded-allow-ips", server_options["forwarded_allow_ips"]]
+            # Click expands bare wildcards on Windows. Keep the wildcard
+            # inside the option token so "*" remains Uvicorn's trust value.
+            command.append(
+                f"--forwarded-allow-ips={server_options['forwarded_allow_ips']}"
             )
+        if "ssl_cert_reqs" in server_options:
+            command.extend(["--ssl-cert-reqs", str(server_options["ssl_cert_reqs"])])
+        if "ssl_version" in server_options:
+            command.extend(["--ssl-version", str(server_options["ssl_version"])])
+        if "ssl_ciphers" in server_options:
+            command.extend(["--ssl-ciphers", server_options["ssl_ciphers"]])
+        if "ssl_ca_certs" in server_options:
+            if server_options["ssl_ca_certs"] != "generated-ca" or trust_anchor is None:
+                raise ParityError("TLS CA option requires the generated parity CA")
+            command.extend(["--ssl-ca-certs", str(trust_anchor)])
         if "limit_concurrency" in server_options:
             command.extend(
                 ["--limit-concurrency", str(server_options["limit_concurrency"])]
@@ -4435,21 +6727,44 @@ def start_server(
         if server_options.get("reset_contextvars"):
             command.append("--reset-contextvars")
 
-    log = tempfile.TemporaryFile(mode="w+t")
-    process = subprocess.Popen(
-        command,
-        cwd=ROOT,
-        env=env,
-        stdin=subprocess.DEVNULL,
-        stdout=log,
-        stderr=log,
-        text=True,
+    log_fd, log_path = tempfile.mkstemp(
+        prefix=f"uvicorn-rs-{server_id}-",
+        suffix=".log",
+        dir=events_path.parent,
     )
+    os.close(log_fd)
+    log = open(log_path, "w+t", encoding="utf-8")
+    process_options = (
+        {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+        if os.name == "nt"
+        else {}
+    )
+    try:
+        process = subprocess.Popen(
+            command,
+            cwd=ROOT,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=log,
+            text=True,
+            pass_fds=inherited_listener_fds,
+            **process_options,
+        )
+    finally:
+        if inherited_listener is not None:
+            inherited_listener.close()
     if expect_startup_failure:
         # Startup failure probes launch Python in separate processes; allow
         # headroom for slower CI hosts before classifying a still-running
-        # process as a server behavior mismatch.
-        deadline = time.monotonic() + 5
+        # process as a server behavior mismatch. The inherited-listener bridge
+        # retries its Unix control-socket connection for five seconds when the
+        # native receiver fails before binding that socket, so give that path
+        # time to report the startup error through the CLI process.
+        startup_failure_timeout = (
+            10 if (server_options or {}).get("inherited_fd") else 5
+        )
+        deadline = time.monotonic() + startup_failure_timeout
         while time.monotonic() < deadline and process.poll() is None:
             time.sleep(0.05)
         if process.poll() is not None:
@@ -4507,13 +6822,24 @@ def start_server(
         and not (server_id == "uvicorn-rs" and profile_id == "lifespan-fault-receive-startup")
     )
     readiness_tls_context = None
+    # Empty-root client-auth inputs reject every client certificate, so an
+    # HTTPS readiness request cannot succeed for those cases. They use the
+    # listener probe below after ASGI startup has completed.
     use_tls_readiness = profile_id in {"websocket-tls", "lifecycle-tls"} or (
+        profile_id == "http1-tls"
+        and client_certificate is not None
+        and (server_options or {}).get("ssl_ca_certs") == "generated-ca"
+    ) or (
         profile_id == "http3" and observe_connection_errors
     )
     if use_tls_readiness:
         readiness_tls_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         readiness_tls_context.check_hostname = False
         readiness_tls_context.verify_mode = ssl.CERT_NONE
+        if client_certificate is not None and client_key is not None:
+            readiness_tls_context.load_cert_chain(
+                certfile=str(client_certificate), keyfile=str(client_key)
+            )
     while time.monotonic() < deadline:
         if process.poll() is not None:
             log.seek(0)
@@ -4559,6 +6885,9 @@ def start_server(
                 server["api_snapshot_path"] = api_snapshot_path
             if server_id == "uvicorn-rs" and coverage_fault_control_path is not None:
                 server["coverage_fault_control_path"] = coverage_fault_control_path
+            if client_certificate is not None and client_key is not None:
+                server["client_certificate"] = client_certificate
+                server["client_key"] = client_key
             return server
         try:
             with socket.create_connection(("127.0.0.1", port), timeout=0.1):
@@ -4576,6 +6905,9 @@ def start_server(
                     server["api_snapshot_path"] = api_snapshot_path
                 if server_id == "uvicorn-rs" and coverage_fault_control_path is not None:
                     server["coverage_fault_control_path"] = coverage_fault_control_path
+                if client_certificate is not None and client_key is not None:
+                    server["client_certificate"] = client_certificate
+                    server["client_key"] = client_key
                 return server
         except OSError:
             time.sleep(0.05)
@@ -4589,32 +6921,117 @@ def stop_server(
 ) -> tuple[int | None, str]:
     process: subprocess.Popen = server["process"]
     log = server["log"]
+    # Hypercorn 0.18's asyncio worker handles SIGBREAK as a graceful shutdown
+    # request. On Windows, terminating it directly may leave its H3 log locked
+    # while the QUIC server tasks are being torn down.
+    windows_hypercorn_cleanup = (
+        os.name == "nt"
+        and server.get("id") == "hypercorn"
+        and signal_number is None
+        and not signal_sent
+    )
+    graceful_cleanup = graceful or windows_hypercorn_cleanup
+    server.setdefault("forced_kill", False)
     if log.closed:
+        log_path = getattr(log, "name", None)
+        if isinstance(log_path, (str, os.PathLike)):
+            cleanup_error = unlink_server_log(Path(log_path))
+            server["process_exit_code"] = process.returncode
+            server["process_alive_after_stop"] = process.poll() is None
+            if cleanup_error is None:
+                server.pop("log_cleanup_error", None)
+            else:
+                server["log_cleanup_error"] = cleanup_error
         return process.returncode, server.get("captured_log", "")[-6000:]
     if process.poll() is None:
+        server["harness_stop_requested"] = True
+        if graceful_cleanup or signal_number is not None:
+            server["graceful_signal_requested"] = True
         api_control_path = server.get("api_control_path")
         if api_control_path is not None:
             api_control_path.touch()
         elif not signal_sent:
             if signal_number is not None:
-                process.send_signal(signal_number)
-            elif graceful:
-                process.terminate()
+                if os.name == "nt" and signal_number in {
+                    signal.SIGINT,
+                    signal.SIGTERM,
+                }:
+                    process.send_signal(signal.CTRL_BREAK_EVENT)
+                else:
+                    process.send_signal(signal_number)
+            elif graceful_cleanup:
+                if os.name == "nt":
+                    process.send_signal(signal.CTRL_BREAK_EVENT)
+                else:
+                    process.terminate()
             else:
                 process.send_signal(signal.SIGTERM)
         try:
             process.wait(timeout=12)
         except subprocess.TimeoutExpired:
+            server["forced_kill"] = True
             process.kill()
             process.wait(timeout=3)
     log.seek(0)
     text = log.read()
     log.close()
+    # Preserve diagnostics even if Windows still has a short-lived reader or
+    # subprocess handle when the profile tries to remove its temporary logs.
+    server["captured_log"] = text
+    server["process_exit_code"] = process.returncode
+    server["process_alive_after_stop"] = process.poll() is None
+    log_path = getattr(log, "name", None)
+    if isinstance(log_path, (str, os.PathLike)):
+        cleanup_error = unlink_server_log(Path(log_path))
+        if cleanup_error is None:
+            server.pop("log_cleanup_error", None)
+        else:
+            server["log_cleanup_error"] = cleanup_error
     # Lifecycle adapters can stop a process before profile finalization, and
     # profiles can restart several processes. Preserve the complete log so
     # validation cannot lose a panic when a handle is closed or a tail grows.
-    server["captured_log"] = text
     return process.returncode, text[-6000:]
+
+
+def unlink_server_log(path: Path) -> str | None:
+    """Remove a closed server log, retrying transient Windows sharing locks."""
+    for attempt in range(8):
+        try:
+            path.unlink(missing_ok=True)
+            return None
+        except OSError as error:
+            # Windows can report ERROR_SHARING_VIOLATION briefly after the
+            # server process exits. A bounded retry handles that race without
+            # hiding a persistent cleanup failure from the parity result.
+            if os.name != "nt" or getattr(error, "winerror", None) != 32:
+                raise
+            if attempt == 7:
+                return str(error)
+            time.sleep(0.05 * (2**attempt))
+
+
+@contextmanager
+def profile_temporary_directory(
+    prefix: str,
+    cleanup_errors: list[dict[str, Any]],
+    profile_id: str,
+) -> Iterator[str]:
+    """Keep Windows temp cleanup failures in the parity receipt."""
+    temporary = tempfile.TemporaryDirectory(prefix=prefix)
+    try:
+        yield temporary.name
+    finally:
+        try:
+            temporary.cleanup()
+        except OSError as error:
+            if os.name != "nt":
+                raise
+            cleanup_errors.append({
+                "profile": profile_id,
+                "server": None,
+                "kind": "profile_tempdir_cleanup_failure",
+                "diagnostic": str(error)[-1000:],
+            })
 
 
 def rust_panic_issues(
@@ -4746,12 +7163,44 @@ def read_server_log(server: dict[str, Any]) -> str:
     log = server["log"]
     if log.closed:
         return server.get("captured_log", "")
-    # Popen's inherited descriptor shares its write offset with this handle.
-    # Seeking and restoring that offset can overwrite diagnostics emitted
-    # during a live read; pread leaves the child's append position intact.
     log.flush()
     size = os.fstat(log.fileno()).st_size
-    return os.pread(log.fileno(), size, 0).decode("utf-8", errors="replace")
+    if hasattr(os, "pread"):
+        # Popen's inherited descriptor shares its write offset with this
+        # handle. pread leaves the child's append position intact.
+        return os.pread(log.fileno(), size, 0).decode("utf-8", errors="replace")
+    # Windows has no os.pread. Reopen the named temporary log so this reader
+    # uses an independent file position while the server continues writing.
+    log_path = getattr(log, "name", None)
+    if not isinstance(log_path, (str, os.PathLike)):
+        raise ParityError("server log has no independent readable path")
+    with open(log_path, "r", encoding="utf-8", errors="replace") as reader:
+        return reader.read()
+
+
+def format_adapter_exception(error: Exception) -> str:
+    """Retain the Python call site for adapter failures in parity artifacts."""
+    return "".join(
+        traceback.format_exception(type(error), error, error.__traceback__)
+    )[-8_000:]
+
+
+def persist_shutdown_trace(case_id: str, server: dict[str, Any], server_log: str) -> None:
+    """Keep opt-in Rust/Python shutdown trace lines in focused diagnostic artifacts."""
+    trace_output = os.environ.get("UVICORN_RS_SHUTDOWN_TRACE_OUTPUT")
+    if not trace_output or server.get("id") != "uvicorn-rs":
+        return
+    lines = [
+        line for line in server_log.splitlines()
+        if line.startswith("uvicorn-rs: shutdown-trace ")
+    ]
+    if not lines:
+        return
+    trace_path = Path(trace_output)
+    trace_path.parent.mkdir(parents=True, exist_ok=True)
+    with trace_path.open("a", encoding="utf-8") as trace_file:
+        for line in lines:
+            trace_file.write(f"{case_id} {line}\n")
 
 
 def server_process_diagnostic(server: dict[str, Any]) -> dict[str, Any]:
@@ -4809,8 +7258,93 @@ def response_observation(status: int, headers: list[tuple[str, str]], body: byte
     }
 
 
+def header_pairs_sha256(headers: list[tuple[str, str]]) -> str:
+    """Hash an ordered header sequence with unambiguous length prefixes."""
+    digest = hashlib.sha256()
+    for name, value in headers:
+        name_bytes = name.lower().encode("ascii")
+        value_bytes = value.encode("utf-8")
+        digest.update(struct.pack("!I", len(name_bytes)))
+        digest.update(name_bytes)
+        digest.update(struct.pack("!I", len(value_bytes)))
+        digest.update(value_bytes)
+    return digest.hexdigest()
+
+
+def tls_client_hello_reply(port: int, wire_version: bytes) -> tuple[int | None, bytes]:
+    """Read one server record for an otherwise identical finite ClientHello."""
+    # Offer old-version suites and a TLS 1.2 suite. The supported-version
+    # control can then prove that the same cipher/extension offer is usable.
+    ciphers = b"\xc0\x2f\xc0\x13\x00\x2f\x00\xff"
+
+    def extension(kind: int, data: bytes) -> bytes:
+        return struct.pack("!HH", kind, len(data)) + data
+
+    hostname = b"localhost"
+    server_name = b"\x00" + struct.pack("!H", len(hostname)) + hostname
+    extensions = b"".join((
+        extension(0, struct.pack("!H", len(server_name)) + server_name),
+        extension(10, b"\x00\x04\x00\x17\x00\x1d"),
+        extension(11, b"\x01\x00"),
+        extension(13, b"\x00\x04\x04\x01\x08\x04"),
+    ))
+    hello = (
+        wire_version + os.urandom(32) + b"\x00"
+        + struct.pack("!H", len(ciphers)) + ciphers + b"\x01\x00"
+        + struct.pack("!H", len(extensions)) + extensions
+    )
+    handshake = b"\x01" + len(hello).to_bytes(3, "big") + hello
+    record = b"\x16" + wire_version + struct.pack("!H", len(handshake)) + handshake
+
+    def receive_exact(connection: socket.socket, size: int) -> bytes:
+        received = bytearray()
+        while len(received) < size:
+            try:
+                chunk = connection.recv(size - len(received))
+            except ConnectionResetError:
+                break
+            if not chunk:
+                break
+            received.extend(chunk)
+        return bytes(received)
+
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as connection:
+        connection.sendall(record)
+        header = receive_exact(connection, 5)
+        # Preserve the peer's actual alert or EOF/reset. Do not manufacture
+        # protocol_version alerts. A timeout remains an infrastructure error.
+        if len(header) != 5:
+            return (None if not header else -1), header
+        length = int.from_bytes(header[3:5], "big")
+        if length > (1 << 14) + 2048:
+            raise ParityError("obsolete TLS probe received an invalid record size")
+        return header[0], receive_exact(connection, length)
+
+
+def obsolete_tls_client_hello(port: int, version: str) -> dict[str, Any]:
+    """Observe RFC 8996 rejection and a TLS 1.2 ClientHello positive control."""
+    wire_version = {"TLSv1.0": b"\x03\x01", "TLSv1.1": b"\x03\x02"}[version]
+    kind, payload = tls_client_hello_reply(port, wire_version)
+    alert = kind == 21 and len(payload) == 2
+    control_kind, control_payload = tls_client_hello_reply(port, b"\x03\x03")
+    return {
+        "handshake_rejected": kind is None or (alert and payload[0] == 2),
+        "tls_alert_level": payload[0] if alert else None,
+        "tls_alert_description": payload[1] if alert else None,
+        "supported_tls_client_hello_admitted": (
+            control_kind == 22 and len(control_payload) >= 6
+            and control_payload[0] == 2 and control_payload[4:6] == b"\x03\x03"
+        ),
+    }
+
+
 def http1_request(
-    port: int, request: dict[str, Any], *, ssl_context: ssl.SSLContext | None = None
+    port: int,
+    request: dict[str, Any],
+    *,
+    ssl_context: ssl.SSLContext | None = None,
+    observe_tls_version: bool = False,
+    observe_tls_cipher: bool = False,
 ) -> dict[str, Any]:
     body = base64.b64decode(request["body_base64"], validate=True)
     if request.get("absolute_target"):
@@ -4871,7 +7405,17 @@ def http1_request(
             )
             observation["connection_closed"] = True
             return observation
-        return response_observation(response.status, response.getheaders(), payload)
+        observation = response_observation(response.status, response.getheaders(), payload)
+        if observe_tls_version:
+            tls_socket = connection.sock
+            observation["negotiated_tls_version"] = (
+                tls_socket.version() if isinstance(tls_socket, ssl.SSLSocket) else None
+            )
+        if observe_tls_cipher:
+            tls_socket = connection.sock
+            cipher = tls_socket.cipher() if isinstance(tls_socket, ssl.SSLSocket) else None
+            observation["negotiated_tls_cipher"] = cipher[0] if cipher is not None else None
+        return observation
     finally:
         connection.close()
 
@@ -5084,6 +7628,124 @@ def http1_request_sequence(
         connection.close()
 
 
+def http1_response_header_capacity_sequence(
+    port: int,
+    requests: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Observe a very large HTTP/1 response without http.client's header cap."""
+    if len(requests) != 2:
+        raise ParityError("HTTP/1 response-header capacity requires two requests")
+    connection = socket.create_connection(("127.0.0.1", port), timeout=10)
+    connection.settimeout(10)
+    stream = connection.makefile("rb")
+
+    def read_response() -> dict[str, Any]:
+        status_line = stream.readline(65_537)
+        if not status_line.endswith(b"\r\n"):
+            raise ParityError(
+                f"invalid HTTP/1 status line during header-capacity probe: {status_line[:160]!r}"
+            )
+        try:
+            status = int(status_line.split(b" ", 2)[1])
+        except (IndexError, ValueError) as error:
+            raise ParityError("invalid HTTP/1 status code during header-capacity probe") from error
+
+        headers: dict[bytes, list[bytes]] = {}
+        total_header_bytes = 0
+        application_header_count = 0
+        application_header_digest = hashlib.sha256()
+        while True:
+            line = stream.readline(1_048_577)
+            total_header_bytes += len(line)
+            if not line or total_header_bytes > 16 * 1024 * 1024:
+                raise ParityError(
+                    "HTTP/1 response header section was incomplete or exceeded 16 MiB"
+                )
+            if line == b"\r\n":
+                break
+            if not line.endswith(b"\r\n") or b":" not in line:
+                raise ParityError(
+                    f"invalid HTTP/1 header line during capacity probe: {line[:160]!r}"
+                )
+            name, value = line[:-2].split(b":", 1)
+            name = name.strip().lower()
+            value = value.strip()
+            headers.setdefault(name, []).append(value)
+            if name.startswith(b"x-capacity-"):
+                application_header_count += 1
+                application_header_digest.update(name + b":" + value + b"\n")
+
+        if b"chunked" in b",".join(headers.get(b"transfer-encoding", [])).lower():
+            body = bytearray()
+            while True:
+                size_line = stream.readline(128)
+                if not size_line.endswith(b"\r\n"):
+                    raise ParityError("incomplete HTTP/1 chunk-size line in capacity probe")
+                try:
+                    chunk_size = int(size_line.split(b";", 1)[0].strip(), 16)
+                except ValueError as error:
+                    raise ParityError("invalid HTTP/1 chunk size in capacity probe") from error
+                if chunk_size == 0:
+                    while stream.readline(65_537) not in (b"\r\n", b""):
+                        pass
+                    break
+                if len(body) + chunk_size > 1_048_576:
+                    raise ParityError("HTTP/1 capacity response body exceeded 1 MiB")
+                chunk = stream.read(chunk_size)
+                if len(chunk) != chunk_size or stream.read(2) != b"\r\n":
+                    raise ParityError("incomplete HTTP/1 response chunk in capacity probe")
+                body.extend(chunk)
+            body_bytes = bytes(body)
+        elif b"content-length" in headers:
+            try:
+                content_length = int(headers[b"content-length"][-1])
+            except ValueError as error:
+                raise ParityError("invalid HTTP/1 Content-Length in capacity probe") from error
+            if not 0 <= content_length <= 1_048_576:
+                raise ParityError("HTTP/1 capacity response body exceeded 1 MiB")
+            body_bytes = stream.read(content_length)
+            if len(body_bytes) != content_length:
+                raise ParityError("incomplete HTTP/1 response body in capacity probe")
+        else:
+            raise ParityError(
+                "HTTP/1 capacity response was not length-delimited; same-connection recovery is unobservable"
+            )
+
+        content_type = next(
+            (value.decode("latin-1") for value in headers.get(b"content-type", [])),
+            None,
+        )
+        response = {
+            "status": status,
+            "content_type": content_type,
+            "body_base64": base64.b64encode(body_bytes).decode("ascii"),
+            "capacity_header_count": application_header_count,
+            "capacity_header_sha256": application_header_digest.hexdigest(),
+            "server_header_count": len(headers.get(b"server", [])),
+            "date_header_count": len(headers.get(b"date", [])),
+            "connection_closed": b"close" in b",".join(
+                headers.get(b"connection", [])
+            ).lower(),
+        }
+        return response
+
+    responses = []
+    try:
+        for request in requests:
+            connection.sendall(
+                (
+                    f"GET {request['path']} HTTP/1.1\r\n"
+                    "Host: localhost\r\n"
+                    "Connection: keep-alive\r\n\r\n"
+                ).encode("ascii")
+            )
+            responses.append(read_response())
+        return {"responses": responses}
+    finally:
+        stream.close()
+        connection.close()
+
+
 def http1_concurrent_requests(
     port: int,
     requests: list[dict[str, Any]],
@@ -5246,6 +7908,7 @@ def http1_streaming_request(
     client = socket.create_connection(("127.0.0.1", port), timeout=10)
     client.settimeout(10)
     reader = client.makefile("rb")
+    concurrent_upload_sender = None
     try:
         headers = [
             f"{specification['method']} {specification['path']} HTTP/1.1\r\n",
@@ -5281,6 +7944,31 @@ def http1_streaming_request(
                 + b"\r\n"
             )
 
+        if specification.get("send_body_concurrently_with_response_read", False):
+            upload_errors: list[OSError] = []
+
+            def send_remaining_body() -> None:
+                try:
+                    for chunk in chunks[1:]:
+                        client.sendall(f"{len(chunk):x}\r\n".encode() + chunk + b"\r\n")
+                    if specification.get("malformed_final_chunk", False):
+                        client.sendall(b"not-a-size\r\n")
+                    else:
+                        trailer_lines = "".join(
+                            f"{name}: {value}\r\n"
+                            for name, value in specification.get("trailers", [])
+                        )
+                        client.sendall(("0\r\n" + trailer_lines + "\r\n").encode("ascii"))
+                except OSError as error:
+                    upload_errors.append(error)
+
+            concurrent_upload_sender = threading.Thread(
+                target=send_remaining_body,
+                name="parity-http1-upload",
+                daemon=True,
+            )
+            concurrent_upload_sender.start()
+
         if specification.get("send_all_before_read", False):
             for chunk in chunks[1:]:
                 try:
@@ -5306,6 +7994,10 @@ def http1_streaming_request(
         except ConnectionResetError:
             status_line = b""
         if not status_line:
+            if concurrent_upload_sender is not None:
+                concurrent_upload_sender.join(timeout=10)
+                if concurrent_upload_sender.is_alive():
+                    raise ParityError("concurrent HTTP/1.1 request-body sender did not stop")
             result = response_observation(None, [], b"")
             result.update({"early_body_base64": "", "connection_closed": True})
             return result
@@ -5337,6 +8029,10 @@ def http1_streaming_request(
                 )
             except ConnectionResetError:
                 response_body = b""
+            if concurrent_upload_sender is not None:
+                concurrent_upload_sender.join(timeout=10)
+                if concurrent_upload_sender.is_alive():
+                    raise ParityError("concurrent HTTP/1.1 request-body sender did not stop")
             result = response_observation(status, response_headers, response_body)
             result["early_body_base64"] = base64.b64encode(response_body).decode("ascii")
             result["connection_closed"] = True
@@ -5347,6 +8043,7 @@ def http1_streaming_request(
             raise ParityError("response finished before the request upload was complete")
         if (
             not specification.get("send_all_before_read", False)
+            and not specification.get("send_body_concurrently_with_response_read", False)
             and not specification.get("send_remaining_after_response", False)
             and not connection_closed
         ):
@@ -5374,11 +8071,16 @@ def http1_streaming_request(
                 response_chunks.append(chunk)
         except (BrokenPipeError, ConnectionResetError, ParityError):
             connection_closed = True
+        if concurrent_upload_sender is not None:
+            concurrent_upload_sender.join(timeout=10)
+            if concurrent_upload_sender.is_alive():
+                raise ParityError("concurrent HTTP/1.1 request-body sender did not stop")
+            connection_closed = connection_closed or bool(upload_errors)
         if specification.get("send_remaining_after_response", False) and not connection_closed:
             for chunk in chunks[1:]:
                 try:
                     client.sendall(f"{len(chunk):x}\r\n".encode() + chunk + b"\r\n")
-                except (BrokenPipeError, ConnectionResetError):
+                except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
                     connection_closed = True
                     break
             if not connection_closed:
@@ -5407,6 +8109,12 @@ def http1_streaming_request(
             result["fault_consumed"] = fault_consumed is True
         return result
     finally:
+        if concurrent_upload_sender is not None and concurrent_upload_sender.is_alive():
+            try:
+                client.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            concurrent_upload_sender.join(timeout=1)
         reader.close()
         client.close()
 
@@ -5798,13 +8506,26 @@ def close_http2_connection(
             return None
         return f"{type(error).__name__}: {error}"
     except OSError as error:
+        if os.name == "nt" and getattr(error, "winerror", None) in {10053, 10054}:
+            # Windows may report an aborted/reset TLS transport while the
+            # client closes after every HTTP/2 response stream has completed.
+            # Response integrity and resource assertions have already passed.
+            return None
         return f"{type(error).__name__}: {error}"
     else:
         raw_socket.close()
         return None
 
 
-def http2_request(port: int, request: dict[str, Any]) -> dict[str, Any]:
+def http2_request(
+    port: int,
+    request: dict[str, Any],
+    *,
+    observe_response_extensions: bool = False,
+    events_path: Path | None = None,
+    expected_application_events: list[str] | None = None,
+    reject_timeout: bool = False,
+) -> dict[str, Any]:
     body = base64.b64decode(request["body_base64"], validate=True)
     context = ssl._create_unverified_context()
     context.set_alpn_protocols(["h2"])
@@ -5816,6 +8537,7 @@ def http2_request(port: int, request: dict[str, Any]) -> dict[str, Any]:
     connection = H2Connection(config=H2Configuration(client_side=True, header_encoding="utf-8"))
     connection.initiate_connection()
     tls_socket.sendall(connection.data_to_send())
+    events_before = len(read_events(events_path)) if events_path is not None else 0
     stream_id = connection.get_next_available_stream_id()
     headers = [
         (":method", request["method"]),
@@ -5834,44 +8556,372 @@ def http2_request(port: int, request: dict[str, Any]) -> dict[str, Any]:
     status = 0
     response_headers: list[tuple[str, str]] = []
     response_body = bytearray()
+    early_hints: list[dict[str, Any]] = []
+    early_hint_before_final_start = False
+    response_trailers: list[list[str]] = []
+
+    def observation() -> dict[str, Any]:
+        result = response_observation(status, response_headers, bytes(response_body))
+        if observe_response_extensions:
+            result.update({
+                "early_hints": early_hints,
+                "early_hint_before_final_start": early_hint_before_final_start,
+                "response_trailers": response_trailers,
+            })
+        if events_path is not None:
+            application_events = read_events(events_path)[events_before:]
+            if expected_application_events:
+                expected_events = set(expected_application_events)
+                deadline = time.monotonic() + 2
+                while (
+                    not expected_events.issubset(application_events)
+                    and time.monotonic() < deadline
+                ):
+                    time.sleep(0.005)
+                    application_events = read_events(events_path)[events_before:]
+            result["application_events"] = application_events
+        return result
+
     try:
         while True:
             try:
                 received = tls_socket.recv(65536)
             except TimeoutError:
-                observation = response_observation(status, response_headers, bytes(response_body))
-                observation["connection_closed"] = True
-                return observation
+                if reject_timeout:
+                    raise ParityError("HTTP/2 response did not finish before the client timeout")
+                result = observation()
+                result["connection_closed"] = True
+                return result
             if not received:
-                observation = response_observation(status, response_headers, bytes(response_body))
-                observation["connection_closed"] = True
-                return observation
+                result = observation()
+                result["connection_closed"] = True
+                return result
             events = connection.receive_data(received)
             for event in events:
-                if isinstance(event, ResponseReceived) and event.stream_id == stream_id:
+                if isinstance(event, InformationalResponseReceived) and event.stream_id == stream_id:
+                    informational_status = 0
+                    informational_headers = []
+                    for name, value in event.headers:
+                        if name == ":status":
+                            informational_status = int(value)
+                        else:
+                            informational_headers.append([name.lower(), value])
+                    early_hints.append({
+                        "status": informational_status,
+                        "headers": informational_headers,
+                    })
+                    if events_path is not None and informational_status == 103:
+                        application_events = read_events(events_path)[events_before:]
+                        if (
+                            "http2.early-hint-call" in application_events
+                            and "http2.final-response-start" not in application_events
+                        ):
+                            early_hint_before_final_start = True
+                elif isinstance(event, ResponseReceived) and event.stream_id == stream_id:
                     for name, value in event.headers:
                         if name == ":status":
                             status = int(value)
                         else:
                             response_headers.append((name, value))
+                elif isinstance(event, TrailersReceived) and event.stream_id == stream_id:
+                    response_trailers.extend(
+                        [name.lower(), value] for name, value in event.headers
+                    )
                 elif isinstance(event, DataReceived) and event.stream_id == stream_id:
                     response_body.extend(event.data)
                     connection.acknowledge_received_data(event.flow_controlled_length, stream_id)
                 elif isinstance(event, StreamReset) and event.stream_id == stream_id:
-                    observation = response_observation(status, response_headers, bytes(response_body))
-                    observation["connection_closed"] = True
-                    return observation
+                    result = observation()
+                    result["connection_closed"] = True
+                    return result
                 elif isinstance(event, StreamEnded) and event.stream_id == stream_id:
                     pending = connection.data_to_send()
                     if pending:
                         tls_socket.sendall(pending)
-                    return response_observation(status, response_headers, bytes(response_body))
+                    return observation()
             pending = connection.data_to_send()
             if pending:
                 tls_socket.sendall(pending)
     finally:
         # A TLS close-notify lets the server finish its connection task before
         # load probes sample the Python task baseline.
+        close_http2_connection(connection, tls_socket)
+        tls_socket.close()
+
+
+def http2_response_trailer_capacity_sequence(
+    port: int, requests: list[dict[str, Any]], events_path: Path
+) -> dict[str, Any]:
+    """Observe a large finite trailer block and a same-connection recovery request."""
+    context = ssl._create_unverified_context()
+    context.set_alpn_protocols(["h2"])
+    raw_socket = socket.create_connection(("127.0.0.1", port), timeout=10)
+    tls_socket = context.wrap_socket(raw_socket, server_hostname="localhost")
+    if tls_socket.selected_alpn_protocol() != "h2":
+        tls_socket.close()
+        raise ParityError("TLS did not negotiate HTTP/2 through ALPN")
+    connection = H2Connection(config=H2Configuration(client_side=True, header_encoding="utf-8"))
+    connection.local_settings[SettingCodes.MAX_HEADER_LIST_SIZE] = (
+        MAX_PARITY_HTTP2_RESPONSE_HEADER_LIST_SIZE
+    )
+    connection.decoder.max_header_list_size = MAX_PARITY_HTTP2_RESPONSE_HEADER_LIST_SIZE
+    connection.initiate_connection()
+    tls_socket.sendall(connection.data_to_send())
+    events_before = len(read_events(events_path))
+
+    def receive_response(request: dict[str, Any]) -> tuple[dict[str, Any], str, int | None, list[list[str]]]:
+        body = base64.b64decode(request["body_base64"], validate=True)
+        stream_id = connection.get_next_available_stream_id()
+        headers = [
+            (":method", request["method"]),
+            (":scheme", "https"),
+            (":authority", f"localhost:{port}"),
+            (":path", request["path"]),
+        ]
+        headers.extend((name.lower(), value) for name, value in request["headers"])
+        if body:
+            headers.append(("content-length", str(len(body))))
+        connection.send_headers(stream_id, headers, end_stream=not body)
+        if body:
+            connection.send_data(stream_id, body, end_stream=True)
+        pending = connection.data_to_send()
+        if pending:
+            tls_socket.sendall(pending)
+
+        status = 0
+        response_headers: list[tuple[str, str]] = []
+        response_body = bytearray()
+        trailers: list[list[str]] = []
+        terminal = "pending"
+        reset_error_code: int | None = None
+        while terminal == "pending":
+            try:
+                received = tls_socket.recv(65536)
+            except TimeoutError:
+                terminal = "timeout"
+                break
+            if not received:
+                terminal = "connection_closed"
+                break
+            for event in connection.receive_data(received):
+                if isinstance(event, ResponseReceived) and event.stream_id == stream_id:
+                    for name, value in event.headers:
+                        if name == ":status":
+                            status = int(value)
+                        else:
+                            response_headers.append((name, value))
+                elif isinstance(event, TrailersReceived) and event.stream_id == stream_id:
+                    trailers.extend([name.lower(), value] for name, value in event.headers)
+                elif isinstance(event, DataReceived) and event.stream_id == stream_id:
+                    response_body.extend(event.data)
+                    connection.acknowledge_received_data(
+                        event.flow_controlled_length, stream_id
+                    )
+                elif isinstance(event, StreamReset) and event.stream_id == stream_id:
+                    terminal = "reset"
+                    reset_error_code = int(event.error_code)
+                    break
+                elif isinstance(event, StreamEnded) and event.stream_id == stream_id:
+                    terminal = "ended"
+                    break
+                elif isinstance(event, ConnectionTerminated):
+                    terminal = "connection_terminated"
+                    reset_error_code = int(event.error_code)
+                    break
+            pending = connection.data_to_send()
+            if pending:
+                tls_socket.sendall(pending)
+
+        observation = response_observation(
+            status if status else None,
+            response_headers,
+            bytes(response_body),
+        )
+        return observation, terminal, reset_error_code, trailers
+
+    responses: list[dict[str, Any]] = []
+    try:
+        first, first_terminal, first_reset_code, trailers = receive_response(requests[0])
+        canonical_trailers = sorted((name, value) for name, value in trailers)
+        trailer_digest = header_pairs_sha256(canonical_trailers)
+        first.update({
+            "response_trailer_count": len(trailers),
+            "response_trailer_sha256": trailer_digest,
+            "response_stream_terminal": first_terminal,
+            "response_stream_reset_error_code": first_reset_code,
+        })
+        responses.append(first)
+
+        followup: dict[str, Any] | None = None
+        followup_terminal: str | None = None
+        if first_terminal in {"ended", "reset"}:
+            try:
+                followup, followup_terminal, _followup_reset_code, _ = receive_response(
+                    requests[1]
+                )
+                followup["response_stream_terminal"] = followup_terminal
+            except (OSError, ValueError) as error:
+                followup_terminal = f"client-error:{type(error).__name__}"
+        if followup is None:
+            followup = {
+                "status": None,
+                "content_type": None,
+                "server_header_values": [],
+                "date_header_present": False,
+                "body_base64": "",
+                "ordered_response_headers": [],
+                "response_header_values_by_name": [],
+                "connection_closed": True,
+                "response_stream_terminal": followup_terminal or "not_attempted",
+            }
+        responses.append(followup)
+
+        application_events = read_events(events_path)[events_before:]
+        expected_events: set[str] = set()
+        if first_terminal == "ended" and len(trailers) in {24576, 24577, 32769}:
+            expected_events = {
+                "http2.response-trailer-capacity.first-send-returned",
+                "http2.response-trailer-capacity.final-send-returned",
+            }
+        elif first_terminal == "reset":
+            expected_events = {"http2.response-trailer-capacity.first-send-returned"}
+        if expected_events:
+            deadline = time.monotonic() + 2
+            while not expected_events.issubset(application_events) and time.monotonic() < deadline:
+                time.sleep(0.005)
+                application_events = read_events(events_path)[events_before:]
+
+        return {
+            "responses": responses,
+            "response_trailer_count": len(trailers),
+            "response_trailer_sha256": trailer_digest,
+            "response_stream_terminal": first_terminal,
+            "response_stream_reset_error_code": first_reset_code,
+            "connection_reused": followup_terminal in {"ended", "reset"},
+            "followup_status": followup.get("status"),
+            "followup_healthy": followup.get("status") == 200,
+            "application_events": application_events,
+        }
+    finally:
+        close_http2_connection(connection, tls_socket)
+        tls_socket.close()
+
+
+def http2_response_header_capacity_sequence(
+    port: int, requests: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Observe an oversized finite response-header block and connection reuse."""
+    context = ssl._create_unverified_context()
+    context.set_alpn_protocols(["h2"])
+    raw_socket = socket.create_connection(("127.0.0.1", port), timeout=10)
+    tls_socket = context.wrap_socket(raw_socket, server_hostname="localhost")
+    if tls_socket.selected_alpn_protocol() != "h2":
+        tls_socket.close()
+        raise ParityError("TLS did not negotiate HTTP/2 through ALPN")
+    connection = H2Connection(config=H2Configuration(client_side=True, header_encoding="utf-8"))
+    connection.local_settings[SettingCodes.MAX_HEADER_LIST_SIZE] = (
+        MAX_PARITY_HTTP2_RESPONSE_HEADER_LIST_SIZE
+    )
+    connection.decoder.max_header_list_size = MAX_PARITY_HTTP2_RESPONSE_HEADER_LIST_SIZE
+    connection.initiate_connection()
+    tls_socket.sendall(connection.data_to_send())
+
+    def receive_response(request: dict[str, Any]) -> tuple[dict[str, Any], str]:
+        stream_id = connection.get_next_available_stream_id()
+        connection.send_headers(
+            stream_id,
+            [
+                (":method", request["method"]),
+                (":scheme", "https"),
+                (":authority", f"localhost:{port}"),
+                (":path", request["path"]),
+                *((name.lower(), value) for name, value in request["headers"]),
+            ],
+            end_stream=True,
+        )
+        pending = connection.data_to_send()
+        if pending:
+            tls_socket.sendall(pending)
+
+        status: int | None = None
+        response_headers: list[tuple[str, str]] = []
+        response_body = bytearray()
+        terminal = "pending"
+        while terminal == "pending":
+            try:
+                received = tls_socket.recv(65536)
+            except TimeoutError:
+                terminal = "timeout"
+                break
+            if not received:
+                terminal = "connection_closed"
+                break
+            for event in connection.receive_data(received):
+                if isinstance(event, ResponseReceived) and event.stream_id == stream_id:
+                    for name, value in event.headers:
+                        if name == ":status":
+                            status = int(value)
+                        else:
+                            response_headers.append((name.lower(), value))
+                elif isinstance(event, DataReceived) and event.stream_id == stream_id:
+                    response_body.extend(event.data)
+                    connection.acknowledge_received_data(
+                        event.flow_controlled_length, stream_id
+                    )
+                elif isinstance(event, StreamReset) and event.stream_id == stream_id:
+                    terminal = "reset"
+                    break
+                elif isinstance(event, ConnectionTerminated):
+                    terminal = "connection_terminated"
+                    break
+                elif isinstance(event, StreamEnded) and event.stream_id == stream_id:
+                    terminal = "ended"
+                    break
+            pending = connection.data_to_send()
+            if pending:
+                tls_socket.sendall(pending)
+
+        capacity_headers = [
+            (name, value)
+            for name, value in response_headers
+            if name.startswith("x-capacity-")
+        ]
+        capacity_digest = hashlib.sha256()
+        for name, value in capacity_headers:
+            capacity_digest.update(name.encode("ascii") + b":" + value.encode("utf-8") + b"\n")
+        return (
+            {
+                "status": status,
+                "body_base64": base64.b64encode(response_body).decode("ascii"),
+                "capacity_header_count": len(capacity_headers),
+                "capacity_header_sha256": capacity_digest.hexdigest(),
+                "connection_closed": terminal == "connection_closed",
+            },
+            terminal,
+        )
+
+    try:
+        first, first_terminal = receive_response(requests[0])
+        followup: dict[str, Any] | None = None
+        followup_terminal: str | None = None
+        if first_terminal == "ended":
+            followup, followup_terminal = receive_response(requests[1])
+        if followup is None:
+            followup = {
+                "status": None,
+                "body_base64": "",
+                "capacity_header_count": 0,
+                "capacity_header_sha256": hashlib.sha256().hexdigest(),
+                "connection_closed": True,
+            }
+        return {
+            "responses": [first, followup],
+            "response_stream_terminal": first_terminal,
+            "connection_reused": followup_terminal == "ended",
+            "followup_status": followup.get("status"),
+            "followup_healthy": followup.get("status") == 200,
+        }
+    finally:
         close_http2_connection(connection, tls_socket)
         tls_socket.close()
 
@@ -6881,10 +9931,13 @@ def _load_resource_result(
         for result in resource_rounds
     )
     settled_rss = [result["rss_after_bytes"] for result in resource_rounds[-2:]]
+    retained_rss_growth = settled_rss[-1] - settled_rss[0] if len(settled_rss) == 2 else 0
+    # Initial load can warm caches and allocate reusable arenas. Check positive
+    # growth between the final settled rounds; reclaimed RSS is not a leak.
     rss_stable = (
         len(resource_rounds) == rounds
         and len(settled_rss) == 2
-        and max(settled_rss) - min(settled_rss) <= 16 * 1024 * 1024
+        and max(0, retained_rss_growth) <= 16 * 1024 * 1024
     )
     task_counts = [result["idle_python_tasks"] for result in resource_rounds]
     # asyncio.all_tasks() is a point-in-time snapshot, so transient tasks can
@@ -7235,7 +10288,10 @@ def http3_shutdown_request(
 
 
 def websocket_raw_frame_observation(
-    server: dict[str, Any], specification: dict[str, Any]
+    server: dict[str, Any],
+    specification: dict[str, Any],
+    *,
+    observe_application_events: bool = False,
 ) -> dict[str, Any]:
     events_path = server["events"]
     events_before = len(read_events(events_path))
@@ -7243,6 +10299,7 @@ def websocket_raw_frame_observation(
     client.settimeout(10)
     handshake_status: int | None = None
     handshake_accept_valid = False
+    compression_negotiated = False
     frame_sent = False
     application_events: list[str] = []
     raw_key = "dGhlIHNhbXBsZSBub25jZQ=="
@@ -7251,13 +10308,36 @@ def websocket_raw_frame_observation(
             (raw_key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode("ascii")
         ).digest()
     ).decode("ascii")
+    offered_subprotocols = specification["subprotocols"]
+    subprotocol_header = (
+        f"Sec-WebSocket-Protocol: {', '.join(offered_subprotocols)}\r\n"
+        if offered_subprotocols
+        else ""
+    )
+    additional_header_lines: list[str] = []
+    for name, value in specification.get("headers", []):
+        if (
+            not name
+            or any(character in name for character in ":\r\n")
+            or any(character in value for character in "\r\n")
+        ):
+            raise ParityError(
+                "raw WebSocket headers must not contain line breaks or name separators"
+            )
+        try:
+            f"{name}: {value}".encode("ascii")
+        except UnicodeEncodeError as error:
+            raise ParityError("raw WebSocket headers must contain ASCII text") from error
+        additional_header_lines.append(f"{name}: {value}\r\n")
+    additional_headers = "".join(additional_header_lines)
     raw_request = (
         f"GET {specification['path']} HTTP/1.1\r\n"
         f"Host: 127.0.0.1:{server['port']}\r\n"
         "Upgrade: websocket\r\n"
         "Connection: Upgrade\r\n"
         f"Sec-WebSocket-Key: {raw_key}\r\n"
-        "Sec-WebSocket-Version: 13\r\n\r\n"
+        "Sec-WebSocket-Version: 13\r\n"
+        f"{subprotocol_header}{additional_headers}\r\n"
     ).encode("ascii")
     try:
         client.sendall(raw_request)
@@ -7281,6 +10361,12 @@ def websocket_raw_frame_observation(
             handshake_accept_valid = (
                 response_headers.get(b"sec-websocket-accept") == expected_accept.encode("ascii")
             )
+            compression_negotiated = b"permessage-deflate" in response_headers.get(
+                b"sec-websocket-extensions", b""
+            ).lower()
+            selected_subprotocol = response_headers.get(b"sec-websocket-protocol")
+        else:
+            selected_subprotocol = None
         if handshake_status == 101:
             raw_frame = base64.b64decode(specification["raw_frame_base64"], validate=True)
             try:
@@ -7291,7 +10377,16 @@ def websocket_raw_frame_observation(
             deadline = time.monotonic() + 3
             while time.monotonic() < deadline:
                 application_events = read_events(events_path)[events_before:]
-                if any(event.startswith("websocket.disconnect:") for event in application_events):
+                if (
+                    any(event.startswith("websocket.disconnect:") for event in application_events)
+                    or (
+                        observe_application_events
+                        and any(
+                            event.startswith("websocket.fragmented.message:")
+                            for event in application_events
+                        )
+                    )
+                ):
                     break
                 if server["process"].poll() is not None:
                     break
@@ -7317,12 +10412,99 @@ def websocket_raw_frame_observation(
         "headers": [],
         "body_base64": "",
     })
-    return {
+    observation = {
         "handshake_status": handshake_status,
         "handshake_accept_valid": handshake_accept_valid,
+        "compression_negotiated": compression_negotiated,
+        "subprotocol": (
+            selected_subprotocol.decode("ascii") if selected_subprotocol is not None else None
+        ),
         "frame_sent": frame_sent,
         "disconnect_event": disconnect_event is not None,
         "disconnect_code": disconnect_code,
+        "followup_status": followup["status"],
+    }
+    if observe_application_events:
+        observation["application_events"] = application_events
+    return observation
+
+
+def websocket_response_header_capacity_observation(
+    server: dict[str, Any], specification: dict[str, Any]
+) -> dict[str, Any]:
+    """Observe a large accepted handshake without a client's header-count cap."""
+
+    events_path = server["events"]
+    events_before = len(read_events(events_path))
+    client = socket.create_connection(("127.0.0.1", server["port"]), timeout=10)
+    client.settimeout(10)
+    response = bytearray()
+    delimiter = b"\r\n\r\n"
+    deadline = time.monotonic() + 10
+    try:
+        raw_request = (
+            f"GET {specification['path']} HTTP/1.1\r\n"
+            f"Host: 127.0.0.1:{server['port']}\r\n"
+            "Upgrade: websocket\r\n"
+            "Connection: Upgrade\r\n"
+            "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+            "Sec-WebSocket-Version: 13\r\n\r\n"
+        ).encode("ascii")
+        client.sendall(raw_request)
+        while delimiter not in response:
+            if time.monotonic() >= deadline:
+                raise ParityError("WebSocket header-capacity handshake timed out")
+            chunk = client.recv(16384)
+            if not chunk:
+                break
+            response.extend(chunk)
+            if len(response) > 8_388_608:
+                raise ParityError("WebSocket response headers exceeded the 8 MiB observation bound")
+    finally:
+        client.close()
+
+    header_block = bytes(response).split(delimiter, 1)[0]
+    lines = header_block.split(b"\r\n")
+    status_parts = lines[0].split() if lines else []
+    handshake_status = (
+        int(status_parts[1])
+        if len(status_parts) >= 2 and status_parts[1].isdigit()
+        else None
+    )
+    application_fields = []
+    handshake_accept_valid = False
+    for line in lines[1:]:
+        name, separator, value = line.partition(b":")
+        if not separator:
+            continue
+        normalized_name = name.strip().lower()
+        normalized_value = value.strip()
+        if normalized_name.startswith(b"x-capacity-"):
+            application_fields.append(normalized_name + b": " + normalized_value)
+        elif normalized_name == b"sec-websocket-accept":
+            handshake_accept_valid = normalized_value == b"s3pPLMBiTxaQ9kYGzzhZRbK+xOo="
+
+    cleanup_event = "websocket.header-capacity.cleanup-completed"
+    application_events = read_events(events_path)[events_before:]
+    deadline = time.monotonic() + 3
+    while cleanup_event not in application_events and time.monotonic() < deadline:
+        if server["process"].poll() is not None:
+            break
+        time.sleep(0.01)
+        application_events = read_events(events_path)[events_before:]
+
+    followup = http1_request(server["port"], {
+        "method": "GET",
+        "path": specification["followup_path"],
+        "headers": [],
+        "body_base64": "",
+    })
+    return {
+        "handshake_status": handshake_status,
+        "handshake_accept_valid": handshake_accept_valid,
+        "application_header_count": len(application_fields),
+        "application_header_sha256": hashlib.sha256(b"\n".join(application_fields)).hexdigest(),
+        "application_events": application_events,
         "followup_status": followup["status"],
     }
 
@@ -7344,11 +10526,15 @@ def websocket_server_keepalive_observation(
         "first_server_ping_received": False,
         "first_server_ping_payload_length": None,
         "pong_sent": False,
+        "unsolicited_pong_sent": False,
         "second_server_ping_received": False,
         "second_server_ping_payload_length": None,
+        "second_pong_sent": False,
+        "second_pong_payload_matches_ping": None,
         "timeout_close_received": False,
         "timeout_close_code": None,
         "timeout_close_reason": None,
+        "connection_closed": False,
     }
 
     def read_exactly(reader: Any, size: int) -> bytes:
@@ -7410,6 +10596,13 @@ def websocket_server_keepalive_observation(
         if observation["handshake_status"] != 101:
             return observation
 
+        if "unsolicited_pong_payload_base64" in specification:
+            unsolicited_pong_payload = base64.b64decode(
+                specification["unsolicited_pong_payload_base64"], validate=True
+            )
+            send_pong(client, unsolicited_pong_payload)
+            observation["unsolicited_pong_sent"] = True
+
         try:
             first_opcode, first_payload = read_frame(reader)
         except (EOFError, OSError, TimeoutError):
@@ -7438,10 +10631,22 @@ def websocket_server_keepalive_observation(
                     )
             return observation
         observation["second_server_ping_payload_length"] = len(second_payload)
+        if "second_pong_payload_base64" in specification:
+            second_pong_payload = base64.b64decode(
+                specification["second_pong_payload_base64"], validate=True
+            )
+            send_pong(client, second_pong_payload)
+            observation["second_pong_sent"] = True
+            observation["second_pong_payload_matches_ping"] = (
+                second_pong_payload == second_payload
+            )
 
         try:
             close_opcode, close_payload = read_frame(reader)
-        except (EOFError, OSError, TimeoutError):
+        except TimeoutError:
+            return observation
+        except (EOFError, OSError):
+            observation["connection_closed"] = True
             return observation
         observation["timeout_close_received"] = close_opcode == 0x8
         if close_opcode == 0x8 and len(close_payload) >= 2:
@@ -7463,6 +10668,7 @@ def websocket_observation(
     fault_control_path: Path | None = None,
     fault_point: str | None = None,
 ) -> dict[str, Any]:
+    compression_negotiated = False
     scheme = "wss" if trust_anchor is not None else "ws"
     uri = f"{scheme}://127.0.0.1:{server['port']}{specification['path']}"
     subprotocols = websocket_client_subprotocols(specification)
@@ -7542,17 +10748,20 @@ def websocket_observation(
                 "timeout graceful shutdown exceeded",
             )
         )
+        sigkill = getattr(signal, "SIGKILL", None)
         return {
             "status": followup["status"],
             "application_events": application_events,
             "shutdown_clean": exit_code is not None
-            and exit_code != -signal.SIGKILL
+            and not server.get("forced_kill", False)
+            and (sigkill is None or exit_code != -sigkill)
             and not shutdown_timeout,
         }
 
     def add_fault_followup(
         observation: dict[str, Any], *, wait_for_events: bool = True
     ) -> dict[str, Any]:
+        observation.setdefault("compression_negotiated", compression_negotiated)
         public_contract = fault_point in PUBLIC_INPUT_CONTRACT_POINTS
         if fault_control_path is None and not public_contract:
             return observation
@@ -7663,6 +10872,7 @@ def websocket_observation(
             uri,
             sock=client_socket,
             subprotocols=subprotocols,
+            compression=None if specification.get("disable_compression", False) else "deflate",
             additional_headers=specification.get("headers", []),
             ssl=ssl_context,
             proxy=None,
@@ -7672,6 +10882,10 @@ def websocket_observation(
             max_size=16 * 1024 * 1024 if "wait_for_app_event" in specification else 1024 * 1024,
             logger=client_logger,
         ) as websocket:
+            compression_negotiated = any(
+                type(extension).__name__ == "PerMessageDeflate"
+                for extension in websocket.protocol.extensions
+            )
             if specification.get("abrupt_disconnect", False):
                 wait_for_app_event = specification.get("wait_for_app_event")
                 if wait_for_app_event is not None:
@@ -7729,7 +10943,17 @@ def websocket_observation(
                     raise ParityError(
                         f"WebSocket app did not reach deferred-read event {wait_for_app_event!r}"
                     )
-            observation = {"handshake_status": 101, "subprotocol": websocket.subprotocol, "messages": echoes}
+            compression_negotiated = any(
+                type(extension).__name__ == "PerMessageDeflate"
+                for extension in websocket.protocol.extensions
+            )
+            observation = {
+                "handshake_established": True,
+                "handshake_status": 101,
+                "subprotocol": websocket.subprotocol,
+                "messages": echoes,
+                "compression_negotiated": compression_negotiated,
+            }
             if pong_received is not None:
                 observation["pong_received"] = pong_received
             if specification.get("expect_close", False):
@@ -7795,6 +11019,7 @@ def websocket_observation(
         close = error.rcvd
         return add_fault_followup(
             {
+                "handshake_established": True,
                 "handshake_status": 101,
                 "close_code": close.code if close is not None else None,
                 "close_reason": close.reason if close is not None else None,
@@ -7802,7 +11027,11 @@ def websocket_observation(
             wait_for_events=False,
         )
     except InvalidStatus as error:
-        observation = {"handshake_established": False, "handshake_status": error.response.status_code}
+        observation = {
+            "handshake_established": False,
+            "handshake_status": error.response.status_code,
+            "compression_negotiated": compression_negotiated,
+        }
         return add_fault_followup(observation, wait_for_events=False)
     except InvalidHandshake:
         # Malformed application handshake headers have no stable response
@@ -7831,8 +11060,17 @@ def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[
     source_fields = {
         "status": "status",
         "content_type": "content_type",
+        "client_certificate_rejected": "client_certificate_rejected",
+        "negotiated_tls_version": "negotiated_tls_version",
+        "negotiated_tls_cipher": "negotiated_tls_cipher",
+        "tls_alert_level": "tls_alert_level",
+        "tls_alert_description": "tls_alert_description",
+        "supported_tls_client_hello_admitted": "supported_tls_client_hello_admitted",
         "body_bytes": "body_base64",
         "ordered_body_bytes": "body_base64",
+        "early_hints": "early_hints",
+        "early_hint_before_final_start": "early_hint_before_final_start",
+        "response_trailers": "response_trailers",
         "ordered_response_headers": "ordered_response_headers",
         "response_header_values_by_name": "response_header_values_by_name",
         "server_header_values": "server_header_values",
@@ -7852,6 +11090,8 @@ def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[
         "handshake_status": "handshake_status",
         "handshake_established": "handshake_established",
         "handshake_accept_valid": "handshake_accept_valid",
+        "application_header_count": "application_header_count",
+        "application_header_sha256": "application_header_sha256",
         "frame_sent": "frame_sent",
         "disconnect_code": "disconnect_code",
         "followup_status": "followup_status",
@@ -7860,12 +11100,16 @@ def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[
         "first_server_ping_received": "first_server_ping_received",
         "first_server_ping_payload_length": "first_server_ping_payload_length",
         "pong_sent": "pong_sent",
+        "unsolicited_pong_sent": "unsolicited_pong_sent",
         "second_server_ping_received": "second_server_ping_received",
         "second_server_ping_payload_length": "second_server_ping_payload_length",
+        "second_pong_sent": "second_pong_sent",
+        "second_pong_payload_matches_ping": "second_pong_payload_matches_ping",
         "timeout_close_received": "timeout_close_received",
         "timeout_close_code": "timeout_close_code",
         "timeout_close_reason": "timeout_close_reason",
         "subprotocol": "subprotocol",
+        "compression_negotiated": "compression_negotiated",
         "ordered_messages": "messages",
         "ordered_message_payload_bytes": "message_payload_bytes",
         "last_ordered_message": "last_message",
@@ -7881,6 +11125,11 @@ def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[
         "startup_failed": "startup_failed",
         "startup_error_observed": "startup_error_observed",
         "responses": "responses",
+        "response_trailer_count": "response_trailer_count",
+        "response_trailer_sha256": "response_trailer_sha256",
+        "response_stream_terminal": "response_stream_terminal",
+        "response_stream_reset_error_code": "response_stream_reset_error_code",
+        "connection_reused": "connection_reused",
         "resource_rounds": "resource_rounds",
         "resource_stable": "resource_stable",
         "task_count_stable": "task_count_stable",
@@ -7897,6 +11146,7 @@ def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[
         "lifespan_tasks_finished_before_probe_cleanup": "lifespan_tasks_finished_before_probe_cleanup",
         "serve_cancellation_propagated": "serve_cancellation_propagated",
         "server_error_observed": "server_error_observed",
+        "worker_replacement_observed": "worker_replacement_observed",
         "request_task_failure_observed_before_peer_close": "request_task_failure_observed_before_peer_close",
         "response_incomplete": "response_incomplete",
         "peer_close_code": "peer_close_code",
@@ -7954,19 +11204,47 @@ def normalize_comparison_observation(value: Any, profile_id: str) -> Any:
     return value
 
 
-def normalize_cli_traceback_stderr(stderr_base64: str) -> tuple[str, Any]:
-    """Compare CLI tracebacks by exception outcome, retaining raw bytes elsewhere.
+def normalize_cli_process_stderr(stderr_base64: str) -> tuple[str, Any]:
+    """Compare Python CLI diagnostics without implementation source locations.
 
     Python traceback frames name implementation-specific source files and line
-    numbers. CLI evidence keeps the original stderr; this comparison value keeps
-    all other stderr lines, exception-chain separators, and exception messages.
-    If stderr is not a standard traceback, its bytes remain exact.
+    numbers. Runtime warnings also print the source path, line, and code line.
+    CLI evidence keeps the original stderr; comparisons retain the exception
+    messages and warning text while removing only those implementation details.
     """
     stderr = base64.b64decode(stderr_base64, validate=True)
     lines = stderr.splitlines()
     traceback_header = b"Traceback (most recent call last):"
     if traceback_header not in lines:
-        return ("raw", stderr)
+        warning_separator = b": RuntimeWarning:"
+        if not any(
+            b"uvicorn/" in line.replace(b"\\", b"/")
+            and warning_separator in line
+            for line in lines
+        ):
+            return ("raw", stderr)
+        normalized_warning: list[bytes] = []
+        skip_source_line = False
+        for line in lines:
+            if skip_source_line and line.startswith(b"  "):
+                normalized_warning.append(b"  <source line>")
+                skip_source_line = False
+                continue
+            normalized_line = line.replace(b"\\", b"/")
+            if b"uvicorn/" in normalized_line and warning_separator in normalized_line:
+                prefix, _, message = normalized_line.partition(warning_separator)
+                source_path = prefix.rsplit(b"uvicorn/", 1)[1]
+                source_name, separator, line_number = source_path.rpartition(b":")
+                if (
+                    separator
+                    and line_number.isdigit()
+                    and source_name.endswith(b".py")
+                ):
+                    normalized_warning.append(b"RuntimeWarning:" + message)
+                    skip_source_line = True
+                    continue
+            normalized_warning.append(line)
+        return ("python-runtime-warning-source", tuple(normalized_warning))
 
     chain_markers = {
         b"The above exception was the direct cause of the following exception:",
@@ -8004,8 +11282,18 @@ def normalize_operation_comparison_observation(
     """Apply only the comparison normalizations declared for an operation."""
     normalized = dict(observation)
     for field, policy in operation.get("comparison_normalization", {}).items():
-        if policy == "python-traceback-exception-chain":
-            normalized[field] = normalize_cli_traceback_stderr(normalized[field])
+        if policy == "python-process-diagnostics":
+            normalized[field] = normalize_cli_process_stderr(normalized[field])
+        elif policy == "uvicorn-rs-shutdown-trace":
+            stderr = base64.b64decode(normalized[field], validate=True)
+            normalized[field] = (
+                "uvicorn-rs-shutdown-trace",
+                tuple(
+                    line
+                    for line in stderr.splitlines()
+                    if not line.startswith(b"uvicorn-rs: shutdown-trace ")
+                ),
+            )
     return normalized
 
 
@@ -8072,7 +11360,14 @@ def run_zero_timeout_concurrent_stream_shutdown(
             )
 
         shutdown_started = time.monotonic()
-        server["process"].terminate()
+        if os.name == "nt":
+            # Popen.terminate() is TerminateProcess on Windows, so the ASGI
+            # requests cannot observe cancellation. Use the same graceful
+            # control event as the active-stream shutdown contract.
+            server["graceful_signal_requested"] = True
+            server["process"].send_signal(signal.CTRL_BREAK_EVENT)
+        else:
+            server["process"].terminate()
         aborted = 0
         for _connection, _response, client_socket in streams:
             client_socket.setsockopt(
@@ -8248,6 +11543,20 @@ def execute_case(
                 h3_grease=case.get("h3_grease", True),
             )
         if profile["id"] == "http2":
+            if case["operation"] in {
+                "http2.response-header-capacity-delivery",
+            }:
+                return http2_response_header_capacity_sequence(
+                    server["port"], case["request_sequence"]
+                )
+            if case["operation"] in {
+                "http2.response-trailer-capacity-delivery",
+                "http2.response-trailer-capacity-one-over-parity",
+                "http2.response-trailer-capacity-large-parity",
+            }:
+                return http2_response_trailer_capacity_sequence(
+                    server["port"], case["request_sequence"], server["events"]
+                )
             return http2_concurrent_requests(server["port"], case["request_sequence"])
         profile_protocols = {part.strip() for part in profile["protocol"].split("+")}
         if (
@@ -8261,16 +11570,26 @@ def execute_case(
         fault = case.get("fault")
         log_offset = len(read_server_log(server))
         events_before = len(read_events(server["events"]))
-        observation = http1_request_sequence(
-            server["port"],
-            case["request_sequence"],
-            fault_control_path=(
-                server.get("coverage_fault_control_path")
-                if fault and fault["point"] in FAULT_POINTS else None
-            ),
-            fault_point=fault.get("point") if fault else None,
-            events_path=server["events"],
-        )
+        if case["operation"] in {
+            "http.response-header-capacity-delivery",
+            "http.response-header-capacity-one-above-map-limit",
+            "http.response-header-capacity-many-above-map-limit",
+        }:
+            observation = http1_response_header_capacity_sequence(
+                server["port"],
+                case["request_sequence"],
+            )
+        else:
+            observation = http1_request_sequence(
+                server["port"],
+                case["request_sequence"],
+                fault_control_path=(
+                    server.get("coverage_fault_control_path")
+                    if fault and fault["point"] in FAULT_POINTS else None
+                ),
+                fault_point=fault.get("point") if fault else None,
+                events_path=server["events"],
+            )
         observation["server_log"] = read_server_log(server)[log_offset:]
         observation["application_events"] = read_events(server["events"])[events_before:]
         return observation
@@ -8293,9 +11612,106 @@ def execute_case(
                 if trust_anchor is None:
                     raise ParityError("HTTPS profile is missing its generated trust anchor")
                 ssl_context = ssl.create_default_context(cafile=str(trust_anchor))
-            return http1_request(server["port"], case["request"], ssl_context=ssl_context)
+                if case["operation"] == "tls.reject-obsolete-version":
+                    observation = obsolete_tls_client_hello(server["port"], case["tls_client_hello"])
+                    followup = http1_request(server["port"], case["request"], ssl_context=ssl_context)
+                    observation["followup_status"] = followup["status"]
+                    return observation
+                if case.get("client_tls") is True:
+                    client_certificate = server.get("client_certificate")
+                    client_key = server.get("client_key")
+                    if client_certificate is None or client_key is None:
+                        raise ParityError("mutual TLS case is missing its generated client identity")
+                    ssl_context.load_cert_chain(
+                        certfile=str(client_certificate), keyfile=str(client_key)
+                    )
+                if case["operation"] == "tls.client-auth-required":
+                    try:
+                        observation = http1_request(
+                            server["port"], case["request"], ssl_context=ssl_context
+                        )
+                    except TimeoutError:
+                        raise
+                    except (ssl.SSLError, ConnectionError, http.client.HTTPException):
+                        return {"client_certificate_rejected": True}
+                    return {
+                        "client_certificate_rejected": bool(
+                            observation.get("connection_closed", False)
+                        )
+                    }
+                if case["operation"] in {"tls.protocol-version", "tls.negotiated-cipher"}:
+                    return http1_request(
+                        server["port"],
+                        case["request"],
+                        ssl_context=ssl_context,
+                        observe_tls_version=case["operation"] == "tls.protocol-version",
+                        observe_tls_cipher=case["operation"] == "tls.negotiated-cipher",
+                    )
+            event_offset = len(read_events(server["events"]))
+            observation = http1_request(
+                server["port"], case["request"], ssl_context=ssl_context
+            )
+            if case["operation"] == "http.response-content-length-drain":
+                deadline = time.monotonic() + 2
+                events = read_events(server["events"])[event_offset:]
+                while (
+                    "response.content-length.final-send-returned" not in events
+                    and time.monotonic() < deadline
+                ):
+                    time.sleep(0.005)
+                    events = read_events(server["events"])[event_offset:]
+                observation["application_events"] = events
+            if (
+                fault is not None
+                and fault["contract"]
+                in {
+                    "server-default-header-finalization-error-closes-connection",
+                    "server-concurrency-callback-error-preserves-503",
+                }
+            ):
+                if (
+                    fault_control_path is None
+                    or fault_control_path.read_text(encoding="utf-8").strip()
+                    == fault["point"]
+                ):
+                    raise ParityError("HTTP response fault was not consumed")
+                observation["fault_consumed"] = True
+            return observation
         if profile_id == "http2":
-            return http2_request(server["port"], case["request"])
+            response_extension_operation = case["operation"] in {
+                "http2.response-early-hints",
+                "http2.response-trailers",
+                "http2.response-trailers-without-te",
+                "http2.incomplete-response-trailers",
+            }
+            observation = http2_request(
+                server["port"],
+                case["request"],
+                observe_response_extensions=response_extension_operation,
+                reject_timeout=case["operation"] == "http2.incomplete-response-trailers",
+                events_path=server["events"]
+                if case["operation"] in {
+                    "http2.response-early-hints",
+                    "http2.response-trailers-without-te",
+                }
+                else None,
+                expected_application_events=case.get("required_observations", {}).get(
+                    "application_events"
+                ),
+            )
+            if (
+                fault is not None
+                and fault["contract"]
+                == "http2-response-event-fault-consumed-and-status-observed"
+            ):
+                if (
+                    fault_control_path is None
+                    or fault_control_path.read_text(encoding="utf-8").strip()
+                    == fault["point"]
+                ):
+                    raise ParityError("HTTP/2 response-event fault was not consumed")
+                observation["fault_consumed"] = True
+            return observation
         if profile_id == "http3":
             if trust_anchor is None or h3_client is None:
                 raise ParityError("HTTP/3 adapter is missing its certificate or client")
@@ -8385,6 +11801,27 @@ def execute_case(
                 events_path=server["events"],
                 events_before=events_before,
             )
+            if (
+                fault is not None
+                and fault["contract"] == "http3-stream-reset-on-runtime-error"
+            ):
+                if (
+                    fault_control_path is None
+                    or fault_control_path.read_text(encoding="utf-8").strip()
+                    == fault["point"]
+                ):
+                    raise ParityError("HTTP/3 stream runtime-error fault was not consumed")
+                observation["fault_consumed"] = True
+            if (
+                fault is not None
+                and fault["contract"] == "http3-legacy-default-header-error-resets-stream"
+            ):
+                if (
+                    fault_control_path is None
+                    or fault_control_path.read_text(encoding="utf-8").strip() == fault["point"]
+                ):
+                    raise ParityError("HTTP/3 legacy path selection fault was not consumed")
+                observation["fault_consumed"] = True
             if fault is not None and fault["contract"] == "http3-body-pump-early-exit-500":
                 if (
                     fault_control_path is None
@@ -8501,12 +11938,55 @@ def execute_case(
             return run_websocket_load_case(
                 server, profile, case, trust_anchor, h3_client
             )
-        if case.get("operation") == "websocket.raw-frame-disconnect":
+        if case.get("operation") == "websocket.response-header-capacity-delivery":
             log_offset = len(read_server_log(server))
-            observation = websocket_raw_frame_observation(server, case["websocket"])
+            observation = websocket_response_header_capacity_observation(
+                server, case["websocket"]
+            )
             observation["server_log"] = read_server_log(server)[log_offset:]
             return observation
-        if case.get("operation") == "websocket.server-keepalive":
+        if case.get("operation") in {
+            "websocket.raw-frame-disconnect",
+            "websocket.fragmented-message-reassembly",
+            "websocket.fragmented-compressed-message-reassembly",
+            "websocket.raw-size-limit-close",
+            "websocket.raw-size-limit-close-uncompressed",
+        }:
+            log_offset = len(read_server_log(server))
+            observation = websocket_raw_frame_observation(
+                server,
+                case["websocket"],
+                observe_application_events=(
+                    case["operation"] in {
+                        "websocket.fragmented-message-reassembly",
+                        "websocket.fragmented-compressed-message-reassembly",
+                    }
+                ),
+            )
+            observation["server_log"] = read_server_log(server)[log_offset:]
+            return observation
+        if case.get("fault", {}).get("contract") == "websocket-keepalive-close-error-followup-200":
+            control = server.get("coverage_fault_control_path")
+            if control is None:
+                raise ParityError("keepalive close failures require the instrumented fault controller")
+            control.write_text(case["fault"]["point"], encoding="utf-8")
+            try:
+                event_offset = len(read_events(server["events"]))
+                observation = websocket_server_keepalive_observation(server, case["websocket"])
+                observation["fault_consumed"] = control.read_text(encoding="utf-8").strip() == ""
+                observation["followup"] = http1_request(server["port"], {
+                    "method": "GET", "path": case["websocket"]["followup_path"],
+                    "headers": [], "body_base64": "",
+                })
+                observation["application_events"] = read_events(server["events"])[event_offset:]
+                return observation
+            finally:
+                control.write_text("", encoding="utf-8")
+        if case.get("operation") in {
+            "websocket.server-keepalive",
+            "websocket.server-keepalive-mismatched-pong",
+            "websocket.server-keepalive-unsolicited-pong",
+        }:
             log_offset = len(read_server_log(server))
             observation = websocket_server_keepalive_observation(
                 server, case["websocket"]
@@ -8554,13 +12034,23 @@ def execute_case(
             except OSError:
                 pass
             time.sleep(0.05)
-        return {
+        server_log = read_server_log(server)
+        observation = {
             "startup_error_observed": (
-                "coverage-only injected MemoryError at " in read_server_log(server)
-                or "uvicorn-rs: ASGI app does not support lifespan" in read_server_log(server)
+                "coverage-only injected MemoryError at " in server_log
+                or "ASGI 'lifespan' protocol appears unsupported." in server_log
+                or "uvicorn-rs: ASGI app does not support lifespan" in server_log
             ),
             "followup": followup,
         }
+        fault = case.get("fault")
+        control_path = server.get("coverage_fault_control_path")
+        if fault is not None:
+            observation["fault_consumed"] = (
+                control_path is not None
+                and control_path.read_text(encoding="utf-8").strip() != fault["point"]
+            )
+        return observation
     if "disconnect" in case:
         disconnect = case["disconnect"]
         fault = case.get("fault")
@@ -8740,6 +12230,7 @@ def execute_case(
             startup = fault["contract"] in EAGER_LIFESPAN_CLEANUP_CONTRACTS
             if startup and fault_control_path.read_text(encoding="utf-8").strip() == fault["point"]:
                 raise ParityError("eager lifespan registration fault was not consumed during startup")
+            fault_consumed = startup
             state = http1_request(server["port"], {
                 "method": "GET", "path": lifecycle["state_path"], "headers": [], "body_base64": "",
             })
@@ -8752,6 +12243,7 @@ def execute_case(
                 })
                 if fault_control_path.read_text(encoding="utf-8").strip() == fault["point"]:
                     raise ParityError("eager application registration fault was not consumed")
+                fault_consumed = True
                 fault_control_path.write_text("", encoding="utf-8")
                 followup = http1_request(server["port"], {
                     "method": "GET", "path": lifecycle["state_path"], "headers": [], "body_base64": "",
@@ -8772,6 +12264,7 @@ def execute_case(
                 "lifespan_shutdown_completed": snapshot["lifespan_shutdown_completed"],
                 "failure_response": failure_response,
                 "followup": followup,
+                "fault_consumed": fault_consumed,
             }
         if case["operation"] == "lifespan.post-response-application-shutdown":
             state = http1_request(server["port"], {
@@ -8981,19 +12474,58 @@ def execute_case(
                         "server_log": server_log,
                     }
 
-                server["process"].terminate()
+                if os.name == "nt":
+                    # Popen.terminate() is an unconditional TerminateProcess
+                    # on Windows, which prevents the held response from
+                    # exercising graceful drain. Ctrl+Break is Uvicorn's
+                    # graceful shutdown signal for this process group.
+                    server["graceful_signal_requested"] = True
+                    server["process"].send_signal(signal.CTRL_BREAK_EVENT)
+                else:
+                    server["process"].terminate()
                 # Leave the held stream enough of its three-second grace to
                 # complete even when admission closure is the failed behavior.
+                trace_shutdown = os.environ.get("UVICORN_RS_SHUTDOWN_TRACE") == "1"
+                listener_probe_started = time.monotonic()
+                if trace_shutdown:
+                    print(
+                        "uvicorn-rs: parity-shutdown-trace "
+                        f"listener-close-probe.start timeout_s=1 "
+                        f"held_stream_socket_open={connection.sock is not None}",
+                        flush=True,
+                    )
                 listener_closed_before_release = wait_for_listener_closed(
                     server, timeout=1, tls_context=tls_context
                 )
+                if trace_shutdown:
+                    print(
+                        "uvicorn-rs: parity-shutdown-trace "
+                        "listener-close-probe.finished "
+                        f"elapsed_s={time.monotonic() - listener_probe_started:.6f} "
+                        f"closed={listener_closed_before_release} "
+                        f"server_running={server['process'].poll() is None} "
+                        f"held_stream_socket_open={connection.sock is not None}",
+                        flush=True,
+                    )
                 if server["process"].poll() is not None:
                     raise ParityError("server exited before the held response stream was released")
                 if "response.shutdown.finished" in read_events(server["events"]):
                     raise ParityError("response stream finished before its shutdown release")
                 release_path.touch()
-                exit_code, server_log = stop_server(server, graceful=True, signal_sent=True)
+                if trace_shutdown:
+                    print(
+                        "uvicorn-rs: parity-shutdown-trace "
+                        "held-stream-release.sent",
+                        flush=True,
+                    )
+                # Consume the remaining TLS response while graceful shutdown
+                # is in progress. On Windows, the stock Uvicorn oracle cannot
+                # finish its TLS close handshake if the client waits for the
+                # server process to exit before reading the response body.
+                # That ordering can make this parity probe time out after the
+                # ASGI stream and lifespan have both already completed.
                 stream_body = first_chunk + response.read()
+                exit_code, server_log = stop_server(server, graceful=True, signal_sent=True)
                 state = response_observation(
                     response.status, response.getheaders(), stream_body
                 )
@@ -9146,6 +12678,132 @@ def execute_case(
 def fault_contract_matches(
     fault: dict[str, Any], observation: dict[str, Any], case: dict[str, Any]
 ) -> bool:
+    if fault["contract"] == "server-unix-listener-permission-error-startup-propagates":
+        return (
+            fault["point"] == "server.unix-listener.set-permissions-error"
+            and observation.get("fault_consumed") is True
+            and observation.get("exit_code") == 0
+            and observation.get("server_started") is False
+            and observation.get("serve_task_finished") is True
+            and observation.get("serve_raised") is True
+            and observation.get("serve_timed_out") is False
+            and observation.get("application_events")
+            == ["lifespan.startup", "lifespan.shutdown"]
+        )
+    if fault["contract"] == "server-connection-invalid-default-header-source-chain":
+        server_logs = observation.get("server_log_events", {})
+        stderr_events = server_logs.get("stderr", []) if isinstance(server_logs, dict) else []
+        connection_error_logged = any(
+            isinstance(event, dict)
+            and "uvicorn-rs: HTTP connection from" in event.get("message", "")
+            for event in stderr_events
+        )
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("response_received") is False
+            and observation.get("process_exit_code") == 0
+            and observation.get("process_timed_out") is False
+            and not connection_error_logged
+            and any(
+                isinstance(event, dict)
+                and event.get("message") == "Invalid HTTP header name."
+                for event in stderr_events
+            )
+        )
+    if fault["contract"] == "server-concurrency-callback-error-preserves-503":
+        return (
+            observation.get("status") == 503
+            and observation.get("body_bytes") == "U2VydmljZSBVbmF2YWlsYWJsZQ=="
+            and observation.get("fault_consumed") is True
+        )
+    if fault["contract"] == "server-default-header-finalization-error-closes-connection":
+        return (
+            fault["point"] == "server.default-header.response-finalization"
+            and observation.get("fault_consumed") is True
+            and observation.get("connection_closed") is True
+        )
+    if fault["contract"] == "http2-response-event-fault-consumed-and-status-observed":
+        expected_status = (
+            500
+            if fault["point"]
+            in {
+                "http.response.early-hint.disconnected",
+                "http.response.early-hint.channel-closed",
+                "asgi.event-type.http-response-early-hint.eq",
+                "http.response.early-hint.links.get-item",
+                "http.response.early-hint.links.extract",
+            }
+            else 200
+        )
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("status") == expected_status
+        )
+    if fault["contract"] == "python-ssl-ca-verifier-error-propagates":
+        expected_message = (
+            "coverage-injected Python SSL helper failure at " + fault["point"]
+        )
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("response_received") is False
+            and observation.get("process_exit_code") == 1
+            and observation.get("process_timed_out") is False
+            and expected_message in observation.get("fault_server_stderr", "")
+        )
+    if fault["contract"] == "python-ssl-ca-verifier-success-fallback-propagates":
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("response_received") is False
+            and observation.get("process_exit_code") == 1
+            and observation.get("process_timed_out") is False
+            and "invalid CA certificate PEM: coverage-injected Rust CA parser failure"
+            in observation.get("fault_server_stderr", "")
+        )
+    if fault["contract"] == "python-ssl-keyfile-error-propagates":
+        expected_message = (
+            "coverage-injected Python SSL keyfile helper failure at " + fault["point"]
+        )
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("response_received") is False
+            and observation.get("process_exit_code") == 1
+            and observation.get("process_timed_out") is False
+            and expected_message in observation.get("fault_server_stderr", "")
+        )
+    if fault["contract"] == "python-ssl-keyfile-rust-decrypt-error-propagates":
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("response_received") is False
+            and observation.get("process_exit_code") == 1
+            and observation.get("process_timed_out") is False
+            and "coverage-injected Rust encrypted private-key decryption failure"
+            in observation.get("fault_server_stderr", "")
+        )
+    if fault["contract"] == "python-tls-initialization-error-propagates":
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("response_received") is False
+            and observation.get("process_exit_code") == 1
+            and observation.get("process_timed_out") is False
+            and TLS_INITIALIZATION_FAILURES[fault["point"]]
+            in observation.get("fault_server_stderr", "")
+        )
+    if fault["contract"] == "python-tls-provider-fallback-serves":
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("response_received") is True
+            and observation.get("response_status") == 200
+            and observation.get("shutdown_signal_sent") is True
+            and observation.get("process_exit_code") == 0
+            and observation.get("process_timed_out") is False
+        )
+    if fault["contract"] == "python-pkcs12-reader-error-propagates":
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("response_received") is False
+            and observation.get("process_exit_code") == 1
+            and observation.get("process_timed_out") is False
+        )
     if fault["contract"] == "asgi-spec-version-2.5":
         payload = None
         body = observation.get("body_bytes")
@@ -9259,29 +12917,24 @@ def fault_contract_matches(
             == base64.b64encode(b"read-once").decode("ascii")
             and observation.get("fault_consumed") is True
         )
-    if fault["contract"] == "http-response-header-capacity-recovery-followup-200":
+    if fault["contract"] == "http-response-header-overflow-delivery-followup-200":
         responses = observation.get("responses", [])
         events = observation.get("application_events", [])
         return (
             isinstance(responses, list) and len(responses) == 2
             and all(isinstance(response, dict) for response in responses)
-            and responses[0].get("status") == 500
+            and responses[0].get("status") == 200
             and responses[0].get("body_base64")
-            == base64.b64encode(b"header capacity rejected").decode("ascii")
+            == base64.b64encode(b"headers accepted").decode("ascii")
+            and responses[0].get("capacity_header_count") == 32769
+            and responses[0].get("capacity_header_sha256")
+            == "1128506a84dad05f4afe923dcbe67864452429bfb55a34c9b748c5754eadb96e"
+            and responses[0].get("server_header_count") == 1
+            and responses[0].get("date_header_count") == 1
+            and responses[0].get("connection_closed") is False
             and responses[1].get("status") == 200
-            and "http.header-capacity.error:RuntimeError:HTTP response headers: max size reached" in events
-            and "http.header-capacity.recovered" in events
-        )
-    if fault["contract"] == "websocket-header-capacity-error-followup-200":
-        followup = observation.get("followup_response")
-        events = observation.get("application_events", [])
-        return (
-            observation.get("handshake_status") == 500
-            and isinstance(followup, dict) and followup.get("status") == 200
-            and "websocket.header-capacity.accept-sent" in events
-            and "websocket.header-capacity.cleanup-completed" in events
-            and "uvicorn-rs: WebSocket request failed: max size reached"
-            in observation.get("server_log", "").splitlines()
+            and responses[1].get("connection_closed") is False
+            and not any(event.startswith("http.header-capacity.error:") for event in events)
         )
     if fault["contract"] in EAGER_REGISTRATION_CLEANUP_CONTRACTS:
         startup = fault["contract"] in EAGER_LIFESPAN_CLEANUP_CONTRACTS
@@ -9298,8 +12951,8 @@ def fault_contract_matches(
         if startup:
             return (
                 common
+                and observation.get("fault_consumed") is True
                 and "lifespan.async-finally.started" in events
-                and "RuntimeError: coverage-injected callback registration failure after inline completion" in log
                 and (
                     (
                         observation.get("lifespan_tasks_finished_before_probe_cleanup") is False
@@ -9407,11 +13060,31 @@ def fault_contract_matches(
             and responses[1].get("body_base64")
             == base64.b64encode(b'{"pending_application_tasks":0}').decode("ascii")
         )
+    if fault["contract"] == "http-response-build-error-closes-connection-followup-200":
+        responses = observation.get("responses")
+        return (
+            isinstance(responses, list)
+            and len(responses) == 2
+            and all(isinstance(response, dict) for response in responses)
+            and responses[0].get("status") is None
+            and responses[0].get("connection_closed") is True
+            and responses[1].get("status") == 200
+        )
     if fault["contract"] in {
         "http-500-then-followup-200", "http-callback-error-followup-200",
         "http-original-task-start-error-followup-200",
     }:
         responses = observation.get("responses")
+        if fault["point"] == "asgi.event-type.extract":
+            return (
+                "coverage-only injected MemoryError at AsgiEventTypeExtract"
+                in observation.get("server_log", "")
+                and isinstance(responses, list)
+                and len(responses) == 2
+                and all(isinstance(response, dict) for response in responses)
+                and responses[0].get("status") == 500
+                and responses[1].get("status") == 200
+            )
         if fault["contract"] == "http-original-task-start-error-followup-200":
             log = observation.get("server_log", "")
             cleanup_error = PYTHON_TASK_START_CLEANUP_ERRORS.get(fault["point"])
@@ -9481,6 +13154,14 @@ def fault_contract_matches(
         return (
             observation.get("stream_reset") is True
             or observation.get("connection_closed") is True
+        )
+    if fault["contract"] == "http3-legacy-default-header-error-resets-stream":
+        return (
+            observation.get("fault_consumed") is True
+            and (
+                observation.get("stream_reset") is True
+                or observation.get("connection_closed") is True
+            )
         )
     if fault["contract"] == "http3-peer-close-classification-defensive-error":
         followup = observation.get("followup_response")
@@ -9738,6 +13419,8 @@ def fault_contract_matches(
             observation.get("disconnect_event") is True
             and isinstance(followup, dict)
             and followup.get("status") == 200
+            and followup.get("response_header_values_by_name")
+            == [["x-asgi-coverage-probe", ["present"]]]
             and observation.get("fault_consumed") is True
         )
     if fault["contract"] == "http3-server-shutdown-force-abort":
@@ -9981,11 +13664,71 @@ def fault_contract_matches(
             and isinstance(followup, dict)
             and followup.get("status") == 200
         )
+    if fault["contract"] == "server-lifespan-startup-auto-fallback-logger-failure-ignored":
+        followup = observation.get("followup_response")
+        return (
+            observation.get("fault_consumed") is True
+            and isinstance(followup, dict)
+            and followup.get("status") == 200
+        )
     if fault["contract"] == "server-shutdown-failure":
         return (
             observation.get("process_terminated") is True
             and isinstance(observation.get("process_exit_code"), int)
             and observation["process_exit_code"] != 0
+        )
+    if fault["contract"] == "server-startup-acknowledgement-drop-cleans-listener":
+        return (
+            observation.get("exit_code") == 0
+            and observation.get("serve_task_finished") is True
+            and observation.get("serve_raised") is True
+            and observation.get("serve_timed_out") is False
+            and observation.get("listener_released") is True
+            and observation.get("application_events") == ["lifespan.startup", "lifespan.shutdown"]
+        )
+    if fault["contract"] == "server-startup-cancelled-after-bind":
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("serve_task_finished") is True
+            and observation.get("server_started_before_cancel") is False
+            and observation.get("server_started_before_shutdown") is False
+        )
+    if fault["contract"] == "server-startup-cancellation-shutdown-error-propagates":
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("exit_code") == 0
+            and observation.get("lifespan_startup_entered_before_cancel") is True
+            and observation.get("server_started_before_cancel") is False
+            and observation.get("serve_raised") is True
+            and observation.get("serve_cancelled") is False
+            and observation.get("serve_task_finished") is True
+            and observation.get("server_started_before_shutdown") is False
+            # The app may consume Shutdown just before cancellation aborts the
+            # task join, so both event traces prove the same fault contract.
+            and observation.get("application_events")
+            in (
+                ["lifespan.startup"],
+                ["lifespan.startup", "lifespan.shutdown"],
+            )
+        )
+    if fault["contract"] == "server-startup-bind-shutdown-error-logged":
+        # Shutdown is sent before this coverage fault aborts the app task. The
+        # task may consume that message first, so both event traces are valid.
+        application_events = observation.get("application_events")
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("exit_code") == 0
+            and observation.get("server_started") is False
+            and observation.get("serve_task_finished") is True
+            and observation.get("serve_raised") is True
+            and observation.get("serve_timed_out") is False
+            and application_events
+            in (
+                ["lifespan.startup"],
+                ["lifespan.startup", "lifespan.shutdown"],
+            )
+            and "uvicorn-rs: ASGI lifespan shutdown failed after listener setup error:"
+            in observation.get("fault_server_stderr", "")
         )
     if fault["contract"] == "server-lifespan-task-cancel":
         events = observation.get("application_events", [])
@@ -10011,6 +13754,19 @@ def fault_contract_matches(
             and "websocket.hold" in events
             and "websocket.app-cancelled" in events
             and observation.get("fault_consumed") is True
+        )
+    if fault["contract"] == "websocket-keepalive-close-error-followup-200":
+        followup = observation.get("followup_response")
+        return (
+            observation.get("handshake_status") == 101
+            and observation.get("handshake_accept_valid") is True
+            and observation.get("first_server_ping_received") is True
+            and observation.get("pong_sent") is True
+            and observation.get("second_server_ping_received") is True
+            and observation.get("timeout_close_received") is False
+            and observation.get("connection_closed") is True
+            and observation.get("fault_consumed") is True
+            and isinstance(followup, dict) and followup.get("status") == 200
         )
     if fault["contract"] == "websocket-driver-send-error-followup-200":
         followup = observation.get("followup_response")
@@ -10047,18 +13803,30 @@ def fault_contract_matches(
         return (
             (
                 observation.get("handshake_status") == 500
-                if fault["point"] == "websocket.accept-key.header-value-error"
+                if fault["point"] in {
+                    "websocket.accept-key.header-value-error",
+                    "websocket.native-upgrade.extension-removed-after-dispatch",
+                }
                 else observation.get("handshake_status") != 101
             )
             and isinstance(followup, dict)
             and followup.get("status") == 200
             and (
-                fault["point"] != "websocket.peer-read-failed.wait-complete"
+                fault["point"] not in {
+                    "websocket.peer-read-failed.wait-complete",
+                    "websocket.native-upgrade.extension-removed-after-dispatch",
+                }
                 or observation.get("fault_consumed") is True
             )
             and (
                 fault["point"] != "websocket.accept-key.header-value-error"
                 or "uvicorn-rs: WebSocket request failed: failed to parse header value"
+                in observation.get("server_log", "")
+            )
+            and (
+                fault["point"]
+                != "websocket.native-upgrade.extension-removed-after-dispatch"
+                or "uvicorn-rs: WebSocket request failed: WebSocket Upgrade is supported only on HTTP/1.1"
                 in observation.get("server_log", "")
             )
         )
@@ -10070,6 +13838,14 @@ def fault_contract_matches(
             and isinstance(followup, dict)
             and followup.get("status") == 200
         )
+        if fault["point"] in {
+            "websocket.yawc.unexpected-continuation-frame",
+            "websocket.yawc.invalid-text-frame",
+            "websocket.yawc.invalid-close-reason",
+            "websocket.yawc.close-reply-flush-error",
+            "websocket.yawc.close-reply-flush-unexpected-frame",
+        }:
+            return healthy_followup and observation.get("fault_consumed") is True
         expected_disconnect = {
             "websocket.receive.channel-closed": "websocket.disconnect:1005:",
             "websocket.receive.connection-closed": "websocket.disconnect:1005:",
@@ -10304,10 +14080,23 @@ def _python_api_server_log_events(
         r"^Uvicorn running on unix socket .+ \(Press CTRL\+C to quit\)$"
     )
     process_pid = re.compile(
-        r"(((?:Started|Finished) server|(?:Started|Stopping) parent|"
-        r"(?:Terminated|Waiting for) child) process \[)\d+(\])"
+        r"(((?:Started|Finished) server|(?:Started|Stopping) (?:parent|reloader)|"
+        r"(?:Terminated|Waiting for) child|Child) process \[)\d+(\])"
     )
+    worker_restart_pid = re.compile(r"((?:New child process|keeping worker) \[)\d+(\])")
     exception_line = re.compile(r"^(?P<class>[A-Za-z_][\w.]*)\b(?:: ?(?P<message>.*))?$")
+    proactor_accept_callback = (
+        "Exception in callback BaseProactorEventLoop._start_serving.<locals>.loop("
+    )
+    coverage_body_pump_join = re.compile(
+        r"^uvicorn-rs: request-body pumps joined: [1-9]\d*$"
+    )
+    shutdown_trace = re.compile(
+        r"^uvicorn-rs: shutdown-trace (?:"
+        r"pid=\d+ |"
+        r"python t_ns=\d+ pid=\d+ thread=[^ ]+ "
+        r")"
+    )
 
     normalized: dict[str, list[dict[str, str]]] = {"stdout": [], "stderr": []}
     custom_level_prefix = re.compile(
@@ -10327,9 +14116,48 @@ def _python_api_server_log_events(
                 normalized[channel].append({"kind": "ansi-colors"})
                 saw_ansi_colors = True
             line = ansi_escape.sub("", lines[index])
+            if shutdown_trace.match(line):
+                index += 1
+                continue
+            # This lifecycle count is emitted only by coverage builds. Keep it
+            # in the raw logs, but don't treat the coverage diagnostic as a
+            # Uvicorn-visible server event in the input-only parity contract.
+            if coverage_body_pump_join.fullmatch(line):
+                index += 1
+                continue
             if not line:
                 index += 1
                 continue
+            # On Windows, asyncio's Proactor loop can emit this callback
+            # traceback after an invalid response closes the accepted socket.
+            # It is event-loop implementation noise rather than a Uvicorn
+            # server log event; retain the original bytes in the evidence,
+            # while comparing the server-level exception above it.
+            if line.startswith(proactor_accept_callback):
+                index += 1
+                while index < len(lines):
+                    candidate = ansi_escape.sub("", lines[index])
+                    index += 1
+                    if candidate == "AssertionError":
+                        break
+                continue
+            if line == "Exception in ASGI application" and index + 1 < len(lines):
+                exception = exception_line.match(
+                    ansi_escape.sub("", lines[index + 1])
+                )
+                if exception:
+                    normalized[channel].append(
+                        {"kind": "raw", "message": line}
+                    )
+                    normalized[channel].append(
+                        {
+                            "kind": "exception",
+                            "class": exception.group("class"),
+                            "message": exception.group("message") or "",
+                        }
+                    )
+                    index += 2
+                    continue
             if line == "During handling of the above exception, another exception occurred:":
                 normalized[channel].append({"kind": "traceback-chain"})
                 index += 1
@@ -10403,6 +14231,21 @@ def _python_api_server_log_events(
             if unix_socket_running_line.match(message):
                 message = "Uvicorn running on unix socket <uds> (Press CTRL+C to quit)"
             message = process_pid.sub(r"\1<pid>\3", message)
+            message = worker_restart_pid.sub(r"\1<pid>\2", message)
+            if (
+                os.name == "nt"
+                and channel == "stderr"
+                and message == "Terminated child process [<pid>]"
+            ):
+                # Multiprocess.terminate() emits this informational message
+                # only when the child has not exited at the instant the
+                # parent checks its exit code. On Windows, Ctrl+Break also
+                # reaches the workers, so scheduler timing determines whether
+                # they exit before the parent's terminate loop. The process
+                # exit and timeout observations remain part of parity; this
+                # race-dependent log line does not.
+                index += 1
+                continue
             event = {"kind": "message", "level": level, "message": message}
             if logger is not None:
                 event["logger"] = logger
@@ -10470,6 +14313,48 @@ def _python_api_server_log_events(
                 key=lambda event: lifecycle_phase(event) or 0,
             )
             index = end
+
+    # Invalid default headers make the probe's client retry until shutdown.
+    # The number of retries depends on how quickly each server rejects a
+    # request, so compare the exception event once while preserving its order
+    # relative to other server logs.
+    for channel, events in normalized.items():
+        collapsed: list[dict[str, str]] = []
+        index = 0
+        while index < len(events):
+            is_trailing_partial_header_failure = (
+                index == len(events) - 1
+                and events[index]
+                == {"kind": "raw", "message": "Exception in ASGI application"}
+                and len(collapsed) >= 2
+                and collapsed[-2]
+                == {"kind": "raw", "message": "Exception in ASGI application"}
+                and collapsed[-1].get("kind") == "exception"
+                and collapsed[-1].get("class") == "RuntimeError"
+                and collapsed[-1].get("message")
+                in {"Invalid HTTP header name.", "Invalid HTTP header value."}
+            )
+            if is_trailing_partial_header_failure:
+                index += 1
+                continue
+            is_default_header_failure = (
+                index + 1 < len(events)
+                and events[index]
+                == {"kind": "raw", "message": "Exception in ASGI application"}
+                and events[index + 1].get("kind") == "exception"
+                and events[index + 1].get("class") == "RuntimeError"
+                and events[index + 1].get("message")
+                in {"Invalid HTTP header name.", "Invalid HTTP header value."}
+            )
+            if not is_default_header_failure:
+                collapsed.append(events[index])
+                index += 1
+                continue
+            pair = events[index : index + 2]
+            if len(collapsed) < 2 or collapsed[-2:] != pair:
+                collapsed.extend(pair)
+            index += 2
+        normalized[channel] = collapsed
     return normalized
 
 
@@ -10477,11 +14362,25 @@ def run_python_api_probe(
     case: dict[str, Any],
     server_id: str,
     coverage_profile_dir: Path | None = None,
+    fault_point: str | None = None,
 ) -> dict[str, Any]:
     """Run one input-selected Python public-surface probe on each interpreter."""
 
     python = ORACLE_PYTHON if server_id == "uvicorn" else Path(sys.executable)
     environment = os.environ.copy()
+    environment.pop("UVICORN_RS_COVERAGE_FAULT_FILE", None)
+    fault_control_directory = None
+    fault_control_path = None
+    fault_consumed = None
+    if fault_point is not None:
+        if server_id != "uvicorn-rs":
+            raise ParityError("Python API fault contracts run only against uvicorn-rs")
+        fault_control_directory = tempfile.TemporaryDirectory(
+            prefix="uvicorn-rs-python-api-fault-"
+        )
+        fault_control_path = Path(fault_control_directory.name) / "coverage-fault.txt"
+        fault_control_path.write_text(fault_point, encoding="utf-8")
+        environment["UVICORN_RS_COVERAGE_FAULT_FILE"] = str(fault_control_path)
     coverage_capture_shutdown = (
         os.environ.get("ASGI_PARITY_COVERAGE_CAPTURE_SHUTDOWN") == "1"
     )
@@ -10490,15 +14389,113 @@ def run_python_api_probe(
     environment.pop("PYTHONHOME", None)
     environment.pop("PYTHONSTARTUP", None)
     environment["PYTHONNOUSERSITE"] = "1"
+    environment["ASGI_PARITY_SERVER_ID"] = server_id
+    if (
+        os.name == "nt"
+        and server_id == "uvicorn"
+        and os.environ.get("UVICORN_RS_TRACE_ORACLE_SIGNAL") == "1"
+    ):
+        environment["ASGI_PARITY_TRACE_ORACLE_SIGNAL"] = "1"
+    source_python_path = str(ROOT / "python")
+    target_source_path = (
+        source_python_path
+        if server_id == "uvicorn-rs" and not INSTALLED_CANDIDATE_MODE
+        else None
+    )
+    if target_source_path is not None:
+        environment["PYTHONPATH"] = target_source_path
     if os.environ.get("ASGI_PARITY_COVERAGE_CAPTURE_SHUTDOWN") == "1":
         # The parent signals after observing the server. The coverage-only
         # site hook keeps both implementations on a normal exit path so LLVM
         # can flush the target profile.
         environment["ASGI_PARITY_COVERAGE_CAPTURE_SHUTDOWN"] = "1"
-        environment["PYTHONPATH"] = coverage_site
+        environment["PYTHONPATH"] = os.pathsep.join(
+            path for path in (coverage_site, target_source_path) if path
+        )
+    probe_api = dict(case["api"])
     run_http = case["api"].get("run_http", {})
+    probe_run_http = dict(run_http)
+    temporary_tls_assets = None
+    if run_http.get("ssl_ca_certs") in {
+        "generated-ca",
+        "trusted-ca",
+        "empty-ca",
+        "missing-ca",
+        "directory-ca",
+        "malformed-ca",
+        "invalid-der-ca",
+        "non-utf8-ca",
+    } or run_http.get("client_tls"):
+        temporary_tls_assets = tempfile.TemporaryDirectory(
+            prefix="uvicorn-rs-python-api-tls-"
+        )
+        tls_directory = Path(temporary_tls_assets.name)
+        certificate, key, ca_certificate = make_certificate(tls_directory)
+        tls_assets = {
+            "server_certificate": str(certificate),
+            "server_key": str(key),
+            "ca_certificate": str(ca_certificate),
+        }
+        if run_http.get("ssl_ca_certs") == "trusted-ca":
+            trusted_ca_certificate = tls_directory / "trusted-ca.pem"
+            trusted_ca_certificate.write_bytes(
+                Path(ca_certificate)
+                .read_bytes()
+                .replace(
+                    b"-----BEGIN CERTIFICATE-----",
+                    b"-----BEGIN TRUSTED CERTIFICATE-----",
+                )
+                .replace(
+                    b"-----END CERTIFICATE-----",
+                    b"-----END TRUSTED CERTIFICATE-----",
+                )
+            )
+            tls_assets["trusted_ca_certificate"] = str(trusted_ca_certificate)
+        if run_http.get("ssl_ca_certs") == "empty-ca":
+            empty_ca_certificate = tls_directory / "empty-ca.pem"
+            empty_ca_certificate.write_bytes(b"")
+            tls_assets["empty_ca_certificate"] = str(empty_ca_certificate)
+        if run_http.get("ssl_ca_certs") == "missing-ca":
+            tls_assets["missing_ca_certificate"] = str(tls_directory / "missing-ca.pem")
+        if run_http.get("ssl_ca_certs") == "directory-ca":
+            directory_ca = tls_directory / "directory-ca"
+            directory_ca.mkdir()
+            tls_assets["directory_ca"] = str(directory_ca)
+        if run_http.get("ssl_ca_certs") == "malformed-ca":
+            malformed_ca_certificate = tls_directory / "malformed-ca.pem"
+            malformed_ca_certificate.write_bytes(
+                b"-----BEGIN CERTIFICATE-----\nnot-base64!\n-----END CERTIFICATE-----\n"
+            )
+            tls_assets["malformed_ca_certificate"] = str(malformed_ca_certificate)
+        if run_http.get("ssl_ca_certs") == "invalid-der-ca":
+            invalid_der_ca_certificate = tls_directory / "invalid-der-ca.pem"
+            invalid_der_ca_certificate.write_bytes(
+                b"-----BEGIN CERTIFICATE-----\nAQID\n-----END CERTIFICATE-----\n"
+            )
+            tls_assets["invalid_der_ca_certificate"] = str(invalid_der_ca_certificate)
+        if run_http.get("ssl_ca_certs") == "non-utf8-ca":
+            non_utf8_ca_certificate = tls_directory / "non-utf8-ca.pem"
+            non_utf8_ca_certificate.write_bytes(b"\xff\xfe\x00not a PEM certificate\n")
+            tls_assets["non_utf8_ca_certificate"] = str(non_utf8_ca_certificate)
+        if run_http.get("client_tls"):
+            client_certificate, client_key = make_client_certificate(tls_directory)
+            tls_assets.update(
+                {
+                    "client_certificate": str(client_certificate),
+                    "client_key": str(client_key),
+                }
+            )
+        probe_run_http["_tls_assets"] = tls_assets
+    if "run_http" in probe_api:
+        probe_api["run_http"] = probe_run_http
     run_http_reload = case["api"].get("run_http_reload")
     for name, value in run_http.get("environment", {}).items():
+        if name == "PYTHONPATH" and target_source_path is not None:
+            if value is not None:
+                environment[name] = os.pathsep.join(
+                    path for path in (target_source_path, value) if path
+                )
+            continue
         if value is None:
             environment.pop(name, None)
         else:
@@ -10506,7 +14503,9 @@ def run_python_api_probe(
     if coverage_capture_shutdown:
         case_pythonpath = run_http.get("environment", {}).get("PYTHONPATH")
         environment["PYTHONPATH"] = os.pathsep.join(
-            path for path in (coverage_site, case_pythonpath) if path
+            path
+            for path in (coverage_site, target_source_path, case_pythonpath)
+            if path
         )
         environment["ASGI_PARITY_COVERAGE_CAPTURE_SHUTDOWN"] = "1"
     if server_id == "uvicorn-rs" and coverage_profile_dir is not None:
@@ -10521,24 +14520,44 @@ def run_python_api_probe(
     command = [
         str(python),
         str(ROOT / "tests/parity/python_api_probe.py"),
-        json.dumps(case["api"], sort_keys=True, separators=(",", ":")),
+        json.dumps(probe_api, sort_keys=True, separators=(",", ":")),
     ]
-    probe_timeout = max(
-        10,
-        run_http.get("timeout_seconds", 5) + 5
-        if "run_http" in case["api"]
-        else run_http_reload["timeout_seconds"] + 5
-        if run_http_reload is not None
-        else 10,
-    )
-    completed = subprocess.run(
-        command,
-        cwd=ROOT,
-        env=environment,
-        capture_output=True,
-        timeout=probe_timeout,
-        check=False,
-    )
+    # The probe can use one deadline for startup/request, another for reload,
+    # and a final one for graceful shutdown. Keep the outer process bound above
+    # the work it is supervising so timeout evidence comes from the probe.
+    if "run_http" in case["api"]:
+        probe_timeout = max(10, 2 * run_http.get("timeout_seconds", 5) + 10)
+    elif run_http_reload is not None:
+        probe_timeout = max(10, 3 * run_http_reload["timeout_seconds"] + 10)
+    else:
+        probe_timeout = 10
+    probe_options = {}
+    if os.name == "nt" and (
+        "run_http" in case["api"] or "run_http_reload" in case["api"]
+    ):
+        # Windows HTTP probes signal their server processes. Give every probe
+        # a private console so those events cannot interrupt the parity
+        # coordinator sharing the runner console.
+        probe_options["creationflags"] = subprocess.CREATE_NEW_CONSOLE
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=ROOT,
+            env=environment,
+            capture_output=True,
+            timeout=probe_timeout,
+            check=False,
+            **probe_options,
+        )
+        if fault_control_path is not None:
+            fault_consumed = (
+                fault_control_path.read_text(encoding="utf-8").strip() == ""
+            )
+    finally:
+        if temporary_tls_assets is not None:
+            temporary_tls_assets.cleanup()
+        if fault_control_directory is not None:
+            fault_control_directory.cleanup()
     if len(completed.stdout) > 4 * 1024 * 1024 or len(completed.stderr) > 4 * 1024 * 1024:
         raise ParityError(f"{case['case_id']}: Python API probe output exceeded the 4 MiB evidence bound")
     observation = {
@@ -10546,7 +14565,36 @@ def run_python_api_probe(
         "stdout_base64": base64.b64encode(completed.stdout).decode("ascii"),
         "stderr_base64": base64.b64encode(completed.stderr).decode("ascii"),
     }
-    if case["operation"] == "python.api.run-http-reload":
+    if case["operation"] == "python.api.server-serve-cancellation":
+        try:
+            cancellation = json.loads(completed.stdout)["server_serve_cancellation"]
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+            raise ParityError(
+                f"{case['case_id']}: serve cancellation probe returned no structured observation; "
+                f"exit={completed.returncode}, "
+                f"stdout={completed.stdout.decode('utf-8', errors='replace')[:2000]!r}, "
+                f"stderr={completed.stderr.decode('utf-8', errors='replace')[:2000]!r}"
+            ) from error
+        if type(cancellation) is not dict:
+            raise ParityError(
+                f"{case['case_id']}: serve cancellation observation must be an object"
+            )
+        observation.update(
+            {
+                name: cancellation.get(name)
+                for name in (
+                    "lifespan_startup_entered_before_cancel",
+                    "server_started_before_cancel",
+                    "serve_cancelled",
+                    "serve_task_finished",
+                    "listener_accepting_after_cancel",
+                )
+            }
+        )
+    if case["operation"] in {
+        "python.api.run-http-reload",
+        "python.api.run-http-reload-filters",
+    }:
         try:
             reload_observation = json.loads(completed.stdout)["run_http_reload"]
         except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
@@ -10567,6 +14615,8 @@ def run_python_api_probe(
                     "first_response_body_base64",
                     "second_response_body_base64",
                     "reload_observed",
+                    "excluded_change_reloaded",
+                    "included_change_reloaded",
                     "shutdown_signal_sent",
                     "process_exit_code",
                     "process_timed_out",
@@ -10578,9 +14628,14 @@ def run_python_api_probe(
         )
     if case["operation"] in {
         "python.api.run-http",
+        "python.api.run-http-incomplete-header",
+        "python.api.run-http-signal-sequence",
+        "python.api.run-http-graceful-timeout",
         "python.api.run-http-request-limit",
         "python.api.run-http-asgi-scope-contract",
         "python.api.run-http-concurrency",
+        "python.api.run-http-bind-conflict",
+        "python.api.run-http-uds-bind-conflict",
     }:
         try:
             run_http_observation = json.loads(completed.stdout)["run_http"]
@@ -10593,26 +14648,93 @@ def run_python_api_probe(
             ) from error
         if type(run_http_observation) is not dict:
             raise ParityError(f"{case['case_id']}: HTTP API observation must be an object")
+        if run_http_observation.get("process_timed_out"):
+            raise ParityError(
+                f"{case['case_id']}: {server_id} HTTP API server exceeded its "
+                "shutdown timeout"
+            )
+        shutdown_trace_output = os.environ.get("UVICORN_RS_SHUTDOWN_TRACE_OUTPUT")
+        trace_oracle_signal = (
+            server_id == "uvicorn"
+            and os.environ.get("UVICORN_RS_TRACE_ORACLE_SIGNAL") == "1"
+        )
+        if shutdown_trace_output and (server_id == "uvicorn-rs" or trace_oracle_signal):
+            encoded_stderr = run_http_observation.get("server_stderr_base64", "")
+            try:
+                server_stderr = base64.b64decode(
+                    encoded_stderr, validate=True
+                ).decode("utf-8", errors="replace")
+            except (ValueError, TypeError):
+                server_stderr = ""
+            trace_lines = [
+                line
+                for line in server_stderr.splitlines()
+                if line.startswith("uvicorn-rs: shutdown-trace ")
+            ]
+            if trace_lines:
+                trace_path = Path(shutdown_trace_output)
+                trace_path.parent.mkdir(parents=True, exist_ok=True)
+                with trace_path.open("a", encoding="utf-8") as trace_file:
+                    for line in trace_lines:
+                        trace_file.write(f"{case['case_id']} {line}\n")
         observation.update(
             {
                 name: run_http_observation.get(name)
                 for name in (
                     "response_received",
                     "response_status",
+                    "raw_connection_open_after_timeout",
                     "response_content_type",
                     "response_body_base64",
                     "listener_responses",
                     "idle_connection_closed",
                     "shutdown_signal_sent",
+                    "shutdown_signals_sent",
                     "process_exit_code",
                     "process_timed_out",
+                    "graceful_shutdown_cancellation_observed",
                     "request_limit_response_count",
                     "request_limit_range_satisfied",
                 )
             }
         )
-        observation["server_log_events"] = _python_api_server_log_events(
-            run_http_observation
+        if fault_point is not None:
+            encoded_stderr = run_http_observation.get("server_stderr_base64", "")
+            try:
+                fault_server_stderr = base64.b64decode(
+                    encoded_stderr, validate=True
+                ).decode("utf-8", errors="replace")
+            except (ValueError, TypeError):
+                fault_server_stderr = ""
+            observation["fault_consumed"] = fault_consumed
+            observation["fault_server_stderr"] = fault_server_stderr
+        server_log_events = _python_api_server_log_events(run_http_observation)
+        observation["server_log_events"] = server_log_events
+        stderr_events = server_log_events["stderr"]
+        child_exit_count = sum(
+            event.get("kind") == "message"
+            and event.get("message") == "Child process [<pid>] died"
+            for event in stderr_events
+        )
+        worker_start_count = sum(
+            event.get("kind") == "message"
+            and event.get("message", "").startswith("Started server process [")
+            for event in stderr_events
+        )
+        observation["worker_replacement_observed"] = (
+            child_exit_count > 0
+            and worker_start_count
+            > case["api"]["run_http"].get("workers", 1)
+        )
+        observation["bind_error_logged"] = any(
+            "bind" in event.get("message", "").lower()
+            and (
+                "already in use" in event.get("message", "").lower()
+                or "only one usage of each socket address"
+                in event.get("message", "").lower()
+            )
+            for channel in server_log_events.values()
+            for event in channel
         )
     if "server_lifespan_startup" in case["api"]:
         try:
@@ -10635,6 +14757,173 @@ def run_python_api_probe(
                     "serve_raised",
                     "serve_timed_out",
                     "server_exit_code",
+                    "serve_exception_class",
+                    "serve_exception_message",
+                )
+            }
+        )
+    if "server_startup_acknowledgement_drop" in case["api"]:
+        try:
+            startup = json.loads(completed.stdout)["server_startup_acknowledgement_drop"]
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+            diagnostic = completed.stderr.decode("utf-8", errors="replace")[-2000:]
+            raise ParityError(
+                f"{case['case_id']}: controller-drop probe has no structured result; "
+                f"exit={completed.returncode}, stderr={diagnostic!r}"
+            ) from error
+        if type(startup) is not dict:
+            raise ParityError(f"{case['case_id']}: controller-drop result must be an object")
+        observation.update({name: startup.get(name) for name in (
+            "serve_task_finished", "serve_raised", "serve_timed_out",
+            "listener_released", "application_events",
+        )})
+    if "server_startup_failure_waiter" in case["api"]:
+        try:
+            startup = json.loads(completed.stdout)["server_startup_failure_waiter"]
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+            raise ParityError(
+                f"{case['case_id']}: startup failure waiter returned no structured observation; "
+                f"exit={completed.returncode}, "
+                f"stdout={completed.stdout.decode('utf-8', errors='replace')[:2000]!r}, "
+                f"stderr={completed.stderr.decode('utf-8', errors='replace')[:2000]!r}"
+            ) from error
+        if type(startup) is not dict:
+            raise ParityError(
+                f"{case['case_id']}: startup failure waiter observation must be an object"
+            )
+        observation.update(
+            {
+                name: startup.get(name)
+                for name in (
+                    "startup_failure_wait_result",
+                    "dropped_control_wait_result",
+                    "dropped_readiness_wait_result",
+                    "server_started_before_shutdown",
+                    "serve_task_finished_before_shutdown",
+                )
+            }
+        )
+    if "server_startup_bind_failure_lifespan_cleanup" in case["api"]:
+        try:
+            startup = json.loads(completed.stdout)[
+                "server_startup_bind_failure_lifespan_cleanup"
+            ]
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+            raise ParityError(
+                f"{case['case_id']}: startup bind-failure lifespan probe returned no structured observation; "
+                f"exit={completed.returncode}, "
+                f"stdout={completed.stdout.decode('utf-8', errors='replace')[:2000]!r}, "
+                f"stderr={completed.stderr.decode('utf-8', errors='replace')[:2000]!r}"
+            ) from error
+        if type(startup) is not dict:
+            raise ParityError(
+                f"{case['case_id']}: startup bind-failure lifespan observation must be an object"
+            )
+        observation.update(
+            {
+                name: startup.get(name)
+                for name in (
+                    "server_started",
+                    "serve_task_finished",
+                    "serve_raised",
+                    "serve_timed_out",
+                    "application_events",
+                )
+            }
+        )
+        if fault_point is not None:
+            observation["fault_server_stderr"] = completed.stderr.decode(
+                "utf-8", errors="replace"
+            )
+    if "server_startup_uds_socket_replacement_lifespan_cleanup" in case["api"]:
+        try:
+            startup = json.loads(completed.stdout)[
+                "server_startup_uds_socket_replacement_lifespan_cleanup"
+            ]
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+            raise ParityError(
+                f"{case['case_id']}: startup UDS replacement lifespan probe returned no structured observation; "
+                f"exit={completed.returncode}, "
+                f"stdout={completed.stdout.decode('utf-8', errors='replace')[:2000]!r}, "
+                f"stderr={completed.stderr.decode('utf-8', errors='replace')[:2000]!r}"
+            ) from error
+        if type(startup) is not dict:
+            raise ParityError(
+                f"{case['case_id']}: startup UDS replacement lifespan observation must be an object"
+            )
+        observation.update(
+            {
+                name: startup.get(name)
+                for name in (
+                    "server_started",
+                    "serve_task_finished",
+                    "serve_raised",
+                    "serve_timed_out",
+                    "application_events",
+                )
+            }
+        )
+        if fault_point is not None:
+            observation["fault_consumed"] = fault_consumed
+    if (
+        "server_startup_cancel_before_listener" in case["api"]
+        or "server_startup_cancel_after_listener" in case["api"]
+        or "server_startup_cancel_after_listener_without_lifespan" in case["api"]
+        or "server_startup_cancel_without_lifespan" in case["api"]
+        or "server_startup_cancel_during_prebound_transfer" in case["api"]
+        or "server_startup_cancel_during_prebound_transfer_without_lifespan" in case["api"]
+    ):
+        try:
+            startup = json.loads(completed.stdout)["server_startup_cancel_before_listener"]
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+            raise ParityError(
+                f"{case['case_id']}: startup cancellation probe returned no structured observation; "
+                f"exit={completed.returncode}, "
+                f"stdout={completed.stdout.decode('utf-8', errors='replace')[:2000]!r}, "
+                f"stderr={completed.stderr.decode('utf-8', errors='replace')[:2000]!r}"
+            ) from error
+        if type(startup) is not dict:
+            raise ParityError(
+                f"{case['case_id']}: startup cancellation observation must be an object"
+            )
+        observation.update(
+            {
+                name: startup.get(name)
+                for name in (
+                    "lifespan_startup_entered_before_cancel",
+                    "server_started_before_cancel",
+                    "serve_cancelled",
+                    "serve_raised",
+                    "serve_timed_out",
+                    "serve_task_finished",
+                    "application_events",
+                    "server_started_before_shutdown",
+                    "listener_transfer_blocked",
+                    "listener_accepting_after_cancel",
+                )
+            }
+        )
+    if "server_lifespan_mode" in case["api"]:
+        try:
+            mode_observation = json.loads(completed.stdout)["server_lifespan_mode"]
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+            raise ParityError(
+                f"{case['case_id']}: server lifespan mode probe returned no structured observation; "
+                f"exit={completed.returncode}, "
+                f"stdout={completed.stdout.decode('utf-8', errors='replace')[:2000]!r}, "
+                f"stderr={completed.stderr.decode('utf-8', errors='replace')[:2000]!r}"
+            ) from error
+        if type(mode_observation) is not dict:
+            raise ParityError(
+                f"{case['case_id']}: server lifespan mode observation must be an object"
+            )
+        observation.update(
+            {
+                name: mode_observation.get(name)
+                for name in (
+                    "server_started_before_shutdown",
+                    "serve_raised",
+                    "application_events",
                 )
             }
         )
@@ -10678,10 +14967,72 @@ def run_python_api_probe(
                 "handshake_status": websocket.get("handshake_status"),
                 "close_code": websocket.get("close_code"),
                 "message_received": websocket.get("message_received"),
+                "shutdown_signal_sent": websocket.get("shutdown_signal_sent"),
                 "process_exit_code": websocket.get("process_exit_code"),
+                "process_timed_out": websocket.get("process_timed_out"),
+                "compression_negotiated": websocket.get("compression_negotiated"),
+                "server_ping_observed": websocket.get("server_ping_observed"),
             }
         )
+        if "scope_observation" in websocket:
+            scope_observation = websocket["scope_observation"]
+            if scope_observation is not None and type(scope_observation) is not dict:
+                raise ParityError(
+                    f"{case['case_id']}: WebSocket scope observation must be an object or null"
+                )
+            if (
+                case["api"]["run_websocket"].get("observe_scope", False)
+                and scope_observation is None
+            ):
+                raise ParityError(
+                    f"{case['case_id']}: requested WebSocket scope observation is missing"
+                )
+            observation["scope_observation"] = scope_observation
+    if fault_point is not None:
+        observation["fault_consumed"] = fault_consumed
     return observation
+
+
+def raise_if_llvm_profile_write_failed(
+    observation: dict[str, Any], case_id: str
+) -> None:
+    """Treat LLVM runtime profile write diagnostics as coverage infrastructure failures.
+
+    Coverage-instrumented subprocesses report profile output errors on their
+    captured server logs. Those diagnostics can otherwise look like a server
+    parity mismatch and hide a transient disk or filesystem failure.
+    """
+    server_log_events = observation.get("server_log_events")
+    if type(server_log_events) is not dict:
+        return
+    for channel in ("stdout", "stderr"):
+        events = server_log_events.get(channel)
+        if type(events) is not list:
+            continue
+        for event in events:
+            if type(event) is not dict or event.get("kind") != "raw":
+                continue
+            message = event.get("message")
+            if (
+                isinstance(message, str)
+                and message.startswith("LLVM Profile Error: Failed to write file")
+            ):
+                raise OSError(
+                    f"{case_id}: LLVM coverage profile could not be written: "
+                    f"{message[:1000]}"
+                )
+
+
+def required_observations_for_case(
+    case: dict[str, Any], operation: dict[str, Any]
+) -> dict[str, Any]:
+    """Return operation requirements with any input-case override applied."""
+    if "required_observations" in case:
+        return case["required_observations"]
+    run_http = case.get("api", {}).get("run_http", {})
+    return run_http.get(
+        "required_observations", operation.get("required_observations", {})
+    )
 
 
 def execute_python_api_profile(
@@ -10694,6 +15045,72 @@ def execute_python_api_profile(
     for case in cases:
         operation = operations[case["operation"]]
         try:
+            if case.get("verification") == "fault-contract":
+                fault = case["fault"]
+                target_raw = run_python_api_probe(
+                    case,
+                    "uvicorn-rs",
+                    coverage_profile_dir / "target"
+                    if coverage_profile_dir is not None
+                    else None,
+                    fault_point=fault["point"] if fault["point"] in FAULT_POINTS else None,
+                )
+                raise_if_llvm_profile_write_failed(target_raw, case["case_id"])
+                target = {name: target_raw[name] for name in operation["observe"]}
+                required = (
+                    {}
+                    if fault["contract"] in {
+                        "server-unix-listener-permission-error-startup-propagates",
+                        "python-tls-initialization-error-propagates",
+                    }
+                    else required_observations_for_case(case, operation)
+                )
+                matches = all(
+                    target.get(field) == value
+                    for field, value in required.items()
+                )
+                target_requirements = operation.get("target_requirements", {})
+                matches = matches and all(
+                    target.get(field) == value
+                    for field, value in target_requirements.items()
+                )
+                fault_observation = {
+                    "fault_consumed": target_raw.get("fault_consumed"),
+                    "fault_server_stderr": target_raw.get(
+                        "fault_server_stderr", ""
+                    ),
+                    **target,
+                }
+                contract_matches = fault_contract_matches(
+                    fault, fault_observation, case
+                )
+                matches = matches and contract_matches
+                difference = (
+                    None
+                    if matches
+                    else f"fault contract {fault['contract']!r} did not hold"
+                )
+                outcomes.append(
+                    {
+                        "case_id": case["case_id"],
+                        "profile": profile["id"],
+                        "operation": case["operation"],
+                        "requirements": case["covers"],
+                        "status": "passed" if matches else "failed",
+                        "oracle_observation": None,
+                        "target_observation": target,
+                        "server_exit_codes": {
+                            "oracle": None,
+                            "target": target.get("exit_code")
+                        },
+                        "difference": difference,
+                    }
+                )
+                print(
+                    f"{'PASS' if matches else 'FAIL'} {profile['id']}: {case['case_id']}",
+                    flush=True,
+                )
+                continue
             oracle_raw = run_python_api_probe(case, "uvicorn")
             target_raw = run_python_api_probe(
                 case,
@@ -10702,17 +15119,26 @@ def execute_python_api_profile(
                 if coverage_profile_dir is not None
                 else None,
             )
+            raise_if_llvm_profile_write_failed(target_raw, case["case_id"])
             oracle = {name: oracle_raw[name] for name in operation["observe"]}
             target = {name: target_raw[name] for name in operation["observe"]}
             fields = operation.get("compare", operation["observe"])
-            matches = {field: oracle[field] for field in fields} == {
-                field: target[field] for field in fields
-            }
+            oracle_comparison = normalize_operation_comparison_observation(
+                {field: oracle[field] for field in fields}, operation
+            )
+            target_comparison = normalize_operation_comparison_observation(
+                {field: target[field] for field in fields}, operation
+            )
+            matches = oracle_comparison == target_comparison
             difference = None
             if not matches:
-                differing_fields = [field for field in fields if oracle[field] != target[field]]
+                differing_fields = [
+                    field
+                    for field in fields
+                    if oracle_comparison[field] != target_comparison[field]
+                ]
                 difference = "Python API observations differ: " + ", ".join(differing_fields)
-            required = operation.get("required_observations", {})
+            required = required_observations_for_case(case, operation)
             if any(
                 oracle.get(field) != value or target.get(field) != value
                 for field, value in required.items()
@@ -10772,6 +15198,9 @@ def start_profile_servers(
     server_options = cases[0].get("server_options", {}) if cases else {}
     if any(case.get("server_options", {}) != server_options for case in cases):
         raise ParityError("profile cases with different server options must use separate processes")
+    client_tls = any(case.get("client_tls") is True for case in cases)
+    if any(case.get("client_tls", False) != client_tls for case in cases):
+        raise ParityError("profile cases with different client TLS settings must use separate processes")
     tls = profile_id in {
         "http2",
         "http3",
@@ -10782,11 +15211,31 @@ def start_profile_servers(
         "startup-empty-private-key",
         "startup-invalid-private-key-pem",
         "startup-mismatched-private-key",
+        "startup-encrypted-private-key-wrong-password",
+        "startup-encrypted-private-key-invalid-utf8",
+        "startup-encrypted-private-key-malformed-pem",
+        "startup-encrypted-private-key-wrong-label",
+        "startup-encrypted-private-key-invalid-der",
+        "startup-traditional-encrypted-private-key-unsupported-cipher",
+        "startup-traditional-encrypted-private-key-missing-dek-info",
+        "startup-traditional-encrypted-private-key-invalid-dek-info",
+        "startup-traditional-encrypted-private-key-invalid-proc-type",
+        "startup-traditional-encrypted-private-key-missing-body",
+        "startup-traditional-encrypted-private-key-invalid-body-base64",
+        "startup-traditional-encrypted-private-key-missing-end-marker",
+        "startup-traditional-unencrypted-private-key-invalid-base64",
     }
     if tls:
         certificate, key, trust_anchor = make_certificate(tempdir)
     else:
         certificate, key, trust_anchor = None, None, None
+    needs_client_tls_material = client_tls or server_options.get("ssl_cert_reqs", 0) != 0
+    if needs_client_tls_material:
+        if trust_anchor is None:
+            raise ParityError("mutual TLS requires a generated server trust anchor")
+        client_certificate, client_key = make_client_certificate(tempdir)
+    else:
+        client_certificate, client_key = None, None
     config = tempdir / "hypercorn.toml"
     config.write_text("keep_alive_max_requests = 100000000\n", encoding="utf-8")
     graceful_timeout_seconds = next(
@@ -10900,6 +15349,9 @@ def start_profile_servers(
                     for case in cases
                 ),
                 server_options=server_options,
+                trust_anchor=trust_anchor,
+                client_certificate=client_certificate,
+                client_key=client_key,
             )
     except Exception:
         for server in servers.values():
@@ -10926,7 +15378,12 @@ def execute_profile(
     server_option_groups: dict[str, list[dict[str, Any]]] = {}
     for case in cases:
         option_key = json.dumps(
-            case.get("server_options", {}), sort_keys=True, separators=(",", ":")
+            {
+                "server_options": case.get("server_options", {}),
+                "client_tls": case.get("client_tls", False),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
         )
         server_option_groups.setdefault(option_key, []).append(case)
     if len(server_option_groups) > 1:
@@ -10990,7 +15447,11 @@ def execute_profile(
 
     outcomes = []
     infrastructure_errors = []
-    with tempfile.TemporaryDirectory(prefix=f"uvicorn-rs-parity-{profile['id']}-") as temporary:
+    with profile_temporary_directory(
+        prefix=f"uvicorn-rs-parity-{profile['id']}-",
+        cleanup_errors=infrastructure_errors,
+        profile_id=profile["id"],
+    ) as temporary:
         tempdir = Path(temporary)
         try:
             oracle, target, trust_anchor = start_profile_servers(
@@ -11097,13 +15558,28 @@ def execute_profile(
                             fault_control_path.write_text("", encoding="utf-8")
                         target_raw = execute_case(case, target, profile, trust_anchor, h3_client)
                     except Exception as error:
-                        raise ParityError(f"target uvicorn-rs adapter failed: {error}") from error
+                        persist_shutdown_trace(
+                            case["case_id"], target, read_server_log(target)
+                        )
+                        raise ParityError(
+                            f"target uvicorn-rs adapter failed: {error}\n"
+                            f"{format_adapter_exception(error)}"
+                        ) from error
+                    target_server_log = target_raw.get("server_log")
+                    if not isinstance(target_server_log, str):
+                        target_server_log = read_server_log(target)
+                    persist_shutdown_trace(case["case_id"], target, target_server_log)
                     operation = operations[case["operation"]]
                     target_result = project_observation(target_raw, operation)
                     if case.get("verification", "oracle-parity") == "fault-contract":
                         oracle_result = None
                         fault_observation = target_result
-                        if case["fault"]["contract"] == "http3-body-pump-early-exit-500":
+                        if case["fault"]["point"] == "asgi.event-type.extract":
+                            fault_observation = {
+                                **target_result,
+                                "server_log": target_raw.get("server_log", ""),
+                            }
+                        elif case["fault"]["contract"] == "http3-body-pump-early-exit-500":
                             fault_observation = {
                                 **target_result,
                                 "fault_consumed": target_raw.get("fault_consumed"),
@@ -11128,17 +15604,38 @@ def execute_profile(
                             "http-callback-error-cleans-task-followup-200",
                         }:
                             fault_observation = {**target_result, "server_log": target_raw["server_log"]}
-                        elif case["fault"]["contract"] == "http-response-header-capacity-recovery-followup-200":
+                        elif case["fault"]["contract"] == "http-response-header-overflow-delivery-followup-200":
                             fault_observation = {
                                 **target_result,
                                 "application_events": target_raw["application_events"],
                             }
-                        elif case["fault"]["contract"] == "websocket-header-capacity-error-followup-200":
-                            fault_observation = {**target_result, "server_log": target_raw["server_log"]}
                         elif case["fault"]["contract"] == "server-forced-task-completion-error-bounded-shutdown":
                             fault_observation = {**target_result, "server_log": target_raw["server_log"]}
                         elif case["fault"]["contract"] == "server-startup-failure":
                             fault_observation = {**target_result, "server_log": read_server_log(target)}
+                        elif case["fault"]["contract"] == "server-unix-listener-permission-error-startup-propagates":
+                            fault_observation = {
+                                **target_result,
+                                "fault_consumed": target_raw.get("fault_consumed"),
+                            }
+                        elif case["fault"]["contract"] == "server-default-header-finalization-error-closes-connection":
+                            fault_observation = {
+                                **target_result,
+                                "fault_consumed": target_raw.get("fault_consumed"),
+                            }
+                        elif case["fault"]["contract"] == "http2-response-event-fault-consumed-and-status-observed":
+                            fault_observation = {
+                                **target_result,
+                                "fault_consumed": target_raw.get("fault_consumed"),
+                            }
+                        elif case["fault"]["contract"] in {
+                            "server-lifespan-startup-auto-fallback",
+                            "server-lifespan-startup-auto-fallback-logger-failure-ignored",
+                        }:
+                            fault_observation = {
+                                **target_result,
+                                "fault_consumed": target_raw.get("fault_consumed"),
+                            }
                         elif case["fault"]["contract"] == "websocket-handshake-error-followup-200":
                             fault_observation = {
                                 **target_result,
@@ -11160,6 +15657,11 @@ def execute_profile(
                             and case["fault"]["point"] in {
                                 "websocket.peer-read-failed.unavailable",
                                 "websocket.peer-read-failed.watch-fallback",
+                                "websocket.yawc.unexpected-continuation-frame",
+                                "websocket.yawc.invalid-text-frame",
+                                "websocket.yawc.invalid-close-reason",
+                                "websocket.yawc.close-reply-flush-error",
+                                "websocket.yawc.close-reply-flush-unexpected-frame",
                             }
                         ):
                             fault_observation = {
@@ -11170,6 +15672,7 @@ def execute_profile(
                             fault_observation = {**target_result, "server_log": target_raw["server_log"],
                                                  "failure_response": target_raw["failure_response"],
                                                  "followup": target_raw["followup"],
+                                                 "fault_consumed": target_raw["fault_consumed"],
                                                  "lifespan_shutdown_completed": target_raw["lifespan_shutdown_completed"]}
                         elif case["fault"]["contract"] == "http-response-reset-cancels-deferred-task":
                             fault_observation = {**target_result, "application_events": target_raw["application_events"]}
@@ -11240,6 +15743,8 @@ def execute_profile(
                                 **target_result,
                                 "fault_consumed": target_raw.get("fault_consumed"),
                             }
+                        elif case["fault"]["contract"] == "websocket-keepalive-close-error-followup-200":
+                            fault_observation = {**target_raw, **target_result}
                         elif case["fault"]["contract"] in {
                             "websocket-driver-send-error-followup-200",
                             "websocket-driver-send-error-cancels-app",
@@ -11313,7 +15818,8 @@ def execute_profile(
                             diagnostic = {
                                 "case_id": case["case_id"],
                                 "profile": profile["id"],
-                                "events": read_events(oracle["events"]),
+                                "oracle_events": read_events(oracle["events"]),
+                                "target_events": read_events(target["events"]),
                                 "server_log": read_server_log(oracle)[-2000:],
                                 "oracle_process": server_process_diagnostic(oracle),
                                 "target_process": server_process_diagnostic(target),
@@ -11321,7 +15827,8 @@ def execute_profile(
                             }
                             raise ParityError(
                                 f"oracle {oracle['id']} adapter failed: {error}; "
-                                f"diagnostic={json.dumps(diagnostic, sort_keys=True)}"
+                                f"diagnostic={json.dumps(diagnostic, sort_keys=True)}\n"
+                                f"{format_adapter_exception(error)}"
                             ) from error
                         oracle_result = project_observation(oracle_raw, operation)
                         comparison_fields = operation.get("compare", operation["observe"])
@@ -11334,7 +15841,7 @@ def execute_profile(
                             profile["id"],
                         )
                         matches = oracle_comparison == target_comparison
-                        required = operation.get("required_observations", {})
+                        required = required_observations_for_case(case, operation)
                         if any(
                             oracle_result.get(field) != value or target_result.get(field) != value
                             for field, value in required.items()
@@ -11391,9 +15898,47 @@ def execute_profile(
                     })
                     break
         finally:
+            outcomes_by_case = {outcome["case_id"]: outcome for outcome in outcomes}
             for server in server_history:
-                exit_code, logs = stop_server(server)
+                try:
+                    exit_code, logs = stop_server(server)
+                except Exception as error:
+                    logs = server.get("captured_log", "")
+                    if logs.strip():
+                        print(f"--- {server['id']} server log ---\n{logs}", file=sys.stderr)
+                    infrastructure_errors.append({
+                        "profile": profile["id"],
+                        "server": server["id"],
+                        "pid": server["process"].pid,
+                        "kind": "server_cleanup_failure",
+                        "diagnostic": str(error)[-1000:],
+                    })
+                    continue
                 captured_log = server.get("captured_log", logs)
+                if server.get("log_cleanup_error"):
+                    log_path = getattr(server.get("log"), "name", None)
+                    infrastructure_errors.append({
+                        "profile": profile["id"],
+                        "server": server["id"],
+                        "pid": server["process"].pid,
+                        "attempted_cases": [
+                            case["case_id"]
+                            for case in server.get("attempted_cases", [])[-8:]
+                        ],
+                        "attempted_case_count": len(
+                            server.get("attempted_cases", [])
+                        ),
+                        "process_exit_code": server.get("process_exit_code"),
+                        "process_alive_after_stop": server.get(
+                            "process_alive_after_stop"
+                        ),
+                        "forced_kill": server.get("forced_kill", False),
+                        "log_path_exists": Path(log_path).exists()
+                        if isinstance(log_path, (str, os.PathLike))
+                        else None,
+                        "kind": "server_log_cleanup_failure",
+                        "diagnostic": server["log_cleanup_error"][-1000:],
+                    })
                 if captured_log.strip():
                     print(f"--- {server['id']} server log ---\n{captured_log}", file=sys.stderr)
                 normal_signal_exit = server["id"] in {"uvicorn", "uvicorn-rs"} and (
@@ -11405,6 +15950,12 @@ def execute_profile(
                             for case in server["attempted_cases"]
                         )
                     )
+                    or (
+                        os.name == "nt"
+                        and exit_code == 3
+                        and server.get("graceful_signal_requested") is True
+                        and "Finished server process [" in captured_log
+                    )
                 )
                 expected_startup_error = server.get("startup_failed", False)
                 expected_lifespan_shutdown_error = (
@@ -11415,6 +15966,30 @@ def execute_profile(
                         in {"server-shutdown-failure", "server-lifespan-task-cancel"}
                         for case in server["attempted_cases"]
                     )
+                )
+                server_outcome_key = {
+                    "uvicorn": "oracle",
+                    "uvicorn-rs": "target",
+                }.get(server["id"])
+                expected_observed_shutdown_exit = (
+                    exit_code == 3
+                    and server_outcome_key is not None
+                    and any(
+                        stops_server(case)
+                        and (outcome := outcomes_by_case.get(case["case_id"])) is not None
+                        and outcome.get("status") == "passed"
+                        and outcome.get("server_exit_codes", {}).get(server_outcome_key)
+                        == exit_code
+                        for case in server.get("attempted_cases", [])
+                    )
+                )
+                expected_windows_cleanup = (
+                    os.name == "nt"
+                    and server.get("harness_stop_requested") is True
+                    # Popen.terminate() uses TerminateProcess on Windows,
+                    # whose requested exit code is 1; this is routine profile
+                    # cleanup after the case observations have been captured.
+                    and exit_code == 1
                 )
                 panic_issues = rust_panic_issues(
                     server, server["attempted_cases"], captured_log
@@ -11431,11 +16006,21 @@ def execute_profile(
                     })
                 if (
                     (exit_code != 0 and not normal_signal_exit and not expected_startup_error
-                     and not expected_lifespan_shutdown_error)
+                     and not expected_lifespan_shutdown_error
+                     and not expected_observed_shutdown_exit
+                     and not expected_windows_cleanup)
                 ):
                     infrastructure_errors.append({
                         "profile": profile["id"],
                         "server": server["id"],
+                        "pid": server["process"].pid,
+                        "attempted_cases": [
+                            case["case_id"]
+                            for case in server.get("attempted_cases", [])[-8:]
+                        ],
+                        "attempted_case_count": len(
+                            server.get("attempted_cases", [])
+                        ),
                         "kind": "server_shutdown_failure",
                         "exit_code": exit_code,
                         "diagnostic": logs[-1000:],
@@ -11476,34 +16061,50 @@ def validate_result_shape(
     dependencies = run["environment"]["dependencies"]
     if not isinstance(dependencies, dict):
         raise ParityError("result environment dependencies must be an object")
+    platform_id = parity_platform_id(run["environment"]["platform"])
     for oracle in manifest["oracles"]:
         pinned = [(oracle["id"], oracle["version"])]
-        pinned.extend((component["id"], component["version"]) for component in oracle["components"])
+        pinned.extend(
+            (component["id"], component["version"])
+            for component in oracle["components"]
+            if "platforms" not in component or platform_id in component["platforms"]
+        )
         for distribution, version in pinned:
             if dependencies.get(distribution) != version:
                 raise ParityError(f"result identity does not match pinned {distribution} version {version}")
     exact_keys(
         run["target"],
-        {"revision", "dirty", "native_extension", "cargo_lock_sha256", "source_sha256"},
+        {"revision", "dirty", "native_extension", "cargo_lock_sha256", "source_files", "source_sha256"},
         "result.run.target",
     )
     exact_keys(run["target"]["native_extension"], {"path", "sha256"}, "result.run.target.native_extension")
     if not isinstance(run["target"]["dirty"], bool):
         raise ParityError("result target dirty flag must be boolean")
+    if run["target"]["source_files"] != runtime_source_hashes(ROOT):
+        raise ParityError("result runtime source inventory differs from checkout")
+    if run["target"]["source_sha256"] != runtime_source_digest(run["target"]["source_files"]):
+        raise ParityError("result runtime source digest does not match its file inventory")
     exact_keys(
         run["harness"],
-        {"runner", "runner_sha256", "fixture_app", "fixture_app_sha256", "http3_client"},
+        {
+            "runner", "runner_sha256", "identity_helper", "fixture_app", "fixture_app_sha256",
+            "python_api_probe", "http3_client",
+        },
         "result.run.harness",
     )
+    exact_keys(run["harness"]["identity_helper"], {"path", "sha256"}, "result.run.harness.identity_helper")
+    exact_keys(run["harness"]["python_api_probe"], {"path", "sha256"}, "result.run.harness.python_api_probe")
     if run["harness"]["http3_client"] is not None:
         exact_keys(run["harness"]["http3_client"], {"path", "sha256"}, "result.run.harness.http3_client")
     for value, label in (
         (run["manifest"]["sha256"], "manifest"),
         (run["target"]["native_extension"]["sha256"], "native extension"),
         (run["target"]["cargo_lock_sha256"], "Cargo.lock"),
-        (run["target"]["source_sha256"], "Rust source"),
+        (run["target"]["source_sha256"], "runtime source"),
         (run["harness"]["runner_sha256"], "runner"),
+        (run["harness"]["identity_helper"]["sha256"], "source identity helper"),
         (run["harness"]["fixture_app_sha256"], "fixture app"),
+        (run["harness"]["python_api_probe"]["sha256"], "Python API probe"),
         *((item["sha256"], "input") for item in run["inputs"]),
     ):
         if not isinstance(value, str) or len(value) != 64 or any(char not in "0123456789abcdef" for char in value):
@@ -11592,18 +16193,40 @@ def validate_result_shape(
 
 
 def main() -> int:
+    windows_ctrl_break_events = 0
+    if os.name == "nt" and hasattr(signal, "SIGBREAK"):
+        def capture_windows_ctrl_break(signum: int, frame: Any) -> None:
+            nonlocal windows_ctrl_break_events
+            windows_ctrl_break_events += 1
+
+        # Windows parity cases signal isolated server process groups. If a
+        # control event leaks to this coordinator, preserve the rest of the
+        # report and record the leak as an infrastructure failure instead of
+        # letting the process exit before it writes the evidence artifact.
+        signal.signal(signal.SIGBREAK, capture_windows_ctrl_break)
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=ROOT / "build" / "asgi-parity" / "result.json")
     parser.add_argument(
         "--oracle-python",
         type=Path,
         default=Path(sys.executable),
-        help="Python environment containing genuine upstream Uvicorn, isolated from uvicorn-rs-py",
+        help="Python environment containing genuine upstream Uvicorn, isolated from the uvicorn-rs distribution",
     )
     parser.add_argument(
         "--case-id",
         action="append",
         help="run only the named input case; repeat to select a batch",
+    )
+    parser.add_argument(
+        "--exclude-case-id",
+        action="append",
+        help="exclude the named input case from a selected batch; repeat to exclude multiple cases",
+    )
+    parser.add_argument(
+        "--profile",
+        action="append",
+        help="run only cases in the named manifest profile; repeat to select multiple profiles",
     )
     parser.add_argument(
         "--coverage-profile-dir",
@@ -11624,12 +16247,20 @@ def main() -> int:
         "--installed-candidate",
         action="store_true",
         help=(
-            "run target subprocesses against the installed uvicorn-rs-py wheel "
+            "run target subprocesses against the installed uvicorn-rs wheel "
             "without prepending the checkout Python adapter"
         ),
     )
+    parser.add_argument(
+        "--trace-hypercorn-h3-events",
+        action="store_true",
+        help=(
+            "wrap the Hypercorn HTTP/3 oracle with bounded stream-lifecycle tracing; "
+            "requires exactly --case-id http3.early-response-with-open-upload"
+        ),
+    )
     args = parser.parse_args()
-    global INSTALLED_CANDIDATE_MODE, ORACLE_PYTHON
+    global INSTALLED_CANDIDATE_MODE, ORACLE_PYTHON, TRACE_HYPERCORN_H3_EVENTS
     # Keep the venv's python symlink intact; resolving it points at the base
     # interpreter, whose site-packages do not contain the isolated oracle.
     ORACLE_PYTHON = Path(os.path.abspath(args.oracle_python))
@@ -11638,6 +16269,7 @@ def main() -> int:
     if args.installed_candidate and args.coverage_profile_dir:
         parser.error("--installed-candidate cannot be combined with --coverage-profile-dir")
     INSTALLED_CANDIDATE_MODE = args.installed_candidate
+    TRACE_HYPERCORN_H3_EVENTS = args.trace_hypercorn_h3_events
 
     manifest, inputs, input_paths = load_contract()
     if args.case_id:
@@ -11649,11 +16281,47 @@ def main() -> int:
         selected_cases = [case for case in inputs["cases"] if case["case_id"] in requested]
     else:
         selected_cases = list(inputs["cases"])
+    if args.profile:
+        known_profiles = {profile["id"] for profile in manifest["profiles"]}
+        unknown_profiles = sorted(set(args.profile) - known_profiles)
+        if unknown_profiles:
+            parser.error(f"unknown profile(s): {', '.join(unknown_profiles)}")
+        selected_profiles = set(args.profile)
+        selected_cases = [
+            case for case in selected_cases if case["profile"] in selected_profiles
+        ]
+        if not selected_cases:
+            parser.error("the selected profile and case filters matched no cases")
+    if args.exclude_case_id:
+        excluded = set(args.exclude_case_id)
+        known = {case["case_id"] for case in inputs["cases"]}
+        unknown = sorted(excluded - known)
+        if unknown:
+            parser.error(f"unknown excluded case ID(s): {', '.join(unknown)}")
+        selected_ids = {case["case_id"] for case in selected_cases}
+        outside_selection = sorted(excluded - selected_ids)
+        if outside_selection:
+            parser.error(
+                "excluded case ID(s) are outside the selected case/profile batch: "
+                + ", ".join(outside_selection)
+            )
+        selected_cases = [
+            case for case in selected_cases if case["case_id"] not in excluded
+        ]
     fault_cases = [case for case in selected_cases if case.get("verification") == "fault-contract"]
     if fault_cases and not args.fault_contracts:
         if args.case_id:
             parser.error("selected fault-contract case requires --fault-contracts and an instrumented coverage build")
         selected_cases = [case for case in selected_cases if case.get("verification", "oracle-parity") != "fault-contract"]
+    if not selected_cases:
+        parser.error("no runnable cases remain after applying the selected filters")
+    if TRACE_HYPERCORN_H3_EVENTS and [case["case_id"] for case in selected_cases] != [
+        "http3.early-response-with-open-upload"
+    ]:
+        parser.error(
+            "--trace-hypercorn-h3-events requires exactly "
+            "--case-id http3.early-response-with-open-upload"
+        )
     coverage_profile_dir = args.coverage_profile_dir.resolve() if args.coverage_profile_dir else None
     if coverage_profile_dir is not None:
         if len(selected_cases) != 1 or not args.case_id:
@@ -11687,6 +16355,14 @@ def main() -> int:
             )
             case_results.extend(profile_results)
             infrastructure_errors.extend(profile_errors)
+    if windows_ctrl_break_events:
+        infrastructure_errors.append(
+            {
+                "kind": "unexpected_harness_ctrl_break",
+                "count": windows_ctrl_break_events,
+                "message": "CTRL_BREAK_EVENT reached the parity coordinator while signaling a child server",
+            }
+        )
     counts = {
         "selected": len(selected_cases),
         "executed": sum(result["status"] != "not_run" for result in case_results),
@@ -11720,8 +16396,16 @@ def main() -> int:
             "harness": {
                 "runner": str(Path(__file__).resolve().relative_to(ROOT)),
                 "runner_sha256": sha256(Path(__file__).resolve()),
+                "identity_helper": {
+                    "path": "scripts/parity_identity.py",
+                    "sha256": sha256(ROOT / "scripts/parity_identity.py"),
+                },
                 "fixture_app": str((FIXTURES / "app.py").relative_to(ROOT)),
                 "fixture_app_sha256": sha256(FIXTURES / "app.py"),
+                "python_api_probe": {
+                    "path": str((FIXTURES / "python_api_probe.py").relative_to(ROOT)),
+                    "sha256": sha256(FIXTURES / "python_api_probe.py"),
+                },
                 "http3_client": (
                     {
                         "path": str(h3_client.relative_to(ROOT)),

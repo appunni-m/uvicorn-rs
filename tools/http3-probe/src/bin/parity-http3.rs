@@ -5,8 +5,9 @@ use std::sync::Arc;
 
 use bytes::{Buf, Bytes};
 use h3_quinn::quinn::{self, rustls};
-use http::{header::HeaderName, HeaderMap, HeaderValue, Request};
-use serde_json::{json, Value};
+use http::{HeaderMap, HeaderValue, Request, header::HeaderName};
+use serde_json::{Value, json};
+use uvicorn_rs::{h3, h3_quinn};
 
 async fn send_truncated_data_frame(
     connection: &quinn::Connection,
@@ -42,9 +43,9 @@ async fn send_truncated_data_frame(
     wire.push(u8::try_from(field_section.len())?);
     wire.extend_from_slice(&field_section);
     wire.extend_from_slice(&[0x00, 0x01]); // DATA frame declares one byte
-                                           // Deliberately omit the declared DATA byte, then cleanly FIN the request
-                                           // stream. This is the minimal input that distinguishes empty DATA from a
-                                           // truncated DATA frame in h3 0.0.8.
+    // Deliberately omit the declared DATA byte, then cleanly FIN the request
+    // stream. This is the minimal input that distinguishes empty DATA from a
+    // truncated DATA frame in h3 0.0.8.
     send.write_all(&wire).await?;
     send.finish()?;
     Ok(receive)
@@ -1131,7 +1132,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             error => {
                 return Err(
                     format!("held response requires a remote application close: {error}").into(),
-                )
+                );
             }
         };
         let response_incomplete = loop {

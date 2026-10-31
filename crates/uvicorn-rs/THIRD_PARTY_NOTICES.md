@@ -1,20 +1,29 @@
-# HTTP/3 third-party source notices
+# Third-party source notices
 
-The HTTP/3 protocol and Quinn transport are separate registry packages:
+The HTTP/3 implementation is vendored inside `uvicorn-rs` and compiled by its
+optional `http3` Cargo feature. The source retains the upstream MIT license.
 
-- [`uvicorn-rs-h3`](https://github.com/appunni-m/uvicorn-rs/blob/main/crates/uvicorn-rs-h3/README.md) is based on the MIT-licensed
-  `h3` 0.0.8 source from [hyperium/h3](https://github.com/hyperium/h3). The
-  upstream source README and license are preserved in that package. The fork
-  adds the receive-path corrections described in its README.
-- [`uvicorn-rs-h3-quinn`](https://github.com/appunni-m/uvicorn-rs/blob/main/crates/uvicorn-rs-h3-quinn/README.md) is based on the
-  MIT-licensed `h3-quinn` 0.0.10 source from
-  [hyperium/h3](https://github.com/hyperium/h3). Its upstream source README and
-  license are preserved in that package. The fork uses `uvicorn-rs-h3` so both
-  crates share the same H3 protocol types.
-- `src/http3/transport.rs` adapts the Quinn stream buffering and error
-  conversion approach from `h3-quinn` 0.0.10. It adds request-scoped peer-stop
-  observation and uses the Quinn read future directly for cancellation-safe
-  request-body reads.
+- The protocol implementation in `src/http3/h3/` is based on the MIT-licensed
+  `h3` 0.0.8 source from [hyperium/h3](https://github.com/hyperium/h3).
+- `src/http3/h3_quinn.rs` is based on the MIT-licensed `h3-quinn` 0.0.10
+  source from [hyperium/h3](https://github.com/hyperium/h3).
+- `src/http3/transport.rs` adapts Quinn stream buffering and error conversion.
+  It adds request-scoped peer-stop observation and uses the Quinn read future
+  directly for cancellation-safe request-body reads.
+- `third-party/h3/` and `third-party/h3-quinn/` retain upstream README and
+  license text in the Cargo archive.
+
+The WebSocket `permessage-deflate` implementation uses the Yawc 0.5.0 crate,
+licensed under MPL-2.0. Its source is obtained as a Cargo dependency rather
+than vendored; `third-party/yawc/LICENSE` retains the upstream license text.
+Yawc is used for sessions where the HTTP/1.1 handshake negotiated compression.
+
+The Python ASGI adapter uses the MIT-licensed `h2` 0.4.20 source from
+[hyperium/h2](https://github.com/hyperium/h2), vendored under
+`third-party/h2/`. Its local `HeaderOrder` extension preserves the response
+field sequence supplied by ASGI when the adapter's HTTP/2 path encodes HPACK.
+The published `uvicorn-rs` Cargo crate uses the registry dependency and does
+not package this adapter-only patch.
 
 The adapted transport code is available under the MIT license:
 

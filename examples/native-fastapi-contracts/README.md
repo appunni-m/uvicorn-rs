@@ -43,16 +43,37 @@ The runner rejects unknown or duplicate case IDs before opening a listener.
 
 ## Current mainline source check
 
-FastAPI-RS main at `e5a6e91cb02b3229f9fbdfce1b00171c6913ccfe` now exports
-`fastapi_rs::native` from the sole core crate. Its default features exclude
-PyO3; the `python` feature enables it optionally. It pins Starlette-RS at
+The public FastAPI-RS `main` resolved to
+`0afccce9f35447f38ebb5e94d0e67fd338ea7ea4` on 2026-10-25. It exports
+`fastapi_rs::native` from the sole core crate, excludes PyO3 from its default
+features, and pins Starlette-RS at
 `4139a72449bf5751e8902fb1c7175ee7f191d338`.
 
-On Uvicorn-RS `40b296ecd48cda884bd5b76a020c017c76ac8189` with clean detached
-worktrees at those exact sibling revisions, the H1 request-stream-progress
-input passed once and the locked normal/build dependency graph contained no
-PyO3. This is a focused source check, not the full 17-input hosted matrix or
-full FastAPI semantic compatibility. See the [source-bound evidence](../../docs/native-fastapi-composition.md).
+The current local composition evidence uses clean detached checkouts at those
+exact FastAPI-RS and Starlette-RS revisions and runs 17 distinct H1/H2 inputs
+once each against the dirty Uvicorn-RS draft. The locked normal/build dependency
+graph contains no PyO3. Receipt paths, hashes, and limits are recorded in the
+[source-bound composition evidence](../../docs/native-fastapi-composition.md).
+This is local evidence, not hosted acceptance, repeated acceptance, or full
+FastAPI semantic compatibility.
+
+### Earlier selected route receipts
+
+The following route receipts used FastAPI-RS `2756140f0a5fad750d11120b668e3bf5899fa102`
+and Starlette-RS `4139a72449bf5751e8902fb1c7175ee7f191d338`; they are historical
+and do not update the current-main evidence above. On the dirty Uvicorn-RS draft
+based on `86e72e181d00feca1b4db7f30377d5d9d4345b83`, the H2
+`http2.path-query-routing` case passed once with no PyO3 in the locked graph.
+Its receipt is `target/kata-progress/native-composition-h2-isolated/receipt.json`
+(SHA-256 `14f0e0620074b80e805fdaa7ef0a1bca5f1de4aee429a4079f1100f96e1be7e8`).
+The H1 `http1.path-query-routing` case also passed once for
+`GET /items/42?tag=green`; its receipt is
+`target/kata-progress/native-composition-h2-isolated/h1-path-query-routing-receipt.json`
+(SHA-256 `f6232b730071886d116f2a2dad7e291ae8b5968180e08e848475d9d5f2de138e`).
+The other 15 manifest inputs passed once each; the batch receipt is
+`target/kata-progress/native-composition-h2-isolated/remaining-15-cases-receipt.json`
+(evidence ID `fd9a40b9335a42e081c785de`; SHA-256
+`0eebcccdd1c00093916cd2f7452cd670d07cf3b9bf46086ef090321a2f43874a`).
 
 The earlier 17-input result (51/51 across three repeats) used a now-removed
 `fastapi-rs-native` crate and remains historical. The 17-input hosted result

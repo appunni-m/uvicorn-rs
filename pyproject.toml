@@ -3,8 +3,8 @@ requires = ["maturin>=1.14,<2"]
 build-backend = "maturin"
 
 [project]
-name = "uvicorn-rs-py"
-version = "0.1.0"
+name = "uvicorn-rs"
+version = "0.3.0"
 license = "BSD-3-Clause OR MIT"
 license-files = ["LICENSE", "LICENSE-BSD-3-Clause", "LICENSE-MIT"]
 description = "Python ASGI client for the Rust-native Uvicorn-RS server"
@@ -53,12 +53,14 @@ uvicorn = "uvicorn.main:main"
 
 [dependency-groups]
 benchmark = [
+    "cryptography>=42",
     "httptools==0.8.0; python_version >= '3.10'",
     "hypercorn[h3]==0.18.0 ; python_full_version >= '3.10'",
     "psutil==7.2.2; python_version >= '3.10'",
     "PyYAML>=5.1",
     "python-dotenv>=0.13",
-    "uvloop==0.23.0; python_version >= '3.10'",
+    "uvloop==0.23.0; python_version >= '3.10' and sys_platform != 'win32' and sys_platform != 'cygwin' and platform_python_implementation != 'PyPy'",
+    "watchfiles>=0.20",
     "websockets>=13.0; python_full_version >= '3.10'",
 ]
 uvicorn-oracle = [
@@ -68,14 +70,22 @@ uvicorn-oracle = [
 fastapi-benchmark = ["fastapi==0.142.4; python_version >= '3.10'"]
 
 [tool.maturin]
-sdist-generator = "git"
+sdist-generator = "cargo"
 module-name = "uvicorn_rs._native"
 python-source = "python"
 python-packages = ["uvicorn_rs", "uvicorn"]
 features = ["pyo3/extension-module"]
+include = [
+    { path = "crates/uvicorn-rs/third-party/h2/Cargo.toml", format = "sdist" },
+    { path = "crates/uvicorn-rs/third-party/h2/LICENSE", format = "sdist" },
+    { path = "crates/uvicorn-rs/third-party/h2/UPSTREAM-README.md", format = "sdist" },
+    { path = "crates/uvicorn-rs/third-party/h2/src/**/*", format = "sdist" },
+    { path = "crates/uvicorn-rs/third-party/hyper/Cargo.toml", format = "sdist" },
+    { path = "crates/uvicorn-rs/third-party/hyper/LICENSE", format = "sdist" },
+    { path = "crates/uvicorn-rs/third-party/hyper/src/**/*", format = "sdist" },
+]
 exclude = [
     ".kata.toml", "benchmarks/**", ".coverage-mcp/**", "build/**", "target/**",
     "tests/**", "scripts/**", "examples/**", ".github/**", ".venv/**",
-    "crates/uvicorn-rs-h3/src/tests/**",
     "**/__pycache__/**", "**/*.profraw", "**/*.profdata", "**/*.pem", "**/*.key",
 ]

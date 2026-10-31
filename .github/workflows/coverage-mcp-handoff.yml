@@ -83,21 +83,28 @@ jobs:
             --raw-artifact-size "$RAW_ARTIFACT_SIZE" \
             --raw-artifact-digest "$RAW_ARTIFACT_DIGEST" \
             --output target/coverage-handoff/raw-inventory.json
+      - name: Create the deterministic source-bound MCP review projection
+        run: |
+          set -euo pipefail
+          python scripts/coverage_mcp_handoff.py project \
+            --report target/asgi-coverage/coverage-report.json \
+            --output target/asgi-coverage-review/coverage-mcp-projection.json
       - name: Decode and save the bounded Coverage-MCP page receipt
         env:
           RECEIPT_GZIP_BASE64: ${{ inputs.receipt_gzip_base64 }}
         run: |
           set -euo pipefail
           python scripts/coverage_mcp_handoff.py write-receipt \
-            --output target/asgi-coverage/coverage-mcp-receipt.json
-      - name: Attach pages and enforce strict offline coverage evidence
+            --output target/asgi-coverage-review/coverage-mcp-receipt.json
+      - name: Attach pages to a derived report and recheck the untouched raw report
         run: |
           set -euo pipefail
           python scripts/attach_coverage_mcp.py \
-            --report target/asgi-coverage/coverage-report.json \
-            --receipt target/asgi-coverage/coverage-mcp-receipt.json
+            --report target/asgi-coverage-review/coverage-mcp-projection.json \
+            --output target/asgi-coverage-review/coverage-report.reviewed.json \
+            --receipt target/asgi-coverage-review/coverage-mcp-receipt.json
           python scripts/check_ci_evidence.py coverage \
-            target/asgi-coverage/coverage-report.json --offline --require-clean
+            target/asgi-coverage/coverage-report.json --offline --allow-pending-mcp --require-clean
       - name: Record immutable raw, reviewed, and workflow identities
         env:
           HANDOFF_RUN_ID: ${{ github.run_id }}
@@ -106,7 +113,7 @@ jobs:
           set -euo pipefail
           python scripts/coverage_mcp_handoff.py create \
             --snapshot target/coverage-handoff/raw-inventory.json \
-            --review-root target/asgi-coverage \
+            --review-root target/asgi-coverage-review \
             --handoff-run-id "$HANDOFF_RUN_ID" \
             --handoff-attempt "$HANDOFF_RUN_ATTEMPT" \
             --output target/coverage-handoff/handoff.json
@@ -114,7 +121,7 @@ jobs:
         with:
           name: uvicorn-rs-coverage-mcp-${{ inputs.ci_run_id }}-${{ inputs.ci_run_attempt }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            target/asgi-coverage/**
+            target/asgi-coverage-review/**
             target/coverage-handoff/**
           if-no-files-found: error
           retention-days: 90

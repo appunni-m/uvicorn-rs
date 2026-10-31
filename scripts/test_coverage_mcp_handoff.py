@@ -15,6 +15,8 @@ import tempfile
 from typing import Any
 
 from coverage_contract import pending_coverage_mcp_request
+from check_ci_evidence import source_constant
+from project_coverage_mcp import uncovered_llvm_functions
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -58,10 +60,11 @@ def page(measurement: str, build_id: str, metric: str, *, next_offset: int | Non
     }
 
 
-def make_fixture(root: Path, *, incomplete_regions: bool = False,
-                 include_receipt: bool = False) -> tuple[Path, Path, Path]:
+def make_fixture(root: Path) -> tuple[Path, Path, Path, Path]:
     report_root = root / "target" / "coverage-handoff-fixture" / "asgi-coverage"
     report_root.mkdir(parents=True)
+    review_root = root / "target" / "coverage-handoff-fixture" / "asgi-coverage-review"
+    review_root.mkdir(parents=True)
     report_path = report_root / "coverage-report.json"
     relative_report = report_path.relative_to(ROOT).as_posix()
     build = {"tool": "fixture", "profile": "coverage"}
@@ -77,9 +80,11 @@ def make_fixture(root: Path, *, incomplete_regions: bool = False,
                       },
                       "regions": [{"file": "src/lib.rs", "start": {"line": 1, "column": 1},
                                    "end": {"line": 1, "column": 2}, "covered": True, "id": "r0"}],
-                      "uncovered_regions": []},
+                      "uncovered_regions": [],
+                      "coverage_mcp": pending_coverage_mcp_request(relative_report)},
         "matrix": {
-            "scope": "complete", "passed": 1, "selected": 1, "failed": 0,
+            "scope": "complete", "passed": 1, "selected": 1, "executed": 1,
+            "failed": 0, "transient_infrastructure_failures": 0,
             "infrastructure_failed": 0, "asgi_selected": 1, "native_selected": 1,
             "verification_runs_required": 3,
             "verification_runs": [{
@@ -94,9 +99,19 @@ def make_fixture(root: Path, *, incomplete_regions: bool = False,
                 "attempts": [{}],
             } for _ in range(3)],
         },
-        "coverage_mcp": pending_coverage_mcp_request(relative_report),
     }
-    write_json(report_path, {"data": [], "uvicorn_rs_unified": extension})
+    llvm_data = [{
+        "files": [{"filename": "src/lib.rs", "segments": [[1, 1, 1, True, True, False]]}],
+        "functions": [
+            {"branches": [], "count": 1, "filenames": ["src/lib.rs"], "mcdc_records": [],
+             "name": "covered_function", "regions": [[1, 1, 1, 2, 1, 0, 0, 0]]},
+            {"branches": [], "count": 0, "filenames": ["src/lib.rs"], "mcdc_records": [],
+             "name": "uncovered_function", "regions": [[2, 1, 2, 2, 0, 0, 0, 0]]},
+        ],
+        "totals": {"functions": {"count": 2, "covered": 1, "notcovered": 1}},
+    }]
+    write_json(report_path, {"type": "llvm.coverage.json.export", "version": "2.0.1",
+                             "data": llvm_data, "uvicorn_rs_unified": extension})
     context = {
         "report_sha256": hashlib.sha256(report_path.read_bytes()).hexdigest(),
         "source_hashes": {"src/lib.rs": SOURCE_FILE_HASH},
@@ -111,13 +126,8 @@ def make_fixture(root: Path, *, incomplete_regions: bool = False,
     (report_root / "run.log").write_text("coverage fixture\n", encoding="utf-8")
     (report_root / "artifacts").mkdir()
     (report_root / "artifacts" / "profile.bin").write_bytes(b"fixture profile")
-    receipt_path = report_root / "coverage-mcp-receipt.json"
-    pages = [page(relative_report, digest_json(build), "regions",
-                  next_offset=15 if incomplete_regions else None),
-             page(relative_report, digest_json(build), "lines")]
-    if include_receipt:
-        write_json(receipt_path, pages)
-    return report_path, receipt_path, report_root
+    receipt_path = review_root / "coverage-mcp-receipt.json"
+    return report_path, receipt_path, report_root, review_root
 
 
 def run(*args: str, expected: int = 0, detail: str = "") -> subprocess.CompletedProcess[str]:
@@ -133,21 +143,54 @@ def run(*args: str, expected: int = 0, detail: str = "") -> subprocess.Completed
     return result
 
 
+def check_uncovered_function_projection() -> None:
+    files = [{"filename": "src/lib.rs", "segments": [[1, 1, 1, True, True, False]]}]
+    totals = {"functions": {"count": 2, "covered": 1, "notcovered": 1}}
+    functions = [
+        {"name": "covered_function", "regions": [[1, 1, 1, 2, 1, 0, 0, 0]]},
+        {"name": "uncovered_function", "regions": [[2, 1, 2, 2, 0, 0, 0, 0]]},
+    ]
+    projected = uncovered_llvm_functions(
+        [{"files": files, "functions": functions, "totals": totals}],
+        [{"function_symbols": ["uncovered_function"]}],
+    )
+    if (len(projected) != 1 or projected[0]["files"] != files or projected[0]["totals"] != totals
+            or [item["name"] for item in projected[0]["functions"]] != ["uncovered_function"]):
+        raise AssertionError("gap projection must preserve file inventory/totals and every uncovered symbol")
+    if uncovered_llvm_functions([{"files": files, "functions": functions, "totals": totals}],
+                                [{"function_symbols": []}]) != [
+                                    {"files": files, "functions": functions, "totals": totals}
+                                ]:
+        raise AssertionError("unmapped uncovered spans must retain the complete LLVM function inventory")
+
+
 def main() -> int:
+    # The installed-wheel exclusion audit must inspect this registry without
+    # importing or executing the parity runner. A starred set expansion once
+    # let all live cases pass but made the subsequent binary audit unreadable.
+    runner = ROOT / "scripts/run_parity.py"
+    fault_points = source_constant(runner, "FAULT_POINTS")
+    tls_failures = source_constant(runner, "TLS_INITIALIZATION_FAILURES")
+    if not isinstance(fault_points, set) or not set(tls_failures) <= fault_points:
+        raise AssertionError("native fault registry must remain literal and include TLS initialization selectors")
+    check_uncovered_function_projection()
     (ROOT / "target").mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="uvicorn-rs-coverage-handoff-", dir=ROOT / "target") as temp:
         root = Path(temp)
-        report, receipt, review_root = make_fixture(root / "valid")
+        report, receipt, raw_root, review_root = make_fixture(root / "valid")
         ci_raw = root / "valid" / "ci-raw"
-        shutil.copytree(review_root, ci_raw)
+        shutil.copytree(raw_root, ci_raw)
         snapshot_path = root / "valid" / "raw-inventory.json"
         run(str(HANDOFF), "snapshot", "--report", str(report), "--source", SOURCE,
             "--ci-run-id", str(CI_RUN_ID), "--ci-attempt", str(CI_ATTEMPT),
             "--raw-artifact-id", str(RAW_ARTIFACT_ID), "--raw-artifact-name", "uvicorn-rs-unified-coverage",
             "--raw-artifact-size", str(RAW_ARTIFACT_SIZE), "--raw-artifact-digest", RAW_ARTIFACT_DIGEST,
             "--output", str(snapshot_path))
-        pages = [page(report.relative_to(ROOT).as_posix(), digest_json({"tool": "fixture", "profile": "coverage"}), "regions"),
-                 page(report.relative_to(ROOT).as_posix(), digest_json({"tool": "fixture", "profile": "coverage"}), "lines")]
+        projection = review_root / "coverage-mcp-projection.json"
+        run(str(HANDOFF), "project", "--report", str(report), "--output", str(projection))
+        projection_ref = projection.relative_to(ROOT).as_posix()
+        pages = [page(projection_ref, digest_json({"tool": "fixture", "profile": "coverage"}), "regions"),
+                 page(projection_ref, digest_json({"tool": "fixture", "profile": "coverage"}), "lines")]
         receipt_bytes = json.dumps(pages, separators=(",", ":")).encode()
         encoded_receipt = base64.b64encode(gzip.compress(receipt_bytes, mtime=0)).decode("ascii")
         decoded_receipt_path = root / "valid" / "decoded-receipt.json"
@@ -159,7 +202,10 @@ def main() -> int:
             "--output", str(root / "valid" / "invalid-receipt.json"), expected=1,
             detail="not valid base64-encoded gzip")
         write_json(receipt, pages)
-        run(str(ATTACH), "--report", str(report), "--receipt", str(receipt))
+        reviewed_report = review_root / "coverage-report.reviewed.json"
+        run(str(ATTACH), "--report", str(projection), "--output", str(reviewed_report),
+            "--receipt", str(receipt))
+        raw_sha_before = hashlib.sha256(report.read_bytes()).hexdigest()
         manifest_path = root / "valid" / "handoff.json"
         run(str(HANDOFF), "create", "--snapshot", str(snapshot_path), "--review-root", str(review_root),
             "--handoff-run-id", str(HANDOFF_RUN_ID), "--handoff-attempt", str(HANDOFF_ATTEMPT),
@@ -179,6 +225,8 @@ def main() -> int:
             "--selection-output", str(selection_path),
         )
         run(*verify_args)
+        if hashlib.sha256(report.read_bytes()).hexdigest() != raw_sha_before:
+            raise AssertionError("projection attachment changed the canonical raw report")
 
         # A handoff for another CI attempt cannot be accepted even if its page data matches.
         wrong_attempt = list(verify_args)
@@ -194,9 +242,17 @@ def main() -> int:
 
         # An MCP chain that advertises another page but omits it is rejected by the attacher.
         broken_root = root / "broken"
-        broken_report, broken_receipt, _ = make_fixture(broken_root, incomplete_regions=True,
-                                                         include_receipt=True)
-        run(str(ATTACH), "--report", str(broken_report), "--receipt", str(broken_receipt),
+        broken_report, broken_receipt, _, broken_review = make_fixture(broken_root)
+        broken_projection = broken_review / "coverage-mcp-projection.json"
+        run(str(HANDOFF), "project", "--report", str(broken_report), "--output", str(broken_projection))
+        broken_ref = broken_projection.relative_to(ROOT).as_posix()
+        incomplete_pages = [page(broken_ref, digest_json({"tool": "fixture", "profile": "coverage"}),
+                                 "regions", next_offset=15),
+                            page(broken_ref, digest_json({"tool": "fixture", "profile": "coverage"}), "lines")]
+        write_json(broken_receipt, incomplete_pages)
+        broken_reviewed = broken_review / "coverage-report.reviewed.json"
+        run(str(ATTACH), "--report", str(broken_projection), "--output", str(broken_reviewed),
+            "--receipt", str(broken_receipt),
             expected=1, detail="receipt omits later pages")
     print("PASS coverage MCP handoff: exact raw artifact, reviewed report, source/run binding, and rejection cases")
     return 0

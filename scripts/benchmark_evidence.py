@@ -428,6 +428,7 @@ class BenchmarkEvidence:
         clients: list[Path],
         *,
         allow_runtime_diagnostics: bool = False,
+        validate_native_extension: bool = True,
         artifacts_dir: Path | None = None,
         extra_dependencies: dict[str, list[str]] | None = None,
     ) -> None:
@@ -437,37 +438,43 @@ class BenchmarkEvidence:
         self.artifacts_dir.mkdir(parents=True, exist_ok=True)
         self.sample_name = "unlabeled"
         self.extra_dependencies = {
-            "uvicorn-rs-py": ["uvicorn_rs", "uvicorn"],
+            **({"uvicorn-rs": ["uvicorn_rs", "uvicorn"]} if validate_native_extension else {}),
             **(extra_dependencies or {}),
         }
         self.started_at = datetime.now(timezone.utc).isoformat()
         self.rustc_version = rustc_version()
-        code = (
-            "import importlib.metadata as metadata,json,sys,uvicorn_rs,uvicorn_rs._native as n; "
-            "from pathlib import Path; "
-            "dist=metadata.distribution('uvicorn-rs-py'); "
-            "direct=dist.read_text('direct_url.json'); "
-            "print(json.dumps({'native':n.__file__,'python':sys.executable,'version':sys.version,"
-            "'python_package':uvicorn_rs.__file__,"
-            "'python_package_root':str(Path(uvicorn_rs.__file__).resolve().parent),"
-            "'direct_url':json.loads(direct) if direct else None}))"
-        )
-        runtime = json.loads(subprocess.check_output([str(python), "-c", code], cwd=root, text=True))
-        self.native = Path(runtime["native"]).resolve()
-        self.python_package_root = Path(runtime["python_package_root"]).resolve()
-        if self.native.parent != self.python_package_root:
-            raise RuntimeError(
-                "uvicorn-rs benchmark loaded its native extension from a different package root: "
-                f"Python package {self.python_package_root}, extension {self.native}"
+        self.validate_native_extension = validate_native_extension
+        if validate_native_extension:
+            code = (
+                "import importlib.metadata as metadata,json,sys,uvicorn_rs,uvicorn_rs._native as n; "
+                "from pathlib import Path; "
+                "dist=metadata.distribution('uvicorn-rs'); "
+                "direct=dist.read_text('direct_url.json'); "
+                "print(json.dumps({'native':n.__file__,'python':sys.executable,'version':sys.version,"
+                "'python_package':uvicorn_rs.__file__,"
+                "'python_package_root':str(Path(uvicorn_rs.__file__).resolve().parent),"
+                "'direct_url':json.loads(direct) if direct else None}))"
             )
-        checkout = _git_checkout(self.python_package_root)
-        expected_root = root.resolve()
-        if checkout is not None and checkout != expected_root:
-            raise RuntimeError(
-                "uvicorn-rs benchmark loaded its Python package from a different Git checkout: "
-                f"measured source {expected_root}, imported package checkout {checkout}"
-            )
-        runtime["python_package_checkout"] = str(checkout) if checkout is not None else None
+            runtime = json.loads(subprocess.check_output([str(python), "-c", code], cwd=root, text=True))
+            self.native = Path(runtime["native"]).resolve()
+            self.python_package_root = Path(runtime["python_package_root"]).resolve()
+            if self.native.parent != self.python_package_root:
+                raise RuntimeError(
+                    "uvicorn-rs benchmark loaded its native extension from a different package root: "
+                    f"Python package {self.python_package_root}, extension {self.native}"
+                )
+            checkout = _git_checkout(self.python_package_root)
+            expected_root = root.resolve()
+            if checkout is not None and checkout != expected_root:
+                raise RuntimeError(
+                    "uvicorn-rs benchmark loaded its Python package from a different Git checkout: "
+                    f"measured source {expected_root}, imported package checkout {checkout}"
+                )
+            runtime["python_package_checkout"] = str(checkout) if checkout is not None else None
+        else:
+            runtime = {"native": None, "python": str(python), "version": None}
+            self.native = None
+            self.python_package_root = None
         self.runtime = runtime
         self.clients = [path.resolve() for path in clients]
         rust_sources = workspace_rust_source_paths(root)
@@ -478,12 +485,13 @@ class BenchmarkEvidence:
             "scripts/benchmark_evidence.py",
         ]
         self.source_paths = sorted(set(common + rust_sources + source_paths))
-        native_bytes = self.native.read_bytes()
-        markers = (b"coverage-injected", b"UVICORN_RS_COVERAGE_", b"__llvm_profile", b"__llvm_covmap")
-        if any(marker in native_bytes for marker in markers):
-            raise RuntimeError("installed native extension contains coverage/fault-injection markers")
-        if not allow_runtime_diagnostics and b"uvicorn-rs-runtime-diagnostics " in native_bytes:
-            raise RuntimeError("installed native extension contains runtime diagnostics; rebuild normal release")
+        if self.native is not None:
+            native_bytes = self.native.read_bytes()
+            markers = (b"coverage-injected", b"UVICORN_RS_COVERAGE_", b"__llvm_profile", b"__llvm_covmap")
+            if any(marker in native_bytes for marker in markers):
+                raise RuntimeError("installed native extension contains coverage/fault-injection markers")
+            if not allow_runtime_diagnostics and b"uvicorn-rs-runtime-diagnostics " in native_bytes:
+                raise RuntimeError("installed native extension contains runtime diagnostics; rebuild normal release")
         self.allow_runtime_diagnostics = allow_runtime_diagnostics
         self.before = self.snapshot()
         self.dependencies_before = self.dependency_snapshot(python)
@@ -583,7 +591,10 @@ print(json.dumps(result))
         return {
             "source_sha256": digest,
             "source_files": source,
-            "native_extension": {"path": str(self.native), "sha256": _sha256(self.native)},
+            "native_extension": (
+                {"path": str(self.native), "sha256": _sha256(self.native)}
+                if self.native is not None else None
+            ),
             "clients": {str(path): _sha256(path) for path in self.clients},
         }
 
@@ -600,8 +611,12 @@ print(json.dumps(result))
             "measurement_identity": {
                 "source_sha256_before": before["source_sha256"],
                 "source_sha256_after": after["source_sha256"],
-                "native_sha256_before": before["native_extension"]["sha256"],
-                "native_sha256_after": after["native_extension"]["sha256"],
+                "native_sha256_before": (
+                    before["native_extension"]["sha256"] if before["native_extension"] is not None else None
+                ),
+                "native_sha256_after": (
+                    after["native_extension"]["sha256"] if after["native_extension"] is not None else None
+                ),
                 "client_sha256_before": before["clients"],
                 "client_sha256_after": after["clients"],
             },

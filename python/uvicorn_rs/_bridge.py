@@ -3,6 +3,7 @@
 import array
 import asyncio
 import contextvars
+import os
 import socket
 import sys
 import time
@@ -14,18 +15,23 @@ error_logger = logging.getLogger("uvicorn.error")
 access_logger = logging.getLogger("uvicorn.access")
 
 
-def send_listener_fds(path, listeners):
-    """Transfer pre-bound TCP listeners to Rust during server startup."""
+def send_listener_fds(path, listeners, stop_event=None):
+    """Transfer pre-bound TCP listeners, stopping if Rust exits before bind."""
     if not hasattr(socket, "SCM_RIGHTS"):
         raise NotImplementedError("inherited TCP listeners require Unix descriptor passing")
     listeners = list(listeners)
     if not listeners:
         raise ValueError("at least one pre-bound TCP listener is required")
     for listener in listeners:
-        if listener.family not in (socket.AF_INET, socket.AF_INET6):
-            raise ValueError("only pre-bound IPv4 and IPv6 TCP listeners are supported")
-        if listener.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) != socket.SOCK_STREAM:
-            raise ValueError("the inherited socket must be a TCP stream listener")
+        # Uvicorn wraps --fd listeners as AF_UNIX even when the descriptor is
+        # an IPv4 or IPv6 socket. Detect the underlying descriptor's family so
+        # worker mode validates the same TCP listener that single-worker mode
+        # passes to the native server.
+        with socket.socket(fileno=os.dup(listener.fileno())) as actual_listener:
+            if actual_listener.family not in (socket.AF_INET, socket.AF_INET6):
+                raise ValueError("only pre-bound IPv4 and IPv6 TCP listeners are supported")
+            if actual_listener.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) != socket.SOCK_STREAM:
+                raise ValueError("the inherited socket must be a TCP stream listener")
     for listener in listeners:
         listener.setblocking(False)
     deadline = time.monotonic() + 5.0
@@ -34,6 +40,8 @@ def send_listener_fds(path, listeners):
             try:
                 control.connect(path)
             except (FileNotFoundError, ConnectionRefusedError):
+                if stop_event is not None and stop_event.is_set():
+                    return
                 if time.monotonic() >= deadline:
                     raise
                 time.sleep(0.01)
@@ -70,20 +78,39 @@ def log_concurrency_limit_rejection(
 
 async def invoke(app, scope, io):
     scope_type = scope.get("type")
+    response_started = False
+    lifespan_phase = "startup"
+    lifespan_failure_signaled = False
     if scope_type == "lifespan":
         error_logger.info("Waiting for application startup.")
 
     async def receive():
+        nonlocal lifespan_phase
         result = io.receive()
         if isinstance(result, dict):
             message = result
         else:
             message = await result
-        if scope_type == "lifespan" and message.get("type") == "lifespan.shutdown":
-            error_logger.info("Waiting for application shutdown.")
+        if scope_type == "lifespan":
+            message_type = message.get("type")
+            if message_type == "lifespan.startup":
+                lifespan_phase = "startup"
+            elif message_type == "lifespan.shutdown":
+                lifespan_phase = "shutdown"
+                error_logger.info("Waiting for application shutdown.")
         return message
 
     async def send(message):
+        nonlocal response_started, lifespan_failure_signaled
+        if (
+            scope_type == "http"
+            and isinstance(message, dict)
+            and message.get("type") == "http.response.start"
+        ):
+            # Uvicorn treats a response-start attempt as committed before its
+            # protocol validates status and headers. If validation fails, do
+            # not turn that exception into a second, synthetic HTTP 500.
+            response_started = True
         pending = io.send(message)
         if pending is not None:
             await pending
@@ -95,22 +122,68 @@ async def invoke(app, scope, io):
                 error_logger.info("Application startup complete.")
             elif event_type == "lifespan.shutdown.complete":
                 error_logger.info("Application shutdown complete.")
-        elif scope_type == "http" and event_type == "http.response.start" and access_logger.hasHandlers():
-            client = scope.get("client")
-            client_addr = "%s:%d" % client if client else ""
-            full_path = quote(scope["path"])
-            if scope["query_string"]:
-                full_path = f"{full_path}?{scope['query_string'].decode('ascii')}"
-            access_logger.info(
-                '%s - "%s %s HTTP/%s" %d',
-                client_addr,
-                scope["method"],
-                full_path,
-                scope["http_version"],
-                message["status"],
-            )
+            elif event_type in (
+                "lifespan.startup.failed",
+                "lifespan.shutdown.failed",
+            ):
+                lifespan_failure_signaled = True
+        elif scope_type == "http" and event_type == "http.response.start":
+            if access_logger.hasHandlers():
+                client = scope.get("client")
+                client_addr = "%s:%d" % client if client else ""
+                full_path = quote(scope["path"])
+                if scope["query_string"]:
+                    full_path = f"{full_path}?{scope['query_string'].decode('ascii')}"
+                access_logger.info(
+                    '%s - "%s %s HTTP/%s" %d',
+                    client_addr,
+                    scope["method"],
+                    full_path,
+                    scope["http_version"],
+                    message["status"],
+                )
 
-    await app(scope, receive, send)
+    try:
+        await app(scope, receive, send)
+    except BaseException as error:
+        if scope_type == "lifespan":
+            # Keep Python exceptions on their owning asyncio loop. Uvicorn
+            # converts these failures into lifecycle state, so send the same
+            # state transition through the native bridge after logging them.
+            if lifespan_failure_signaled:
+                return
+            if io.is_auto:
+                error_logger.info("ASGI 'lifespan' protocol appears unsupported.")
+            else:
+                error_logger.error(
+                    "Exception in 'lifespan' protocol\n",
+                    exc_info=(type(error), error, error.__traceback__),
+                )
+            io.report_exception(lifespan_phase)
+            return
+        if scope_type != "http":
+            raise
+        if response_started:
+            error_logger.exception("Exception in ASGI application")
+            try:
+                setattr(error, "_uvicorn_rs_logged_asgi_error", True)
+            except BaseException:
+                pass
+            raise
+        error_logger.exception("Exception in ASGI application")
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 500,
+                "headers": [(b"content-type", b"text/plain; charset=utf-8")],
+            }
+        )
+        await send(
+            {
+                "type": "http.response.body",
+                "body": b"" if scope.get("http_version") == "3" else b"Internal Server Error",
+            }
+        )
 
 
 async def invoke_with_reset_contextvars(app, scope, io):

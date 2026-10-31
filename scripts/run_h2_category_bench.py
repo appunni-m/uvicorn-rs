@@ -48,6 +48,25 @@ WORKLOADS = {
         "app": FASTAPI_APP,
         "client": {"mode": "fixed", "path": "/protocol", "expected_body": "http_version=2"},
     },
+    "fastapi-validated-route": {
+        "app": FASTAPI_APP,
+        "client": {
+            "mode": "fixed",
+            "path": "/items/7?repeat=3",
+            "expected_body": (
+                '{"item_id":21,"name":"item-7","active":true,'
+                '"labels":["python","asgi"]}'
+            ),
+        },
+    },
+    "fastapi-python-cpu": {
+        "app": FASTAPI_APP,
+        "client": {
+            "mode": "fixed",
+            "path": "/cpu/20000",
+            "expected_body": '{"iterations":20000,"checksum":499563}',
+        },
+    },
     "fixed": {
         "app": FASTAPI_APP,
         "client": {"mode": "fixed", "path": "/fixed"},

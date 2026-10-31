@@ -1,0 +1,30 @@
+{
+  "schema": "uvicorn-rs-parity/input@47",
+  "cases": [
+    {
+      "case_id": "websocket.wsproto-text-and-binary-round-trip",
+      "profile": "websocket-wsproto",
+      "operation": "websocket.message-exchange",
+      "covers": [
+        "websocket.message-exchange"
+      ],
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [
+          "other",
+          "parity"
+        ],
+        "messages": [
+          {
+            "kind": "text",
+            "value": "rust-python-boundary"
+          },
+          {
+            "kind": "binary_base64",
+            "value": "AAEC/3BhcnR5"
+          }
+        ]
+      }
+    }
+  ]
+}

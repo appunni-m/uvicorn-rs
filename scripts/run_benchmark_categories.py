@@ -140,6 +140,18 @@ def workload_names(path):
     raise ValueError(f"{path}: no WORKLOADS dictionary")
 
 
+def default_category_workloads(label, names):
+    """Select FastAPI comparisons while excluding protocol-only probes."""
+    if label == "http1":
+        return [name for name in names if name.startswith("fastapi-")]
+    if label in {"http2", "http3"}:
+        # These category modules also use short names for ordinary FastAPI
+        # workloads. Keep only negotiated-protocol probes out of the matched
+        # FastAPI comparison class.
+        return [name for name in names if not name.startswith("protocol-")]
+    return list(names)
+
+
 def expected_rows(path, label, selected_servers, repetitions, selected_workloads=None):
     if label == "lifecycle":
         return {(label, name, number) for name in selected_servers
@@ -236,7 +248,7 @@ def capture_identity(root, python, evidence_class):
     clients = [root / "target/release" / name for name in PROBE_NAMES]
     for path in clients:
         normal_binary(path)
-    extra_dependencies = {"uvicorn-rs-py": ["uvicorn_rs", "uvicorn"]}
+    extra_dependencies = {"uvicorn-rs": ["uvicorn_rs", "uvicorn"]}
     try:
         importlib.metadata.distribution("fastapi")
     except importlib.metadata.PackageNotFoundError:
@@ -251,12 +263,12 @@ def capture_identity(root, python, evidence_class):
                                   artifacts_dir=Path(directory),
                                   extra_dependencies=extra_dependencies)
         dependencies = evidence.dependencies_before
-        required = {"hypercorn", "h11", "h2", "aioquic", "uvloop", "httptools", "websockets", "uvicorn-rs-py"}
+        required = {"hypercorn", "h11", "h2", "aioquic", "uvloop", "httptools", "websockets", "uvicorn-rs"}
         if fastapi_selected:
             required.update(FASTAPI_BENCHMARK_DISTRIBUTIONS)
         if missing := sorted(required - dependencies.keys()):
             raise RuntimeError(f"frozen benchmark dependencies are missing: {missing}")
-        modified = [name for name, value in dependencies.items() if name != "uvicorn-rs-py" and
+        modified = [name for name, value in dependencies.items() if name != "uvicorn-rs" and
                     (value["record_content_mismatches"] or value["unrecorded_source_files"] or
                      (value["direct_url"] and value["direct_url"].get("dir_info", {}).get("editable")))]
         if modified:
@@ -381,6 +393,13 @@ def main():
             if non_fastapi:
                 parser.error("the maintained cross-category comparison accepts upstream FastAPI workloads only: "
                              + ", ".join(non_fastapi))
+        elif selected_category in {"http2", "http3"}:
+            protocol_only = sorted(name for name in args.workloads if name.startswith("protocol-"))
+            if protocol_only:
+                parser.error(
+                    "protocol-only probes are separate from the stock-FastAPI comparison: "
+                    + ", ".join(protocol_only)
+                )
     if args.capture_identity and (args.output_dir or args.parity_before_identity or args.parity_report):
         parser.error("capture mode cannot also run the suite")
     if not args.capture_identity and (not args.parity_before_identity or not args.parity_report):
@@ -489,8 +508,8 @@ def main():
                 workloads = workload_names(script)
                 if args.workloads and args.category == [label]:
                     workloads = list(dict.fromkeys(args.workloads))
-                elif label == "http1":
-                    workloads = [workload for workload in workloads if workload.startswith("fastapi-")]
+                else:
+                    workloads = default_category_workloads(label, workloads)
                 category_concurrency = args.h3_concurrency if label == "http3" else args.concurrency
                 command += ["--workloads", *workloads, "--duration", str(args.duration),
                             "--warmup", str(args.warmup), "--concurrency", str(category_concurrency)]

@@ -55,11 +55,15 @@ class _BenchmarkCaseFailure(RuntimeError):
         identity_result: dict | None = None,
         partial_client_metrics: dict | None = None,
         asgi_timings_path: Path | None = None,
+        runtime_diagnostics: dict | None = None,
+        runtime_diagnostics_error: str | None = None,
     ) -> None:
         super().__init__(message)
         self.identity_result = identity_result
         self.partial_client_metrics = partial_client_metrics
         self.asgi_timings_path = asgi_timings_path
+        self.runtime_diagnostics = runtime_diagnostics
+        self.runtime_diagnostics_error = runtime_diagnostics_error
 
 
 class _HttpClientFailure(RuntimeError):
@@ -544,6 +548,7 @@ def _sample(
         text=True,
     )
     client = None
+    server_cleanup_attempted = False
     try:
         _wait_ready(process, port, log)
         case = definition["client"]
@@ -602,6 +607,28 @@ def _sample(
             metrics["performance_evidence_status"] = "diagnostic_only"
         return metrics
     except Exception as error:
+        stop_client(client)
+        server_cleanup_attempted = True
+        diagnostic_errors = []
+        try:
+            _stop_server(process)
+        except Exception as stop_error:
+            diagnostic_errors.append(
+                f"server shutdown failed while capturing diagnostics: {stop_error}"
+            )
+        runtime_diagnostics = None
+        if server_name.startswith("uvicorn-rs-"):
+            try:
+                runtime_diagnostics = _runtime_diagnostics(log)
+            except (OSError, ValueError) as diagnostic_error:
+                diagnostic_errors.append(
+                    f"could not read Rust runtime diagnostics: {diagnostic_error}"
+                )
+            if runtime_diagnostics is None and require_runtime_diagnostics:
+                diagnostic_errors.append(
+                    "Rust server did not emit runtime diagnostics after shutdown"
+                )
+        runtime_diagnostics_error = "; ".join(diagnostic_errors) or None
         log.seek(0)
         server_output = log.read()
         if evidence is not None and identity_before is not None and identity_result is None:
@@ -619,10 +646,13 @@ def _sample(
             identity_result,
             getattr(error, "partial_client_metrics", None),
             asgi_timings_path,
+            runtime_diagnostics,
+            runtime_diagnostics_error,
         ) from error
     finally:
         stop_client(client)
-        _stop_server(process)
+        if not server_cleanup_attempted:
+            _stop_server(process)
         log.close()
 
 
@@ -852,6 +882,10 @@ def main() -> None:
                         partial_client_metrics = None
                     asgi_stage_diagnostics = None
                     asgi_stage_diagnostics_error = None
+                    runtime_diagnostics = getattr(error, "runtime_diagnostics", None)
+                    runtime_diagnostics_error = getattr(
+                        error, "runtime_diagnostics_error", None
+                    )
                     asgi_timings_path = getattr(error, "asgi_timings_path", None)
                     if isinstance(asgi_timings_path, Path):
                         if asgi_timings_path.is_file():
@@ -920,6 +954,10 @@ def main() -> None:
                         row["asgi_stage_diagnostics"] = asgi_stage_diagnostics
                     if asgi_stage_diagnostics_error is not None:
                         row["asgi_stage_diagnostics_error"] = asgi_stage_diagnostics_error
+                    if runtime_diagnostics is not None:
+                        row["runtime_diagnostics"] = runtime_diagnostics
+                    if runtime_diagnostics_error is not None:
+                        row["runtime_diagnostics_error"] = runtime_diagnostics_error
                     if identity_result is not None:
                         row["measurement_identity"] = identity_result.get(
                             "measurement_identity"

@@ -27,6 +27,8 @@ import time
 import zipfile
 from pathlib import Path
 
+from build_input_identity import build_input_hashes
+
 
 async def consume_wheel():
     from uvicorn_rs import Server
@@ -151,6 +153,12 @@ def probe_installed_cli_tls_and_shutdown():
     checkout = Path(__file__).resolve().parents[1]
     with tempfile.TemporaryDirectory(prefix="uvicorn-rs-installed-cli-") as directory:
         workdir = Path(directory)
+        app_root = workdir / "app"
+        app_root.mkdir()
+        shutil.copyfile(
+            checkout / "examples" / "lifespan_asgi.py",
+            app_root / "lifespan_asgi.py",
+        )
         openssl_config = workdir / "openssl.cnf"
         certificate = workdir / "cert.pem"
         private_key = workdir / "key.pem"
@@ -208,7 +216,7 @@ IP.1 = 127.0.0.1
             raise RuntimeError("installed wheel did not expose the uvicorn console script")
         command = [
             str(uvicorn_script),
-            "examples.lifespan_asgi:app",
+            "lifespan_asgi:app",
             "--host",
             "127.0.0.1",
             "--port",
@@ -221,7 +229,9 @@ IP.1 = 127.0.0.1
             "2",
         ]
         environment = os.environ.copy()
-        environment["PYTHONPATH"] = str(checkout)
+        # Keep the sample app importable without putting the checkout's Python
+        # package ahead of the installed wheel under test.
+        environment["PYTHONPATH"] = str(app_root)
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         context.check_hostname = False
         context.verify_mode = ssl.CERT_NONE
@@ -353,7 +363,7 @@ def main():
     import uvicorn_rs
     from uvicorn_rs import _native
     import uvicorn
-    import uvicorn.main as uvicorn_main
+    uvicorn_main = importlib.import_module("uvicorn.main")
 
     native = Path(_native.__file__).resolve()
     package = Path(uvicorn_rs.__file__).resolve()
@@ -388,6 +398,11 @@ def main():
             raise RuntimeError("wheel omitted a required uvicorn namespace file")
         if uvicorn_package.read_bytes() != archive.read("uvicorn/__init__.py"):
             raise RuntimeError("imported uvicorn namespace does not match the supplied wheel")
+        if (
+            Path(uvicorn_main.__file__).read_bytes()
+            != archive.read("uvicorn/main.py")
+        ):
+            raise RuntimeError("imported uvicorn CLI module does not match the supplied wheel")
         metadata_name = next(
             name for name in archive.namelist() if name.endswith(".dist-info/METADATA")
         )
@@ -399,8 +414,8 @@ def main():
             if ": " in line and not line.startswith((" ", "\t")):
                 key, value = line.split(": ", 1)
                 metadata_fields.setdefault(key, []).append(value)
-        if metadata_fields.get("Name") != ["uvicorn-rs-py"]:
-            raise RuntimeError("wheel metadata does not identify uvicorn-rs-py")
+        if metadata_fields.get("Name") != ["uvicorn-rs"]:
+            raise RuntimeError("wheel metadata does not identify the uvicorn-rs distribution")
         if "standard" not in metadata_fields.get("Provides-Extra", []):
             raise RuntimeError("wheel metadata omits the Uvicorn-compatible standard extra")
         entry_points = configparser.ConfigParser(interpolation=None)
@@ -510,18 +525,8 @@ def main():
         "consumer_probe_sha256": hashlib.sha256(
             Path(__file__).read_bytes()
         ).hexdigest(),
-        "build_inputs_sha256": {
-            relative_path: hashlib.sha256(
-                (Path(__file__).resolve().parents[1] / relative_path).read_bytes()
-            ).hexdigest()
-            for relative_path in (
-                "Cargo.toml",
-                "Cargo.lock",
-                "pyproject.toml",
-                "src/lib.rs",
-            )
-        },
-        "version": importlib.metadata.version("uvicorn-rs-py"),
+        "build_inputs_sha256": build_input_hashes(Path(__file__).resolve().parents[1]),
+        "version": importlib.metadata.version("uvicorn-rs"),
         "wheel": str(args.wheel.resolve()),
         "wheel_sha256": hashlib.sha256(args.wheel.read_bytes()).hexdigest(),
         "native_path": str(native),

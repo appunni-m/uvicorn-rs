@@ -244,7 +244,7 @@ def main():
             "app_sha256": hashlib.sha256(
                 (ROOT / "examples/lifespan_asgi.py").read_bytes()
             ).hexdigest(),
-            "server_version": importlib.metadata.version("uvicorn-rs-py"),
+            "server_version": importlib.metadata.version("uvicorn-rs"),
             "server_package": str(package),
             "native_path": str(native),
             "native_sha256": hashlib.sha256(native.read_bytes()).hexdigest(),

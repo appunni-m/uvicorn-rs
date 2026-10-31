@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@33",
+  "schema": "uvicorn-rs-parity/input@47",
   "cases": [
     {
       "case_id": "http2.scope-query-header-and-body",
@@ -185,6 +185,76 @@
       }
     },
     {
+      "case_id": "http2.invalid-response-header-name",
+      "profile": "http2",
+      "operation": "http.invalid-response-header",
+      "covers": [
+        "http.invalid-response-header"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/invalid-asgi/header-name",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.invalid-response-header-value",
+      "profile": "http2",
+      "operation": "http.invalid-response-header",
+      "covers": [
+        "http.invalid-response-header"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/invalid-asgi/header-value",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.invalid-asgi-response-status-range",
+      "profile": "http2",
+      "operation": "http.invalid-response-start",
+      "covers": [
+        "http.invalid-response-start"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/invalid-asgi/invalid-status",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.invalid-asgi-response-status-type",
+      "profile": "http2",
+      "operation": "http.invalid-response-start",
+      "covers": [
+        "http.invalid-response-start"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/invalid-asgi/status-not-integer",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.invalid-asgi-response-headers-container",
+      "profile": "http2",
+      "operation": "http.invalid-response-start",
+      "covers": [
+        "http.invalid-response-start"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/invalid-asgi/headers-not-iterable",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
       "case_id": "http2.application-error-before-response-start",
       "profile": "http2",
       "operation": "http.application-error",
@@ -208,6 +278,63 @@
       "verification": "fault-contract",
       "fault": {
         "point": "http.app-task.panic-before-response-start",
+        "contract": "http2-500-generic-error-body"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http2.scope-extension-early-hint-set-item",
+      "profile": "http2",
+      "operation": "http.application-status",
+      "covers": [
+        "http.application-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "scope.http2.extensions.early-hint.set-item",
+        "contract": "http2-500-generic-error-body"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http2.scope-extension-response-trailers-set-item",
+      "profile": "http2",
+      "operation": "http.application-status",
+      "covers": [
+        "http.application-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "scope.http2.extensions.response-trailers.set-item",
+        "contract": "http2-500-generic-error-body"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http2.scope-extensions-set-item",
+      "profile": "http2",
+      "operation": "http.application-status",
+      "covers": [
+        "http.application-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "scope.http2.extensions.set-item",
         "contract": "http2-500-generic-error-body"
       },
       "request": {
@@ -370,6 +497,23 @@
       ]
     },
     {
+      "case_id": "http2.zero-concurrency-rejects-request-with-503",
+      "profile": "http2",
+      "operation": "http.concurrency-limit",
+      "covers": [
+        "http.concurrency-limit"
+      ],
+      "server_options": {
+        "limit_concurrency": 0
+      },
+      "request": {
+        "method": "GET",
+        "path": "/scope?concurrency=zero",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
       "case_id": "http2.final-response-completes-before-app-return",
       "profile": "http2",
       "operation": "http.response-final-before-app-return",
@@ -467,16 +611,381 @@
       }
     },
     {
-      "case_id": "http2.response-headers-preserve-duplicate-value-order",
+      "case_id": "http2.response-headers-preserve-asgi-order",
       "profile": "http2",
-      "operation": "http.response-headers",
+      "operation": "http.response-headers-ordered",
       "covers": [
-        "http.response-headers"
+        "http.response-headers-ordered"
       ],
       "request": {
         "method": "GET",
         "path": "/response-headers-order",
         "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.response-header-capacity-over-map-limit",
+      "profile": "http2",
+      "operation": "http2.response-header-capacity-delivery",
+      "covers": [
+        "http2.response-header-capacity-delivery"
+      ],
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/response-header-capacity?count=24576",
+          "headers": [],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/scope",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
+      "case_id": "http2.response-early-hints",
+      "profile": "http2",
+      "operation": "http2.response-early-hints",
+      "covers": [
+        "http2.response-early-hints"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-early-hints",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.invalid-response-early-hint-link-value",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-early-hint-invalid-header",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.response-early-hint-after-response-start",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-early-hint-after-start",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.response-trailers-before-start",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers-before-start",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.response-trailers-before-body-complete",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers-before-body-complete",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.response-trailers-without-negotiation",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers-without-negotiation",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.response-trailers-pseudo-header-rejected",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers-pseudo-header",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.response-trailers",
+      "profile": "http2",
+      "operation": "http2.response-trailers",
+      "covers": [
+        "http2.response-trailers"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers",
+        "headers": [
+          [
+            "te",
+            "trailers"
+          ]
+        ],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.response-trailer-capacity-delivery-at-limit",
+      "profile": "http2",
+      "operation": "http2.response-trailer-capacity-delivery",
+      "covers": [
+        "http2.response-trailer-capacity-delivery"
+      ],
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/response-trailers-capacity?count=24576",
+          "headers": [["te", "trailers"]],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/scope",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
+      "case_id": "http2.response-trailer-capacity-large-parity",
+      "profile": "http2",
+      "operation": "http2.response-trailer-capacity-large-parity",
+      "covers": [
+        "http2.response-trailer-capacity-large-parity"
+      ],
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/response-trailers-capacity?count=32769",
+          "headers": [["te", "trailers"]],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/scope",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
+      "case_id": "http2.response-trailer-capacity-one-over-parity",
+      "profile": "http2",
+      "operation": "http2.response-trailer-capacity-one-over-parity",
+      "covers": [
+        "http2.response-trailer-capacity-one-over-parity"
+      ],
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/response-trailers-capacity?count=24577",
+          "headers": [["te", "trailers"]],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/scope",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
+      "case_id": "http2.invalid-response-trailer-name",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers-invalid-header-name",
+        "headers": [
+          ["te", "trailers"]
+        ],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.invalid-response-trailer-value",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers-invalid-header-value",
+        "headers": [
+          ["te", "trailers"]
+        ],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.response-trailers-without-te",
+      "profile": "http2",
+      "operation": "http2.response-trailers-without-te",
+      "covers": [
+        "http2.response-trailers-without-te"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers-without-te",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http2.early-hint-disconnected-surfaces-error",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.response.early-hint.disconnected",
+        "contract": "http2-response-event-fault-consumed-and-status-observed"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/response-early-hints",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http2.early-hint-channel-closed-surfaces-error",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.response.early-hint.channel-closed",
+        "contract": "http2-response-event-fault-consumed-and-status-observed"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/response-early-hints",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http2.trailers-disconnected-surfaces-error",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.response.trailers.disconnected",
+        "contract": "http2-response-event-fault-consumed-and-status-observed"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers",
+        "headers": [["te", "trailers"]],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http2.trailers-channel-closed-surfaces-error",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.response.trailers.channel-closed",
+        "contract": "http2-response-event-fault-consumed-and-status-observed"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers",
+        "headers": [["te", "trailers"]],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http2.trailers-channel-full-backpressure-completes",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.response.trailers.channel-full",
+        "contract": "http2-response-event-fault-consumed-and-status-observed"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers",
+        "headers": [["te", "trailers"]],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http2.trailers-full-send-closed-surfaces-error",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.response.trailers.full-send-closed",
+        "contract": "http2-response-event-fault-consumed-and-status-observed"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers",
+        "headers": [["te", "trailers"]],
         "body_base64": ""
       }
     },
@@ -502,6 +1011,226 @@
         "pause_before_read_ms": 100,
         "chunks": 32,
         "chunk_bytes": 2048
+      }
+    },
+    {
+      "case_id": "fault.http2.http-response-early-hint-eq-surfaces-error",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "asgi.event-type.http-response-early-hint.eq",
+        "contract": "http2-response-event-fault-consumed-and-status-observed"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/response-early-hints",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http2.early-hint-links-get-item-surfaces-error",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.response.early-hint.links.get-item",
+        "contract": "http2-response-event-fault-consumed-and-status-observed"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/response-early-hints",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http2.early-hint-links-extract-surfaces-error",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.response.early-hint.links.extract",
+        "contract": "http2-response-event-fault-consumed-and-status-observed"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/response-early-hints",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http2.http-response-trailers-eq-surfaces-error",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "asgi.event-type.http-response-trailers.eq",
+        "contract": "http2-response-event-fault-consumed-and-status-observed"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers",
+        "headers": [
+          [
+            "te",
+            "trailers"
+          ]
+        ],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http2.trailers-headers-get-item-surfaces-error",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.response.trailers.headers.get-item",
+        "contract": "http2-response-event-fault-consumed-and-status-observed"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers",
+        "headers": [
+          [
+            "te",
+            "trailers"
+          ]
+        ],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http2.trailers-headers-extract-surfaces-error",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.response.trailers.headers.extract",
+        "contract": "http2-response-event-fault-consumed-and-status-observed"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers",
+        "headers": [
+          [
+            "te",
+            "trailers"
+          ]
+        ],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http2.trailers-more-trailers-get-item-surfaces-error",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.response.trailers.more-trailers.get-item",
+        "contract": "http2-response-event-fault-consumed-and-status-observed"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers",
+        "headers": [
+          [
+            "te",
+            "trailers"
+          ]
+        ],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http2.trailers-more-trailers-extract-surfaces-error",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.response.trailers.more-trailers.extract",
+        "contract": "http2-response-event-fault-consumed-and-status-observed"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers",
+        "headers": [
+          [
+            "te",
+            "trailers"
+          ]
+        ],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http2.trailers-mutex-poison-surfaces-error",
+      "profile": "http2",
+      "operation": "http.invalid-asgi-message-status",
+      "covers": [
+        "http.invalid-asgi-message-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.response.trailers.mutex.poison",
+        "contract": "http2-response-event-fault-consumed-and-status-observed"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers",
+        "headers": [
+          [
+            "te",
+            "trailers"
+          ]
+        ],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http2.application-returns-before-required-trailers",
+      "profile": "http2",
+      "operation": "http2.incomplete-response-trailers",
+      "covers": [
+        "http2.incomplete-response-trailers"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers-missing",
+        "headers": [
+          [
+            "te",
+            "trailers"
+          ]
+        ],
+        "body_base64": ""
       }
     }
   ]

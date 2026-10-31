@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@33",
+  "schema": "uvicorn-rs-parity/input@47",
   "cases": [
     {
       "case_id": "http3.sequential-responses-one-connection",
@@ -2707,6 +2707,31 @@
       }
     },
     {
+      "case_id": "fault.http3.legacy-default-header-error-resets-stream",
+      "profile": "http3",
+      "operation": "http3.injected-stream-error",
+      "covers": [
+        "http3.injected-stream-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.legacy-path.selection",
+        "contract": "http3-legacy-default-header-error-resets-stream"
+      },
+      "server_options": {
+        "headers": [
+          "invalid name: value"
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": "",
+        "expect_response_error": true
+      }
+    },
+    {
       "case_id": "fault.http3.body-pump-connection-closed",
       "profile": "http3",
       "operation": "http3.body-pump-early-exit",
@@ -2813,6 +2838,11 @@
         "point": "http3.native-body-pump.stop-wait",
         "contract": "http3-body-pump-error-stop-disconnect-followup-200"
       },
+      "server_options": {
+        "headers": [
+          "X-ASGI-Coverage-Probe:present"
+        ]
+      },
       "request": {
         "method": "POST",
         "path": "/h3-upload-disconnect",
@@ -2837,6 +2867,11 @@
       "fault": {
         "point": "http3.native-body-pump.error-stop-wait",
         "contract": "http3-body-pump-error-stop-disconnect-followup-200"
+      },
+      "server_options": {
+        "headers": [
+          "X-ASGI-Coverage-Probe:present"
+        ]
       },
       "request": {
         "method": "POST",
@@ -2903,7 +2938,7 @@
       },
       "request": {
         "method": "POST",
-        "path": "/return-before-response-start",
+        "path": "/h3-upload-disconnect",
         "headers": [],
         "body_base64": ""
       }
@@ -3126,6 +3161,11 @@
         "point": "http3.body-pump.error.request-stop",
         "contract": "http3-body-pump-error-stop-disconnect-followup-200"
       },
+      "server_options": {
+        "headers": [
+          "X-ASGI-Coverage-Probe:present"
+        ]
+      },
       "request": {
         "method": "POST",
         "path": "/h3-upload-disconnect",
@@ -3150,6 +3190,11 @@
       "fault": {
         "point": "http3.legacy-path.selection",
         "contract": "http3-legacy-body-pump-delivers-disconnect-followup-200"
+      },
+      "server_options": {
+        "headers": [
+          "X-ASGI-Coverage-Probe:present"
+        ]
       },
       "request": {
         "method": "POST",
@@ -3240,6 +3285,31 @@
         "chunk_bytes": 4096
       },
       "h3_grease": false
+    },
+    {
+      "case_id": "fault.http3.native-default-header-error-resets-stream",
+      "profile": "http3",
+      "operation": "http3.injected-stream-error",
+      "covers": [
+        "http3.injected-stream-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.default-header.response-finalization",
+        "contract": "http3-stream-reset-on-runtime-error"
+      },
+      "server_options": {
+        "headers": [
+          "invalid name: value"
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": "",
+        "expect_response_error": true
+      }
     }
   ]
 }

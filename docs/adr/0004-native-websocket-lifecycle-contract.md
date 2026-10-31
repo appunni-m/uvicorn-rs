@@ -2,9 +2,14 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-- **Status:** Partially implemented; native HTTP/1.1 WebSocket transport is provisional, while the shared framework contract and lifecycle integration remain proposed
+- **Status:** Partially implemented; native HTTP/1.1 handshake/session handling is shared with the ASGI adapter, while full compatibility and framework lifecycle integration remain open
 - **Date:** 2026-10-12
 - **Related work:** Kata `wb4y`, `sw8s`, Starlette-RS `wkz8`, FastAPI-RS `s08y`
+
+> **Current package layout:** This ADR records the earlier split H3 packages and
+> lifecycle crate name. The accepted layout now puts optional HTTP/3 behind
+> `uvicorn-rs`'s `http3` feature and names the lifecycle crate
+> `asgi-lifespan-protocol-rs`; see [ADR 0006](0006-single-native-server-crate.md).
 
 ## Context
 
@@ -14,8 +19,8 @@ request/response streams, but it does not define a bidirectional WebSocket
 session or application startup and shutdown.
 
 The current `uvicorn-rs` crate serves HTTP/1.1, HTTP/2, and HTTP/3 Tower
-services and provides a provisional HTTP/1.1 WebSocket handshake/session API.
-The selected WebSocket report below predates the current 214-case native
+services and provides an HTTP/1.1 WebSocket handshake/session API.
+The selected WebSocket report below predates the current native
 manifest: it selected 13 focused cleartext HTTP/1.1 WebSocket cases from the
 then 101-case manifest. All 13 selected cases passed with complete per-case
 attribution and zero case failures, infrastructure failures, transient
@@ -28,35 +33,35 @@ conformance result. Coverage-MCP follow-up matched the source receipt and
 reported `tests: passed`, with 32 missing region groups and 17 missing line
 groups in `crates/uvicorn-rs/src/websocket.rs`. This selected report does not
 establish the current full-matrix coverage gate; see the
-[unified coverage status](../coverage.md#current-unified-coverage-status-2026-10-17)
-for the latest source-bound evidence. The cases exercise text/binary echo,
+[unified coverage status](../coverage.md#current-unified-coverage-status-2026-10-22)
+for current source-bound evidence. The cases exercise text/binary echo,
 Ping/Pong, close exchange,
 shutdown close, selected handshake rejection, and subprotocol/header rules.
 They do not complete the full handshake inventory. TLS, HTTP/2, and HTTP/3
-WebSockets, ASGI mapping, and framework-native integration remain open. The API depends on the server's
-HTTP/1.1 upgrade capability and is not a framework-neutral shared contract. A new
-`native-app-contract` crate prototypes runtime-neutral application
-startup/shutdown hooks, consumed optionally by the core's TCP/TLS and HTTP/3
-entry points.
+WebSockets and framework-native integration remain open. The `uvicorn-rs-py`
+adapter now builds `WebSocketUpgrade` from the native HTTP/1.1 request and uses
+its handshake response, registration, and `WebSocketSession`; Python still
+owns ASGI scope/event conversion and application scheduling. The API depends
+on the server's HTTP/1.1 upgrade capability and is not a framework-neutral
+contract. Runtime-neutral startup and shutdown hooks live in
+`asgi-lifespan-protocol-rs` and are consumed optionally by the server.
 Starlette-RS has WebSocket and lifespan state machines for its Python ASGI
 implementation, while its current `NativeApplication` is HTTP-only. An archived
 receipt records HTTP composition through Starlette-RS and the Uvicorn core on a
-prior dirty sibling snapshot. The current FastAPI-native example references a
-missing sibling crate and is not presently reproducible; in any case, that
-receipt does not establish native WebSocket or lifecycle support. These are
-separate gaps from the existing Python ASGI path.
+prior dirty sibling snapshot. That receipt does not establish current exact-
+source native WebSocket or lifecycle composition. These are separate gaps
+from the existing Python ASGI path.
 
 ADR 0003 selects the package direction: native transport and framework contracts
 belong to `uvicorn-rs`, Starlette-RS, and FastAPI-RS. The optional
 `uvicorn-rs-py`, `starlette-rs-py`, and `fastapi-rs-py` clients own Python
-object conversion and upstream Python-package compatibility. The intended
-Python mode will map the native transport/session contract to ASGI WebSocket
-and lifespan events on the application's Python event loop. `uvicorn-rs-py`
-now delegates HTTP protocol handling to the native Rust transport, while Python
-still builds ASGI scopes and events and invokes the application. The generic
-native `ConnectionUpgrade` lifecycle has not been mapped to ASGI WebSocket
-events. Those Python calls remain a language boundary; they are not present in
-the native Rust path.
+object conversion and upstream Python-package compatibility. `uvicorn-rs-py`
+delegates HTTP protocol handling and HTTP/1.1 WebSocket handshake/session
+ownership to the native Rust server, while Python builds ASGI scopes and events
+and invokes the application on its event loop. The separately named
+`asgi-lifespan-protocol-rs` package supplies native lifecycle hooks; it is not
+the ASGI lifespan event protocol. These Python calls remain a language
+boundary and are not present in the native Rust path.
 
 WebSocket transport depends on the HTTP version. HTTP/1.1 uses the RFC 6455
 Upgrade handshake. HTTP/2 uses Extended CONNECT under RFC 8441; HTTP/3 uses
@@ -64,7 +69,7 @@ the corresponding mechanism in RFC 9220. HTTP/2 and HTTP/3 do not use the
 HTTP/1.1 `101 Switching Protocols` handshake. The transport adapter must own
 those differences.
 
-## Decision proposal
+## Decisions
 
 ### Keep ordinary HTTP on Tower
 
@@ -73,39 +78,27 @@ Keep the HTTP-only service contract in ADR 0003. Do not replace streaming
 Hyper, Quinn, or protocol-specific stream types in Starlette-RS or
 FastAPI-RS.
 
-### Add only the missing shared contract
+### Keep WebSocket transport in `uvicorn-rs`
 
-Keep the server-neutral contract crate small. Its current prototype contains
-only lifecycle hooks and has no dependencies. The crate must not depend on
-Tokio, Hyper, Quinn, Uvicorn-RS, Starlette-RS, FastAPI-RS, PyO3, or a Python
-runtime. Add a WebSocket contract only after its API has been reviewed. The
-crate name and current lifecycle method signatures remain provisional until
-the same contract compiles in all three repositories.
+`WebSocketUpgrade` and `WebSocketSession` belong to the native server crate:
+the server owns HTTP/1.1 upgrade validation, RFC 6455 framing, connection
+lifetime, and graceful shutdown. Native Rust services and the Python ASGI
+adapter use this same path. The adapter translates between the native session
+and ASGI events without moving Python application calls onto Tokio.
+Native Rust services use `with_subprotocol` to require that the selected token
+was offered by the client. The ASGI adapter uses
+`with_application_subprotocol` to preserve Uvicorn 0.54.0 behavior: it returns
+a syntactically valid application-selected token even when the client did not
+offer it. The focused `websocket.unoffered-subprotocol-selection` live parity
+case verifies that behavior; it does not establish broader invalid-token or
+WebSocket compatibility.
 
-The framework-facing shape should provide:
-
-- A typed WebSocket upgrade capability for a matched native route.
-- An accept result containing the selected subprotocol and permitted
-  handshake headers, or an HTTP denial response before the handshake is
-  committed.
-- A protocol-neutral session with text, binary, and close messages. The
-  transport owns framing, masking, Ping/Pong handling, and HTTP-version
-  handshake translation. A session send waits for downstream capacity;
-  implementations must not require an unbounded message queue.
-- A receive result that distinguishes a peer close from a transport failure,
-  and a close value that preserves the code and reason where the peer sent
-  them.
-- Cancellation by dropping the session future or by an explicit cancellation
-  value supplied by the server. A reset or disconnect cancels only the
-  affected stream/session; it must not cancel sibling HTTP/2 or HTTP/3
-  streams.
-
-The contract must coexist with the HTTP request/response service contract. It must not
-encode a WebSocket session as an `http_body::Body` or require a framework to
-depend on a server-owned upgrade type. The implementation spike must prove a
-route can choose between an ordinary HTTP response, an HTTP denial, and an
-accepted session without the application constructing a protocol-specific
-status line.
+Keep `asgi-lifespan-protocol-rs` as the separate runtime-neutral lifecycle
+package. It contains lifecycle hooks, not WebSocket transport and not Python
+ASGI events. Do not create a `native-app-contract` replacement package or
+another standalone WebSocket contract crate. HTTP/2 and HTTP/3 WebSocket
+support require their own transport-specific implementations and evidence;
+the current HTTP/1.1 API does not imply those protocols are supported.
 
 ### Make lifecycle ownership explicit
 
@@ -125,8 +118,10 @@ changing an HTTP response whose body was already committed. A timed-out hook
 future is dropped. The runtime contract must not own a Tokio runtime or choose
 a framework's state representation.
 
-The current lifecycle spike is `native_app_contract::ApplicationLifecycle`,
-re-exported by `uvicorn_rs` and optionally configured in `ServerConfig`.
+The current lifecycle interface is
+`asgi_lifespan_protocol_rs::ApplicationLifecycle`, re-exported by `uvicorn_rs`
+and optionally configured in `ServerConfig`. Its accepted name and package
+boundaries are recorded in [ADR 0006](0006-single-native-server-crate.md).
 It is not the ASGI lifespan event protocol. Seven target-only live inputs now
 exercise startup state before request dispatch, H1/H2/H3 drain order, startup
 failure and timeout, shutdown failure and timeout, timeout cancellation, and
@@ -138,19 +133,21 @@ connection closure. It does not establish ASGI `http.disconnect` or identify the
 request-lifetime receipt (`benchmarks/results/2026-10-12/native-request-lifetime-live/report.md`).
 The earlier 34-input package-move result remains in the
 package-promotion receipt (`benchmarks/results/2026-10-12/native-package-promotion-live/report.md`).
-The [`native-app-contract` 0.1.0 crate](https://crates.io/crates/native-app-contract/0.1.0)
-is now published and exposes lifecycle hooks only. Starlette-RS/FastAPI-RS do
-not yet consume it on their current main branches.
+The earlier `native-app-contract` registry identity is historical. The current
+workspace and planned release use `asgi-lifespan-protocol-rs`; the old name is
+not the package identity for this architecture. Starlette-RS/FastAPI-RS do not
+yet consume the current lifecycle crate on their current main branches.
 
 ### Preserve dependency direction
 
-The proposed Rust-native graph is:
+The intended Rust-native dependency direction is:
 
 ```text
-FastAPI-RS native app -> Starlette-RS native app -> shared app contract
-uvicorn-rs native server --------------------------> shared app contract
-uvicorn-rs-py -> Python ASGI callable (compatibility path)
-fastapi-rs-py / starlette-rs-py -> Python framework APIs (compatibility paths)
+FastAPI-RS native app -> Starlette-RS native app
+FastAPI-RS native app --optional integration--> uvicorn-rs
+uvicorn-rs -> asgi-lifespan-protocol-rs
+uvicorn-rs-py -> uvicorn-rs -> Python ASGI callable
+fastapi-rs-py / starlette-rs-py -> Python framework APIs
 ```
 
 Starlette-RS remains independent of Uvicorn-RS. FastAPI-RS uses Starlette-RS
@@ -170,7 +167,7 @@ requirements before that combination is listed as generally supported.
 
 | Transport | Current prototype | Required live cases before general support is claimed |
 |---|---|---|
-| HTTP/1.1, cleartext and TLS | Provisional native `WebSocketUpgrade` and `WebSocketSession` API; 13 selected cleartext cases pass 13/13 with complete per-case attribution. This selected result is not aggregate coverage; aggregate acceptance remains incomplete. TLS is not yet measured for the native API. | accept/denial, full invalid-handshake inventory, subprotocol/header selection, text/binary exchange, close code/reason, abrupt disconnect, bounded slow consumer, shutdown, TLS |
+| HTTP/1.1, cleartext and TLS | Native `WebSocketUpgrade`/`WebSocketSession` handles handshake and session ownership; the ASGI adapter uses the same API. The historical 13-case cleartext receipt predates current source and is not aggregate coverage. TLS and full Uvicorn parity remain unverified. | accept/denial, full invalid-handshake inventory, subprotocol/header selection, text/binary exchange, close code/reason, abrupt disconnect, bounded slow consumer, shutdown, TLS |
 | HTTP/2, TLS | Not implemented | RFC 8441 negotiation, accept/denial, stream reset, sibling-stream health, frame exchange, bounded send, shutdown |
 | HTTP/3, QUIC/TLS | Not implemented | RFC 9220 negotiation, accept/denial, request-stream reset, sibling-stream health, frame exchange, bounded send, graceful drain |
 
@@ -202,7 +199,8 @@ contract above:
   identify whether a peer reset, connection error, or server cancellation
   dropped the service future. This case does not prove delivery of ASGI
   http.disconnect or the required Python task behavior.
-- The current H3 adapter uses the maintained `uvicorn-rs-h3` package, based on
+- At this ADR's 2026-10-12 snapshot, the H3 adapter used the maintained
+  `uvicorn-rs-h3` package, based on
   upstream h3 0.0.8, and `uvicorn-rs-h3-quinn`, based on h3-quinn 0.0.10. It observes a
   request-stream reset when the request body or response writer is polled, but
   it has no independent request-close future for an application waiting on an
@@ -235,22 +233,22 @@ contract above:
   for the report path, measured totals, and remaining gaps.
 
 The generic H2 request/connection lifetime signal and its sibling-isolation
-case are implemented. The native core now has a transport-specific HTTP/1.1
-WebSocket API, but no shared framework contract or ASGI mapping.
-ASGI task semantics and independent H3 idle-reset notification remain
-feasibility gates, not support claims. Do not route Python ASGI traffic through
-the native transport until pending-receive disconnect, response-after-EOF,
-ASGI WebSocket, and upgraded-session shutdown cases pass the live matrix.
+case are implemented. The current Python adapter routes HTTP/1.1 WebSocket
+handshake and session ownership through the native API while keeping ASGI event
+conversion and Python task scheduling at the adapter boundary. This is not
+complete Uvicorn or ASGI compatibility evidence. Pending-receive disconnect,
+response-after-EOF, the full WebSocket behavior inventory, TLS WebSockets, and
+HTTP/2/HTTP/3 WebSockets remain separate acceptance items.
 
 ## Alternatives considered
 
 - **Encode WebSockets as HTTP body frames:** rejected because WebSockets are
   bidirectional sessions with a handshake, close semantics, and independent
   send/receive demand; an HTTP response body cannot represent them correctly.
-- **Put shared WebSocket/lifecycle contract types in Uvicorn-RS core:**
-  rejected because Starlette-RS would then need a server dependency, reversing
-  the agreed dependency direction. The core may depend on the neutral contract
-  crate to implement server-side behavior.
+- **Make Starlette-RS depend on Uvicorn-RS for WebSocket transport:**
+  rejected because frameworks remain independently usable. The server owns
+  `WebSocketUpgrade` and `WebSocketSession`; lifecycle hooks stay in the
+  separate `asgi-lifespan-protocol-rs` package.
 - **Make Uvicorn-RS depend on Starlette-RS:** rejected because the server
   must host framework-neutral services and remain independently usable.
 - **Keep ASGI dictionaries in the native path:** rejected because this would
@@ -259,9 +257,10 @@ ASGI WebSocket, and upgraded-session shutdown cases pass the live matrix.
 
 ## Risks and open questions
 
-- A shared contract crate adds one more independently versioned package. Keep
-  it small and runtime-neutral; do not move HTTP request/response types into it
-  if standard HTTP and Tower types already suffice.
+- Adding a separate WebSocket contract would add another independently
+  versioned package without removing the server-owned transport boundary. Keep
+  WebSocket transport in `uvicorn-rs` and keep the existing lifecycle package
+  focused on startup and shutdown hooks.
 - The lifecycle spike accepts `Send` futures and applies independent 30-second
   default startup and shutdown hook timeouts. The shutdown hook timeout begins
   after connection draining, so total server stop duration can exceed the

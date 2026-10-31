@@ -71,11 +71,13 @@ nav:
           - Native service contract: adr/0003-rust-native-service-contract.md
           - Uvicorn public compatibility contract: adr/0005-uvicorn-public-compatibility-contract.md
           - WebSocket lifecycle contract: adr/0004-native-websocket-lifecycle-contract.md
+          - Single native server crate: adr/0006-single-native-server-crate.md
       - Compatibility evidence:
           - Input-only parity matrix: parity.md
           - Case inventory: asgi-case-inventory.md
           - ASGI implementation evidence: maintainers/asgi-support-evidence.md
           - Uvicorn 0.54.0 contract: maintainers/uvicorn-0.54.0-contract.md
+          - Uvicorn CLI and settings map: maintainers/uvicorn-cli-option-map.md
           - Deployment validation: maintainers/deployment-validation.md
       - Performance:
           - Benchmark method: benchmarks.md
@@ -85,6 +87,8 @@ nav:
           - Performance investigation: performance-investigation-2026-10-05.md
       - Release and project health:
           - Release process: releases.md
+          - Release completion plan: maintainers/release-completion-plan.md
+          - FastAPI application evaluation: fastapi-evaluation.md
           - Implementation review: implementation-review.md
           - Coverage: coverage.md
           - Coverage plan: coverage-plan.md

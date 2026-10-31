@@ -9,6 +9,8 @@ import json
 import logging
 import os
 from pathlib import Path
+import signal
+import time
 from urllib.parse import parse_qs
 
 
@@ -27,7 +29,18 @@ _request_context = ContextVar("asgi_parity_request_context", default="empty")
 _request_context.set("inherited")
 
 
-def _header_capacity_headers(query_string):
+def custom_loop_factory():
+    """Return a deterministic event loop for Uvicorn import-path parity."""
+    return asyncio.new_event_loop()
+
+
+def observed_custom_loop_factory():
+    """Expose custom-loop selection through the CLI's captured process output."""
+    print("parity custom event-loop factory invoked", flush=True)
+    return asyncio.new_event_loop()
+
+
+def _header_capacity_headers(query_string, *, include_content_length=True):
     """Build a finite, input-selected list of distinct valid ASGI headers."""
     parameter, separator, value = query_string.partition(b"=")
     if parameter != b"count" or not separator or not value.isdigit():
@@ -35,7 +48,13 @@ def _header_capacity_headers(query_string):
     count = int(value)
     if not 1 <= count <= 32769:
         raise ValueError("header-capacity fixture count is outside its bounded range")
-    return [(f"x-capacity-{index:x}".encode("ascii"), b"x") for index in range(count)]
+    headers = [
+        (f"x-capacity-{index:x}".encode("ascii"), b"x")
+        for index in range(count)
+    ]
+    if include_content_length:
+        headers.append((b"content-length", b"16"))
+    return headers
 
 
 def _scope_address(scope, key):
@@ -193,6 +212,7 @@ async def _respond(
             "type": event_type("http.response.start"),
             "status": status,
             "headers": [(b"content-type", content_type)],
+            "trailers": False,
         }
     )
     await send({"type": event_type("http.response.body"), "body": body, "more_body": False})
@@ -440,9 +460,14 @@ async def _app_impl(scope, receive, send):
             return
         if scope["path"] == "/ws-header-capacity":
             try:
+                headers = _header_capacity_headers(
+                    scope["query_string"], include_content_length=False
+                )
+                headers[0] = (b"x-capacity-repeat", b"first")
+                headers[-1] = (b"x-capacity-repeat", b"last")
                 await send({
                     "type": "websocket.accept",
-                    "headers": _header_capacity_headers(scope["query_string"]),
+                    "headers": headers,
                 })
                 _record("websocket.header-capacity.accept-sent")
                 await receive()
@@ -464,6 +489,15 @@ async def _app_impl(scope, receive, send):
         if scope["path"] == "/ws-receive-wrong-signature":
             await send({"type": "websocket.accept"})
             await receive(None)
+            return
+        if scope["path"] == "/ws-fragmented-message":
+            await send({"type": "websocket.accept"})
+            message = await receive()
+            if message["type"] == "websocket.receive":
+                _record(f"websocket.fragmented.message:{message.get('text')}")
+                await send({"type": "websocket.close", "code": 1000})
+            elif message["type"] == "websocket.disconnect":
+                _record(f"websocket.disconnect:{message.get('code')}:{message.get('reason', '')}")
             return
         if scope["path"] in {"/ws-upgrade-client-drop", "/ws-upgrade-server-shutdown"}:
             _record("websocket.upgrade.waiting")
@@ -521,6 +555,12 @@ async def _app_impl(scope, receive, send):
             return
         if scope["path"] == "/ws-wait-for-disconnect":
             await send({"type": "websocket.accept"})
+            message = await receive()
+            if message["type"] == "websocket.disconnect":
+                _record(f"websocket.disconnect:{message['code']}:{message['reason']}")
+            return
+        if scope["path"] == "/ws-unoffered-subprotocol":
+            await send({"type": "websocket.accept", "subprotocol": "server-v1"})
             message = await receive()
             if message["type"] == "websocket.disconnect":
                 _record(f"websocket.disconnect:{message['code']}:{message['reason']}")
@@ -639,6 +679,17 @@ async def _app_impl(scope, receive, send):
         if scope["path"] == "/ws-invalid-send-payload":
             await send({"type": "websocket.send"})
             return
+        if scope["path"] in {
+            "/ws-send-http-response-early-hint",
+            "/ws-send-http-response-trailers",
+        }:
+            event_type = (
+                "http.response.early_hint"
+                if scope["path"].endswith("early-hint")
+                else "http.response.trailers"
+            )
+            await send({"type": event_type})
+            return
         if scope["path"] == "/ws-invalid-send-both-payloads":
             await send({"type": "websocket.send", "text": "text", "bytes": b"bytes"})
             return
@@ -648,6 +699,15 @@ async def _app_impl(scope, receive, send):
             return
         if scope["path"] == "/ws-send-and-return":
             await send({"type": "websocket.send", "text": "queued final frame"})
+            return
+        if scope["path"] == "/ws-queue-delayed-reader":
+            await asyncio.sleep(0.1)
+            for _ in range(3):
+                message = await receive()
+                if message["type"] == "websocket.disconnect":
+                    return
+            _record("websocket.queue-reader-received-3")
+            await send({"type": "websocket.close", "code": 1000, "reason": "queue drained"})
             return
         if scope["path"] == "/ws-final-frame-drain":
             await send({"type": "websocket.send", "text": "drain-first"})
@@ -700,6 +760,147 @@ async def _app_impl(scope, receive, send):
             _request_context.get().encode("ascii"),
             content_type=b"text/plain; charset=utf-8",
         )
+        return
+    if path == "/response-early-hints":
+        _record("http2.early-hint-call")
+        await send({
+            "type": "http.response.early_hint",
+            "links": [b"</style.css>; rel=preload; as=style"],
+        })
+        await send({
+            "type": _ASGIEventType("http.response.early_hint"),
+            "links": [b"</app.js>; rel=preload; as=script"],
+        })
+        await asyncio.sleep(0.15)
+        _record("http2.final-response-start")
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        extensions = ",".join(sorted(scope.get("extensions", {}))).encode("ascii")
+        await send({"type": "http.response.body", "body": extensions})
+        return
+    if path == "/response-early-hint-invalid-header":
+        await send({
+            "type": "http.response.early_hint",
+            "links": [b"invalid\nlink"],
+        })
+        return
+    if path == "/response-early-hint-after-start":
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({
+            "type": "http.response.early_hint",
+            "links": [b"</too-late.css>; rel=preload; as=style"],
+        })
+        return
+    if path == "/response-trailers-before-start":
+        await send({"type": "http.response.trailers", "headers": []})
+        return
+    if path == "/response-trailers-missing":
+        await send({
+            "type": "http.response.start", "status": 200,
+            "headers": [], "trailers": True,
+        })
+        await send({"type": "http.response.body", "body": b"complete"})
+        return
+    if path == "/response-trailers-before-body-complete":
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [],
+            "trailers": True,
+        })
+        await send({"type": "http.response.trailers", "headers": []})
+        return
+    if path == "/response-trailers-without-negotiation":
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"complete"})
+        await send({"type": "http.response.trailers", "headers": []})
+        return
+    if path == "/response-trailers-pseudo-header":
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [],
+            "trailers": True,
+        })
+        await send({"type": "http.response.body", "body": b"complete"})
+        await send({
+            "type": "http.response.trailers",
+            "headers": [(b":status", b"200")],
+        })
+        return
+    if path in {
+        "/response-trailers-invalid-header-name",
+        "/response-trailers-invalid-header-value",
+    }:
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [],
+            "trailers": True,
+        })
+        await send({"type": "http.response.body", "body": b"complete"})
+        headers = (
+            [(b"invalid name", b"value")]
+            if path.endswith("header-name")
+            else [(b"x-trailer", b"invalid\nvalue")]
+        )
+        await send({"type": "http.response.trailers", "headers": headers})
+        return
+    if path in {"/response-trailers", "/response-trailers-without-te"}:
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [],
+            "trailers": True,
+        })
+        extensions = ",".join(sorted(scope.get("extensions", {}))).encode("ascii")
+        await send({"type": "http.response.body", "body": extensions})
+        await send({
+            "type": "http.response.trailers",
+            "headers": [
+                (b"x-asgi-trailer", b"first"),
+                (b"connection", b"close"),
+                (b"te", b"trailers"),
+                (b"keep-alive", b"timeout=5"),
+            ],
+            "more_trailers": True,
+        })
+        _record("http2.response-trailers.first-send-returned")
+        await send({
+            "type": _ASGIEventType("http.response.trailers"),
+            "headers": [
+                (b"x-asgi-trailer", b"last"),
+                (b"proxy-connection", b"keep-alive"),
+                (b"upgrade", b"websocket"),
+                (b"transfer-encoding", b"chunked"),
+            ],
+            "more_trailers": False,
+        })
+        _record("http2.response-trailers.final-send-returned")
+        return
+    if path == "/response-trailers-capacity":
+        # The shared capacity generator appends Content-Length for response
+        # header tests; that field is forbidden in HTTP/2 trailers, so keep
+        # this probe limited to its generated x-capacity fields.
+        headers = _header_capacity_headers(scope["query_string"])[:-1]
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [],
+            "trailers": True,
+        })
+        await send({"type": "http.response.body", "body": b"trailer capacity probe"})
+        await send({
+            "type": "http.response.trailers",
+            "headers": headers[:-1],
+            "more_trailers": True,
+        })
+        _record("http2.response-trailer-capacity.first-send-returned")
+        await send({
+            "type": "http.response.trailers",
+            "headers": headers[-1:],
+            "more_trailers": False,
+        })
+        _record("http2.response-trailer-capacity.final-send-returned")
         return
     if path == "/response-headers-order":
         await send({
@@ -802,6 +1003,10 @@ async def _app_impl(scope, receive, send):
 
     if path == "/invalid-asgi/unknown-type":
         await send({"type": "http.response.trailers"})
+        return
+
+    if path == "/invalid-asgi/unrecognized-type":
+        await send({"type": "http.response.unrecognized"})
         return
 
     if path == "/final-body-before-app-return":
@@ -969,6 +1174,20 @@ async def _app_impl(scope, receive, send):
             }
         )
         await send({"type": "http.response.body", "body": b"invalid"})
+        return
+
+    if path == "/content-length-empty-body-drain":
+        await send({
+            "type": "http.response.start", "status": 200,
+            "headers": [(b"content-length", b"8"), (b"content-type", b"text/plain")],
+        })
+        await send({"type": "http.response.body", "body": b"complete", "more_body": True})
+        _record("response.content-length.first-send-returned")
+        await asyncio.sleep(0.05)
+        await send({"type": "http.response.body", "body": b"", "more_body": True})
+        _record("response.content-length.empty-send-returned")
+        await send({"type": "http.response.body", "body": b"", "more_body": False})
+        _record("response.content-length.final-send-returned")
         return
 
     if path == "/response-burst":
@@ -1589,8 +1808,22 @@ async def lifespan_probe_app(scope, receive, send):
         while True:
             message = await receive()
             if message["type"] == "lifespan.startup":
+                restart_failure_marker = os.environ.get(
+                    "ASGI_PARITY_WORKER_CONTROL_FAIL_RESTART_STARTUP_FILE"
+                )
+                if restart_failure_marker and Path(restart_failure_marker).exists():
+                    await send({
+                        "type": "lifespan.startup.failed",
+                        "message": "parity worker restart startup failure",
+                    })
+                    return
                 _lifespan_probe_started = True
                 await send({"type": "lifespan.startup.complete"})
+                startup_ready_directory = os.environ.get(
+                    "ASGI_PARITY_WORKER_CONTROL_STARTUP_READY_DIR"
+                )
+                if startup_ready_directory:
+                    Path(startup_ready_directory, f"{os.getpid()}.ready").touch()
             elif message["type"] == "lifespan.shutdown":
                 if _lifespan_probe_shutdown_delay:
                     await asyncio.sleep(_lifespan_probe_shutdown_delay)
@@ -1598,6 +1831,57 @@ async def lifespan_probe_app(scope, receive, send):
                 return
     elif scope["type"] == "http":
         await receive()
+        if scope["path"] == "/python-api-worker-restart":
+            marker_path = os.environ.get("ASGI_PARITY_WORKER_CRASH_ONCE_FILE")
+            if marker_path is not None:
+                crash_count = int(
+                    os.environ.get("ASGI_PARITY_WORKER_CRASH_COUNT", "1")
+                )
+                for attempt in range(crash_count):
+                    try:
+                        marker_fd = os.open(
+                            f"{marker_path}-{attempt}",
+                            os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                            0o600,
+                        )
+                    except FileExistsError:
+                        continue
+                    os.close(marker_fd)
+                    os._exit(73)
+                # Keep the surviving worker busy long enough for the parent
+                # supervisor to notice and replace its peer after each crash.
+                await asyncio.sleep(1.25)
+                await _respond(
+                    send, b"python-api-worker-restarted", content_type=b"text/plain"
+                )
+                return
+        if scope["path"] == "/python-api-worker-healthcheck-expiry":
+            marker_path = os.environ.get("ASGI_PARITY_WORKER_STALL_ONCE_FILE")
+            if marker_path is None:
+                raise RuntimeError("worker health-check input is missing its marker path")
+            try:
+                marker_fd = os.open(
+                    marker_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600
+                )
+            except FileExistsError:
+                # Keep a responsive peer occupied while the parent times out
+                # and replaces the worker that stopped answering health checks.
+                await asyncio.sleep(4.0)
+                await _respond(
+                    send,
+                    b"python-api-worker-healthcheck-restarted",
+                    content_type=b"text/plain",
+                )
+            else:
+                os.write(marker_fd, str(os.getpid()).encode("ascii"))
+                os.close(marker_fd)
+                os.kill(os.getpid(), signal.SIGSTOP)
+                await _respond(
+                    send,
+                    b"python-api-worker-healthcheck-resumed-without-replacement",
+                    content_type=b"text/plain",
+                )
+            return
         for name, value in scope.get("headers", []):
             if name.lower() == b"x-parity-lifespan-shutdown-delay":
                 _lifespan_probe_shutdown_delay = float(value.decode("ascii"))
@@ -1623,6 +1907,52 @@ async def lifespan_probe_app(scope, receive, send):
                 b"asgi-scope-contract-passed"
                 if root_path_matches and path_matches and raw_path_matches
                 else b"asgi-scope-contract-failed"
+            )
+            await _respond(send, body, content_type=b"text/plain")
+            return
+        if scope["path"] in {
+            "/python-api-second-signal-escalation",
+            "/python-api-graceful-timeout-hold",
+        }:
+            await _respond(
+                send,
+                b"python-api-signal-escalation-hold",
+                content_type=b"text/plain",
+            )
+            marker_path = os.environ.get("ASGI_PARITY_SIGNAL_HOLD_MARKER")
+            if marker_path is None:
+                raise RuntimeError("signal-escalation input is missing its hold marker")
+            Path(marker_path).touch()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancel_marker_path = os.environ.get(
+                    "ASGI_PARITY_SIGNAL_CANCEL_MARKER"
+                )
+                if cancel_marker_path is not None:
+                    Path(cancel_marker_path).touch()
+                raise
+            return
+        if scope["path"] == "/module-cli-proxy-headers":
+            client = scope.get("client") or ("", 0)
+            client_host, client_port = client
+            body = b"|".join(
+                (
+                    b"scheme=" + scope["scheme"].encode("ascii"),
+                    b"client=" + str(client_host).encode("ascii"),
+                    str(client_port).encode("ascii"),
+                )
+            )
+            await _respond(send, body, content_type=b"text/plain")
+            return
+        if scope["path"] == "/module-cli-proxy-headers-disabled":
+            client = scope.get("client") or ("", 0)
+            client_host = client[0]
+            body = b"|".join(
+                (
+                    b"scheme=" + scope["scheme"].encode("ascii"),
+                    b"client=" + str(client_host).encode("ascii"),
+                )
             )
             await _respond(send, body, content_type=b"text/plain")
             return
@@ -1659,6 +1989,12 @@ def python_api_factory_probe_app():
     return lifespan_probe_app
 
 
+def python_api_factory_type_error_probe_app():
+    """Raise from the explicit factory call for Config.load parity."""
+
+    raise TypeError("python-api-factory-type-error")
+
+
 async def python_api_uds_probe_app(scope, receive, send):
     """Expose Unix-domain HTTP scope address semantics in one response."""
     if scope["type"] == "lifespan":
@@ -1677,6 +2013,7 @@ async def python_api_uds_probe_app(scope, receive, send):
         and server[1] is None
     )
     body = (
+        f"scheme={scope['scheme']}|"
         f"client-is-none={str(client_is_none).lower()}|"
         f"server-has-unix-shape={str(server_has_unix_shape).lower()}"
     ).encode("ascii")
@@ -1685,6 +2022,61 @@ async def python_api_uds_probe_app(scope, receive, send):
 
 def python_api_wsgi_probe_app(environ, start_response):
     """Return a deterministic WSGI response for Python API parity inputs."""
+
+    if environ["PATH_INFO"] == "/python-api-wsgi-error":
+        raise RuntimeError("python-api-wsgi-probe-error")
+
+    if environ["PATH_INFO"] == "/python-api-wsgi-iterator-before-start-error":
+        def response_chunks():
+            yield from ()
+            raise RuntimeError("python-api-wsgi-iterator-before-start-probe-error")
+
+        return response_chunks()
+
+    if environ["PATH_INFO"] == "/python-api-wsgi-after-start-error":
+        start_response("200 OK", [("content-type", "text/plain")])
+        marker = os.environ["ASGI_PARITY_WSGI_STREAM_RELEASE_MARKER"]
+
+        def response_chunks():
+            yield b"python-api-wsgi-after-start|first"
+            deadline = time.monotonic() + 3.0
+            while not os.path.exists(marker) and time.monotonic() < deadline:
+                time.sleep(0.01)
+            raise RuntimeError("python-api-wsgi-after-start-probe-error")
+
+        return response_chunks()
+
+    if environ["PATH_INFO"] == "/python-api-wsgi-stream":
+        start_response("200 OK", [("content-type", "text/plain")])
+        marker = os.environ["ASGI_PARITY_WSGI_STREAM_RELEASE_MARKER"]
+
+        def response_chunks():
+            yield b"python-api-wsgi-stream|first"
+            deadline = time.monotonic() + 3.0
+            while not os.path.exists(marker) and time.monotonic() < deadline:
+                time.sleep(0.01)
+            yield b"|released" if os.path.exists(marker) else b"|timed-out"
+
+        return response_chunks()
+
+    if environ["PATH_INFO"] == "/python-api-wsgi-content-length-drain":
+        body = b"python-api-wsgi-content-length-drain|complete"
+        start_response(
+            "200 OK",
+            [
+                ("content-type", "text/plain"),
+                ("content-length", str(len(body))),
+            ],
+        )
+        marker = os.environ["ASGI_PARITY_WSGI_STREAM_RELEASE_MARKER"]
+
+        def response_chunks():
+            yield body
+            deadline = time.monotonic() + 3.0
+            while not os.path.exists(marker) and time.monotonic() < deadline:
+                time.sleep(0.01)
+
+        return response_chunks()
 
     body = b"|".join(
         (
@@ -1695,6 +2087,8 @@ def python_api_wsgi_probe_app(environ, start_response):
             environ.get("HTTP_X_PYTHON_API", "missing").encode("latin1"),
         )
     )
+    if environ["REQUEST_METHOD"] == "POST":
+        body += b"|request-body=" + environ["wsgi.input"].read()
     start_response(
         "200 OK",
         [
@@ -1703,6 +2097,12 @@ def python_api_wsgi_probe_app(environ, start_response):
         ],
     )
     return [body]
+
+
+def python_api_wsgi_probe_app_factory():
+    """Return the WSGI app used by Python API factory parity inputs."""
+
+    return python_api_wsgi_probe_app
 
 
 async def lifespan_startup_error_probe_app(scope, receive, send):
@@ -1720,3 +2120,55 @@ def asgi2_probe_app(scope):
         await lifespan_probe_app(scope, receive, send)
 
     return app
+
+
+def python_api_asgi2_factory_probe_app():
+    """Return the ASGI2 probe used by Python API factory parity inputs."""
+
+    return asgi2_probe_app
+
+
+class PythonApiASGI3Callable:
+    """Expose the Python API probe as an ASGI3 callable instance."""
+
+    async def __call__(self, scope, receive, send):
+        await lifespan_probe_app(scope, receive, send)
+
+
+python_api_asgi3_callable_app = PythonApiASGI3Callable()
+
+
+async def python_api_websocket_cli_probe_app(scope, receive, send):
+    """Serve the focused CLI WebSocket parity probes as ASGI 3."""
+
+    if scope["type"] != "websocket":
+        return
+    message = await receive()
+    if message["type"] != "websocket.connect":
+        return
+    await send({"type": "websocket.accept"})
+    if scope["path"] == "/ws-queue-delayed-reader":
+        await asyncio.sleep(0.1)
+        for _ in range(3):
+            message = await receive()
+            if message["type"] == "websocket.disconnect":
+                return
+        await send(
+            {
+                "type": "websocket.close",
+                "code": 1000,
+                "reason": "queue drained",
+            }
+        )
+        return
+    while True:
+        message = await receive()
+        if message["type"] == "websocket.disconnect":
+            return
+        if message["type"] == "websocket.receive":
+            response = {"type": "websocket.send"}
+            if "text" in message:
+                response["text"] = message["text"]
+            else:
+                response["bytes"] = message.get("bytes", b"")
+            await send(response)

@@ -8,6 +8,7 @@ use bytes::{Buf, Bytes};
 use futures_util::future::join_all;
 use h3_quinn::quinn::{self, rustls};
 use http::Request;
+use uvicorn_rs::{h3, h3_quinn};
 
 type BenchError = Box<dyn Error + Send + Sync>;
 

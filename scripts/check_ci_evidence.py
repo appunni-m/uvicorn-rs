@@ -26,11 +26,12 @@ from typing import Any
 
 from coverage_contract import pending_coverage_mcp_request
 from coverage_toolchain import ToolchainError, validate_coverage_tools
+from parity_identity import runtime_source_digest, runtime_source_hashes
 
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "tests/parity/manifest.json"
-UNIFIED_SCHEMA = "uvicorn-rs-coverage/unified@9"
+UNIFIED_SCHEMA = "uvicorn-rs-coverage/unified@10"
 PRODUCTION_SOURCE_SET = (
     "src/lib.rs",
     "crates/uvicorn-rs/src/lib.rs",
@@ -38,7 +39,7 @@ PRODUCTION_SOURCE_SET = (
     "crates/uvicorn-rs/src/http3/transport.rs",
     "crates/uvicorn-rs/src/websocket.rs",
     "crates/uvicorn-rs/src/peer_read.rs",
-    "crates/native-app-contract/src/lib.rs",
+    "crates/asgi-lifespan-protocol-rs/src/lib.rs",
 )
 EXECUTABLE_SOURCE_SET = PRODUCTION_SOURCE_SET[:-1]
 NO_COUNTER_SOURCE_SET = (PRODUCTION_SOURCE_SET[-1],)
@@ -46,14 +47,85 @@ COVERAGE_SUPPORT_SOURCE_SET = (
     "crates/uvicorn-rs/src/coverage.rs",
     "crates/uvicorn-rs/src/http3/coverage.rs",
 )
+THIRD_PARTY_SOURCE_SET = (
+    "crates/uvicorn-rs/src/http3/h3/buf.rs",
+    "crates/uvicorn-rs/src/http3/h3/client/builder.rs",
+    "crates/uvicorn-rs/src/http3/h3/client/connection.rs",
+    "crates/uvicorn-rs/src/http3/h3/client/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/client/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/config.rs",
+    "crates/uvicorn-rs/src/http3/h3/connection.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/codes.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/connection_error_creators.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/error.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/internal_error.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/ext.rs",
+    "crates/uvicorn-rs/src/http3/h3/frame.rs",
+    "crates/uvicorn-rs/src/http3/h3/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/coding.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/frame.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/headers.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/push.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/varint.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/block.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/decoder.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/dynamic.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/encoder.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/field.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/parse_error.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_int.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_string/bitwin.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_string/decode.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_string/encode.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_string/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/static_.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/tests.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/vas.rs",
+    "crates/uvicorn-rs/src/http3/h3/quic.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/builder.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/connection.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/request.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/shared_state.rs",
+    "crates/uvicorn-rs/src/http3/h3/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/webtransport/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/webtransport/session_id.rs",
+    "crates/uvicorn-rs/src/http3/h3_quinn.rs",
+)
 NATIVE_FAULT_CONTRACTS = {
+    "http1.keep-alive.active-request-drain": {
+        "operation": "native-http1-keepalive-active-request-drain",
+        "scenario": "two-active-requests",
+    },
+    "http1.keep-alive.deadline-channel-closed": {
+        "operation": "native-http1-keepalive-deadline-channel-closed",
+        "scenario": "deadline-channel-closed",
+    },
     "http1.upgrade.receiver-closed": {
-        "operation": "native-http1-upgrade-session",
-        "scenario": "receiver-closed",
+        "contracts": [
+            {
+                "operation": "native-http1-upgrade-session",
+                "scenario": "receiver-closed",
+            },
+            {
+                "operation": "native-https-upgrade-session-error",
+                "scenario": "receiver-closed",
+            },
+        ],
     },
     "http1.peer-read.receiver-closed": {
         "operation": "native-http1-peer-read-receiver-closed",
         "scenario": "receiver-closed",
+    },
+    "http1.unix-peer-read.on-read-error": {
+        "operation": "native-http1-unix-peer-read-on-read-error",
+        "scenario": "on-read-error",
     },
     "http1.peer-read.failure-after-data": {
         "operation": "native-http1-peer-read-error-response-cancel",
@@ -127,6 +199,18 @@ NATIVE_FAULT_CONTRACTS = {
         "operation": "native-http1-websocket",
         "scenario": "accept-key-header-value-error",
     },
+    "websocket.handshake.extension-negotiation": {
+        "operation": "native-http1-websocket",
+        "scenario": "extension-negotiation-error",
+    },
+    "websocket.session.construction-error": {
+        "operation": "native-http1-websocket",
+        "scenario": "accepted-session-construction-error",
+    },
+    "websocket.session.extension-to-str-error": {
+        "operation": "native-http1-websocket",
+        "scenario": "accepted-session-extension-header-error",
+    },
     "websocket.receive.close-reply.flush": {
         "operation": "native-http1-websocket",
         "scenario": "close-reply-flush-failure",
@@ -140,8 +224,20 @@ NATIVE_FAULT_CONTRACTS = {
         "scenario": "deadline-overflow",
     },
     "server.listener.accept-error": {
-        "operation": "native-server-listener-accept-error",
-        "scenario": "accept-error",
+        "contracts": [
+            {
+                "operation": "native-server-listener-accept-error",
+                "scenario": "accept-error",
+            },
+            {
+                "operation": "native-tcp-multi-listener-accept-error",
+                "scenario": "multi-listener-accept-error",
+            },
+        ],
+    },
+    "server.listener.unexpected-clean-exit": {
+        "operation": "native-tcp-multi-listener-clean-exit",
+        "scenario": "unexpected-clean-exit",
     },
     "server.listener.admission-closed": {
         "operation": "native-server-listener-admission-closed",
@@ -347,14 +443,66 @@ def normalize_operation_comparison_observation(
     for field, policy in operation.get("comparison_normalization", {}).items():
         require(field in normalized, f"comparison normalization field is absent: {field}")
         require(
-            policy == "python-traceback-exception-chain",
+            (operation.get("id"), policy) in {
+                ("cli.process", "python-process-diagnostics"),
+                (
+                    "python.api.server-lifespan-auto-fallback",
+                    "uvicorn-rs-shutdown-trace",
+                ),
+            },
             f"unsupported comparison normalization policy: {policy}",
         )
+        if policy == "uvicorn-rs-shutdown-trace":
+            stderr = base64.b64decode(normalized[field], validate=True)
+            normalized[field] = (
+                "uvicorn-rs-shutdown-trace",
+                tuple(
+                    line
+                    for line in stderr.splitlines()
+                    if not line.startswith(b"uvicorn-rs: shutdown-trace ")
+                ),
+            )
+            continue
         stderr = base64.b64decode(normalized[field], validate=True)
         lines = stderr.splitlines()
         traceback_header = b"Traceback (most recent call last):"
         if traceback_header not in lines:
-            normalized[field] = ("raw", stderr)
+            warning_separator = b": RuntimeWarning:"
+            if not any(
+                b"uvicorn/" in line.replace(b"\\", b"/")
+                and warning_separator in line
+                for line in lines
+            ):
+                normalized[field] = ("raw", stderr)
+                continue
+            normalized_warning: list[bytes] = []
+            skip_source_line = False
+            for line in lines:
+                if skip_source_line and line.startswith(b"  "):
+                    normalized_warning.append(b"  <source line>")
+                    skip_source_line = False
+                    continue
+                normalized_line = line.replace(b"\\", b"/")
+                if (
+                    b"uvicorn/" in normalized_line
+                    and warning_separator in normalized_line
+                ):
+                    prefix, _, message = normalized_line.partition(warning_separator)
+                    source_path = prefix.rsplit(b"uvicorn/", 1)[1]
+                    source_name, separator, line_number = source_path.rpartition(b":")
+                    if (
+                        separator
+                        and line_number.isdigit()
+                        and source_name.endswith(b".py")
+                    ):
+                        normalized_warning.append(b"RuntimeWarning:" + message)
+                        skip_source_line = True
+                        continue
+                normalized_warning.append(line)
+            normalized[field] = (
+                "python-runtime-warning-source",
+                tuple(normalized_warning),
+            )
             continue
 
         chain_markers = {
@@ -390,6 +538,25 @@ def normalize_operation_comparison_observation(
     return normalized
 
 
+def required_observations_for_case(
+    case: dict[str, Any], operation: dict[str, Any]
+) -> dict[str, Any]:
+    """Apply input-case requirements over operation defaults.
+
+    Keep offline evidence validation aligned with the live parity runner. Some
+    run_http inputs intentionally expect no response (for example, an invalid
+    default header), so the operation-wide success defaults do not apply to
+    those cases. Python API cases may also override operation requirements at
+    the case level when the expected behavior is specific to one input.
+    """
+    if "required_observations" in case:
+        return case["required_observations"]
+    run_http = case.get("api", {}).get("run_http", {})
+    return run_http.get(
+        "required_observations", operation.get("required_observations", {})
+    )
+
+
 def validate_observations(row: dict[str, Any], case: dict[str, Any], manifest: dict[str, Any]) -> None:
     exact_keys(row, {"case_id", "profile", "operation", "requirements", "verification", "fault", "status",
                      "oracle_observation", "target_observation", "server_exit_codes", "difference"},
@@ -422,7 +589,7 @@ def validate_observations(row: dict[str, Any], case: dict[str, Any], manifest: d
         )
         require(target_comparison == oracle_comparison,
                 f"live observations differ on declared comparison fields: {case['case_id']}")
-        for field, expected in operation.get("required_observations", {}).items():
+        for field, expected in required_observations_for_case(case, operation).items():
             require(target.get(field) == expected, f"required observation differs: {case['case_id']} ({field})")
         for field, expected in operation.get("target_requirements", {}).items():
             require(target.get(field) == expected, f"target requirement differs: {case['case_id']} ({field})")
@@ -433,12 +600,30 @@ def validate_observations(row: dict[str, Any], case: dict[str, Any], manifest: d
 def validate_parity(
     result: dict[str, Any], *, expected_cases: list[dict[str, Any]] | None = None,
     expected_native_sha256: str | None = None, offline: bool = True,
+    expected_excluded_case_ids: set[str] | None = None,
     _current_revision: str | None = None, expected_coverage_profile_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Check exact indexed cases; callers may bind evidence to a shipping native hash."""
     manifest, all_cases, input_paths = load_contract()
+    excluded = expected_excluded_case_ids or set()
+    if excluded:
+        public_ids = {
+            case["case_id"] for case in all_cases
+            if case.get("verification", "oracle-parity") == "oracle-parity"
+        }
+        unknown_exclusions = sorted(excluded - public_ids)
+        require(
+            not unknown_exclusions,
+            f"parity exclusions are not public oracle cases: {', '.join(unknown_exclusions)}",
+        )
     if expected_cases is None:
-        expected_cases = [case for case in all_cases if case.get("verification", "oracle-parity") == "oracle-parity"]
+        expected_cases = [
+            case for case in all_cases
+            if case.get("verification", "oracle-parity") == "oracle-parity"
+            and case["case_id"] not in excluded
+        ]
+    else:
+        require(not excluded, "explicit case exclusions cannot be combined with a preselected case batch")
     expected = {case["case_id"]: case for case in expected_cases}
     require(len(expected) == len(expected_cases) and bool(expected), "expected parity case selection is empty or duplicated")
     exact_keys(result, {"schema", "status", "run", "summary", "cases", "infrastructure_errors"}, "parity report")
@@ -451,6 +636,16 @@ def validate_parity(
     require(isinstance(run.get("run_id"), str) and bool(run["run_id"]), "parity run identity is empty")
     require(isinstance(run.get("command"), list) and bool(run["command"])
             and all(isinstance(part, str) for part in run["command"]), "parity command identity is invalid")
+    if expected_excluded_case_ids is not None:
+        command = run["command"]
+        recorded_exclusions = [
+            command[index + 1]
+            for index, value in enumerate(command[:-1])
+            if value == "--exclude-case-id"
+        ]
+        require(len(recorded_exclusions) == len(set(recorded_exclusions))
+                and set(recorded_exclusions) == expected_excluded_case_ids,
+                "parity command exclusions differ from the declared platform exclusions")
     if expected_coverage_profile_dir is not None:
         command = run["command"]
         expected_profile_dir = str(expected_coverage_profile_dir.resolve())
@@ -463,27 +658,57 @@ def validate_parity(
     require(run["inputs"] == [{"path": str(path.relative_to(ROOT)), "schema": input_schema, "sha256": sha256(path)}
                                for path in input_paths], "parity input identities differ from checkout")
     target = run["target"]
-    exact_keys(target, {"source_sha256", "cargo_lock_sha256", "revision", "dirty", "native_extension"}, "parity target")
+    exact_keys(target, {"source_sha256", "source_files", "cargo_lock_sha256", "revision", "dirty", "native_extension"}, "parity target")
     exact_keys(target["native_extension"], {"path", "sha256"}, "parity native")
-    require(target.get("source_sha256") == sha256(ROOT / "src/lib.rs"), "parity native source identity differs from checkout")
+    current_source_files = runtime_source_hashes(ROOT)
+    require(target.get("source_files") == current_source_files, "parity runtime source inventory differs from checkout")
+    require(target.get("source_sha256") == runtime_source_digest(current_source_files), "parity runtime source identity differs from checkout")
     require(target.get("cargo_lock_sha256") == sha256(ROOT / "Cargo.lock"), "parity Cargo.lock identity differs")
     require(target.get("revision") == (_current_revision or git_commit()), "parity commit differs from checkout")
     require(type(target.get("dirty")) is bool, "parity has no explicit source-state flag")
     harness = run["harness"]
-    exact_keys(harness, {"runner", "runner_sha256", "fixture_app", "fixture_app_sha256", "http3_client"}, "parity harness")
+    exact_keys(
+        harness,
+        {
+            "runner", "runner_sha256", "identity_helper", "fixture_app", "fixture_app_sha256",
+            "python_api_probe", "http3_client",
+        },
+        "parity harness",
+    )
+    exact_keys(harness["identity_helper"], {"path", "sha256"}, "parity source identity helper")
+    exact_keys(harness["python_api_probe"], {"path", "sha256"}, "Python API probe")
     if harness["http3_client"] is not None:
         exact_keys(harness["http3_client"], {"path", "sha256"}, "HTTP/3 client")
         valid_digest(harness["http3_client"]["sha256"], "HTTP/3 client")
     require(harness.get("runner") == "scripts/run_parity.py" and
             harness.get("runner_sha256") == sha256(ROOT / "scripts/run_parity.py"), "parity runner identity differs")
+    require(harness["identity_helper"].get("path") == "scripts/parity_identity.py" and
+            harness["identity_helper"].get("sha256") == sha256(ROOT / "scripts/parity_identity.py"),
+            "parity source identity helper differs")
     require(harness.get("fixture_app") == "tests/parity/app.py" and
             harness.get("fixture_app_sha256") == sha256(ROOT / "tests/parity/app.py"), "parity application identity differs")
+    require(harness["python_api_probe"].get("path") == "tests/parity/python_api_probe.py" and
+            harness["python_api_probe"].get("sha256") == sha256(ROOT / "tests/parity/python_api_probe.py"),
+            "parity Python API probe identity differs")
     exact_keys(run["environment"], {"python", "platform", "machine", "rustc", "dependencies"}, "parity environment")
     dependencies = run["environment"]["dependencies"]
     require(isinstance(dependencies, dict), "parity dependency identity is invalid")
+    platform_name = run["environment"]["platform"].lower()
+    if platform_name.startswith(("windows", "win32")):
+        parity_platform = "windows"
+    elif platform_name.startswith(("macos", "darwin")):
+        parity_platform = "macos"
+    elif platform_name.startswith("linux"):
+        parity_platform = "linux"
+    else:
+        raise EvidenceError(f"unsupported parity environment platform: {run['environment']['platform']}")
     for oracle in manifest["oracles"]:
+        components = [
+            item for item in oracle["components"]
+            if "platforms" not in item or parity_platform in item["platforms"]
+        ]
         for distribution, version in [(oracle["id"], oracle["version"]),
-                                      *((item["id"], item["version"]) for item in oracle["components"])]:
+                                      *((item["id"], item["version"]) for item in components)]:
             require(dependencies.get(distribution) == version, f"parity reference version differs: {distribution}")
     native_sha = valid_digest(target["native_extension"].get("sha256"), "parity native")
     if expected_native_sha256 is not None:
@@ -747,6 +972,7 @@ def expected_source_hashes(coverage_runner: Path, input_paths: list[Path]) -> di
             and tuple(source_constant(coverage_runner, "EXECUTABLE_SOURCE_SET")) == EXECUTABLE_SOURCE_SET
             and tuple(source_constant(coverage_runner, "NO_COUNTER_SOURCE_SET")) == NO_COUNTER_SOURCE_SET
             and tuple(source_constant(coverage_runner, "COVERAGE_SUPPORT_SOURCE_SET")) == COVERAGE_SUPPORT_SOURCE_SET
+            and tuple(source_constant(coverage_runner, "THIRD_PARTY_SOURCE_SET")) == THIRD_PARTY_SOURCE_SET
             and tuple(source_constant(coverage_runner, "PYTHON_SOURCE_SET")) == PYTHON_SOURCE_SET,
             "coverage runner production-source classification differs from validator contract")
     selected: dict[str, str] = {}
@@ -759,10 +985,11 @@ def expected_source_hashes(coverage_runner: Path, input_paths: list[Path]) -> di
             selected[relative] = sha256(path)
     discovered = {
         str(item.relative_to(ROOT))
-        for directory in (ROOT / "src", ROOT / "crates/uvicorn-rs/src", ROOT / "crates/native-app-contract/src")
+        for directory in (ROOT / "src", ROOT / "crates/uvicorn-rs/src", ROOT / "crates/asgi-lifespan-protocol-rs/src")
         for item in directory.rglob("*.rs")
     }
-    require(discovered == set(PRODUCTION_SOURCE_SET) | set(COVERAGE_SUPPORT_SOURCE_SET),
+    require(discovered == (set(PRODUCTION_SOURCE_SET) | set(COVERAGE_SUPPORT_SOURCE_SET)
+                           | set(THIRD_PARTY_SOURCE_SET)),
             "Rust source inventory is incomplete or unclassified")
     python_sources = {
         str(item.relative_to(ROOT)) for item in (ROOT / "python/uvicorn_rs").rglob("*.py")
@@ -826,8 +1053,13 @@ def validate_coverage(
             require(isinstance(fault, dict) and set(fault) == {"point"}
                     and isinstance(fault.get("point"), str)
                     and fault.get("point") in NATIVE_FAULT_CONTRACTS
-                    and case.get("operation") == NATIVE_FAULT_CONTRACTS[fault["point"]]["operation"]
-                    and case.get("scenario") == NATIVE_FAULT_CONTRACTS[fault["point"]]["scenario"],
+                    and any(
+                        case.get("operation") == contract["operation"]
+                        and case.get("scenario") == contract["scenario"]
+                        for contract in NATIVE_FAULT_CONTRACTS[fault["point"]].get(
+                            "contracts", [NATIVE_FAULT_CONTRACTS[fault["point"]]]
+                        )
+                    ),
                     f"invalid native fault contract: {case['id']}")
         else:
             require(fault is None, f"native target contract cannot declare a fault: {case['id']}")
@@ -927,11 +1159,13 @@ def validate_coverage(
 
     coverage = ext["coverage"]
     exact_keys(coverage, {"gate", "source_set", "executable_source_set", "coverage_support_source_set",
+                         "third_party_source_set",
                          "source_files", "llvm_normalization", "line_validation", "summary", "llvm_summary",
                          "regions", "uncovered_regions", "attribution", "coverage_mcp"}, "coverage")
     require(tuple(coverage.get("source_set", [])) == PRODUCTION_SOURCE_SET
             and tuple(coverage.get("executable_source_set", [])) == EXECUTABLE_SOURCE_SET
-            and tuple(coverage.get("coverage_support_source_set", [])) == COVERAGE_SUPPORT_SOURCE_SET,
+            and tuple(coverage.get("coverage_support_source_set", [])) == COVERAGE_SUPPORT_SOURCE_SET
+            and tuple(coverage.get("third_party_source_set", [])) == THIRD_PARTY_SOURCE_SET,
             "coverage source inventory differs from the declared production sources")
     source_rows = coverage.get("source_files")
     require(isinstance(source_rows, list) and len(source_rows) == len(PRODUCTION_SOURCE_SET),
@@ -1640,6 +1874,12 @@ def main() -> int:
     parser.add_argument("--offline", action="store_true", help="validate retained evidence without importing the installed native")
     parser.add_argument("--require-clean", action="store_true", help="require evidence produced from a clean source checkout")
     parser.add_argument(
+        "--exclude-case-id",
+        action="append",
+        default=[],
+        help="declare a platform-inapplicable public input excluded from a parity report; repeat for each case",
+    )
+    parser.add_argument(
         "--allow-pending-mcp",
         action="store_true",
         help=("CI-only mode: validate the complete raw LLVM and matrix evidence while Coverage-MCP is pending; "
@@ -1648,10 +1888,16 @@ def main() -> int:
     args = parser.parse_args()
     if args.kind != "coverage" and args.allow_pending_mcp:
         parser.error("--allow-pending-mcp is valid only for coverage reports")
+    if args.kind != "parity" and args.exclude_case_id:
+        parser.error("--exclude-case-id is valid only for parity reports")
     path = args.report.resolve()
     result = read_json(path)
     checked = (
-        validate_parity(result, offline=args.offline)
+        validate_parity(
+            result,
+            offline=args.offline,
+            expected_excluded_case_ids=set(args.exclude_case_id) if args.exclude_case_id else None,
+        )
         if args.kind == "parity"
         else validate_coverage(result, path, allow_pending_mcp=args.allow_pending_mcp)
     )

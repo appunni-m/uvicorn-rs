@@ -11,12 +11,16 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
+import sys
+import tempfile
 import zlib
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from coverage_contract import pending_coverage_mcp_request
+from project_coverage_mcp import ProjectionError, projection_document
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,6 +32,11 @@ REPORT_NAME = "coverage-report.json"
 CONTEXT_NAME = f"{REPORT_NAME}.context.json"
 CI_IDENTITY_NAME = "ci-run.json"
 RECEIPT_NAME = "coverage-mcp-receipt.json"
+PROJECTION_NAME = "coverage-mcp-projection.json"
+PROJECTION_CONTEXT_NAME = f"{PROJECTION_NAME}.context.json"
+REVIEWED_REPORT_NAME = "coverage-report.reviewed.json"
+PROJECTION_CONTEXT_SCHEMA = "uvicorn-rs-coverage-mcp-projection@1"
+REPORT_SCHEMAS = {"uvicorn-rs-coverage/unified@9", "uvicorn-rs-coverage/unified@10"}
 SCHEMA = "uvicorn-rs-coverage-mcp-handoff@1"
 CI_IDENTITY_SCHEMA = "uvicorn-rs-ci-artifact-identity@1"
 SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -125,7 +134,7 @@ def validate_ci_identity(root: Path, *, source: str, run_id: int, attempt: int) 
 def validate_pending_report(report_path: Path, *, source: str, expected_path: str) -> dict[str, Any]:
     report = read_json(report_path)
     extension = report.get("uvicorn_rs_unified") if isinstance(report, dict) else None
-    require(isinstance(extension, dict) and extension.get("schema") == "uvicorn-rs-coverage/unified@9",
+    require(isinstance(extension, dict) and extension.get("schema") in REPORT_SCHEMAS,
             "raw report is not the supported unified-coverage schema")
     run = extension.get("run")
     run_source = run.get("source") if isinstance(run, dict) else None
@@ -141,7 +150,8 @@ def validate_pending_report(report_path: Path, *, source: str, expected_path: st
         require(isinstance(row, dict) and type(row.get("total")) is int and row["total"] > 0
                 and row.get("covered") == row["total"] and row.get("missing") == 0,
                 f"raw unified report does not pass its {metric} coverage gate")
-    require(extension.get("coverage_mcp") == pending_coverage_mcp_request(expected_path),
+    require(isinstance(coverage, dict)
+            and coverage.get("coverage_mcp") == pending_coverage_mcp_request(expected_path),
             "raw report is not awaiting Coverage-MCP for this exact repository path")
     context = read_json(report_path.with_name(report_path.name + ".context.json"))
     require(isinstance(context, dict)
@@ -158,13 +168,16 @@ def validate_pending_report(report_path: Path, *, source: str, expected_path: st
     return {"report": report, "extension": extension, "context": context, "build_id": digest_json(build)}
 
 
-def validate_reviewed_report(review_root: Path, *, source: str, expected_path: str) -> dict[str, Any]:
-    report_path = review_root / REPORT_NAME
-    context_path = review_root / CONTEXT_NAME
+def validate_reviewed_report(
+    review_root: Path, *, source: str, expected_path: str,
+    report_name: str = REVIEWED_REPORT_NAME,
+) -> dict[str, Any]:
+    report_path = review_root / report_name
+    context_path = review_root / f"{report_name}.context.json"
     receipt_path = review_root / RECEIPT_NAME
     report = read_json(report_path)
     extension = report.get("uvicorn_rs_unified") if isinstance(report, dict) else None
-    require(isinstance(extension, dict) and extension.get("schema") == "uvicorn-rs-coverage/unified@9",
+    require(isinstance(extension, dict) and extension.get("schema") in REPORT_SCHEMAS,
             "reviewed report is not the supported unified-coverage schema")
     run = extension.get("run")
     run_source = run.get("source") if isinstance(run, dict) else None
@@ -468,6 +481,22 @@ def command_snapshot(args: argparse.Namespace) -> None:
                       "report_sha256": snapshot["report_sha256"]}, sort_keys=True))
 
 
+def command_project(args: argparse.Namespace) -> None:
+    report_path = args.report.resolve()
+    output_path = args.output.resolve()
+    identity_path = (args.ci_identity or report_path.parent / CI_IDENTITY_NAME).resolve()
+    require(report_path != output_path, "projection output must not replace the canonical report")
+    report_bytes, context_bytes = projection_document(report_path, output_path, identity_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(report_bytes)
+    output_path.with_name(output_path.name + ".context.json").write_bytes(context_bytes)
+    binding = json.loads(context_bytes)["projection_binding"]
+    print(json.dumps({"projection": str(output_path), "bytes": len(report_bytes),
+                      "projection_sha256": binding["projection_report_sha256"],
+                      "canonical_report_sha256": binding["canonical_report_sha256"],
+                      "ci_run": binding["ci_run"]}, sort_keys=True))
+
+
 def command_write_receipt(args: argparse.Namespace) -> None:
     pages = decode_receipt(args.receipt_gzip_base64)
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -475,6 +504,66 @@ def command_write_receipt(args: argparse.Namespace) -> None:
                            encoding="utf-8")
     print(json.dumps({"receipt": str(args.output), "pages": len(pages),
                       "bytes": args.output.stat().st_size}, sort_keys=True))
+
+
+def validate_projection_binding(review_root: Path, snapshot: dict[str, Any]) -> dict[str, Any]:
+    projection_path = review_root / PROJECTION_NAME
+    context_path = review_root / PROJECTION_CONTEXT_NAME
+    report = read_json(projection_path)
+    context = read_json(context_path)
+    binding = context.get("projection_binding") if isinstance(context, dict) else None
+    require(isinstance(binding, dict) and binding.get("schema") == PROJECTION_CONTEXT_SCHEMA,
+            "review projection has no supported canonical binding")
+    require(binding.get("canonical_report_path") == snapshot.get("measurement_path")
+            and binding.get("canonical_report_sha256") == snapshot.get("report_sha256")
+            and binding.get("canonical_context_sha256") == snapshot.get("context_sha256")
+            and binding.get("canonical_ci_identity_sha256")
+            == snapshot.get("files", {}).get(CI_IDENTITY_NAME, {}).get("sha256")
+            and binding.get("source_commit") == snapshot.get("source_commit")
+            and binding.get("ci_run") == {
+                "id": snapshot.get("ci_run", {}).get("id"),
+                "attempt": snapshot.get("ci_run", {}).get("attempt"),
+                "workflow_path": CI_WORKFLOW,
+            }
+            and binding.get("build_id") == snapshot.get("build_id")
+            and binding.get("scope") == "full" and binding.get("test_status") == "passed"
+            and binding.get("recorded_revision") == snapshot.get("source_commit"),
+            "review projection is not bound to the selected raw report, CI attempt, source, build, and passing matrix")
+    require(binding.get("projection_report_sha256") == file_hash(projection_path)
+            and context.get("report_sha256") == file_hash(projection_path)
+            and context.get("source_hashes") == binding.get("source_hashes")
+            and context.get("build_id") == binding.get("build_id")
+            and context.get("scope") == binding.get("scope")
+            and context.get("test_status") == binding.get("test_status")
+            and context.get("recorded_revision") == binding.get("recorded_revision"),
+            "review projection or its source/build context digest changed")
+    extension = report.get("uvicorn_rs_unified") if isinstance(report, dict) else None
+    run = extension.get("run") if isinstance(extension, dict) else None
+    coverage = extension.get("coverage") if isinstance(extension, dict) else None
+    require(isinstance(run, dict) and isinstance(coverage, dict)
+            and run.get("source", {}).get("revision") == snapshot.get("source_commit")
+            and digest_json(run.get("build")) == snapshot.get("build_id")
+            and coverage.get("coverage_mcp") == pending_coverage_mcp_request(report_relative(projection_path)),
+            "review projection report identity or MCP measurement path differs")
+    return {"report": report, "context": context, "binding": binding}
+
+
+def verify_reviewed_projection(review_root: Path, *, reviewed_report_path: Path) -> None:
+    projection_path = review_root / PROJECTION_NAME
+    receipt_path = review_root / RECEIPT_NAME
+    (ROOT / "target").mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="coverage-mcp-reverify-", dir=ROOT / "target") as temp:
+        generated_report = Path(temp) / REVIEWED_REPORT_NAME
+        command = [sys.executable, str(ROOT / "scripts" / "attach_coverage_mcp.py"),
+                   "--report", str(projection_path), "--output", str(generated_report),
+                   "--receipt", str(receipt_path)]
+        result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
+        require(result.returncode == 0,
+                "offline Coverage-MCP page validation failed: " + (result.stderr.strip() or result.stdout.strip()))
+        require(generated_report.read_bytes() == reviewed_report_path.read_bytes()
+                and generated_report.with_name(generated_report.name + ".context.json").read_bytes()
+                == reviewed_report_path.with_name(reviewed_report_path.name + ".context.json").read_bytes(),
+                "reviewed report differs from deterministic attachment of its projection and complete page receipt")
 
 
 def command_create(args: argparse.Namespace) -> None:
@@ -499,20 +588,23 @@ def command_create(args: argparse.Namespace) -> None:
             and type(artifact.get("size_in_bytes")) is int and artifact["size_in_bytes"] > 0,
             "raw inventory CI/artifact metadata is invalid")
     validate_digest(artifact.get("digest"), "raw inventory artifact digest")
-    report_path = args.review_root / REPORT_NAME
+    projection = validate_projection_binding(args.review_root, snapshot)
+    projection_path = args.review_root / PROJECTION_NAME
+    reviewed_report_path = args.review_root / REVIEWED_REPORT_NAME
+    projection_reference = report_relative(projection_path)
     review = validate_reviewed_report(args.review_root, source=source,
-                                      expected_path=snapshot.get("measurement_path"))
+                                      expected_path=projection_reference)
+    reviewed_context = review["context"]
+    require(reviewed_context.get("projection_binding") == projection["binding"],
+            "reviewed report context is not bound to the retained MCP projection")
+    verify_reviewed_projection(args.review_root, reviewed_report_path=reviewed_report_path)
     reviewed_files = file_inventory(args.review_root)
-    raw_files = snapshot.get("files")
-    require(isinstance(raw_files, dict), "raw inventory has no file checksums")
-    allowed_changed = {REPORT_NAME, CONTEXT_NAME}
-    for name, value in raw_files.items():
-        if name in allowed_changed:
-            continue
-        require(reviewed_files.get(name) == value,
-                f"review step changed unrelated CI artifact file: {name}")
-    require(set(reviewed_files) == set(raw_files) | {RECEIPT_NAME},
-            "reviewed artifact added or removed files outside the MCP page receipt")
+    expected_reviewed_files = {
+        PROJECTION_NAME, PROJECTION_CONTEXT_NAME, REVIEWED_REPORT_NAME,
+        f"{REVIEWED_REPORT_NAME}.context.json", RECEIPT_NAME,
+    }
+    require(set(reviewed_files) == expected_reviewed_files,
+            "reviewed artifact contains missing or unexpected projection/receipt files")
     expected_artifact_name = (
         f"uvicorn-rs-coverage-mcp-{ci['id']}-{ci['attempt']}-"
         f"{args.handoff_run_id}-{args.handoff_attempt}"
@@ -526,10 +618,15 @@ def command_create(args: argparse.Namespace) -> None:
                         "raw_report_sha256": snapshot["report_sha256"],
                         "raw_context_sha256": snapshot["context_sha256"],
                         "build_id": snapshot["build_id"],
+                        "projection_path": projection_reference,
+                        "projection_report_sha256": projection["binding"]["projection_report_sha256"],
+                        "projection_context_sha256": file_hash(args.review_root / PROJECTION_CONTEXT_NAME),
                         "raw_inventory_sha256": file_hash(args.snapshot),
                         "raw_files": snapshot["files"]},
-        "reviewed": {"report_sha256": file_hash(report_path),
-                     "context_sha256": file_hash(args.review_root / CONTEXT_NAME),
+        "reviewed": {"report_sha256": file_hash(reviewed_report_path),
+                     "context_sha256": file_hash(args.review_root / f"{REVIEWED_REPORT_NAME}.context.json"),
+                     "projection_report_sha256": projection["binding"]["projection_report_sha256"],
+                     "projection_context_sha256": file_hash(args.review_root / PROJECTION_CONTEXT_NAME),
                      "receipt_sha256": review["receipt_sha256"],
                      "files": reviewed_files},
         "handoff_run": {"id": args.handoff_run_id, "attempt": args.handoff_attempt,
@@ -580,6 +677,10 @@ def command_verify(args: argparse.Namespace) -> None:
     measurement = manifest.get("measurement", {})
     require(isinstance(measurement, dict), "coverage handoff manifest has no measurement identity")
     measured_path = measurement.get("path") if isinstance(measurement, dict) else None
+    projection_path = args.review_root / PROJECTION_NAME
+    projection_reference = report_relative(projection_path)
+    require(measurement.get("projection_path") == projection_reference,
+            "coverage handoff selects another MCP review projection")
     inventory_path = args.manifest.with_name("raw-inventory.json")
     inventory = read_json(inventory_path)
     require(isinstance(inventory, dict)
@@ -595,8 +696,7 @@ def command_verify(args: argparse.Namespace) -> None:
             and inventory.get("files") == measurement.get("raw_files"),
             "raw coverage inventory differs from the reviewed handoff manifest")
     raw_report_path = args.ci_raw_root / REPORT_NAME
-    require(isinstance(measured_path, str) and measured_path == report_relative(args.review_root / REPORT_NAME),
-            "coverage handoff was queried against another measurement path")
+    require(isinstance(measured_path, str), "coverage handoff has no canonical measurement path")
     validate_ci_identity(args.ci_raw_root, source=args.source, run_id=args.ci_run_id, attempt=args.ci_attempt)
     raw_report = validate_pending_report(raw_report_path, source=args.source, expected_path=measured_path)
     raw_files = file_inventory(args.ci_raw_root)
@@ -607,13 +707,29 @@ def command_verify(args: argparse.Namespace) -> None:
             and measurement.get("build_id") == raw_report["build_id"],
             "selected raw coverage report, context, or build differs from the handoff")
 
-    reviewed = validate_reviewed_report(args.review_root, source=args.source, expected_path=measured_path)
+    expected_projection, expected_projection_context = projection_document(
+        raw_report_path, projection_path, args.ci_raw_root / CI_IDENTITY_NAME,
+        canonical_report_path=measured_path,
+    )
+    require(projection_path.read_bytes() == expected_projection
+            and (args.review_root / PROJECTION_CONTEXT_NAME).read_bytes() == expected_projection_context,
+            "MCP projection is stale or differs from the canonical raw report")
+    projection = validate_projection_binding(args.review_root, inventory)
+    reviewed_report_path = args.review_root / REVIEWED_REPORT_NAME
+    reviewed = validate_reviewed_report(args.review_root, source=args.source,
+                                        expected_path=projection_reference)
+    require(reviewed["context"].get("projection_binding") == projection["binding"],
+            "reviewed report context is not bound to the verified MCP projection")
+    verify_reviewed_projection(args.review_root, reviewed_report_path=reviewed_report_path)
     reviewed_files = file_inventory(args.review_root)
     reviewed_identity = manifest.get("reviewed", {})
     require(isinstance(reviewed_identity, dict)
             and reviewed_files == reviewed_identity.get("files")
-            and reviewed_identity.get("report_sha256") == file_hash(args.review_root / REPORT_NAME)
-            and reviewed_identity.get("context_sha256") == file_hash(args.review_root / CONTEXT_NAME)
+            and reviewed_identity.get("report_sha256") == file_hash(reviewed_report_path)
+            and reviewed_identity.get("context_sha256")
+            == file_hash(args.review_root / f"{REVIEWED_REPORT_NAME}.context.json")
+            and reviewed_identity.get("projection_report_sha256") == projection["binding"]["projection_report_sha256"]
+            and reviewed_identity.get("projection_context_sha256") == file_hash(args.review_root / PROJECTION_CONTEXT_NAME)
             and reviewed_identity.get("receipt_sha256") == reviewed["receipt_sha256"],
             "reviewed artifact files differ from their immutable manifest")
 
@@ -633,6 +749,8 @@ def command_verify(args: argparse.Namespace) -> None:
         "raw_report_sha256": measurement["raw_report_sha256"],
         "reviewed_report_sha256": reviewed_identity["report_sha256"],
         "reviewed_context_sha256": reviewed_identity["context_sha256"],
+        "projection_report_sha256": reviewed_identity["projection_report_sha256"],
+        "projection_context_sha256": reviewed_identity["projection_context_sha256"],
         "coverage_mcp_receipt_sha256": reviewed_identity["receipt_sha256"],
         "build_id": reviewed["build_id"],
     }
@@ -699,6 +817,12 @@ def parser() -> argparse.ArgumentParser:
     snapshot.add_argument("--output", type=Path, required=True)
     snapshot.set_defaults(func=command_snapshot)
 
+    project = commands.add_parser("project", help="create a deterministic source-bound MCP review projection")
+    project.add_argument("--report", type=Path, required=True, help="unchanged canonical CI report")
+    project.add_argument("--ci-identity", type=Path, help="defaults to ci-run.json beside --report")
+    project.add_argument("--output", type=Path, required=True, help="repository-relative projection path")
+    project.set_defaults(func=command_project)
+
     receipt = commands.add_parser("write-receipt", help="decode bounded gzip/base64 MCP receipt input")
     receipt.add_argument("--receipt-gzip-base64", default=os.environ.get("RECEIPT_GZIP_BASE64", ""))
     receipt.add_argument("--output", type=Path, required=True)
@@ -745,5 +869,5 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except HandoffError as error:
+    except (HandoffError, ProjectionError) as error:
         raise SystemExit(f"coverage MCP handoff error: {error}")

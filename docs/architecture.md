@@ -2,21 +2,66 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-This document describes the PyO3/ASGI implementation distributed as
-`uvicorn-rs-py` and the Python-free `uvicorn-rs` server crate. With the default
-`native-tcp` feature, the Python server delegates HTTP/1.1, HTTP/2 over
-TCP/TLS, and HTTP/3 over Quinn to the native crate through Rust services.
-Python app loading, the caller-owned event loop, ASGI scope/messages, context,
-and app exceptions remain on the Python side. Builds without `native-tcp`
-retain the older protocol implementation; coverage builds also compile a
-limited legacy HTTP/3 path for fault contracts.
-Hosted CI on clean commit
+This document describes the PyO3/ASGI implementation for the PyPI distribution
+`uvicorn-rs` and the Python-free Cargo server crate `uvicorn-rs`. The root Cargo
+integration package and optional extra console script are named
+`uvicorn-rs-py`. A read-only registry check on 2026-10-30 found Cargo 0.2.1
+versions of `uvicorn-rs` and `asgi-lifespan-protocol-rs`; no PyPI version of
+`uvicorn-rs` has been published. The PyPI Trusted Publisher is configured for
+`appunni-m/uvicorn-rs`, workflow `release.yml`, environment `pypi`.
+Every Cargo feature configuration of the Python adapter delegates HTTP/1.1,
+HTTP/2 over TCP/TLS, and HTTP/3 over Quinn to the native crate through Rust
+services. Feature selection no longer switches to a second protocol stack.
+The `uvicorn-rs` crate includes the H3 protocol and Quinn adapter source; Rust
+applications enable them with its optional `http3` Cargo feature. The Python
+adapter enables that feature for Python ASGI applications. Python app loading,
+the caller-owned event loop, ASGI scope/messages, context, and app exceptions
+remain on the Python side. Coverage builds still compile limited legacy H3
+helpers for fault-contract attribution; ordinary builds do not use that path.
+Historical hosted CI on clean commit
 [`94c89b79c1f2a8e5f90b2171ee28ca929444a7f5`](https://github.com/appunni-m/uvicorn-rs/commit/94c89b79c1f2a8e5f90b2171ee28ca929444a7f5)
-passed the unified 761-case coverage matrix. Independent Coverage-MCP review
-and a complete three-system performance result remain pending. See the
-[current coverage record](coverage.md#current-unified-coverage-status-2026-10-19)
-and [benchmark status](benchmark-status.md). The previous root Python
-distribution and CLI names are not compatibility requirements.
+passed the unified 761-case coverage matrix; that run is not current release
+evidence. The latest hosted candidate run is CI
+[#514](https://github.com/appunni-m/uvicorn-rs/actions/runs/41064798064) on PR
+head `e6064abdaa43fc13f064a026f9c346dc790bed46`. Linux x86-64 and macOS ARM64
+installed-wheel parity each passed 718/718 cases. Windows x86-64 passed 687 of
+691 cases; its four failures are confined to multi-worker process behavior,
+and Windows candidate-consumer checks were skipped. Linux and macOS candidate
+artifacts and consumers passed. Rust quality, MSRV, native FastAPI-RS
+composition, and release-evidence checks passed.
+
+The three-repeat unified coverage matrix completed but missed the 100% gate at
+14,118/14,243 regions and 10,402/10,461 lines. The report has no accepted
+independent Coverage-MCP review. Focused Windows diagnostics
+[#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177) and
+[#523](https://github.com/appunni-m/uvicorn-rs/actions/runs/41085775055) each
+passed one worker case with shutdown tracing. Run #523 did not reproduce the
+SIGTERM-labelled case's earlier timeout; its trace records both processes
+exiting 0 after orderly shutdown. The cause of the #514 failures remains
+unconfirmed. Complete Uvicorn compatibility and the three-system benchmark
+remain open. See the
+[current coverage record](coverage.md#current-unified-coverage-status-2026-10-30),
+[parity evidence](parity.md), and [benchmark status](benchmark-status.md).
+The PyPI distribution provides the `uvicorn` namespace and primary
+`uvicorn`/`python -m uvicorn` commands. The root Cargo/PyO3 integration package
+remains `uvicorn-rs-py` and retains an optional `uvicorn-rs-py` console alias.
+The distribution has not had its first release.
+Earlier local candidate builds used `uvicorn-rs-py` as their distribution
+metadata name, but that name was never published to PyPI and is not the current
+distribution name.
+
+The Rust package graph has two native crates: `asgi-lifespan-protocol-rs`
+defines runtime-neutral lifecycle hooks, and `uvicorn-rs` contains the server
+and its optional HTTP/3 implementation. The historical bootstrap audit records
+the old `uvicorn-rs-h3` and `uvicorn-rs-h3-quinn` 0.1.0 uploads. On 2026-10-25,
+crates.io API lookups for the removed 0.1.0 names returned HTTP 404; the
+subsequent 0.2.1 `uvicorn-rs` and lifecycle crates were published from the clean
+commit recorded above. New server builds do not depend on separate H3 crates.
+`uvicorn-rs-py` enables the core's `http3` feature for Python ASGI hosting,
+while Rust-native applications choose whether to enable it. The earlier
+`asgi-lifespan-protocol-rs` 0.2.0 archive records a dirty source tree; the
+published 0.2.1 release provenance and checksum are documented in the
+[release guide](releases.md#distribution-boundaries).
 
 The native crate exposes an opt-in proactive TCP EOF observer through
 [`PeerReadHalfCloseMode`](https://github.com/appunni-m/uvicorn-rs/blob/main/crates/uvicorn-rs/src/lib.rs). The Python ASGI
@@ -33,8 +78,9 @@ An earlier local report for the native TCP/TLS integration covered 747 cases:
 lines. Its fully paginated Coverage-MCP receipt matched that report's source
 and build, but the report was tied to a dirty worktree and did not establish
 clean hosted release evidence. No normal-build parity run was included in that
-instrumented report. The latest clean hosted coverage status is the 761-case
-report recorded in [coverage evidence](coverage.md#current-unified-coverage-status-2026-10-19).
+instrumented report. The current exact-main coverage result and its package
+graph limitations are recorded in
+[coverage evidence](coverage.md#current-unified-coverage-status-2026-10-22).
 See the [coverage history](coverage.md) and the candidate-wheel smoke
 (`benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md`).
 Older 506-, 494-, 485-, 451-, and 448-case results below are historical and do not
@@ -58,10 +104,10 @@ flowchart LR
 ```
 
 The `uvicorn-rs-py` CLI imports `module:attribute`, selects asyncio or optional
-uvloop, and starts the Rust server from that event loop. With the default
-`native-tcp` feature, the Python adapter creates Rust services for HTTP/1.1,
-HTTP/2 over TCP/TLS, and HTTP/3 over Quinn; the native crate owns network I/O,
-protocol state, transport flow control, and connection draining. PyO3's
+uvloop, and starts the Rust server from that event loop. The Python adapter
+creates Rust services for HTTP/1.1, HTTP/2 over TCP/TLS, and HTTP/3 over Quinn
+in both default and no-default-feature builds; the native crate owns network
+I/O, protocol state, transport flow control, and connection draining. PyO3's
 asyncio integration dispatches ASGI calls back to the captured Python loop.
 Application code never runs on Tokio workers. The bridge constructs the ASGI
 scope and wraps Rust-backed `receive()` and `send()` operations in the callable
@@ -72,9 +118,12 @@ as ASGI request trailers.
 The native module builds its Tokio multithread runtime at import with one async
 worker and registers it with PyO3's async integration. This count applies to
 Tokio's asynchronous scheduler. The Python asyncio or uvloop event loop runs on
-its own thread, and Tokio can create blocking-pool threads when needed; the
-process can therefore use more than one CPU with one Tokio async worker. A
-process-wide `OnceLock<Result<Runtime, io::Error>>` retains either the runtime or its
+its own thread, and Tokio can create blocking-pool threads when needed. One
+Tokio async worker cannot execute Rust async tasks in parallel across CPU
+cores. The process can create additional threads, so work outside that async
+scheduler may use other cores when it runs concurrently and releases the GIL.
+This is one Tokio scheduler worker, not a one-thread or one-core process limit.
+A process-wide `OnceLock<Result<Runtime, io::Error>>` retains either the runtime or its
 construction failure. Construction failures become Python `OSError` before
 the native exports are added; repeated initialization returns the cached
 failure. If the async integration already has a valid registered runtime, that
@@ -210,23 +259,52 @@ paired benchmark before it can be considered a general performance setting.
 
 ## Header capacity and response commitment
 
-Response and WebSocket acceptance headers use the pinned `http` crate's finite
-`HeaderMap` storage. Its internal bucket ceiling does not define a stable
-public accepted-header count; distinct names, duplicate values, map growth, and
-reserved handshake headers affect capacity differently. This is a compiled
-capacity boundary, not a configurable CLI limit.
+Response and WebSocket acceptance headers use the `http` crate's finite
+`HeaderMap` storage. In the current lockfile (`http` 1.5.0), one map can hold
+24,576 distinct header names; repeated values for an existing name do not use
+another key slot. For ASGI HTTP/1 and HTTP/2 responses, validated fields that
+do not fit in the map stay in an ordered sidecar on the response and are emitted
+by the vendored Hyper/H2 encoders. This keeps application header order and
+matches Uvicorn 0.54.0's HTTP/1 delivery behavior without changing the `http`
+dependency seen by downstream Rust consumers. HTTP/2 uses the same ordered
+sidecar as an extension beyond Uvicorn's protocol set. The Python ASGI adapter
+also uses the sidecar for WebSocket accept responses under its workspace-only
+patched-Hyper feature; the direct Rust `WebSocketUpgrade` API keeps its bounded
+map behavior when built without that feature. HTTP/3 response-header overflow
+is outside this focused change and remains unverified.
 
-HTTP header construction uses `try_append`
-before committing response state, then moves the finished map into the
-response. WebSocket construction retains the application task guard until
-fallible handshake header assembly succeeds. Capacity failures follow the
-native `Result` channel and existing public failure/cleanup behavior. Both valid
-large-header support contracts passed a nine-case targeted snapshot, including
-the small HTTP 500 recovery, rejected WebSocket handshake, application cleanup,
-and healthy follow-ups. Both also pass attribution and all three complete
-repeats in the historical shared-write 448-case full verification and the selected normal-build
-audit. See
-[coverage evidence](coverage.md#historical-targeted-verification-9-cases-fallible-header-assembly).
+The HTTP/1 raw-wire parity cases send 24,575, 24,576 and 32,769 distinct
+application headers, plus the default `Server` and `Date` fields. Each case
+matches Uvicorn 0.54.0 by status, body, count and SHA-256, then verifies a
+healthy request on the same connection. The raw observer is required because
+Python's standard response parser stops after 100 header lines. WebSocket
+construction retains the application task guard until fallible handshake
+header assembly succeeds. A focused raw-wire WebSocket parity case sends
+32,769 application fields, including repeated values at opposite ends of the
+sequence, and matches Uvicorn 0.54.0's 101 status, field count and digest,
+cleanup events, and healthy `/scope` follow-up. The local installed-wheel
+receipt is dirty-source development evidence, not the release gate.
+[RFC 9110 §5.4](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.4)
+does not define a universal field-count limit.
+
+The HTTP/2 `http2.response-header-capacity-over-map-limit` case sends 24,576
+distinct application fields through the same sidecar, checks status, body,
+count and SHA-256 against Hypercorn 0.18.0, and confirms stream completion plus
+a healthy request on the same connection. This is HTTP/2 extension evidence;
+Uvicorn does not provide an HTTP/2 server.
+
+[RFC 9113 §10.5.1](https://www.rfc-editor.org/rfc/rfc9113.html#section-10.5.1)
+discusses field-block resource exhaustion risks. The HTTP/2 trailer parity
+cases send 24,576, 24,577, and 32,769 distinct names with a finite 2 MiB client
+decoder budget. The ordered sidecar delivers all three responses to the same
+behavior as Hypercorn 0.18.0 by count and SHA-256, completes each stream, and
+keeps the same-connection `/scope` follow-up healthy. The selected local
+installed-wheel report is
+`target/kata-progress/trailer-overflow-parity-20261031/parity.json`; exact-source
+hosted CI #547 is still validating the committed change. The earlier
+WebSocket target-only rejection contract has been replaced by the live
+Uvicorn-capacity parity case described above; historical instrumentation
+evidence remains in [coverage history](coverage.md#public-header-capacity-contracts).
 
 ## Context, exceptions, and cancellation
 
@@ -346,9 +424,18 @@ The H3 adapter forwards response-side peer stop to a pending ASGI `receive()`
 as `http.disconnect`; a target-only public input contract checks same-connection
 recovery because the pinned Hypercorn oracle did not complete this case.
 The native core tracks HTTP/1.1 upgrade sessions through `ConnectionUpgrade`.
-The Python ASGI adapter maps the supported HTTP/1.1 WebSocket path to ASGI
-connect, receive, send, and disconnect events. Protocol coverage limits are
-listed in the [support matrix](support-matrix.md#supported-behaviors).
+Its `WebSocketUpgrade` API validates the RFC 6455 request, constructs the
+handshake response, registers a `WebSocketSession`, and applies the configured
+message-size limit. The Python ASGI adapter uses that same API for WebSocket
+acceptance and session ownership; Python still owns ASGI scope/event conversion
+and application calls. Native Rust services select only a client-offered
+subprotocol with `with_subprotocol`; the ASGI adapter uses
+`with_application_subprotocol` to preserve Uvicorn 0.54.0 behavior for a valid
+application-selected token that was not offered. The focused
+`websocket.unoffered-subprotocol-selection` parity case verifies this one
+behavior. HTTP/2 and HTTP/3 WebSocket handshakes are not implemented. Protocol
+coverage limits are listed in the
+[support matrix](support-matrix.md#supported-behaviors).
 H3 stream errors and closed receivers end the request pump in the PyO3 path.
 The server joins all remaining pumps within the unused transport grace period.
 If that deadline expires, it logs the timeout, aborts the pumps, and drains

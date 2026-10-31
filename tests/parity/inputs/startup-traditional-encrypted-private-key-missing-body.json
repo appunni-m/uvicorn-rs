@@ -1,0 +1,12 @@
+{
+  "schema": "uvicorn-rs-parity/input@47",
+  "cases": [
+    {
+      "case_id": "startup-traditional-encrypted-private-key-missing-body.rejects-key",
+      "profile": "startup-traditional-encrypted-private-key-missing-body",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "startup_failure": {"expect_failed": true}
+    }
+  ]
+}

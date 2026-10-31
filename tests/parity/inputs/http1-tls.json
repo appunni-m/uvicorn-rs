@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@33",
+  "schema": "uvicorn-rs-parity/input@47",
   "cases": [
     {
       "case_id": "http1-tls.scope-reports-https",
@@ -25,6 +25,144 @@
       "request": {
         "method": "GET",
         "path": "/invalid-asgi/incomplete-response-body",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http1-tls.client-certificate-required",
+      "profile": "http1-tls",
+      "operation": "http.scope-and-body",
+      "covers": [
+        "http.scope-and-body"
+      ],
+      "client_tls": true,
+      "server_options": {
+        "ssl_ca_certs": "generated-ca",
+        "ssl_cert_reqs": 2
+      },
+      "request": {
+        "method": "GET",
+        "path": "/scope?parity=mutual-tls",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http1-tls.client-certificate-required-rejects-anonymous",
+      "profile": "http1-tls",
+      "operation": "tls.client-auth-required",
+      "covers": [
+        "tls.client-auth-required"
+      ],
+      "server_options": {
+        "ssl_ca_certs": "generated-ca",
+        "ssl_cert_reqs": 2
+      },
+      "request": {
+        "method": "GET",
+        "path": "/scope?parity=anonymous-client",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http1-tls.client-certificate-required-without-ca-rejects-untrusted-client",
+      "profile": "http1-tls",
+      "operation": "tls.client-auth-required",
+      "covers": [
+        "tls.client-auth-required"
+      ],
+      "client_tls": true,
+      "server_options": {
+        "ssl_cert_reqs": 2
+      },
+      "request": {
+        "method": "GET",
+        "path": "/scope?parity=empty-client-roots",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http1-tls.client-certificate-optional-allows-anonymous",
+      "profile": "http1-tls",
+      "operation": "http.scope-and-body",
+      "covers": [
+        "http.scope-and-body"
+      ],
+      "server_options": {
+        "ssl_ca_certs": "generated-ca",
+        "ssl_cert_reqs": 1
+      },
+      "request": {
+        "method": "GET",
+        "path": "/scope?parity=optional-client",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http1-tls.ssl-version-restricts-negotiation-to-tls12",
+      "profile": "http1-tls",
+      "operation": "tls.protocol-version",
+      "covers": [
+        "tls.protocol-version"
+      ],
+      "server_options": {
+        "ssl_version": 5
+      },
+      "request": {
+        "method": "GET",
+        "path": "/scope?parity=tls12",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http1-tls.ssl-ciphers-restricts-negotiated-suite",
+      "profile": "http1-tls",
+      "operation": "tls.negotiated-cipher",
+      "covers": [
+        "tls.negotiated-cipher"
+      ],
+      "server_options": {
+        "ssl_version": 5,
+        "ssl_ciphers": "ECDHE-RSA-AES256-GCM-SHA384"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/scope?parity=tls-cipher",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http1-tls.rejects-tlsv1-0-and-recovers",
+      "profile": "http1-tls",
+      "operation": "tls.reject-obsolete-version",
+      "covers": [
+        "tls.reject-obsolete-version"
+      ],
+      "tls_client_hello": "TLSv1.0",
+      "request": {
+        "method": "GET",
+        "path": "/scope?parity=obsolete-tls-recovery",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http1-tls.rejects-tlsv1-1-and-recovers",
+      "profile": "http1-tls",
+      "operation": "tls.reject-obsolete-version",
+      "covers": [
+        "tls.reject-obsolete-version"
+      ],
+      "tls_client_hello": "TLSv1.1",
+      "request": {
+        "method": "GET",
+        "path": "/scope?parity=obsolete-tls-recovery",
         "headers": [],
         "body_base64": ""
       }

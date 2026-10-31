@@ -1,19 +1,65 @@
 {
-  "schema": "uvicorn-rs-parity/input@33",
+  "schema": "uvicorn-rs-parity/input@47",
   "cases": [
     {
       "case_id": "lifespan.auto-app-raises-before-startup",
       "profile": "lifespan-no-support-error",
       "operation": "lifespan.unsupported",
-      "covers": [
-        "lifespan.unsupported"
-      ],
+      "covers": ["lifespan.unsupported"],
       "request": {
         "method": "GET",
         "path": "/state",
         "headers": [],
         "body_base64": ""
       }
+    },
+    {
+      "case_id": "fault.lifespan.info-logger-import-failure-keeps-auto-fallback",
+      "profile": "lifespan-no-support-error",
+      "operation": "lifespan.startup-auto-fallback",
+      "covers": ["lifespan.startup-auto-fallback"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.log-info.import-logging",
+        "contract": "server-lifespan-startup-auto-fallback-logger-failure-ignored"
+      },
+      "startup_fallback": {"followup_path": "/state"}
+    },
+    {
+      "case_id": "fault.lifespan.info-logger-getattr-failure-keeps-auto-fallback",
+      "profile": "lifespan-no-support-error",
+      "operation": "lifespan.startup-auto-fallback",
+      "covers": ["lifespan.startup-auto-fallback"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.log-info.get-logger",
+        "contract": "server-lifespan-startup-auto-fallback-logger-failure-ignored"
+      },
+      "startup_fallback": {"followup_path": "/state"}
+    },
+    {
+      "case_id": "fault.lifespan.info-logger-call-logger-failure-keeps-auto-fallback",
+      "profile": "lifespan-no-support-error",
+      "operation": "lifespan.startup-auto-fallback",
+      "covers": ["lifespan.startup-auto-fallback"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.log-info.call-get-logger",
+        "contract": "server-lifespan-startup-auto-fallback-logger-failure-ignored"
+      },
+      "startup_fallback": {"followup_path": "/state"}
+    },
+    {
+      "case_id": "fault.lifespan.info-logger-call-info-failure-keeps-auto-fallback",
+      "profile": "lifespan-no-support-error",
+      "operation": "lifespan.startup-auto-fallback",
+      "covers": ["lifespan.startup-auto-fallback"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.log-info.call-info",
+        "contract": "server-lifespan-startup-auto-fallback-logger-failure-ignored"
+      },
+      "startup_fallback": {"followup_path": "/state"}
     }
   ]
 }
