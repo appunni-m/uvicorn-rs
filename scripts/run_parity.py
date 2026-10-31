@@ -14648,24 +14648,26 @@ def run_python_api_probe(
             ) from error
         if type(run_http_observation) is not dict:
             raise ParityError(f"{case['case_id']}: HTTP API observation must be an object")
-        if run_http_observation.get("process_timed_out"):
-            raise ParityError(
-                f"{case['case_id']}: {server_id} HTTP API server exceeded its "
-                "shutdown timeout"
-            )
         shutdown_trace_output = os.environ.get("UVICORN_RS_SHUTDOWN_TRACE_OUTPUT")
         trace_oracle_signal = (
             server_id == "uvicorn"
             and os.environ.get("UVICORN_RS_TRACE_ORACLE_SIGNAL") == "1"
         )
+        encoded_stdout = run_http_observation.get("server_stdout_base64", "")
+        encoded_stderr = run_http_observation.get("server_stderr_base64", "")
+        try:
+            server_stdout = base64.b64decode(
+                encoded_stdout, validate=True
+            ).decode("utf-8", errors="replace")
+        except (ValueError, TypeError):
+            server_stdout = ""
+        try:
+            server_stderr = base64.b64decode(
+                encoded_stderr, validate=True
+            ).decode("utf-8", errors="replace")
+        except (ValueError, TypeError):
+            server_stderr = ""
         if shutdown_trace_output and (server_id == "uvicorn-rs" or trace_oracle_signal):
-            encoded_stderr = run_http_observation.get("server_stderr_base64", "")
-            try:
-                server_stderr = base64.b64decode(
-                    encoded_stderr, validate=True
-                ).decode("utf-8", errors="replace")
-            except (ValueError, TypeError):
-                server_stderr = ""
             trace_lines = [
                 line
                 for line in server_stderr.splitlines()
@@ -14677,6 +14679,16 @@ def run_python_api_probe(
                 with trace_path.open("a", encoding="utf-8") as trace_file:
                     for line in trace_lines:
                         trace_file.write(f"{case['case_id']} {line}\n")
+        if run_http_observation.get("process_timed_out"):
+            diagnostic = server_stderr or server_stdout
+            diagnostic_tail = "\n".join(diagnostic.splitlines()[-20:])[-3000:]
+            raise ParityError(
+                f"{case['case_id']}: {server_id} HTTP API server exceeded its "
+                "shutdown timeout; "
+                f"exit={run_http_observation.get('process_exit_code')}, "
+                f"signals={run_http_observation.get('shutdown_signals_sent')!r}, "
+                f"diagnostic_tail={diagnostic_tail!r}"
+            )
         observation.update(
             {
                 name: run_http_observation.get(name)
