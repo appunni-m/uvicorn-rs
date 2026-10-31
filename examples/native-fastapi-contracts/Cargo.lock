@@ -1365,6 +1365,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "pin-project-lite",
+ "socket2",
  "tokio",
  "tokio-rustls",
  "tokio-tungstenite",
