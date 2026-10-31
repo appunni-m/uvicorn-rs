@@ -2795,6 +2795,10 @@ def load_contract(
             }
             if "required_observations" in case:
                 python_api_case_keys.add("required_observations")
+            if "compare" in case:
+                python_api_case_keys.add("compare")
+            if "target_requirements" in case:
+                python_api_case_keys.add("target_requirements")
             if case.get("verification") == "fault-contract":
                 python_api_case_keys.update({"verification", "fault"})
             exact_case_keys(case, python_api_case_keys, case_id)
@@ -2808,6 +2812,23 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}.required_observations must use declared observation fields"
                     )
+            observed_fields = operations[case["operation"]]["observe"]
+            if "compare" in case and (
+                not isinstance(case["compare"], list)
+                or not case["compare"]
+                or len(case["compare"]) != len(set(case["compare"]))
+                or not set(case["compare"]).issubset(observed_fields)
+            ):
+                raise ParityError(
+                    f"{case_id}.compare must contain unique declared observation fields"
+                )
+            if "target_requirements" in case and (
+                not isinstance(case["target_requirements"], dict)
+                or not set(case["target_requirements"]).issubset(observed_fields)
+            ):
+                raise ParityError(
+                    f"{case_id}.target_requirements must use declared observation fields"
+                )
             if case.get("verification") == "fault-contract":
                 fault = case["fault"]
                 run_http = case.get("api", {}).get("run_http", {})
@@ -15083,7 +15104,9 @@ def execute_python_api_profile(
                     target.get(field) == value
                     for field, value in required.items()
                 )
-                target_requirements = operation.get("target_requirements", {})
+                target_requirements = case.get(
+                    "target_requirements", operation.get("target_requirements", {})
+                )
                 matches = matches and all(
                     target.get(field) == value
                     for field, value in target_requirements.items()
@@ -15136,7 +15159,9 @@ def execute_python_api_profile(
             raise_if_llvm_profile_write_failed(target_raw, case["case_id"])
             oracle = {name: oracle_raw[name] for name in operation["observe"]}
             target = {name: target_raw[name] for name in operation["observe"]}
-            fields = operation.get("compare", operation["observe"])
+            fields = case.get(
+                "compare", operation.get("compare", operation["observe"])
+            )
             oracle_comparison = normalize_operation_comparison_observation(
                 {field: oracle[field] for field in fields}, operation
             )
@@ -15160,7 +15185,9 @@ def execute_python_api_profile(
                 matches = False
                 if difference is None:
                     difference = f"required observations did not match {required!r}"
-            target_requirements = operation.get("target_requirements", {})
+            target_requirements = case.get(
+                "target_requirements", operation.get("target_requirements", {})
+            )
             if any(
                 target.get(field) != value
                 for field, value in target_requirements.items()

@@ -2757,48 +2757,6 @@
         "process_exit_code",
         "process_timed_out",
         "server_log_events",
-        "worker_replacement_observed"
-      ],
-      "compare": [
-        "exit_code",
-        "response_received",
-        "response_status",
-        "response_content_type",
-        "response_body_base64",
-        "listener_responses",
-        "idle_connection_closed",
-        "shutdown_signal_sent",
-        "shutdown_signals_sent",
-        "process_exit_code",
-        "process_timed_out",
-        "server_log_events",
-        "worker_replacement_observed"
-      ],
-      "required_observations": {
-        "response_received": true,
-        "response_status": 200,
-        "shutdown_signal_sent": true,
-        "process_timed_out": false
-      }
-    },
-    {
-      "id": "python.api.run-http-worker-precedence",
-      "kind": "command_operation",
-      "observe": [
-        "exit_code",
-        "stdout_base64",
-        "stderr_base64",
-        "response_received",
-        "response_status",
-        "response_content_type",
-        "response_body_base64",
-        "listener_responses",
-        "idle_connection_closed",
-        "shutdown_signal_sent",
-        "shutdown_signals_sent",
-        "process_exit_code",
-        "process_timed_out",
-        "server_log_events",
         "worker_replacement_observed",
         "worker_start_count"
       ],
@@ -2813,17 +2771,15 @@
         "shutdown_signal_sent",
         "shutdown_signals_sent",
         "process_exit_code",
-        "process_timed_out"
+        "process_timed_out",
+        "server_log_events",
+        "worker_replacement_observed"
       ],
       "required_observations": {
         "response_received": true,
         "response_status": 200,
         "shutdown_signal_sent": true,
         "process_timed_out": false
-      },
-      "target_requirements": {
-        "worker_replacement_observed": false,
-        "worker_start_count": 2
       }
     },
     {
