@@ -1306,14 +1306,11 @@ except KeyboardInterrupt:
         "shutdown_signal_sequence", [shutdown_signal_name]
     )
     if os.name == "nt":
-        # The runner gives this probe a private console. Broadcast console
-        # events to its server tree and keep the probe itself alive. A new
-        # process group disables Ctrl+C, so use one only for break-only tests.
-        if "SIGINT" in shutdown_signal_names:
-            previous_windows_sigint_handler = signal.signal(
-                signal.SIGINT, signal.SIG_IGN
-            )
-        else:
+        # The runner gives this probe a private console. A new process group
+        # disables Ctrl+C, so use one only for break-only tests. Ignore Ctrl+C
+        # in the probe only after the server is spawned; children can inherit
+        # the ignored console state and then miss the shutdown event.
+        if "SIGINT" not in shutdown_signal_names:
             process_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
         previous_windows_sigbreak_handler = signal.signal(
             signal.SIGBREAK, signal.SIG_IGN
@@ -1798,6 +1795,10 @@ except KeyboardInterrupt:
                         subprocess.CREATE_NEW_PROCESS_GROUP
                     )
                     if signal_name == "SIGINT":
+                        if previous_windows_sigint_handler is None:
+                            previous_windows_sigint_handler = signal.signal(
+                                signal.SIGINT, signal.SIG_IGN
+                            )
                         windows_signal = signal.CTRL_C_EVENT
                     else:
                         windows_signal = signal.CTRL_BREAK_EVENT
