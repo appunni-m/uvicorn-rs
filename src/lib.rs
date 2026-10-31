@@ -5275,7 +5275,7 @@ fn append_response_header_with_overflow(
 ) -> PyResult<()> {
     if overflow_headers
         .iter()
-        .any(|(overflow_name, _)| overflow_name == &name)
+        .any(|(overflow_name, _)| overflow_name == name)
     {
         overflow_headers.push((name, value));
         return Ok(());
