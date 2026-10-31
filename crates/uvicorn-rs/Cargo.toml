@@ -41,6 +41,7 @@ asgi-lifespan-protocol-rs = { version = "0.3.0", path = "../asgi-lifespan-protoc
 pin-project-lite = "0.2"
 hyper = { version = "1", features = ["http1", "http2", "server"] }
 hyper-util = { version = "0.1", features = ["http1", "http2", "server", "server-auto", "service", "tokio"] }
+socket2 = "0.6"
 tokio = { version = "1", features = ["io-util", "macros", "net", "rt", "sync", "time"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
 tokio-tungstenite = { version = "0.29", default-features = false, features = ["handshake"] }
@@ -56,7 +57,6 @@ h2 = "0.4"
 hyper = { version = "1", features = ["client"] }
 proptest = "1"
 quinn-proto = { version = "0.11", default-features = false }
-socket2 = "0.6"
 serde_json = "1"
 rustls-pemfile = "2"
 tokio = { version = "1", features = ["signal"] }

@@ -2813,6 +2813,31 @@ enum UnixListenerEvent {
     },
 }
 
+async fn accept_tcp_listener(
+    listener: &TcpListener,
+) -> io::Result<(tokio::net::TcpStream, SocketAddr)> {
+    #[cfg(windows)]
+    {
+        // Windows multiprocessing workers share duplicated handles to one
+        // listening socket. More than one poller can observe a connection
+        // becoming readable, even though only one worker can accept it. Keep
+        // the Winsock handle nonblocking at the point of every accept poll so
+        // a stale readiness notification returns WouldBlock instead of
+        // blocking Tokio's runtime thread.
+        std::future::poll_fn(|context| {
+            if let Err(error) = socket2::SockRef::from(listener).set_nonblocking(true) {
+                return Poll::Ready(Err(error));
+            }
+            listener.poll_accept(context)
+        })
+        .await
+    }
+    #[cfg(not(windows))]
+    {
+        listener.accept().await
+    }
+}
+
 #[cfg(unix)]
 async fn next_unix_listener_event(
     listener: &UnixListener,
@@ -3264,12 +3289,12 @@ async fn next_listener_event(
                         if take_listener_accept_fault() {
                             return Err(io::Error::other("injected listener accept failure"));
                         }
-                        listener.accept().await
+                        accept_tcp_listener(listener).await
                     }
                     #[cfg(not(coverage))]
                     {
                         if std::env::var_os("UVICORN_RS_SHUTDOWN_TRACE").is_some() {
-                            let mut accept = Box::pin(listener.accept());
+                            let mut accept = Box::pin(accept_tcp_listener(listener));
                             std::future::poll_fn(|context| {
                                 shutdown_trace!("tcp-listener.accept.poll-enter");
                                 let result = accept.as_mut().poll(context);
@@ -3281,7 +3306,7 @@ async fn next_listener_event(
                             })
                             .await
                         } else {
-                            listener.accept().await
+                            accept_tcp_listener(listener).await
                         }
                     }
                 } => {
