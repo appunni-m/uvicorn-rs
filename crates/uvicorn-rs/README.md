@@ -43,6 +43,11 @@ uvicorn-rs = "0.2"
 
 To enable HTTP/3, use `uvicorn-rs = { version = "0.2", features = ["http3"] }`.
 
+The `workspace-hyper-buffer-limit` feature is reserved for the Python adapter
+in this repository. It requires the workspace's patched Hyper and should not
+be enabled by downstream crates. Without it, configured HTTP/1 buffer limits
+must be at least 8192 bytes, matching the published Hyper release.
+
 ## Minimal server
 
 The [minimal server example](https://github.com/appunni-m/uvicorn-rs/blob/main/crates/uvicorn-rs/examples/minimal.rs)

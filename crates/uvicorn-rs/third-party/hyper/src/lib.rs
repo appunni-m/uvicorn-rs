@@ -111,6 +111,12 @@
 //!   behavior, for the purposes of protection. It is also possible to _change_
 //!   what the default options are set to, also in efforts to protect the
 //!   most people possible.
+
+/// Build marker checked by `uvicorn-rs` before using workspace-only HTTP/1
+/// buffer sizes that the published Hyper release does not accept.
+#[doc(hidden)]
+pub const UVICORN_RS_WORKSPACE_BUFFER_LIMIT: () = ();
+
 #[doc(hidden)]
 pub use http;
 

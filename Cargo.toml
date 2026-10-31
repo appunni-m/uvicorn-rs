@@ -54,7 +54,11 @@ tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync",
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 zeroize = "1"
-uvicorn-rs = { version = "0.2.2", path = "crates/uvicorn-rs", features = ["http3"] }
+uvicorn-rs = {
+    version = "0.2.2",
+    path = "crates/uvicorn-rs",
+    features = ["http3", "workspace-hyper-buffer-limit"],
+}
 tower-service = "0.3"
 
 [target.'cfg(unix)'.dependencies]

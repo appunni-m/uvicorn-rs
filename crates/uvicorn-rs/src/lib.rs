@@ -87,6 +87,9 @@ use tokio::{
 use tokio_rustls::TlsAcceptor;
 use tower_service::Service;
 
+#[cfg(feature = "workspace-hyper-buffer-limit")]
+const _: () = hyper::UVICORN_RS_WORKSPACE_BUFFER_LIMIT;
+
 #[cfg(not(coverage))]
 fn write_shutdown_trace(message: fmt::Arguments<'_>) {
     static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
@@ -1252,8 +1255,11 @@ pub struct ServerConfig {
     pub http1_keep_alive_timeout: Option<Duration>,
     /// Maximum HTTP/1 connection read buffer in bytes.
     ///
-    /// `None` retains the server's default limit. Zero is rejected before
-    /// serving starts.
+    /// `None` retains the server's default limit. Standalone builds require
+    /// values of at least 8192 bytes, matching the published Hyper release;
+    /// zero and smaller values are rejected before serving starts. The
+    /// workspace-only `workspace-hyper-buffer-limit` feature accepts any
+    /// positive value and requires the patched workspace Hyper dependency.
     pub http1_max_buffer_size: Option<usize>,
     /// Whether TCP connections accept HTTP/2, including prior-knowledge h2c.
     /// TLS callers must configure their acceptor's ALPN list consistently.
@@ -2003,7 +2009,7 @@ impl fmt::Display for ServeError {
                 formatter.write_str("graceful shutdown timeout exceeds the runtime clock range")
             }
             Self::InvalidHttp1MaxBufferSize => {
-                formatter.write_str("HTTP/1 max buffer size must be greater than zero")
+                formatter.write_str("HTTP/1 max buffer size is unsupported by this build")
             }
             Self::InvalidApplicationLifecycleTimeout => {
                 formatter.write_str("application lifecycle timeout exceeds the runtime clock range")
@@ -2083,6 +2089,11 @@ impl ServeError {
     }
 }
 
+#[cfg(feature = "workspace-hyper-buffer-limit")]
+const HTTP1_MAX_BUFFER_SIZE_MINIMUM: usize = 1;
+#[cfg(not(feature = "workspace-hyper-buffer-limit"))]
+const HTTP1_MAX_BUFFER_SIZE_MINIMUM: usize = 8192;
+
 fn validate_server_config(config: &ServerConfig) -> Result<(), ServeError> {
     if config.max_connections == 0 {
         return Err(ServeError::InvalidConnectionLimit);
@@ -2090,7 +2101,10 @@ fn validate_server_config(config: &ServerConfig) -> Result<(), ServeError> {
     if config.max_connections > Semaphore::MAX_PERMITS {
         return Err(ServeError::ConnectionLimitTooLarge);
     }
-    if config.http1_max_buffer_size.is_some_and(|size| size == 0) {
+    if config
+        .http1_max_buffer_size
+        .is_some_and(|size| size < HTTP1_MAX_BUFFER_SIZE_MINIMUM)
+    {
         return Err(ServeError::InvalidHttp1MaxBufferSize);
     }
     let now = Instant::now();
