@@ -63,7 +63,7 @@ FIXTURES = ROOT / "tests" / "parity"
 MANIFEST_PATH = FIXTURES / "manifest.json"
 APP = "tests.parity.app:app"
 MANIFEST_SCHEMA = "uvicorn-rs-parity/manifest@2"
-INPUT_SCHEMA = "uvicorn-rs-parity/input@46"
+INPUT_SCHEMA = "uvicorn-rs-parity/input@47"
 RESULT_SCHEMA = "uvicorn-rs-parity/result@5"
 ORACLE_PYTHON = Path(sys.executable)
 # Normal-wheel parity must exercise the installed wheel built for this run.
@@ -71,6 +71,23 @@ ORACLE_PYTHON = Path(sys.executable)
 # the checkout beside the instrumented native extension.
 INSTALLED_CANDIDATE_MODE = False
 TRACE_HYPERCORN_H3_EVENTS = False
+
+
+def _is_import_path(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    module, separator, attribute = value.partition(":")
+    if not separator:
+        module, separator, attribute = value.rpartition(".")
+    return bool(
+        separator
+        and module
+        and attribute
+        and all(part.isidentifier() for part in module.split("."))
+        and all(part.isidentifier() for part in attribute.split("."))
+    )
+
+
 # These messages authorize one deliberately injected panic per attempted
 # coverage fault case. They never authorize ordinary target/reference panics
 # or a failing process exit. The hook event, not a repeated JoinError log,
@@ -3014,6 +3031,7 @@ def load_contract(
                     "http_version",
                     "http_backend",
                     "observe_scope",
+                    "observe_tls",
                     "proxy_headers",
                     "forwarded_allow_ips",
                     "limit_concurrency",
@@ -3059,6 +3077,9 @@ def load_contract(
                     "bind_conflict",
                     "required_observations",
                     "shutdown_signal_sequence",
+                    "custom_http_protocol",
+                    "custom_http_protocol_import_path",
+                    "ssl_context_factory",
                 } & set(run_http)
                 exact_keys(
                     run_http,
@@ -3460,6 +3481,39 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}.api.run_http.application_interface must be asgi2, asgi3, or wsgi"
                     )
+                if "custom_http_protocol" in run_http:
+                    if type(run_http["custom_http_protocol"]) is not bool:
+                        raise ParityError(
+                            f"{case_id}.api.run_http.custom_http_protocol must be boolean"
+                        )
+                    if run_http["custom_http_protocol"] and (
+                        run_http["invocation"] != "config-server"
+                        or run_http.get("application_interface", "asgi3")
+                        not in {"asgi2", "asgi3"}
+                    ):
+                        raise ParityError(
+                            f"{case_id}: custom HTTP Protocol input requires Config/Server with an ASGI 2 or ASGI 3 app"
+                        )
+                for field in (
+                    "custom_http_protocol_import_path",
+                    "ssl_context_factory",
+                ):
+                    if field in run_http and type(run_http[field]) is not bool:
+                        raise ParityError(
+                            f"{case_id}.api.run_http.{field} must be boolean"
+                        )
+                if run_http.get("custom_http_protocol_import_path") and not run_http.get(
+                    "custom_http_protocol"
+                ):
+                    raise ParityError(
+                        f"{case_id}: custom HTTP import-path input requires a custom HTTP protocol"
+                    )
+                if run_http.get("ssl_context_factory") and (
+                    not run_http.get("tls")
+                ):
+                    raise ParityError(
+                        f"{case_id}: TLS context-factory input requires TLS"
+                    )
                 if not isinstance(run_http["method"], str) or run_http["method"] not in {
                     "GET",
                     "POST",
@@ -3677,9 +3731,20 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}.api.run_http.observe_scope must be a boolean"
                     )
-                if run_http.get("observe_scope") and run_http["invocation"] != "api":
+                if run_http.get("observe_scope") and run_http["invocation"] not in {
+                    "api",
+                    "config-server",
+                }:
                     raise ParityError(
-                        f"{case_id}.api.run_http.observe_scope is supported only for direct API invocation"
+                        f"{case_id}.api.run_http.observe_scope requires a Python API server invocation"
+                    )
+                if "observe_tls" in run_http and type(run_http["observe_tls"]) is not bool:
+                    raise ParityError(
+                        f"{case_id}.api.run_http.observe_tls must be a boolean"
+                    )
+                if run_http.get("observe_tls") and not run_http.get("tls"):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.observe_tls requires tls=true"
                     )
                 if "observe_loop" in run_http and type(run_http["observe_loop"]) is not bool:
                     raise ParityError(
@@ -4862,6 +4927,7 @@ def load_contract(
                 if kind == "http1":
                     allowed_options.add("http")
                     allowed_options.add("h11_max_incomplete_event_size")
+                    allowed_options.add("ws")
                 if kind in {"http1", "http2"}:
                     allowed_options.add("reset_contextvars")
                 if kind == "http1-tls":
@@ -4871,6 +4937,23 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: unsupported HTTP server options: "
                         f"{', '.join(sorted(unknown_options))}"
+                    )
+                if "ws" in server_options and (
+                    not isinstance(server_options["ws"], str)
+                    or (
+                        server_options["ws"]
+                        not in {
+                            "auto",
+                            "none",
+                            "websockets",
+                            "websockets-sansio",
+                            "wsproto",
+                        }
+                        and not _is_import_path(server_options["ws"])
+                    )
+                ):
+                    raise ParityError(
+                        f"{case_id}: server_options.ws must select a built-in backend or a protocol import path"
                     )
                 if "proxy_headers" in server_options and type(
                     server_options["proxy_headers"]
@@ -5315,11 +5398,20 @@ def load_contract(
                     )
                 if "ws" in server_options and (
                     not isinstance(server_options["ws"], str)
-                    or server_options["ws"]
-                    not in {"auto", "none", "websockets", "websockets-sansio", "wsproto"}
+                    or (
+                        server_options["ws"]
+                        not in {
+                            "auto",
+                            "none",
+                            "websockets",
+                            "websockets-sansio",
+                            "wsproto",
+                        }
+                        and not _is_import_path(server_options["ws"])
+                    )
                 ):
                     raise ParityError(
-                        f"{case_id}: server_options.ws must select a Uvicorn WebSocket backend"
+                        f"{case_id}: server_options.ws must select a built-in backend or a protocol import path"
                     )
                 if "ws_max_size" in server_options and (
                     type(server_options["ws_max_size"]) is not int
@@ -6231,6 +6323,11 @@ def start_server(
             env["PYTHONPATH"] = os.pathsep.join(
                 path for path in (source_python_path, env.get("PYTHONPATH")) if path
             )
+    if _is_import_path(websocket_selector):
+        parity_fixture_path = str(ROOT / "tests" / "parity")
+        env["PYTHONPATH"] = os.pathsep.join(
+            path for path in (parity_fixture_path, env.get("PYTHONPATH")) if path
+        )
     # Shutdown workflows restart a profile in the same temporary directory.
     # Readiness and request checkpoints must belong to the new process.
     events_path.write_text("", encoding="utf-8")

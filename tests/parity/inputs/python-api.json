@@ -1,11 +1,13 @@
 {
-  "schema": "uvicorn-rs-parity/input@46",
+  "schema": "uvicorn-rs-parity/input@47",
   "cases": [
     {
       "case_id": "python-api.public-imports-and-signatures",
       "profile": "python-api",
       "operation": "python.api.imports-signatures",
-      "covers": ["python.api.imports-signatures"],
+      "covers": [
+        "python.api.imports-signatures"
+      ],
       "api": {
         "imports": [
           "uvicorn.__version__",
@@ -64,27 +66,52 @@
       "case_id": "python-api.config-properties-and-retired-loop-hook",
       "profile": "python-api",
       "operation": "python.api.imports-signatures",
-      "covers": ["python.api.imports-signatures"],
+      "covers": [
+        "python.api.imports-signatures"
+      ],
       "api": {
-        "imports": ["uvicorn.Config"],
-        "signatures": ["uvicorn.Config"],
+        "imports": [
+          "uvicorn.Config"
+        ],
+        "signatures": [
+          "uvicorn.Config"
+        ],
         "config_probes": [
           {
             "app": "tests.parity.app:app",
-            "options": {"interface": "asgi2"},
-            "properties": ["asgi_version", "is_ssl"],
-            "methods": ["setup_event_loop"]
+            "options": {
+              "interface": "asgi2"
+            },
+            "properties": [
+              "asgi_version",
+              "is_ssl"
+            ],
+            "methods": [
+              "setup_event_loop"
+            ]
           },
           {
             "app": "tests.parity.app:app",
-            "options": {"interface": "asgi3", "ssl_certfile": "cert.pem"},
-            "properties": ["asgi_version", "is_ssl"],
+            "options": {
+              "interface": "asgi3",
+              "ssl_certfile": "cert.pem"
+            },
+            "properties": [
+              "asgi_version",
+              "is_ssl"
+            ],
             "methods": []
           },
           {
             "app": "tests.parity.app:app",
-            "options": {"interface": "wsgi", "ssl_keyfile": "key.pem"},
-            "properties": ["asgi_version", "is_ssl"],
+            "options": {
+              "interface": "wsgi",
+              "ssl_keyfile": "key.pem"
+            },
+            "properties": [
+              "asgi_version",
+              "is_ssl"
+            ],
             "methods": []
           }
         ]
@@ -94,10 +121,16 @@
       "case_id": "python-api.config-default-settings",
       "profile": "python-api",
       "operation": "python.api.imports-signatures",
-      "covers": ["python.api.imports-signatures"],
+      "covers": [
+        "python.api.imports-signatures"
+      ],
       "api": {
-        "imports": ["uvicorn.Config"],
-        "signatures": ["uvicorn.Config"],
+        "imports": [
+          "uvicorn.Config"
+        ],
+        "signatures": [
+          "uvicorn.Config"
+        ],
         "config_probes": [
           {
             "app": "tests.parity.app:app",
@@ -168,16 +201,26 @@
       "case_id": "python-api.config-load-explicit-factory-type-error",
       "profile": "python-api",
       "operation": "python.api.imports-signatures",
-      "covers": ["python.api.imports-signatures"],
+      "covers": [
+        "python.api.imports-signatures"
+      ],
       "api": {
-        "imports": ["uvicorn.Config"],
-        "signatures": ["uvicorn.Config"],
+        "imports": [
+          "uvicorn.Config"
+        ],
+        "signatures": [
+          "uvicorn.Config"
+        ],
         "config_probes": [
           {
             "app": "app:python_api_factory_type_error_probe_app",
-            "options": {"factory": true},
+            "options": {
+              "factory": true
+            },
             "properties": [],
-            "methods": ["load"]
+            "methods": [
+              "load"
+            ]
           }
         ]
       }
@@ -224,24 +267,39 @@
       "case_id": "python-api.run-env-file-interpolation-uses-process-environment",
       "profile": "python-api",
       "operation": "python.api.imports-signatures",
-      "covers": ["python.api.imports-signatures"],
+      "covers": [
+        "python.api.imports-signatures"
+      ],
       "api": {
-        "imports": ["uvicorn.run"],
-        "signatures": ["uvicorn.run"],
+        "imports": [
+          "uvicorn.run"
+        ],
+        "signatures": [
+          "uvicorn.run"
+        ],
         "calls": [
           {
             "target": "os:environ.pop",
-            "arguments": ["UVICORN_RS_PARITY_DOTENV_EXPANSION"],
-            "keyword_arguments": {"default": null}
+            "arguments": [
+              "UVICORN_RS_PARITY_DOTENV_EXPANSION"
+            ],
+            "keyword_arguments": {
+              "default": null
+            }
           },
           {
             "target": "os:environ.__setitem__",
-            "arguments": ["UVICORN_RS_PARITY_DOTENV_SOURCE", "from-process-environment"],
+            "arguments": [
+              "UVICORN_RS_PARITY_DOTENV_SOURCE",
+              "from-process-environment"
+            ],
             "keyword_arguments": {}
           },
           {
             "target": "uvicorn.run",
-            "arguments": ["uvicorn_rs_cli_app_dir:factory_dotenv_syntax_error"],
+            "arguments": [
+              "uvicorn_rs_cli_app_dir:factory_dotenv_syntax_error"
+            ],
             "keyword_arguments": {
               "app_dir": "tests/parity/fixtures/app_dir_only",
               "env_file": "tests/parity/fixtures/app_dir_only/factory-dotenv-syntax.env",
@@ -255,14 +313,22 @@
       "case_id": "python-api.run-reports-missing-module",
       "profile": "python-api",
       "operation": "python.api.imports-signatures",
-      "covers": ["python.api.imports-signatures"],
+      "covers": [
+        "python.api.imports-signatures"
+      ],
       "api": {
-        "imports": ["uvicorn.run"],
-        "signatures": ["uvicorn.run"],
+        "imports": [
+          "uvicorn.run"
+        ],
+        "signatures": [
+          "uvicorn.run"
+        ],
         "calls": [
           {
             "target": "uvicorn.run",
-            "arguments": ["uvicorn_rs_missing_run_module_20261019:app"],
+            "arguments": [
+              "uvicorn_rs_missing_run_module_20261019:app"
+            ],
             "keyword_arguments": {}
           }
         ]
@@ -272,15 +338,25 @@
       "case_id": "python-api.config-load-rejects-http2-with-auto-backend",
       "profile": "python-api",
       "operation": "python.api.imports-signatures",
-      "covers": ["python.api.imports-signatures"],
+      "covers": [
+        "python.api.imports-signatures"
+      ],
       "api": {
-        "imports": ["uvicorn.Config"],
-        "signatures": ["uvicorn.Config"],
+        "imports": [
+          "uvicorn.Config"
+        ],
+        "signatures": [
+          "uvicorn.Config"
+        ],
         "calls": [
           {
             "target": "uvicorn.Config",
-            "arguments": ["uvicorn_rs_missing_http2_config_20261021:app"],
-            "keyword_arguments": {"http2": true},
+            "arguments": [
+              "uvicorn_rs_missing_http2_config_20261021:app"
+            ],
+            "keyword_arguments": {
+              "http2": true
+            },
             "method_calls": [
               {
                 "method": "load",
@@ -296,17 +372,31 @@
       "case_id": "python-api.config-load-rejects-invalid-http-import-string",
       "profile": "python-api",
       "operation": "python.api.imports-signatures",
-      "covers": ["python.api.imports-signatures"],
+      "covers": [
+        "python.api.imports-signatures"
+      ],
       "api": {
-        "imports": ["uvicorn.Config"],
-        "signatures": ["uvicorn.Config"],
+        "imports": [
+          "uvicorn.Config"
+        ],
+        "signatures": [
+          "uvicorn.Config"
+        ],
         "calls": [
           {
             "target": "uvicorn.Config",
-            "arguments": ["tests.parity.app:app"],
-            "keyword_arguments": {"http": "invalid"},
+            "arguments": [
+              "tests.parity.app:app"
+            ],
+            "keyword_arguments": {
+              "http": "invalid"
+            },
             "method_calls": [
-              {"method": "load", "arguments": [], "keyword_arguments": {}}
+              {
+                "method": "load",
+                "arguments": [],
+                "keyword_arguments": {}
+              }
             ]
           }
         ]
@@ -316,17 +406,31 @@
       "case_id": "python-api.config-load-rejects-invalid-websocket-import-string",
       "profile": "python-api",
       "operation": "python.api.imports-signatures",
-      "covers": ["python.api.imports-signatures"],
+      "covers": [
+        "python.api.imports-signatures"
+      ],
       "api": {
-        "imports": ["uvicorn.Config"],
-        "signatures": ["uvicorn.Config"],
+        "imports": [
+          "uvicorn.Config"
+        ],
+        "signatures": [
+          "uvicorn.Config"
+        ],
         "calls": [
           {
             "target": "uvicorn.Config",
-            "arguments": ["tests.parity.app:app"],
-            "keyword_arguments": {"ws": "invalid"},
+            "arguments": [
+              "tests.parity.app:app"
+            ],
+            "keyword_arguments": {
+              "ws": "invalid"
+            },
             "method_calls": [
-              {"method": "load", "arguments": [], "keyword_arguments": {}}
+              {
+                "method": "load",
+                "arguments": [],
+                "keyword_arguments": {}
+              }
             ]
           }
         ]
@@ -336,15 +440,25 @@
       "case_id": "python-api.run-missing-app-precedes-http2-validation",
       "profile": "python-api",
       "operation": "python.api.imports-signatures",
-      "covers": ["python.api.imports-signatures"],
+      "covers": [
+        "python.api.imports-signatures"
+      ],
       "api": {
-        "imports": ["uvicorn.run"],
-        "signatures": ["uvicorn.run"],
+        "imports": [
+          "uvicorn.run"
+        ],
+        "signatures": [
+          "uvicorn.run"
+        ],
         "calls": [
           {
             "target": "uvicorn.run",
-            "arguments": ["uvicorn_rs_missing_http2_run_20261021:app"],
-            "keyword_arguments": {"http2": true}
+            "arguments": [
+              "uvicorn_rs_missing_http2_run_20261021:app"
+            ],
+            "keyword_arguments": {
+              "http2": true
+            }
           }
         ]
       }
@@ -353,7 +467,9 @@
       "case_id": "python-api.config-server-runs-app-on-requested-asyncio-loop",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -372,7 +488,9 @@
       "case_id": "python-api.run-uses-custom-loop-factory",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -391,7 +509,9 @@
       "case_id": "python-api.config-server-accepts-single-worker-healthcheck-timeout",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -410,7 +530,9 @@
       "case_id": "python-api.config-server-web-concurrency-zero-uses-single-process",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -430,7 +552,9 @@
       "case_id": "python-api.run-serves-request-and-shuts-down-on-signal",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -447,7 +571,9 @@
       "case_id": "python-api.run-serves-request-and-shuts-down-on-sigterm",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -464,7 +590,9 @@
       "case_id": "python-api.run-serves-successful-application-factory",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -482,7 +610,9 @@
       "case_id": "python-api.module-cli-serves-successful-application-factory",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -500,7 +630,9 @@
       "case_id": "python-api.run-serves-asgi2-application-factory",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -520,7 +652,9 @@
       "case_id": "python-api.module-cli-serves-asgi2-application-factory",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -540,7 +674,9 @@
       "case_id": "python-api.run-serves-asgi3-callable-instance",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -560,7 +696,9 @@
       "case_id": "python-api.module-cli-serves-asgi3-callable-instance",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -580,7 +718,9 @@
       "case_id": "python-api.run-auto-detects-asgi3-application-factory",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -600,7 +740,9 @@
       "case_id": "python-api.module-cli-auto-detects-asgi3-application-factory",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -620,7 +762,9 @@
       "case_id": "python-api.run-applies-numeric-warning-log-level",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -639,7 +783,9 @@
       "case_id": "python-api.run-applies-custom-json-log-config",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -658,7 +804,9 @@
       "case_id": "python-api.module-cli-applies-custom-json-log-config",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -677,7 +825,9 @@
       "case_id": "python-api.run-applies-custom-ini-log-config",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -696,7 +846,9 @@
       "case_id": "python-api.module-cli-applies-custom-ini-log-config",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -715,7 +867,9 @@
       "case_id": "python-api.run-applies-custom-yaml-log-config",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -734,7 +888,9 @@
       "case_id": "python-api.module-cli-applies-custom-yaml-log-config",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -753,7 +909,9 @@
       "case_id": "python-api.module-cli-uses-log-config-from-environment",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -774,7 +932,9 @@
       "case_id": "python-api.run-http-with-lifespan-disabled",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -791,7 +951,9 @@
       "case_id": "python-api.module-cli-http-with-lifespan-disabled",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -808,7 +970,9 @@
       "case_id": "python-api.module-cli-h11-backend-serves-request",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -826,7 +990,9 @@
       "case_id": "python-api.module-cli-two-workers-serve-request",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -845,7 +1011,9 @@
       "case_id": "python-api.module-cli-two-workers-from-uvicorn-workers-environment",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -866,7 +1034,9 @@
       "case_id": "python-api.module-cli-two-workers-stop-on-sigterm",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -885,13 +1055,18 @@
       "case_id": "python-api.module-cli-second-sigint-forces-inflight-request-shutdown",
       "profile": "python-api",
       "operation": "python.api.run-http-signal-sequence",
-      "covers": ["python.api.run-http-signal-sequence"],
+      "covers": [
+        "python.api.run-http-signal-sequence"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
           "path": "/python-api-second-signal-escalation",
           "shutdown_signal": "SIGINT",
-          "shutdown_signal_sequence": ["SIGINT", "SIGINT"],
+          "shutdown_signal_sequence": [
+            "SIGINT",
+            "SIGINT"
+          ],
           "timeout_seconds": 8,
           "lifespan": "off",
           "invocation": "module-cli",
@@ -899,7 +1074,10 @@
           "required_observations": {
             "response_received": true,
             "response_status": 200,
-            "shutdown_signals_sent": ["SIGINT", "SIGINT"]
+            "shutdown_signals_sent": [
+              "SIGINT",
+              "SIGINT"
+            ]
           }
         }
       }
@@ -908,13 +1086,18 @@
       "case_id": "python-api.run-second-sigint-forces-inflight-request-shutdown",
       "profile": "python-api",
       "operation": "python.api.run-http-signal-sequence",
-      "covers": ["python.api.run-http-signal-sequence"],
+      "covers": [
+        "python.api.run-http-signal-sequence"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
           "path": "/python-api-second-signal-escalation",
           "shutdown_signal": "SIGINT",
-          "shutdown_signal_sequence": ["SIGINT", "SIGINT"],
+          "shutdown_signal_sequence": [
+            "SIGINT",
+            "SIGINT"
+          ],
           "timeout_seconds": 8,
           "lifespan": "off",
           "invocation": "api",
@@ -922,7 +1105,10 @@
           "required_observations": {
             "response_received": true,
             "response_status": 200,
-            "shutdown_signals_sent": ["SIGINT", "SIGINT"]
+            "shutdown_signals_sent": [
+              "SIGINT",
+              "SIGINT"
+            ]
           }
         }
       }
@@ -931,7 +1117,9 @@
       "case_id": "python-api.module-cli-graceful-timeout-cancels-inflight-request",
       "profile": "python-api",
       "operation": "python.api.run-http-graceful-timeout",
-      "covers": ["python.api.run-http-graceful-timeout"],
+      "covers": [
+        "python.api.run-http-graceful-timeout"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -951,7 +1139,9 @@
       "case_id": "python-api.module-cli-graceful-timeout-flag-cancels-inflight-request",
       "profile": "python-api",
       "operation": "python.api.run-http-graceful-timeout",
-      "covers": ["python.api.run-http-graceful-timeout"],
+      "covers": [
+        "python.api.run-http-graceful-timeout"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -969,7 +1159,9 @@
       "case_id": "python-api.module-cli-web-concurrency-two-workers-serve-request",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -989,7 +1181,9 @@
       "case_id": "python-api.module-cli-explicit-workers-overrides-web-concurrency",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1011,7 +1205,9 @@
       "case_id": "python-api.module-cli-worker-crash-restarts",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1032,7 +1228,9 @@
       "case_id": "python-api.module-cli-worker-restarts-after-two-crashes",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1086,7 +1284,9 @@
       "case_id": "python-api.module-cli-limit-max-requests-exits-after-one-response",
       "profile": "python-api",
       "operation": "python.api.run-http-request-limit",
-      "covers": ["python.api.run-http-request-limit"],
+      "covers": [
+        "python.api.run-http-request-limit"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1107,7 +1307,9 @@
       "case_id": "python-api.module-cli-limit-max-requests-jitter-stays-in-configured-range",
       "profile": "python-api",
       "operation": "python.api.run-http-request-limit",
-      "covers": ["python.api.run-http-request-limit"],
+      "covers": [
+        "python.api.run-http-request-limit"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1129,7 +1331,9 @@
       "case_id": "python-api.module-cli-applies-warning-log-level",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1147,7 +1351,9 @@
       "case_id": "python-api.module-cli-uses-log-level-from-environment",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1157,7 +1363,9 @@
           "lifespan": "auto",
           "invocation": "module-cli",
           "root_path": "",
-          "environment": {"UVICORN_LOG_LEVEL": "debug"}
+          "environment": {
+            "UVICORN_LOG_LEVEL": "debug"
+          }
         }
       }
     },
@@ -1165,7 +1373,9 @@
       "case_id": "python-api.module-cli-explicit-log-level-overrides-environment",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1176,7 +1386,9 @@
           "invocation": "module-cli",
           "root_path": "",
           "log_level": "warning",
-          "environment": {"UVICORN_LOG_LEVEL": "debug"}
+          "environment": {
+            "UVICORN_LOG_LEVEL": "debug"
+          }
         }
       }
     },
@@ -1184,7 +1396,9 @@
       "case_id": "python-api.run-disables-access-log",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1202,7 +1416,9 @@
       "case_id": "python-api.module-cli-disables-access-log",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1220,7 +1436,9 @@
       "case_id": "python-api.module-cli-disables-access-log-from-environment",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1230,7 +1448,9 @@
           "lifespan": "auto",
           "invocation": "module-cli",
           "root_path": "",
-          "environment": {"UVICORN_ACCESS_LOG": "false"}
+          "environment": {
+            "UVICORN_ACCESS_LOG": "false"
+          }
         }
       }
     },
@@ -1238,7 +1458,9 @@
       "case_id": "python-api.module-cli-explicit-access-log-overrides-environment",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1249,7 +1471,9 @@
           "invocation": "module-cli",
           "root_path": "",
           "access_log": false,
-          "environment": {"UVICORN_ACCESS_LOG": "true"}
+          "environment": {
+            "UVICORN_ACCESS_LOG": "true"
+          }
         }
       }
     },
@@ -1257,7 +1481,9 @@
       "case_id": "python-api.module-cli-disables-server-and-date-headers",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1269,7 +1495,10 @@
           "root_path": "",
           "server_header": false,
           "date_header": false,
-          "observe_headers": ["server", "date"]
+          "observe_headers": [
+            "server",
+            "date"
+          ]
         }
       }
     },
@@ -1277,7 +1506,9 @@
       "case_id": "python-api.module-cli-disables-server-date-headers-from-environment",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1287,7 +1518,10 @@
           "lifespan": "auto",
           "invocation": "module-cli",
           "root_path": "",
-          "observe_headers": ["server", "date"],
+          "observe_headers": [
+            "server",
+            "date"
+          ],
           "environment": {
             "UVICORN_SERVER_HEADER": "false",
             "UVICORN_DATE_HEADER": "false"
@@ -1299,7 +1533,9 @@
       "case_id": "python-api.module-cli-explicit-server-date-headers-overrides-environment",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1310,7 +1546,9 @@
           "invocation": "module-cli",
           "root_path": "",
           "server_header": true,
-          "observe_headers": ["server"],
+          "observe_headers": [
+            "server"
+          ],
           "environment": {
             "UVICORN_SERVER_HEADER": "false",
             "UVICORN_DATE_HEADER": "false"
@@ -1322,7 +1560,9 @@
       "case_id": "python-api.module-cli-appends-custom-response-header",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1332,8 +1572,15 @@
           "lifespan": "auto",
           "invocation": "module-cli",
           "root_path": "",
-          "headers": [["X-Parity-Server", "uvicorn-cli"]],
-          "observe_headers": ["x-parity-server"]
+          "headers": [
+            [
+              "X-Parity-Server",
+              "uvicorn-cli"
+            ]
+          ],
+          "observe_headers": [
+            "x-parity-server"
+          ]
         }
       }
     },
@@ -1341,7 +1588,9 @@
       "case_id": "python-api.module-cli-custom-backlog-serves-request",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1359,7 +1608,9 @@
       "case_id": "python-api.run-http-applies-root-path",
       "profile": "python-api",
       "operation": "python.api.run-http-asgi-scope-contract",
-      "covers": ["python.api.run-http-asgi-scope-contract"],
+      "covers": [
+        "python.api.run-http-asgi-scope-contract"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1370,9 +1621,18 @@
           "invocation": "api",
           "root_path": "/mounted",
           "request_headers": [
-            ["x-asgi-expected-root-path-base64", "L21vdW50ZWQ="],
-            ["x-asgi-expected-path-base64", "L21vdW50ZWQvcHl0aG9uLWFwaS1yb290LXBhdGg="],
-            ["x-asgi-expected-raw-path-base64", "L3B5dGhvbi1hcGktcm9vdC1wYXRo"]
+            [
+              "x-asgi-expected-root-path-base64",
+              "L21vdW50ZWQ="
+            ],
+            [
+              "x-asgi-expected-path-base64",
+              "L21vdW50ZWQvcHl0aG9uLWFwaS1yb290LXBhdGg="
+            ],
+            [
+              "x-asgi-expected-raw-path-base64",
+              "L3B5dGhvbi1hcGktcm9vdC1wYXRo"
+            ]
           ]
         }
       }
@@ -1381,7 +1641,9 @@
       "case_id": "python-api.run-http-decodes-non-ascii-request-path",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1398,7 +1660,9 @@
       "case_id": "python-api.run-http-binds-ipv6-loopback",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1416,7 +1680,9 @@
       "case_id": "python-api.config-server-binds-ipv6-loopback",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1434,7 +1700,9 @@
       "case_id": "python-api.run-http-asgi-raw-path-preserves-unicode-root-path",
       "profile": "python-api",
       "operation": "python.api.run-http-asgi-scope-contract",
-      "covers": ["python.api.run-http-asgi-scope-contract"],
+      "covers": [
+        "python.api.run-http-asgi-scope-contract"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1445,9 +1713,18 @@
           "invocation": "api",
           "root_path": "/mounted/应用",
           "request_headers": [
-            ["x-asgi-expected-root-path-base64", "L21vdW50ZWQv5bqU55So"],
-            ["x-asgi-expected-path-base64", "L21vdW50ZWQv5bqU55SoL3B5dGhvbi1hcGktYXNnaS1zY29wZS1jb250cmFjdC/lupTnlKg="],
-            ["x-asgi-expected-raw-path-base64", "L3B5dGhvbi1hcGktYXNnaS1zY29wZS1jb250cmFjdC8lRTUlQkElOTQlRTclOTQlQTg="]
+            [
+              "x-asgi-expected-root-path-base64",
+              "L21vdW50ZWQv5bqU55So"
+            ],
+            [
+              "x-asgi-expected-path-base64",
+              "L21vdW50ZWQv5bqU55SoL3B5dGhvbi1hcGktYXNnaS1zY29wZS1jb250cmFjdC/lupTnlKg="
+            ],
+            [
+              "x-asgi-expected-raw-path-base64",
+              "L3B5dGhvbi1hcGktYXNnaS1zY29wZS1jb250cmFjdC8lRTUlQkElOTQlRTclOTQlQTg="
+            ]
           ]
         }
       }
@@ -1456,7 +1733,9 @@
       "case_id": "python-api.module-cli-timeout-keep-alive-closes-idle-connection",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1475,7 +1754,9 @@
       "case_id": "python-api.module-cli-default-graceful-shutdown-waits-for-lifespan",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1486,7 +1767,10 @@
           "invocation": "module-cli",
           "root_path": "",
           "request_headers": [
-            ["x-parity-lifespan-shutdown-delay", "11"]
+            [
+              "x-parity-lifespan-shutdown-delay",
+              "11"
+            ]
           ]
         }
       }
@@ -1495,7 +1779,9 @@
       "case_id": "python-api.module-cli-applies-root-path",
       "profile": "python-api",
       "operation": "python.api.run-http-asgi-scope-contract",
-      "covers": ["python.api.run-http-asgi-scope-contract"],
+      "covers": [
+        "python.api.run-http-asgi-scope-contract"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1506,9 +1792,18 @@
           "invocation": "module-cli",
           "root_path": "/mounted",
           "request_headers": [
-            ["x-asgi-expected-root-path-base64", "L21vdW50ZWQ="],
-            ["x-asgi-expected-path-base64", "L21vdW50ZWQvbW9kdWxlLWNsaS1yb290LXBhdGg="],
-            ["x-asgi-expected-raw-path-base64", "L21vZHVsZS1jbGktcm9vdC1wYXRo"]
+            [
+              "x-asgi-expected-root-path-base64",
+              "L21vdW50ZWQ="
+            ],
+            [
+              "x-asgi-expected-path-base64",
+              "L21vdW50ZWQvbW9kdWxlLWNsaS1yb290LXBhdGg="
+            ],
+            [
+              "x-asgi-expected-raw-path-base64",
+              "L21vZHVsZS1jbGktcm9vdC1wYXRo"
+            ]
           ]
         }
       }
@@ -1517,7 +1812,9 @@
       "case_id": "python-api.module-cli-root-path-envvar-applies-root-path",
       "profile": "python-api",
       "operation": "python.api.run-http-asgi-scope-contract",
-      "covers": ["python.api.run-http-asgi-scope-contract"],
+      "covers": [
+        "python.api.run-http-asgi-scope-contract"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1528,9 +1825,14 @@
           "invocation": "module-cli",
           "root_path": "/mounted",
           "root_path_from_environment": true,
-          "environment": {"UVICORN_ROOT_PATH": "/mounted"},
+          "environment": {
+            "UVICORN_ROOT_PATH": "/mounted"
+          },
           "request_headers": [
-            ["x-asgi-expected-root-path-base64", "L21vdW50ZWQ="],
+            [
+              "x-asgi-expected-root-path-base64",
+              "L21vdW50ZWQ="
+            ],
             [
               "x-asgi-expected-path-base64",
               "L21vdW50ZWQvbW9kdWxlLWNsaS1yb290LXBhdGgtZW52dmFy"
@@ -1547,7 +1849,9 @@
       "case_id": "python-api.module-cli-explicit-root-path-over-envvar",
       "profile": "python-api",
       "operation": "python.api.run-http-asgi-scope-contract",
-      "covers": ["python.api.run-http-asgi-scope-contract"],
+      "covers": [
+        "python.api.run-http-asgi-scope-contract"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1557,9 +1861,14 @@
           "lifespan": "auto",
           "invocation": "module-cli",
           "root_path": "/mounted",
-          "environment": {"UVICORN_ROOT_PATH": "/from-environment"},
+          "environment": {
+            "UVICORN_ROOT_PATH": "/from-environment"
+          },
           "request_headers": [
-            ["x-asgi-expected-root-path-base64", "L21vdW50ZWQ="],
+            [
+              "x-asgi-expected-root-path-base64",
+              "L21vdW50ZWQ="
+            ],
             [
               "x-asgi-expected-path-base64",
               "L21vdW50ZWQvbW9kdWxlLWNsaS1yb290LXBhdGgtZXhwbGljaXQ="
@@ -1576,7 +1885,9 @@
       "case_id": "python-api.run-applies-custom-default-response-header",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1586,8 +1897,15 @@
           "lifespan": "auto",
           "invocation": "api",
           "root_path": "",
-          "headers": [["X-Python-API-Default", "from-run"]],
-          "observe_headers": ["x-python-api-default"]
+          "headers": [
+            [
+              "X-Python-API-Default",
+              "from-run"
+            ]
+          ],
+          "observe_headers": [
+            "x-python-api-default"
+          ]
         }
       }
     },
@@ -1595,7 +1913,9 @@
       "case_id": "python-api.run-rejects-invalid-default-header-name",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1605,7 +1925,12 @@
           "lifespan": "auto",
           "invocation": "api",
           "root_path": "",
-          "headers": [["Invalid Header", "value"]],
+          "headers": [
+            [
+              "Invalid Header",
+              "value"
+            ]
+          ],
           "required_observations": {
             "response_received": false,
             "response_status": null,
@@ -1619,7 +1944,9 @@
       "case_id": "python-api.fault.connection-invalid-default-header-source-chain-suppresses-connection-log",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "verification": "fault-contract",
       "fault": {
         "point": "server.connection.invalid-default-header.source-chain",
@@ -1634,7 +1961,12 @@
           "lifespan": "auto",
           "invocation": "api",
           "root_path": "",
-          "headers": [["Invalid Header", "value"]],
+          "headers": [
+            [
+              "Invalid Header",
+              "value"
+            ]
+          ],
           "required_observations": {
             "response_received": false,
             "response_status": null,
@@ -1648,7 +1980,9 @@
       "case_id": "python-api.run-rejects-invalid-default-header-value",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1658,7 +1992,12 @@
           "lifespan": "auto",
           "invocation": "api",
           "root_path": "",
-          "headers": [["X-Python-API-Invalid", "bad\u0001value"]],
+          "headers": [
+            [
+              "X-Python-API-Invalid",
+              "bad\u0001value"
+            ]
+          ],
           "required_observations": {
             "response_received": false,
             "response_status": null,
@@ -1672,7 +2011,9 @@
       "case_id": "python-api.run-error-before-response-start-returns-500",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1682,8 +2023,15 @@
           "lifespan": "auto",
           "invocation": "api",
           "root_path": "",
-          "headers": [["X-Python-API-After-Error", "configured"]],
-          "observe_headers": ["x-python-api-after-error"],
+          "headers": [
+            [
+              "X-Python-API-After-Error",
+              "configured"
+            ]
+          ],
+          "observe_headers": [
+            "x-python-api-after-error"
+          ],
           "required_observations": {
             "response_received": true,
             "response_status": 500,
@@ -1697,7 +2045,9 @@
       "case_id": "python-api.run-applies-concurrency-limit",
       "profile": "python-api",
       "operation": "python.api.run-http-concurrency",
-      "covers": ["python.api.run-http-concurrency"],
+      "covers": [
+        "python.api.run-http-concurrency"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1715,7 +2065,9 @@
       "case_id": "python-api.module-cli-applies-concurrency-limit",
       "profile": "python-api",
       "operation": "python.api.run-http-concurrency",
-      "covers": ["python.api.run-http-concurrency"],
+      "covers": [
+        "python.api.run-http-concurrency"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1733,7 +2085,9 @@
       "case_id": "python-api.run-zero-concurrency-rejects-request",
       "profile": "python-api",
       "operation": "python.api.run-http-concurrency",
-      "covers": ["python.api.run-http-concurrency"],
+      "covers": [
+        "python.api.run-http-concurrency"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1751,7 +2105,9 @@
       "case_id": "python-api.run-zero-concurrency-rejects-http10-request",
       "profile": "python-api",
       "operation": "python.api.run-http-concurrency",
-      "covers": ["python.api.run-http-concurrency"],
+      "covers": [
+        "python.api.run-http-concurrency"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1776,7 +2132,9 @@
       "case_id": "python-api.config-server-applies-concurrency-limit",
       "profile": "python-api",
       "operation": "python.api.run-http-concurrency",
-      "covers": ["python.api.run-http-concurrency"],
+      "covers": [
+        "python.api.run-http-concurrency"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1794,7 +2152,9 @@
       "case_id": "python-api.run-preserves-custom-default-header-value-order",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1805,10 +2165,18 @@
           "invocation": "api",
           "root_path": "",
           "headers": [
-            ["X-Python-API-Sequence", "first"],
-            ["X-Python-API-Sequence", "second"]
+            [
+              "X-Python-API-Sequence",
+              "first"
+            ],
+            [
+              "X-Python-API-Sequence",
+              "second"
+            ]
           ],
-          "observe_headers": ["x-python-api-sequence"]
+          "observe_headers": [
+            "x-python-api-sequence"
+          ]
         }
       }
     },
@@ -1816,7 +2184,9 @@
       "case_id": "python-api.run-applies-trusted-proxy-headers",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1827,8 +2197,14 @@
           "invocation": "api",
           "root_path": "",
           "request_headers": [
-            ["x-forwarded-for", "198.51.100.25, 127.0.0.1"],
-            ["x-forwarded-proto", "https"]
+            [
+              "x-forwarded-for",
+              "198.51.100.25, 127.0.0.1"
+            ],
+            [
+              "x-forwarded-proto",
+              "https"
+            ]
           ],
           "observe_scope": true,
           "proxy_headers": true,
@@ -1840,7 +2216,9 @@
       "case_id": "python-api.run-uses-forwarded-allow-ips-environment",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1851,8 +2229,14 @@
           "invocation": "api",
           "root_path": "",
           "request_headers": [
-            ["x-forwarded-for", "198.51.100.25, 127.0.0.1"],
-            ["x-forwarded-proto", "https"]
+            [
+              "x-forwarded-for",
+              "198.51.100.25, 127.0.0.1"
+            ],
+            [
+              "x-forwarded-proto",
+              "https"
+            ]
           ],
           "observe_scope": true,
           "proxy_headers": true,
@@ -1866,7 +2250,9 @@
       "case_id": "python-api.run-argument-overrides-forwarded-allow-ips-environment",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1877,8 +2263,14 @@
           "invocation": "api",
           "root_path": "",
           "request_headers": [
-            ["x-forwarded-for", "198.51.100.25, 127.0.0.1"],
-            ["x-forwarded-proto", "https"]
+            [
+              "x-forwarded-for",
+              "198.51.100.25, 127.0.0.1"
+            ],
+            [
+              "x-forwarded-proto",
+              "https"
+            ]
           ],
           "observe_scope": true,
           "proxy_headers": true,
@@ -1893,7 +2285,9 @@
       "case_id": "python-api.module-cli-applies-trusted-proxy-headers",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1904,8 +2298,14 @@
           "invocation": "module-cli",
           "root_path": "",
           "request_headers": [
-            ["x-forwarded-for", "198.51.100.25, 127.0.0.1"],
-            ["x-forwarded-proto", "https"]
+            [
+              "x-forwarded-for",
+              "198.51.100.25, 127.0.0.1"
+            ],
+            [
+              "x-forwarded-proto",
+              "https"
+            ]
           ],
           "proxy_headers": true,
           "forwarded_allow_ips": "127.0.0.1,::1",
@@ -1919,7 +2319,9 @@
       "case_id": "python-api.module-cli-uses-forwarded-allow-ips-environment",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1930,8 +2332,14 @@
           "invocation": "module-cli",
           "root_path": "",
           "request_headers": [
-            ["x-forwarded-for", "198.51.100.25, 127.0.0.1"],
-            ["x-forwarded-proto", "https"]
+            [
+              "x-forwarded-for",
+              "198.51.100.25, 127.0.0.1"
+            ],
+            [
+              "x-forwarded-proto",
+              "https"
+            ]
           ],
           "environment": {
             "FORWARDED_ALLOW_IPS": "127.0.0.1,::1"
@@ -1943,7 +2351,9 @@
       "case_id": "python-api.module-cli-disables-proxy-headers",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1954,8 +2364,14 @@
           "invocation": "module-cli",
           "root_path": "",
           "request_headers": [
-            ["x-forwarded-for", "198.51.100.25, 127.0.0.1"],
-            ["x-forwarded-proto", "https"]
+            [
+              "x-forwarded-for",
+              "198.51.100.25, 127.0.0.1"
+            ],
+            [
+              "x-forwarded-proto",
+              "https"
+            ]
           ],
           "proxy_headers": false
         }
@@ -1965,7 +2381,9 @@
       "case_id": "python-api.module-cli-disables-proxy-headers-from-environment",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -1976,8 +2394,14 @@
           "invocation": "module-cli",
           "root_path": "",
           "request_headers": [
-            ["x-forwarded-for", "198.51.100.25, 127.0.0.1"],
-            ["x-forwarded-proto", "https"]
+            [
+              "x-forwarded-for",
+              "198.51.100.25, 127.0.0.1"
+            ],
+            [
+              "x-forwarded-proto",
+              "https"
+            ]
           ],
           "environment": {
             "UVICORN_PROXY_HEADERS": "false"
@@ -1989,7 +2413,9 @@
       "case_id": "python-api.run-auto-detects-asgi2-callable",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -2008,7 +2434,9 @@
       "case_id": "python-api.run-explicit-asgi2-interface",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -2027,7 +2455,9 @@
       "case_id": "python-api.module-cli-auto-detects-asgi2-callable",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -2046,7 +2476,9 @@
       "case_id": "python-api.module-cli-explicit-asgi2-interface",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -2065,7 +2497,9 @@
       "case_id": "python-api.run-applies-websocket-message-size-limit",
       "profile": "python-api",
       "operation": "python.api.run-websocket",
-      "covers": ["python.api.run-websocket"],
+      "covers": [
+        "python.api.run-websocket"
+      ],
       "required_observations": {
         "handshake_status": 101,
         "close_code": 1009,
@@ -2085,7 +2519,9 @@
       "case_id": "python-api.module-cli-websocket-message-size-limit",
       "profile": "python-api",
       "operation": "python.api.run-websocket",
-      "covers": ["python.api.run-websocket"],
+      "covers": [
+        "python.api.run-websocket"
+      ],
       "required_observations": {
         "handshake_status": 101,
         "close_code": 1009,
@@ -2107,7 +2543,9 @@
       "case_id": "python-api.module-cli-websocket-wsproto-exchange",
       "profile": "python-api",
       "operation": "python.api.run-websocket",
-      "covers": ["python.api.run-websocket"],
+      "covers": [
+        "python.api.run-websocket"
+      ],
       "required_observations": {
         "handshake_status": 101,
         "close_code": 1000,
@@ -2128,7 +2566,9 @@
       "case_id": "python-api.module-cli-websocket-bounded-queue-drains-burst",
       "profile": "python-api",
       "operation": "python.api.run-websocket",
-      "covers": ["python.api.run-websocket"],
+      "covers": [
+        "python.api.run-websocket"
+      ],
       "required_observations": {
         "handshake_status": 101,
         "close_code": 1000
@@ -2150,7 +2590,9 @@
       "case_id": "python-api.module-cli-websocket-server-ping-interval",
       "profile": "python-api",
       "operation": "python.api.run-websocket",
-      "covers": ["python.api.run-websocket"],
+      "covers": [
+        "python.api.run-websocket"
+      ],
       "required_observations": {
         "handshake_status": 101,
         "close_code": 1011,
@@ -2177,7 +2619,9 @@
       "case_id": "python-api.module-cli-websocket-default-per-message-deflate",
       "profile": "python-api",
       "operation": "python.api.run-websocket",
-      "covers": ["python.api.run-websocket"],
+      "covers": [
+        "python.api.run-websocket"
+      ],
       "required_observations": {
         "handshake_status": 101,
         "close_code": 1000,
@@ -2200,7 +2644,9 @@
       "case_id": "python-api.module-cli-websocket-disabled-per-message-deflate",
       "profile": "python-api",
       "operation": "python.api.run-websocket",
-      "covers": ["python.api.run-websocket"],
+      "covers": [
+        "python.api.run-websocket"
+      ],
       "required_observations": {
         "handshake_status": 101,
         "close_code": 1000,
@@ -2224,7 +2670,9 @@
       "case_id": "python-api.run-websocket-over-unix-domain-socket",
       "profile": "python-api",
       "operation": "python.api.run-websocket",
-      "covers": ["python.api.run-websocket"],
+      "covers": [
+        "python.api.run-websocket"
+      ],
       "api": {
         "run_websocket": {
           "path": "/ws",
@@ -2241,7 +2689,9 @@
       "case_id": "python-api.run-websocket-with-ping-timeout-disabled",
       "profile": "python-api",
       "operation": "python.api.run-websocket-keepalive-no-timeout",
-      "covers": ["python.api.run-websocket-keepalive-no-timeout"],
+      "covers": [
+        "python.api.run-websocket-keepalive-no-timeout"
+      ],
       "api": {
         "run_websocket": {
           "path": "/ws",
@@ -2259,7 +2709,9 @@
       "case_id": "python-api.run-websocket-with-unbounded-ping-timeout",
       "profile": "python-api",
       "operation": "python.api.run-websocket-keepalive-unbounded-timeout",
-      "covers": ["python.api.run-websocket-keepalive-unbounded-timeout"],
+      "covers": [
+        "python.api.run-websocket-keepalive-unbounded-timeout"
+      ],
       "api": {
         "run_websocket": {
           "path": "/ws",
@@ -2267,7 +2719,7 @@
           "ws_max_size": 64,
           "ws_max_queue": 1,
           "ws_ping_interval": 0.1,
-          "ws_ping_timeout": 1e300,
+          "ws_ping_timeout": 1e+300,
           "keepalive_idle_seconds": 0.35,
           "timeout_seconds": 5
         }
@@ -2277,14 +2729,16 @@
       "case_id": "python-api.run-websocket-with-infinite-ping-interval",
       "profile": "python-api",
       "operation": "python.api.run-websocket-keepalive-infinite-interval",
-      "covers": ["python.api.run-websocket-keepalive-infinite-interval"],
+      "covers": [
+        "python.api.run-websocket-keepalive-infinite-interval"
+      ],
       "api": {
         "run_websocket": {
           "path": "/ws",
           "message": "infinite-interval-remains-open",
           "ws_max_size": 64,
           "ws_max_queue": 1,
-          "ws_ping_interval": 1e9999,
+          "ws_ping_interval": Infinity,
           "ws_ping_timeout": 0.3,
           "keepalive_idle_seconds": 0.35,
           "timeout_seconds": 5
@@ -2295,14 +2749,18 @@
       "case_id": "python-api.run-websocket-with-nan-ping-interval",
       "profile": "python-api",
       "operation": "python.api.run-websocket-keepalive-nan-interval",
-      "covers": ["python.api.run-websocket-keepalive-nan-interval"],
+      "covers": [
+        "python.api.run-websocket-keepalive-nan-interval"
+      ],
       "api": {
         "run_websocket": {
           "path": "/ws",
           "message": "nan-interval-remains-open",
           "ws_max_size": 64,
           "ws_max_queue": 1,
-          "ws_ping_interval": {"$float": "nan"},
+          "ws_ping_interval": {
+            "$float": "nan"
+          },
           "ws_ping_timeout": 0.3,
           "timeout_seconds": 5
         }
@@ -2312,7 +2770,9 @@
       "case_id": "python-api.run-websocket-with-nan-ping-timeout",
       "profile": "python-api",
       "operation": "python.api.run-websocket-keepalive-nan-timeout",
-      "covers": ["python.api.run-websocket-keepalive-nan-timeout"],
+      "covers": [
+        "python.api.run-websocket-keepalive-nan-timeout"
+      ],
       "api": {
         "run_websocket": {
           "path": "/ws",
@@ -2320,7 +2780,9 @@
           "ws_max_size": 64,
           "ws_max_queue": 1,
           "ws_ping_interval": 0.01,
-          "ws_ping_timeout": {"$float": "nan"},
+          "ws_ping_timeout": {
+            "$float": "nan"
+          },
           "keepalive_idle_seconds": 0.5,
           "timeout_seconds": 5
         }
@@ -2330,7 +2792,9 @@
       "case_id": "python-api.run-websocket-with-keepalive-disabled",
       "profile": "python-api",
       "operation": "python.api.run-websocket-keepalive-disabled",
-      "covers": ["python.api.run-websocket-keepalive-disabled"],
+      "covers": [
+        "python.api.run-websocket-keepalive-disabled"
+      ],
       "api": {
         "run_websocket": {
           "path": "/ws",
@@ -2347,7 +2811,9 @@
       "case_id": "python-api.run-websocket-zero-ping-interval-disables-keepalive",
       "profile": "python-api",
       "operation": "python.api.run-websocket",
-      "covers": ["python.api.run-websocket"],
+      "covers": [
+        "python.api.run-websocket"
+      ],
       "api": {
         "run_websocket": {
           "path": "/ws",
@@ -2365,7 +2831,9 @@
       "case_id": "python-api.run-websocket-negative-ping-timeout-closes-1011",
       "profile": "python-api",
       "operation": "python.api.run-websocket-keepalive-negative-timeout",
-      "covers": ["python.api.run-websocket-keepalive-negative-timeout"],
+      "covers": [
+        "python.api.run-websocket-keepalive-negative-timeout"
+      ],
       "api": {
         "run_websocket": {
           "path": "/ws",
@@ -2383,7 +2851,9 @@
       "case_id": "python-api.run-websocket-default-per-message-deflate",
       "profile": "python-api",
       "operation": "python.api.run-websocket",
-      "covers": ["python.api.run-websocket"],
+      "covers": [
+        "python.api.run-websocket"
+      ],
       "required_observations": {
         "handshake_status": 101,
         "close_code": 1000,
@@ -2404,7 +2874,9 @@
       "case_id": "python-api.run-websocket-disabled-per-message-deflate",
       "profile": "python-api",
       "operation": "python.api.run-websocket",
-      "covers": ["python.api.run-websocket"],
+      "covers": [
+        "python.api.run-websocket"
+      ],
       "required_observations": {
         "handshake_status": 101,
         "close_code": 1000,
@@ -2426,7 +2898,9 @@
       "case_id": "python-api.run-websocket-compressed-message-size-limit",
       "profile": "python-api",
       "operation": "python.api.run-websocket",
-      "covers": ["python.api.run-websocket"],
+      "covers": [
+        "python.api.run-websocket"
+      ],
       "required_observations": {
         "handshake_status": 101,
         "close_code": 1009,
@@ -2447,7 +2921,9 @@
       "case_id": "python-api.server-started-follows-lifespan-readiness",
       "profile": "python-api",
       "operation": "python.api.server-readiness",
-      "covers": ["python.api.server-readiness"],
+      "covers": [
+        "python.api.server-readiness"
+      ],
       "api": {
         "server_readiness": true
       }
@@ -2456,7 +2932,9 @@
       "case_id": "python-api.server-callback-notify-stops-server",
       "profile": "python-api",
       "operation": "python.api.server-callback-notify",
-      "covers": ["python.api.server-callback-notify"],
+      "covers": [
+        "python.api.server-callback-notify"
+      ],
       "api": {
         "server_callback_notify": true
       }
@@ -2465,7 +2943,9 @@
       "case_id": "python-api.server-startup-failure-leaves-not-started",
       "profile": "python-api",
       "operation": "python.api.server-startup-failure-state",
-      "covers": ["python.api.server-startup-failure-state"],
+      "covers": [
+        "python.api.server-startup-failure-state"
+      ],
       "api": {
         "server_startup_failure": true
       }
@@ -2474,7 +2954,9 @@
       "case_id": "python-api.server-startup-bind-failure-shuts-down-lifespan",
       "profile": "python-api",
       "operation": "python.api.server-startup-bind-failure-lifespan-cleanup",
-      "covers": ["python.api.server-startup-bind-failure-lifespan-cleanup"],
+      "covers": [
+        "python.api.server-startup-bind-failure-lifespan-cleanup"
+      ],
       "api": {
         "server_startup_bind_failure_lifespan_cleanup": true
       }
@@ -2483,7 +2965,9 @@
       "case_id": "python-api.server-startup-bind-failure-shutdown-error-logged",
       "profile": "python-api",
       "operation": "python.api.server-startup-bind-shutdown-error-log",
-      "covers": ["python.api.server-startup-bind-shutdown-error-log"],
+      "covers": [
+        "python.api.server-startup-bind-shutdown-error-log"
+      ],
       "verification": "fault-contract",
       "fault": {
         "point": "lifespan.shutdown.task-join-error",
@@ -2497,7 +2981,9 @@
       "case_id": "python-api.server-startup-uds-replaces-existing-socket-and-shuts-down-lifespan",
       "profile": "python-api",
       "operation": "python.api.server-startup-uds-socket-replacement-lifespan-cleanup",
-      "covers": ["python.api.server-startup-uds-socket-replacement-lifespan-cleanup"],
+      "covers": [
+        "python.api.server-startup-uds-socket-replacement-lifespan-cleanup"
+      ],
       "api": {
         "server_startup_uds_socket_replacement_lifespan_cleanup": true
       }
@@ -2506,7 +2992,9 @@
       "case_id": "python-api.fault.uds-permissions-error-propagates-and-cleans-lifespan",
       "profile": "python-api",
       "operation": "python.api.server-startup-uds-socket-replacement-lifespan-cleanup",
-      "covers": ["python.api.server-startup-uds-socket-replacement-lifespan-cleanup"],
+      "covers": [
+        "python.api.server-startup-uds-socket-replacement-lifespan-cleanup"
+      ],
       "verification": "fault-contract",
       "fault": {
         "point": "server.unix-listener.set-permissions-error",
@@ -2520,7 +3008,9 @@
       "case_id": "python-api.concurrent-startup-failure-waiter",
       "profile": "python-api",
       "operation": "python.api.server-startup-failure-waiter",
-      "covers": ["python.api.server-startup-failure-waiter"],
+      "covers": [
+        "python.api.server-startup-failure-waiter"
+      ],
       "api": {
         "server_startup_failure_waiter": true
       }
@@ -2529,7 +3019,9 @@
       "case_id": "python-api.server-serve-cancellation-listener-state",
       "profile": "python-api",
       "operation": "python.api.server-serve-cancellation",
-      "covers": ["python.api.server-serve-cancellation"],
+      "covers": [
+        "python.api.server-serve-cancellation"
+      ],
       "api": {
         "server_serve_cancellation": {
           "phase": "after-startup"
@@ -2540,7 +3032,9 @@
       "case_id": "python-api.server-serve-cancellation-during-startup",
       "profile": "python-api",
       "operation": "python.api.server-serve-cancellation",
-      "covers": ["python.api.server-serve-cancellation"],
+      "covers": [
+        "python.api.server-serve-cancellation"
+      ],
       "api": {
         "server_serve_cancellation": {
           "phase": "during-startup"
@@ -2551,7 +3045,9 @@
       "case_id": "python-api.cancel-startup-before-listener-and-shutdown-lifespan",
       "profile": "python-api",
       "operation": "python.api.server-startup-cancel-before-listener",
-      "covers": ["python.api.server-startup-cancel-before-listener"],
+      "covers": [
+        "python.api.server-startup-cancel-before-listener"
+      ],
       "api": {
         "server_startup_cancel_before_listener": true
       }
@@ -2560,7 +3056,9 @@
       "case_id": "python-api.cancel-startup-shutdown-task-join-error",
       "profile": "python-api",
       "operation": "python.api.server-startup-cancel-shutdown-error",
-      "covers": ["python.api.server-startup-cancel-shutdown-error"],
+      "covers": [
+        "python.api.server-startup-cancel-shutdown-error"
+      ],
       "verification": "fault-contract",
       "fault": {
         "point": "lifespan.shutdown.task-join-error",
@@ -2574,7 +3072,9 @@
       "case_id": "python-api.cancel-startup-without-lifespan-before-listener",
       "profile": "python-api",
       "operation": "python.api.server-startup-cancel-without-lifespan",
-      "covers": ["python.api.server-startup-cancel-without-lifespan"],
+      "covers": [
+        "python.api.server-startup-cancel-without-lifespan"
+      ],
       "api": {
         "server_startup_cancel_without_lifespan": true
       }
@@ -2583,7 +3083,9 @@
       "case_id": "python-api.cancel-startup-during-prebound-listener-transfer",
       "profile": "python-api",
       "operation": "python.api.server-startup-cancel-during-prebound-transfer",
-      "covers": ["python.api.server-startup-cancel-during-prebound-transfer"],
+      "covers": [
+        "python.api.server-startup-cancel-during-prebound-transfer"
+      ],
       "api": {
         "server_startup_cancel_during_prebound_transfer": true
       }
@@ -2592,7 +3094,9 @@
       "case_id": "python-api.cancel-startup-during-prebound-transfer-without-lifespan",
       "profile": "python-api",
       "operation": "python.api.server-startup-cancel-during-prebound-transfer-without-lifespan",
-      "covers": ["python.api.server-startup-cancel-during-prebound-transfer-without-lifespan"],
+      "covers": [
+        "python.api.server-startup-cancel-during-prebound-transfer-without-lifespan"
+      ],
       "api": {
         "server_startup_cancel_during_prebound_transfer_without_lifespan": true
       }
@@ -2601,7 +3105,9 @@
       "case_id": "python-api.direct-server-lifespan-boolean-false",
       "profile": "python-api",
       "operation": "python.api.server-lifespan-mode-validation",
-      "covers": ["python.api.server-lifespan-mode-validation"],
+      "covers": [
+        "python.api.server-lifespan-mode-validation"
+      ],
       "api": {
         "server_lifespan_mode": {
           "mode": "boolean-disabled",
@@ -2615,7 +3121,9 @@
       "case_id": "python-api.direct-server-lifespan-boolean-true",
       "profile": "python-api",
       "operation": "python.api.server-lifespan-mode-validation",
-      "covers": ["python.api.server-lifespan-mode-validation"],
+      "covers": [
+        "python.api.server-lifespan-mode-validation"
+      ],
       "api": {
         "server_lifespan_mode": {
           "mode": "boolean-enabled"
@@ -2626,7 +3134,9 @@
       "case_id": "python-api.direct-server-rejects-invalid-lifespan-mode",
       "profile": "python-api",
       "operation": "python.api.server-lifespan-mode-validation",
-      "covers": ["python.api.server-lifespan-mode-validation"],
+      "covers": [
+        "python.api.server-lifespan-mode-validation"
+      ],
       "api": {
         "server_lifespan_mode": {
           "mode": "invalid-string"
@@ -2637,7 +3147,9 @@
       "case_id": "python-api.direct-server-rejects-invalid-lifespan-type",
       "profile": "python-api",
       "operation": "python.api.server-lifespan-mode-validation",
-      "covers": ["python.api.server-lifespan-mode-validation"],
+      "covers": [
+        "python.api.server-lifespan-mode-validation"
+      ],
       "api": {
         "server_lifespan_mode": {
           "mode": "invalid-type"
@@ -2648,7 +3160,9 @@
       "case_id": "python-api.server-on-propagates-lifespan-startup-failure",
       "profile": "python-api",
       "operation": "python.api.server-lifespan-startup",
-      "covers": ["python.api.server-lifespan-startup"],
+      "covers": [
+        "python.api.server-lifespan-startup"
+      ],
       "api": {
         "server_lifespan_startup": {
           "lifespan": "on",
@@ -2661,7 +3175,9 @@
       "case_id": "python-api.server-on-rejects-unexpected-lifespan-startup-event",
       "profile": "python-api",
       "operation": "python.api.server-lifespan-startup",
-      "covers": ["python.api.server-lifespan-startup"],
+      "covers": [
+        "python.api.server-lifespan-startup"
+      ],
       "api": {
         "server_lifespan_startup": {
           "lifespan": "on",
@@ -2674,7 +3190,9 @@
       "case_id": "python-api.server-auto-falls-back-on-unexpected-lifespan-startup-event",
       "profile": "python-api",
       "operation": "python.api.server-lifespan-auto-fallback",
-      "covers": ["python.api.server-lifespan-auto-fallback"],
+      "covers": [
+        "python.api.server-lifespan-auto-fallback"
+      ],
       "api": {
         "server_lifespan_startup": {
           "lifespan": "auto",
@@ -2687,7 +3205,9 @@
       "case_id": "python-api.server-auto-falls-back-on-lifespan-app-exception",
       "profile": "python-api",
       "operation": "python.api.server-lifespan-auto-fallback",
-      "covers": ["python.api.server-lifespan-auto-fallback"],
+      "covers": [
+        "python.api.server-lifespan-auto-fallback"
+      ],
       "api": {
         "server_lifespan_startup": {
           "lifespan": "auto",
@@ -2700,7 +3220,9 @@
       "case_id": "python-api.server-auto-starts-after-lifespan-callable-returns",
       "profile": "python-api",
       "operation": "python.api.server-lifespan-early-return",
-      "covers": ["python.api.server-lifespan-early-return"],
+      "covers": [
+        "python.api.server-lifespan-early-return"
+      ],
       "api": {
         "server_lifespan_startup": {
           "lifespan": "auto",
@@ -2713,7 +3235,9 @@
       "case_id": "python-api.server-on-starts-after-lifespan-callable-returns",
       "profile": "python-api",
       "operation": "python.api.server-lifespan-early-return",
-      "covers": ["python.api.server-lifespan-early-return"],
+      "covers": [
+        "python.api.server-lifespan-early-return"
+      ],
       "api": {
         "server_lifespan_startup": {
           "lifespan": "on",
@@ -2726,7 +3250,9 @@
       "case_id": "python-api.module-cli-on-exits-on-lifespan-startup-error",
       "profile": "python-api",
       "operation": "python.api.module-cli-lifespan-startup",
-      "covers": ["python.api.module-cli-lifespan-startup"],
+      "covers": [
+        "python.api.module-cli-lifespan-startup"
+      ],
       "api": {
         "module_cli_lifespan_startup": {
           "lifespan": "on",
@@ -2739,7 +3265,9 @@
       "case_id": "python-api.module-cli-forces-colored-server-logs",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -2757,7 +3285,9 @@
       "case_id": "python-api.run-forces-colored-server-logs",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -2777,7 +3307,9 @@
       "case_id": "python-api.module-cli-disables-colored-server-logs",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -2795,7 +3327,9 @@
       "case_id": "python-api.module-cli-forces-colored-server-logs-from-environment",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -2805,7 +3339,9 @@
           "lifespan": "auto",
           "invocation": "module-cli",
           "root_path": "",
-          "environment": {"UVICORN_USE_COLORS": "true"}
+          "environment": {
+            "UVICORN_USE_COLORS": "true"
+          }
         }
       }
     },
@@ -2813,7 +3349,9 @@
       "case_id": "python-api.module-cli-explicit-no-colors-overrides-environment",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -2824,7 +3362,9 @@
           "invocation": "module-cli",
           "root_path": "",
           "use_colors": false,
-          "environment": {"UVICORN_USE_COLORS": "true"}
+          "environment": {
+            "UVICORN_USE_COLORS": "true"
+          }
         }
       }
     },
@@ -2832,12 +3372,19 @@
       "case_id": "python-api.run-serves-wsgi-request",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
           "path": "/python-api-wsgi?name=rust",
-          "request_headers": [["X-Python-API", "wsgi"]],
+          "request_headers": [
+            [
+              "X-Python-API",
+              "wsgi"
+            ]
+          ],
           "shutdown_signal": "SIGINT",
           "post_response_settle_seconds": 0.25,
           "timeout_seconds": 5,
@@ -2853,14 +3400,22 @@
       "case_id": "python-api.run-serves-wsgi-post-body",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "POST",
           "path": "/python-api-wsgi?name=rust",
           "request_headers": [
-            ["Content-Type", "application/octet-stream"],
-            ["X-Python-API", "wsgi-body"]
+            [
+              "Content-Type",
+              "application/octet-stream"
+            ],
+            [
+              "X-Python-API",
+              "wsgi-body"
+            ]
           ],
           "request_body_base64": "d3NnaS1ib2R5LXBhcml0eQ==",
           "shutdown_signal": "SIGINT",
@@ -2878,14 +3433,22 @@
       "case_id": "python-api.module-cli-serves-wsgi-post-body",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "POST",
           "path": "/python-api-wsgi?name=rust",
           "request_headers": [
-            ["Content-Type", "application/octet-stream"],
-            ["X-Python-API", "wsgi-body"]
+            [
+              "Content-Type",
+              "application/octet-stream"
+            ],
+            [
+              "X-Python-API",
+              "wsgi-body"
+            ]
           ],
           "request_body_base64": "d3NnaS1ib2R5LXBhcml0eQ==",
           "shutdown_signal": "SIGINT",
@@ -2903,15 +3466,26 @@
       "case_id": "python-api.run-serves-wsgi-chunked-post-body",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "POST",
           "path": "/python-api-wsgi?name=rust",
           "request_headers": [
-            ["Content-Type", "application/octet-stream"],
-            ["Transfer-Encoding", "chunked"],
-            ["X-Python-API", "wsgi-chunked-body"]
+            [
+              "Content-Type",
+              "application/octet-stream"
+            ],
+            [
+              "Transfer-Encoding",
+              "chunked"
+            ],
+            [
+              "X-Python-API",
+              "wsgi-chunked-body"
+            ]
           ],
           "request_body_base64": "Y2h1bmtlZC1ib2R5",
           "shutdown_signal": "SIGINT",
@@ -2928,15 +3502,26 @@
       "case_id": "python-api.module-cli-serves-wsgi-chunked-post-body",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "POST",
           "path": "/python-api-wsgi?name=rust",
           "request_headers": [
-            ["Content-Type", "application/octet-stream"],
-            ["Transfer-Encoding", "chunked"],
-            ["X-Python-API", "wsgi-chunked-body"]
+            [
+              "Content-Type",
+              "application/octet-stream"
+            ],
+            [
+              "Transfer-Encoding",
+              "chunked"
+            ],
+            [
+              "X-Python-API",
+              "wsgi-chunked-body"
+            ]
           ],
           "request_body_base64": "Y2h1bmtlZC1ib2R5",
           "shutdown_signal": "SIGINT",
@@ -2954,17 +3539,31 @@
       "case_id": "python-api.run-serves-wsgi-multi-chunk-post-body",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "POST",
           "path": "/python-api-wsgi?name=rust",
           "request_headers": [
-            ["Content-Type", "application/octet-stream"],
-            ["Transfer-Encoding", "chunked"],
-            ["X-Python-API", "wsgi-multi-chunk-body"]
+            [
+              "Content-Type",
+              "application/octet-stream"
+            ],
+            [
+              "Transfer-Encoding",
+              "chunked"
+            ],
+            [
+              "X-Python-API",
+              "wsgi-multi-chunk-body"
+            ]
           ],
-          "request_body_chunks_base64": ["Y2h1bmtlZC0=", "d3NnaS1ib2R5"],
+          "request_body_chunks_base64": [
+            "Y2h1bmtlZC0=",
+            "d3NnaS1ib2R5"
+          ],
           "shutdown_signal": "SIGINT",
           "post_response_settle_seconds": 0.25,
           "timeout_seconds": 5,
@@ -2980,17 +3579,31 @@
       "case_id": "python-api.module-cli-serves-wsgi-multi-chunk-post-body",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "POST",
           "path": "/python-api-wsgi?name=rust",
           "request_headers": [
-            ["Content-Type", "application/octet-stream"],
-            ["Transfer-Encoding", "chunked"],
-            ["X-Python-API", "wsgi-multi-chunk-body"]
+            [
+              "Content-Type",
+              "application/octet-stream"
+            ],
+            [
+              "Transfer-Encoding",
+              "chunked"
+            ],
+            [
+              "X-Python-API",
+              "wsgi-multi-chunk-body"
+            ]
           ],
-          "request_body_chunks_base64": ["Y2h1bmtlZC0=", "d3NnaS1ib2R5"],
+          "request_body_chunks_base64": [
+            "Y2h1bmtlZC0=",
+            "d3NnaS1ib2R5"
+          ],
           "shutdown_signal": "SIGINT",
           "post_response_settle_seconds": 0.25,
           "timeout_seconds": 5,
@@ -3006,25 +3619,92 @@
       "case_id": "python-api.run-serves-wsgi-sixty-four-chunk-post-body",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "POST",
           "path": "/python-api-wsgi?name=rust",
           "request_headers": [
-            ["Content-Type", "application/octet-stream"],
-            ["Transfer-Encoding", "chunked"],
-            ["X-Python-API", "wsgi-64-chunk-body"]
+            [
+              "Content-Type",
+              "application/octet-stream"
+            ],
+            [
+              "Transfer-Encoding",
+              "chunked"
+            ],
+            [
+              "X-Python-API",
+              "wsgi-64-chunk-body"
+            ]
           ],
           "request_body_chunks_base64": [
-            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
-            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
-            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
-            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
-            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
-            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
-            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
-            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ=="
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ=="
           ],
           "shutdown_signal": "SIGINT",
           "timeout_seconds": 5,
@@ -3040,25 +3720,92 @@
       "case_id": "python-api.module-cli-serves-wsgi-sixty-four-chunk-post-body",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "POST",
           "path": "/python-api-wsgi?name=rust",
           "request_headers": [
-            ["Content-Type", "application/octet-stream"],
-            ["Transfer-Encoding", "chunked"],
-            ["X-Python-API", "wsgi-64-chunk-body"]
+            [
+              "Content-Type",
+              "application/octet-stream"
+            ],
+            [
+              "Transfer-Encoding",
+              "chunked"
+            ],
+            [
+              "X-Python-API",
+              "wsgi-64-chunk-body"
+            ]
           ],
           "request_body_chunks_base64": [
-            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
-            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
-            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
-            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
-            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
-            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
-            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==",
-            "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ==", "QQ=="
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ==",
+            "QQ=="
           ],
           "shutdown_signal": "SIGINT",
           "timeout_seconds": 5,
@@ -3074,7 +3821,9 @@
       "case_id": "python-api.run-streams-wsgi-response-before-app-completes",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3093,7 +3842,9 @@
       "case_id": "python-api.module-cli-streams-wsgi-response-before-app-completes",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3112,7 +3863,9 @@
       "case_id": "python-api.run-serves-successful-wsgi-application-factory",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3132,7 +3885,9 @@
       "case_id": "python-api.module-cli-serves-successful-wsgi-application-factory",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3153,7 +3908,9 @@
       "case_id": "python-api.run-wsgi-application-error-returns-500",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3177,7 +3934,9 @@
       "case_id": "python-api.module-cli-wsgi-application-error-returns-500",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3253,7 +4012,9 @@
       "case_id": "python-api.run-wsgi-error-after-response-start-closes-stream",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3277,7 +4038,9 @@
       "case_id": "python-api.module-cli-wsgi-error-after-response-start-closes-stream",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3301,12 +4064,19 @@
       "case_id": "python-api.run-serves-wsgi-request-auto-lifespan",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
           "path": "/python-api-wsgi?name=rust",
-          "request_headers": [["X-Python-API", "wsgi"]],
+          "request_headers": [
+            [
+              "X-Python-API",
+              "wsgi"
+            ]
+          ],
           "shutdown_signal": "SIGINT",
           "post_response_settle_seconds": 0.25,
           "timeout_seconds": 5,
@@ -3322,12 +4092,19 @@
       "case_id": "python-api.run-serves-wsgi-request-auto-lifespan-with-logging",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
           "path": "/python-api-wsgi?name=rust",
-          "request_headers": [["X-Python-API", "wsgi"]],
+          "request_headers": [
+            [
+              "X-Python-API",
+              "wsgi"
+            ]
+          ],
           "shutdown_signal": "SIGINT",
           "post_response_settle_seconds": 0.25,
           "timeout_seconds": 5,
@@ -3344,12 +4121,19 @@
       "case_id": "python-api.module-cli-serves-wsgi-request",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
           "path": "/python-api-wsgi?name=rust",
-          "request_headers": [["X-Python-API", "wsgi"]],
+          "request_headers": [
+            [
+              "X-Python-API",
+              "wsgi"
+            ]
+          ],
           "shutdown_signal": "SIGINT",
           "post_response_settle_seconds": 0.25,
           "timeout_seconds": 5,
@@ -3365,12 +4149,19 @@
       "case_id": "python-api.module-cli-serves-wsgi-request-auto-lifespan",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
           "path": "/python-api-wsgi?name=rust",
-          "request_headers": [["X-Python-API", "wsgi"]],
+          "request_headers": [
+            [
+              "X-Python-API",
+              "wsgi"
+            ]
+          ],
           "shutdown_signal": "SIGINT",
           "post_response_settle_seconds": 0.25,
           "timeout_seconds": 5,
@@ -3386,7 +4177,9 @@
       "case_id": "python-api.module-cli-drains-wsgi-final-body-after-content-length",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3399,7 +4192,9 @@
           "root_path": "",
           "interface": "wsgi",
           "application_interface": "wsgi",
-          "observe_headers": ["content-length"]
+          "observe_headers": [
+            "content-length"
+          ]
         }
       }
     },
@@ -3407,7 +4202,9 @@
       "case_id": "python-api.run-applies-concurrency-limit-unix-socket",
       "profile": "python-api",
       "operation": "python.api.run-http-concurrency",
-      "covers": ["python.api.run-http-concurrency"],
+      "covers": [
+        "python.api.run-http-concurrency"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3426,7 +4223,9 @@
       "case_id": "python-api.module-cli-serves-unix-domain-socket-request",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3445,7 +4244,9 @@
       "case_id": "python-api.config-server-serves-unix-domain-socket-request",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3464,7 +4265,9 @@
       "case_id": "python-api.module-cli-serves-tls-over-unix-domain-socket",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3484,7 +4287,9 @@
       "case_id": "python-api.module-cli-serves-request-on-inherited-fd",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3503,7 +4308,9 @@
       "case_id": "python-api.module-cli-serves-request-on-inherited-ipv6-fd",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3523,7 +4330,9 @@
       "case_id": "python-api.module-cli-two-workers-serves-inherited-ipv6-fd-request",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3543,7 +4352,9 @@
       "case_id": "python-api.module-cli-two-workers-serves-inherited-fd-request",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3562,7 +4373,9 @@
       "case_id": "python-api.server-sockets-serves-request-on-multiple-inherited-fds",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3581,7 +4394,9 @@
       "case_id": "python-api.config-server-serves-request-on-inherited-fd",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3599,7 +4414,9 @@
       "case_id": "python-api.run-serves-request-on-inherited-fd",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3617,7 +4434,9 @@
       "case_id": "python-api.run-http-reports-occupied-port",
       "profile": "python-api",
       "operation": "python.api.run-http-bind-conflict",
-      "covers": ["python.api.run-http-bind-conflict"],
+      "covers": [
+        "python.api.run-http-bind-conflict"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3636,7 +4455,9 @@
       "case_id": "python-api.run-http-reports-occupied-unix-socket-path",
       "profile": "python-api",
       "operation": "python.api.run-http-uds-bind-conflict",
-      "covers": ["python.api.run-http-uds-bind-conflict"],
+      "covers": [
+        "python.api.run-http-uds-bind-conflict"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3655,7 +4476,9 @@
       "case_id": "python-api.server-serves-request-on-prebound-socket",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3673,7 +4496,9 @@
       "case_id": "python-api.server-serves-request-on-multiple-prebound-sockets",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3692,7 +4517,9 @@
       "case_id": "python-api.server-serves-request-on-multiple-prebound-tls-sockets",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3712,7 +4539,9 @@
       "case_id": "python-api.config-server-uses-pkcs8-keyfile-password",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3731,7 +4560,9 @@
       "case_id": "python-api.config-server-uses-pkcs12-pbe-sha1-3des-key",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3751,7 +4582,9 @@
       "case_id": "python-api.config-server-uses-pkcs12-pbe-sha1-2des-key",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3771,7 +4604,9 @@
       "case_id": "python-api.config-server-rejects-wrong-pkcs12-pbe-sha1-3des-key-password",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3798,7 +4633,9 @@
       "case_id": "python-api.config-server-rejects-pkcs12-pbe-sha1-3des-zero-iterations",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3825,7 +4662,9 @@
       "case_id": "python-api.config-server-rejects-pkcs12-pbe-sha1-3des-short-ciphertext",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -3852,7 +4691,9 @@
       "case_id": "python-api.config-server-rejects-pkcs12-pbe-sha1-3des-invalid-decrypted-key",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4402,7 +5243,9 @@
       "case_id": "python-api.config-server-handles-password-for-unencrypted-key",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4422,7 +5265,9 @@
       "case_id": "python-api.module-cli-uses-pkcs8-keyfile-password",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4441,7 +5286,9 @@
       "case_id": "python-api.config-server-uses-traditional-encrypted-rsa-aes128-key",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4461,7 +5308,9 @@
       "case_id": "python-api.config-server-uses-traditional-encrypted-rsa-aes192-key",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4481,7 +5330,9 @@
       "case_id": "python-api.config-server-rejects-wrong-traditional-rsa-aes128-key-password",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4508,7 +5359,9 @@
       "case_id": "python-api.config-server-rejects-wrong-traditional-rsa-aes192-key-password",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4535,7 +5388,9 @@
       "case_id": "python-api.config-server-rejects-traditional-key-malformed-begin-suffix",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4562,7 +5417,9 @@
       "case_id": "python-api.config-server-rejects-unsupported-traditional-encrypted-key-label",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4589,7 +5446,9 @@
       "case_id": "python-api.config-server-rejects-traditional-key-invalid-utf8",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4616,7 +5475,9 @@
       "case_id": "python-api.config-server-rejects-traditional-key-empty-file",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4643,7 +5504,9 @@
       "case_id": "python-api.config-server-rejects-traditional-key-malformed-begin-line",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4670,7 +5533,9 @@
       "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-unsupported-cipher",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4697,7 +5562,9 @@
       "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-short-ciphertext",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4724,7 +5591,9 @@
       "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-empty-body",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4751,7 +5620,9 @@
       "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-invalid-base64",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4778,7 +5649,9 @@
       "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-missing-end-marker",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4805,7 +5678,9 @@
       "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-missing-body",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4832,7 +5707,9 @@
       "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-short-iv",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4859,7 +5736,9 @@
       "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-malformed-dek-info",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4886,7 +5765,9 @@
       "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-missing-dek-info",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4913,7 +5794,9 @@
       "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-invalid-proc-type",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4940,7 +5823,9 @@
       "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-unknown-header",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4967,7 +5852,9 @@
       "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-missing-proc-type",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -4994,7 +5881,9 @@
       "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-high-nonhex-iv",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5021,7 +5910,9 @@
       "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-odd-iv",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5048,7 +5939,9 @@
       "case_id": "python-api.config-server-rejects-traditional-encrypted-rsa-key-nonhex-iv",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5075,7 +5968,9 @@
       "case_id": "python-api.config-server-uses-traditional-encrypted-rsa-key",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5095,7 +5990,9 @@
       "case_id": "python-api.config-server-uses-traditional-encrypted-rsa-des-ede3-key",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5121,7 +6018,9 @@
       "case_id": "python-api.config-server-rejects-wrong-traditional-rsa-des-ede3-key-password",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5148,7 +6047,9 @@
       "case_id": "python-api.fault.keyfile-rust-decrypt-error-propagates",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "verification": "fault-contract",
       "fault": {
         "point": "python.ssl.keyfile.rust-decrypt-error",
@@ -5181,7 +6082,9 @@
       "case_id": "python-api.config-server-uses-traditional-encrypted-ec-key",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5201,7 +6104,9 @@
       "case_id": "python-api.config-server-rejects-wrong-traditional-rsa-key-password",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5228,7 +6133,9 @@
       "case_id": "python-api.config-server-rejects-wrong-pkcs8-keyfile-password",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5254,7 +6161,9 @@
       "case_id": "python-api.config-server-rejects-invalid-client-certificate-reqs",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5280,7 +6189,9 @@
       "case_id": "python-api.config-server-rejects-empty-client-ca-file",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5307,7 +6218,9 @@
       "case_id": "python-api.config-server-rejects-missing-client-ca-file",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5334,7 +6247,9 @@
       "case_id": "python-api.config-server-rejects-client-ca-directory",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5361,7 +6276,9 @@
       "case_id": "python-api.config-server-rejects-malformed-client-ca-file",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5388,7 +6305,9 @@
       "case_id": "python-api.config-server-rejects-invalid-der-client-ca-file",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5415,7 +6334,9 @@
       "case_id": "python-api.config-server-rejects-non-utf8-client-ca-file",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5442,7 +6363,9 @@
       "case_id": "python-api.config-server-accepts-trusted-client-ca-file",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5463,7 +6386,9 @@
       "case_id": "python-api.fault.ca-verifier-import-error-propagates",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "verification": "fault-contract",
       "fault": {
         "point": "python.ssl.ca-verifier.import",
@@ -5495,7 +6420,9 @@
       "case_id": "python-api.fault.ca-verifier-protocol-error-propagates",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "verification": "fault-contract",
       "fault": {
         "point": "python.ssl.ca-verifier.protocol",
@@ -5527,7 +6454,9 @@
       "case_id": "python-api.fault.ca-verifier-context-error-propagates",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "verification": "fault-contract",
       "fault": {
         "point": "python.ssl.ca-verifier.context",
@@ -5559,7 +6488,9 @@
       "case_id": "python-api.fault.ca-verifier-create-context-error-propagates",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "verification": "fault-contract",
       "fault": {
         "point": "python.ssl.ca-verifier.create-context",
@@ -5591,7 +6522,9 @@
       "case_id": "python-api.fault.ca-verifier-verify-mode-error-propagates",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "verification": "fault-contract",
       "fault": {
         "point": "python.ssl.ca-verifier.verify-mode",
@@ -5623,7 +6556,9 @@
       "case_id": "python-api.fault.ca-verifier-create-verify-mode-error-propagates",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "verification": "fault-contract",
       "fault": {
         "point": "python.ssl.ca-verifier.create-verify-mode",
@@ -5655,7 +6590,9 @@
       "case_id": "python-api.fault.ca-verifier-set-verify-mode-error-propagates",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "verification": "fault-contract",
       "fault": {
         "point": "python.ssl.ca-verifier.set-verify-mode",
@@ -5687,7 +6624,9 @@
       "case_id": "python-api.fault.ca-verifier-python-success-fallback-propagates",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "verification": "fault-contract",
       "fault": {
         "point": "python.ssl.ca-verifier.rust-parse-error",
@@ -5719,7 +6658,9 @@
       "case_id": "python-api.config-server-ignores-empty-client-ca-path",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5739,7 +6680,9 @@
       "case_id": "python-api.config-server-requires-trusted-client-certificate",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5760,7 +6703,9 @@
       "case_id": "python-api.config-server-requires-trusted-client-certificate-tls12",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5782,7 +6727,9 @@
       "case_id": "python-api.module-cli-requires-trusted-client-certificate-tls12",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5804,7 +6751,9 @@
       "case_id": "python-api.config-server-allows-anonymous-optional-client-certificate",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5825,7 +6774,9 @@
       "case_id": "python-api.config-server-allows-trusted-optional-client-certificate",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5846,7 +6797,9 @@
       "case_id": "python-api.config-server-allows-anonymous-optional-client-certificate-with-empty-roots",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5866,7 +6819,9 @@
       "case_id": "python-api.config-server-rejects-untrusted-client-certificate-with-empty-roots",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5892,7 +6847,9 @@
       "case_id": "python-api.module-cli-reload-restarts-after-watched-module-change",
       "profile": "python-api",
       "operation": "python.api.run-http-reload",
-      "covers": ["python.api.run-http-reload"],
+      "covers": [
+        "python.api.run-http-reload"
+      ],
       "api": {
         "run_http_reload": {
           "timeout_seconds": 20,
@@ -5905,14 +6862,20 @@
       "case_id": "python-api.module-cli-reload-respects-include-exclude-globs",
       "profile": "python-api",
       "operation": "python.api.run-http-reload-filters",
-      "covers": ["python.api.run-http-reload-filters"],
+      "covers": [
+        "python.api.run-http-reload-filters"
+      ],
       "api": {
         "run_http_reload": {
           "timeout_seconds": 20,
           "reload_delay": 0.1,
           "workers": 1,
-          "reload_include": ["*.txt"],
-          "reload_exclude": ["ignored.txt"]
+          "reload_include": [
+            "*.txt"
+          ],
+          "reload_exclude": [
+            "ignored.txt"
+          ]
         }
       }
     },
@@ -5920,7 +6883,9 @@
       "case_id": "python-api.module-cli-reload-from-uvicorn-reload-environment",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5940,7 +6905,9 @@
       "case_id": "python-api.run-reset-contextvars-clears-http-request-context",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5958,7 +6925,9 @@
       "case_id": "python-api.module-cli-reset-contextvars-clears-http-request-context",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5976,7 +6945,9 @@
       "case_id": "python-api.module-cli-reset-contextvars-from-environment",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -5996,7 +6967,9 @@
       "case_id": "python-api.module-cli-reset-contextvars-explicit-flag-overrides-environment",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -6017,7 +6990,9 @@
       "case_id": "python-api.module-cli-two-workers-scale-with-ttin-ttou",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -6038,7 +7013,9 @@
       "case_id": "python-api.module-cli-two-workers-restart-on-sighup",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -6059,7 +7036,9 @@
       "case_id": "python-api.module-cli-sighup-keeps-workers-after-replacement-startup-failure",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -6087,14 +7066,26 @@
       "case_id": "python-api.server-on-tick-updates-headers-callback-and-request-limit",
       "profile": "python-api",
       "operation": "python.api.imports-signatures",
-      "covers": ["python.api.imports-signatures"],
+      "covers": [
+        "python.api.imports-signatures"
+      ],
       "api": {
-        "imports": ["uvicorn.Server"],
-        "signatures": ["uvicorn:Server.main_loop", "uvicorn:Server.on_tick"],
+        "imports": [
+          "uvicorn.Server"
+        ],
+        "signatures": [
+          "uvicorn:Server.main_loop",
+          "uvicorn:Server.on_tick"
+        ],
         "server_on_tick": {
           "options": {
             "date_header": true,
-            "headers": [["x-kata-test", "present"]],
+            "headers": [
+              [
+                "x-kata-test",
+                "present"
+              ]
+            ],
             "limit_max_requests": 3,
             "limit_max_requests_jitter": 0
           },
@@ -6108,9 +7099,13 @@
       "case_id": "python-api.server-startup-main-loop-shutdown",
       "profile": "python-api",
       "operation": "python.api.imports-signatures",
-      "covers": ["python.api.imports-signatures"],
+      "covers": [
+        "python.api.imports-signatures"
+      ],
       "api": {
-        "imports": ["uvicorn.Server"],
+        "imports": [
+          "uvicorn.Server"
+        ],
         "signatures": [
           "uvicorn:Server.main_loop",
           "uvicorn:Server.shutdown",
@@ -6125,9 +7120,13 @@
       "case_id": "python-api.server-startup-honors-preexisting-exit-request",
       "profile": "python-api",
       "operation": "python.api.imports-signatures",
-      "covers": ["python.api.imports-signatures"],
+      "covers": [
+        "python.api.imports-signatures"
+      ],
       "api": {
-        "imports": ["uvicorn.Server"],
+        "imports": [
+          "uvicorn.Server"
+        ],
         "signatures": [
           "uvicorn:Server.main_loop",
           "uvicorn:Server.shutdown",
@@ -6142,18 +7141,30 @@
       "case_id": "python-api.server-handle-exit-signal-escalation",
       "profile": "python-api",
       "operation": "python.api.imports-signatures",
-      "covers": ["python.api.imports-signatures"],
+      "covers": [
+        "python.api.imports-signatures"
+      ],
       "api": {
-        "imports": ["uvicorn.Server"],
+        "imports": [
+          "uvicorn.Server"
+        ],
         "signatures": [
           "uvicorn:Server.capture_signals",
           "uvicorn:Server.handle_exit"
         ],
         "server_signals": {
           "sequences": [
-            ["SIGINT"],
-            ["SIGINT", "SIGINT"],
-            ["SIGTERM", "SIGTERM"]
+            [
+              "SIGINT"
+            ],
+            [
+              "SIGINT",
+              "SIGINT"
+            ],
+            [
+              "SIGTERM",
+              "SIGTERM"
+            ]
           ]
         }
       }
@@ -6162,7 +7173,9 @@
       "case_id": "python-api.fault.keyfile-error-import-propagates",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "verification": "fault-contract",
       "fault": {
         "point": "python.ssl.keyfile-error.import",
@@ -6195,7 +7208,9 @@
       "case_id": "python-api.fault.keyfile-error-protocol-propagates",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "verification": "fault-contract",
       "fault": {
         "point": "python.ssl.keyfile-error.protocol",
@@ -6228,7 +7243,9 @@
       "case_id": "python-api.fault.keyfile-error-context-propagates",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "verification": "fault-contract",
       "fault": {
         "point": "python.ssl.keyfile-error.context",
@@ -6261,7 +7278,9 @@
       "case_id": "python-api.fault.keyfile-error-create-context-propagates",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "verification": "fault-contract",
       "fault": {
         "point": "python.ssl.keyfile-error.create-context",
@@ -6294,7 +7313,9 @@
       "case_id": "python-api.module-cli-listener-host-port-from-environment",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -6316,7 +7337,9 @@
       "case_id": "python-api.module-cli-concurrency-limit-from-environment",
       "profile": "python-api",
       "operation": "python.api.run-http-concurrency",
-      "covers": ["python.api.run-http-concurrency"],
+      "covers": [
+        "python.api.run-http-concurrency"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -6336,7 +7359,9 @@
       "case_id": "python-api.module-cli-explicit-concurrency-limit-overrides-invalid-environment",
       "profile": "python-api",
       "operation": "python.api.run-http-concurrency",
-      "covers": ["python.api.run-http-concurrency"],
+      "covers": [
+        "python.api.run-http-concurrency"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -6357,7 +7382,9 @@
       "case_id": "python-api.module-cli-explicit-concurrency-limit-overrides-valid-environment",
       "profile": "python-api",
       "operation": "python.api.run-http-concurrency",
-      "covers": ["python.api.run-http-concurrency"],
+      "covers": [
+        "python.api.run-http-concurrency"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -6378,12 +7405,19 @@
       "case_id": "python-api.module-cli-uses-wsgi-interface-from-environment",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
           "path": "/python-api-wsgi-environment?name=rust",
-          "request_headers": [["X-Python-API", "wsgi-env"]],
+          "request_headers": [
+            [
+              "X-Python-API",
+              "wsgi-env"
+            ]
+          ],
           "shutdown_signal": "SIGINT",
           "post_response_settle_seconds": 0.25,
           "timeout_seconds": 5,
@@ -6401,7 +7435,9 @@
       "case_id": "python-api.module-cli-explicit-interface-overrides-environment",
       "profile": "python-api",
       "operation": "python.api.run-http",
-      "covers": ["python.api.run-http"],
+      "covers": [
+        "python.api.run-http"
+      ],
       "api": {
         "run_http": {
           "method": "GET",
@@ -6423,7 +7459,9 @@
       "case_id": "python-api.module-cli-reload-filters-from-environment",
       "profile": "python-api",
       "operation": "python.api.run-http-reload-filters",
-      "covers": ["python.api.run-http-reload-filters"],
+      "covers": [
+        "python.api.run-http-reload-filters"
+      ],
       "api": {
         "run_http_reload": {
           "timeout_seconds": 20,
@@ -6442,14 +7480,20 @@
       "case_id": "python-api.module-cli-explicit-reload-filters-override-environment",
       "profile": "python-api",
       "operation": "python.api.run-http-reload-filters",
-      "covers": ["python.api.run-http-reload-filters"],
+      "covers": [
+        "python.api.run-http-reload-filters"
+      ],
       "api": {
         "run_http_reload": {
           "timeout_seconds": 20,
           "reload_delay": 0.1,
           "workers": 1,
-          "reload_include": ["*.txt"],
-          "reload_exclude": ["ignored.txt"],
+          "reload_include": [
+            "*.txt"
+          ],
+          "reload_exclude": [
+            "ignored.txt"
+          ],
           "environment": {
             "UVICORN_RELOAD_INCLUDES": "*.py",
             "UVICORN_RELOAD_EXCLUDES": "*.txt"
@@ -6991,6 +8035,93 @@
       "api": {
         "server_startup_acknowledgement_drop": {
           "shutdown": "failed"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.custom-http-protocol-class-serves-request-and-shutdown",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/custom-protocol",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 6,
+          "lifespan": "on",
+          "invocation": "config-server",
+          "root_path": "",
+          "custom_http_protocol": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.custom-http-protocol-class-preserves-asgi2-scope",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/custom-protocol",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 6,
+          "lifespan": "on",
+          "invocation": "config-server",
+          "root_path": "",
+          "application_interface": "asgi2",
+          "custom_http_protocol": true,
+          "custom_http_protocol_import_path": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.custom-http-protocol-ssl-context-factory-policy",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/custom-protocol",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 6,
+          "lifespan": "on",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "custom_http_protocol": true,
+          "ssl_context_factory": true
+        }
+      }
+    },
+    {
+      "case_id": "python-api.ssl-context-factory-with-native-http-policy",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 6,
+          "lifespan": "on",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_context_factory": true,
+          "observe_scope": true,
+          "observe_tls": true
         }
       }
     }

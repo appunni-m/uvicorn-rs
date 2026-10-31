@@ -35,6 +35,49 @@ InterfaceType = Literal["auto", "asgi3", "asgi2", "wsgi"]
 
 SSL_PROTOCOL_VERSION: int = ssl.PROTOCOL_TLS_SERVER
 
+_NATIVE_HTTP_PROTOCOLS = {"auto", "h11", "httptools", "zttp"}
+_NATIVE_WS_PROTOCOLS = {
+    "auto",
+    "none",
+    "websockets",
+    "websockets-sansio",
+    "wsproto",
+}
+
+
+def create_ssl_context(
+    certfile: str | os.PathLike[str],
+    keyfile: str | os.PathLike[str] | None,
+    password: str | None,
+    ssl_version: int,
+    cert_reqs: int,
+    ca_certs: str | os.PathLike[str] | None,
+    ciphers: str | None,
+    alpn_protocols: list[str] | None = None,
+) -> ssl.SSLContext:
+    """Build the SSL context used by Uvicorn-compatible Python protocols."""
+    context = ssl.SSLContext(ssl_version)
+    get_password = (lambda: password) if password else None
+    context.load_cert_chain(certfile, keyfile, get_password)
+    context.verify_mode = ssl.VerifyMode(cert_reqs)
+    if ca_certs:
+        context.load_verify_locations(ca_certs)
+    if ciphers:
+        context.set_ciphers(ciphers)
+    if alpn_protocols:
+        context.set_alpn_protocols(alpn_protocols)
+    return context
+
+
+def _resolve_protocol_class(
+    value: type[asyncio.Protocol] | str,
+    native_selectors: set[str],
+) -> type[asyncio.Protocol] | None:
+    """Resolve an extension protocol while leaving built-ins on the Rust path."""
+    if isinstance(value, str):
+        return None if value in native_selectors else import_from_string(value)
+    return value
+
 
 LOGGING_CONFIG: dict[str, Any] = {
     "version": 1,
@@ -479,8 +522,60 @@ class Config:
         """Resolve the import target and optional no-argument app factory."""
         if self.loaded:
             raise AssertionError("Config is already loaded")
-        self._validate_native_runtime()
         _validate_http2_backend(self.http, self.http2)
+        if self.http2:
+            # Uvicorn's zttp HTTP/2 class advertises its ALPN requirements.
+            # The Rust runtime handles the built-in selector without loading
+            # a Python Protocol implementation.
+            self.http_protocol_class = None
+        else:
+            self.http_protocol_class = _resolve_protocol_class(
+                self.http, _NATIVE_HTTP_PROTOCOLS
+            )
+
+        alpn_protocols = getattr(self.http_protocol_class, "alpn_protocols", None)
+        if self.ssl_context_factory is not None:
+            def default_ssl_context_factory() -> ssl.SSLContext:
+                if not self.ssl_certfile:
+                    raise RuntimeError(
+                        "`default_ssl_context_factory()` requires `ssl_certfile` to be set on `Config`. "
+                        "Either pass `ssl_certfile` (and optionally `ssl_keyfile`) or build the `SSLContext` "
+                        "directly inside `ssl_context_factory` without calling the default factory."
+                    )
+                return create_ssl_context(
+                    certfile=self.ssl_certfile,
+                    keyfile=self.ssl_keyfile,
+                    password=self.ssl_keyfile_password,
+                    ssl_version=self.ssl_version,
+                    cert_reqs=self.ssl_cert_reqs,
+                    ca_certs=self.ssl_ca_certs,
+                    ciphers=self.ssl_ciphers,
+                    alpn_protocols=alpn_protocols,
+                )
+
+            context = self.ssl_context_factory(self, default_ssl_context_factory)
+            if not isinstance(context, ssl.SSLContext):
+                raise TypeError(
+                    "`ssl_context_factory` must return an `ssl.SSLContext`, "
+                    f"got {type(context).__name__}"
+                )
+            self.ssl = context
+        elif self.is_ssl:
+            assert self.ssl_certfile
+            self.ssl = create_ssl_context(
+                certfile=self.ssl_certfile,
+                keyfile=self.ssl_keyfile,
+                password=self.ssl_keyfile_password,
+                ssl_version=self.ssl_version,
+                cert_reqs=self.ssl_cert_reqs,
+                ca_certs=self.ssl_ca_certs,
+                ciphers=self.ssl_ciphers,
+                alpn_protocols=alpn_protocols,
+            )
+        else:
+            self.ssl = None
+
+        self.ws_protocol_class = _resolve_protocol_class(self.ws, _NATIVE_WS_PROTOCOLS)
         self.loaded_app = self.load_app()
         try:
             self.loaded_app = self.loaded_app()
@@ -499,6 +594,8 @@ class Config:
         self.loaded_app, self.interface = _configure_asgi_interface(
             self.loaded_app, self.interface, self.lifespan
         )
+        if self.interface == "wsgi":
+            self.ws_protocol_class = None
         if self.proxy_headers:
             from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
@@ -523,27 +620,8 @@ class Config:
         tls12_protocol = getattr(ssl, "PROTOCOL_TLSv1_2", None)
         if tls12_protocol is not None:
             supported_ssl_versions.add(tls12_protocol)
-        # Uvicorn treats unknown HTTP and WebSocket selector strings as import
-        # paths. Resolve those before rejecting custom implementations so an
-        # invalid selector keeps the pinned CLI/API import diagnostic.
-        if isinstance(self.http, str) and self.http not in {
-            "auto",
-            "h11",
-            "httptools",
-            "zttp",
-        }:
-            import_from_string(self.http)
-        if isinstance(self.ws, str) and self.ws not in {
-            "auto",
-            "none",
-            "websockets",
-            "websockets-sansio",
-            "wsproto",
-        }:
-            import_from_string(self.ws)
-        # These Uvicorn selectors route to the Rust engine's native WebSocket
-        # implementation. Only the legacy websockets selector applies its
-        # configured receive queue; the other backends do not consume it.
+        # Built-in WebSocket selectors route through Rust. An explicit Python
+        # protocol class is served at the extension boundary in Server.
         checks = (
             (self.uds is not None and os.name == "nt", "uds"),
             (self.fd is not None and os.name == "nt", "fd"),
@@ -551,12 +629,6 @@ class Config:
             # WEB_CONCURRENCY=0 reaches Config without the explicit-value
             # normalization and is still a single-process configuration.
             (self.workers not in (0, 1) and not self.should_reload, "workers"),
-            (self.http not in {"auto", "h11", "httptools", "zttp"}, "http"),
-            (
-                self.ws
-                not in {"auto", "none", "websockets", "websockets-sansio", "wsproto"},
-                "ws",
-            ),
             (self.lifespan not in {"auto", "on", "off"}, "lifespan"),
             (self.interface not in {"auto", "asgi2", "asgi3", "wsgi"}, "interface"),
             (
@@ -568,7 +640,6 @@ class Config:
                 ),
                 "log_level",
             ),
-            (self.ssl_context_factory is not None, "ssl_context_factory"),
             (self.ssl_version not in supported_ssl_versions, "ssl_version"),
         )
         unsupported.extend(name for enabled, name in checks if enabled)
@@ -577,6 +648,16 @@ class Config:
             raise NotImplementedError(
                 f"uvicorn-rs does not implement these Uvicorn Config settings yet: {names}"
             )
+
+    @property
+    def _uses_custom_http_protocol(self) -> bool:
+        """Whether an explicit Python HTTP Protocol owns the listener path."""
+        return not isinstance(self.http, str) or self.http not in _NATIVE_HTTP_PROTOCOLS
+
+    @property
+    def _uses_custom_ws_protocol(self) -> bool:
+        """Whether a custom Python WebSocket Protocol was selected."""
+        return not isinstance(self.ws, str) or self.ws not in _NATIVE_WS_PROTOCOLS
 
     @property
     def _native_tls12_only(self) -> bool:

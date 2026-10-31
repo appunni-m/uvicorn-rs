@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@46",
+  "schema": "uvicorn-rs-parity/input@47",
   "cases": [
     {
       "case_id": "startup-encrypted-private-key-invalid-utf8.rejects-key",

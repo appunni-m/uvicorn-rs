@@ -408,6 +408,7 @@ import contextvars
 import json
 import logging
 import socket
+import ssl
 import time
 import uvicorn
 
@@ -429,12 +430,62 @@ def custom_loop_factory():
     loop_factory_calls += 1
     return ParityEventLoop()
 
+def parity_ssl_context_factory(config, default_ssl_context_factory):
+    context = default_ssl_context_factory()
+    context.maximum_version = ssl.TLSVersion.TLSv1_2
+    context.set_alpn_protocols(["uvicorn-rs-parity"])
+    return context
+
+class ParityCustomHTTPProtocol(asyncio.Protocol):
+    alpn_protocols = ["uvicorn-rs-parity"]
+
+    def __init__(self, config, server_state, app_state, _loop=None):
+        self.config = config
+        self.server_state = server_state
+        self.app_state = app_state
+        self.transport = None
+        self.request = bytearray()
+
+    def connection_made(self, transport):
+        self.transport = transport
+        self.server_state.connections.add(self)
+
+    def data_received(self, data):
+        self.request.extend(data)
+        if b"\r\n\r\n" not in self.request:
+            return
+        ssl_object = self.transport.get_extra_info("ssl_object")
+        alpn = ssl_object.selected_alpn_protocol() if ssl_object else None
+        tls_version = ssl_object.version() if ssl_object else None
+        body = (
+            "custom-http:"
+            + self.app_state.get("custom_http_protocol", "missing")
+            + ":"
+            + str(alpn or "none")
+            + ":"
+            + str(tls_version or "none")
+        ).encode("ascii")
+        response = (
+            b"HTTP/1.1 200 OK\r\nContent-Length: "
+            + str(len(body)).encode("ascii")
+            + b"\r\nConnection: close\r\n\r\n"
+            + body
+        )
+        self.server_state.total_requests += 1
+        self.transport.write(response)
+        self.transport.close()
+
+    def connection_lost(self, error):
+        self.server_state.connections.discard(self)
+
 async def asgi3_app(scope, receive, send):
     if scope["type"] == "lifespan":
         while True:
             message = await receive()
             if message["type"] == "lifespan.startup":
                 lifespan_state["started"] = True
+                if os.environ.get("ASGI_PARITY_CUSTOM_HTTP_PROTOCOL") == "1":
+                    scope["state"]["custom_http_protocol"] = scope["asgi"]["version"]
                 await send({"type": "lifespan.startup.complete"})
             elif message["type"] == "lifespan.shutdown":
                 await send({"type": "lifespan.shutdown.complete"})
@@ -721,6 +772,14 @@ if ssl_version is not None:
     options["ssl_version"] = ssl_version
 if ssl_ciphers is not None:
     options["ssl_ciphers"] = ssl_ciphers
+if os.environ.get("ASGI_PARITY_CUSTOM_HTTP_PROTOCOL") == "1":
+    options["http"] = (
+        "__main__:ParityCustomHTTPProtocol"
+        if os.environ.get("ASGI_PARITY_CUSTOM_HTTP_PROTOCOL_IMPORT_PATH") == "1"
+        else ParityCustomHTTPProtocol
+    )
+if os.environ.get("ASGI_PARITY_SSL_CONTEXT_FACTORY") == "1":
+    options["ssl_context_factory"] = parity_ssl_context_factory
 try:
     if invocation in {"config-server", "server-sockets"}:
         if invocation == "server-sockets":
@@ -1058,6 +1117,14 @@ except KeyboardInterrupt:
         environment["ASGI_PARITY_TRACE_ORACLE_SIGNAL_ACTIVE"] = "1"
     if request.get("callable_instance"):
         environment["ASGI_PARITY_CALLABLE_INSTANCE"] = "1"
+    if request.get("custom_http_protocol"):
+        if request["invocation"] != "config-server":
+            raise RuntimeError("custom HTTP protocol input requires config-server")
+        environment["ASGI_PARITY_CUSTOM_HTTP_PROTOCOL"] = "1"
+    if request.get("custom_http_protocol_import_path"):
+        environment["ASGI_PARITY_CUSTOM_HTTP_PROTOCOL_IMPORT_PATH"] = "1"
+    if request.get("ssl_context_factory"):
+        environment["ASGI_PARITY_SSL_CONTEXT_FACTORY"] = "1"
     if request.get("implicit_factory"):
         environment["ASGI_PARITY_IMPLICIT_FACTORY"] = "1"
     if wsgi_streaming_probe:
@@ -1365,6 +1432,8 @@ except KeyboardInterrupt:
         if trust_anchor is None:
             raise RuntimeError("TLS client context is missing its trust anchor")
         context = ssl.create_default_context(cafile=str(trust_anchor))
+        if request.get("ssl_context_factory"):
+            context.set_alpn_protocols(["uvicorn-rs-parity"])
         if request.get("ssl_version") == ssl.PROTOCOL_TLSv1_2:
             context.minimum_version = ssl.TLSVersion.TLSv1_2
             context.maximum_version = ssl.TLSVersion.TLSv1_2
@@ -1499,6 +1568,21 @@ except KeyboardInterrupt:
                             **dict(request.get("request_headers", [])),
                         },
                     )
+                    tls_observation = None
+                    if request.get("observe_tls"):
+                        tls_socket = getattr(connection, "sock", None)
+                        tls_observation = {
+                            "tls_version": (
+                                tls_socket.version()
+                                if tls_socket is not None
+                                else None
+                            ),
+                            "tls_alpn_protocol": (
+                                tls_socket.selected_alpn_protocol()
+                                if tls_socket is not None
+                                else None
+                            ),
+                        }
                     http_response = connection.getresponse()
                     if wsgi_streaming_probe:
                         wsgi_stream_response_started = True
@@ -1521,6 +1605,8 @@ except KeyboardInterrupt:
                             for name in request.get("observe_headers", [])
                         },
                     }
+                    if tls_observation is not None:
+                        listener_response.update(tls_observation)
                     listener_responses[listener_index] = listener_response
                     response_count += 1
                     made_progress = True

@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@46",
+  "schema": "uvicorn-rs-parity/input@47",
   "cases": [
     {
       "case_id": "websocket.none-selector-dispatches-upgrade-as-http",
@@ -45,6 +45,31 @@
         "messages": [],
         "shutdown": true,
         "shutdown_during_upgrade": true
+      }
+    },
+    {
+      "case_id": "websocket.custom-protocol-class-upgrade-and-lifespan-state",
+      "profile": "websocket",
+      "operation": "websocket.message-exchange",
+      "covers": [
+        "websocket.message-exchange"
+      ],
+      "server_options": {
+        "ws": "custom_websocket:ParityCustomWebSocketProtocol"
+      },
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [],
+        "messages": [
+          {
+            "kind": "text",
+            "value": "custom-protocol-text"
+          },
+          {
+            "kind": "binary_base64",
+            "value": "AAEC/3BhcnR5"
+          }
+        ]
       }
     },
     {
