@@ -9,32 +9,46 @@
 
 ## Current unified coverage status (2026-10-31)
 
-The latest completed exact-source coverage report is from full-mode CI
-[#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457) for PR #19 head
-`8a17d982a7b98a0074ab7e56acad4c508d9d2c73` (merge ref
-`10929063e0dfb420d6ebb7210922ad805528039d`). All 1,340 indexed coverage
-cases completed with attribution. The three-repeat gate remains below 100%:
+The latest completed full coverage report is from
+[CI #531](https://github.com/appunni-m/uvicorn-rs/actions/runs/41140694132),
+PR #19 head `48aba59dc12ab4fa9c6195d95d2fabd226b4a052`, merge ref
+`0e76ef265977050836044fcb6ef9550b1352fcda`. All 1,341 indexed cases were
+attributed. The three-repeat gate remains below 100%:
 **14,137/14,252 executable regions** (115 missing) and **10,411/10,465 lines**
-(54 missing). Artifact `13016632517` has archive SHA-256
-`4674397eba67621d60dd06f3f1cdb9793e83d9ba7bedfb9b64eacf9dca4177e7`; the
-report records source SHA-256
-`56d4ce12ebf5dddcad815968f622ac22f5fd6cfd1f8f52212b670d2d7da4fd24` and
-native-extension SHA-256
-`c7e901b397b55d2d72bbedf9ad85eb7c4c213a97246ee2e3c3b5d8df472b5041`.
+(54 missing). Artifact `13022180254` has archive SHA-256
+`95e4eed1095c0068fcd4423ff2c122e3ae1bd35aabfe05ff7d81cd4af03cf5da`;
+source SHA-256 is
+`9acb1ef935d10af060a0e41a39d33d4b4484cb75c079c2ee33d277a4eceed6ed`.
+This earlier-source report is diagnostic, rather than current acceptance.
 
-The overall #528 workflow conclusion is cancelled. Its Linux x86-64
-installed-wheel parity and candidate consumers passed. Windows
-parity was 688/691 with three process/shutdown differences; macOS ARM64
-candidate verification was cancelled. Rust quality, MSRV, feature builds,
-Rust docs/no-Python checks, native FastAPI-RS composition, release-evidence
-checks, and separate docs deployment passed. No accepted independent
-Coverage-MCP receipt exists.
+[CI #536](https://github.com/appunni-m/uvicorn-rs/actions/runs/41151116481)
+checks the h11 fix and ten new CLI observations committed in
+`6342b20402bf0cceabd8eafde3f067e1620bafba`. Its full coverage and parity jobs
+are still running. Rust quality, feature builds, MSRV, native composition and
+release-evidence contracts passed. No accepted independent Coverage-MCP
+receipt exists; `7t4g` remains open.
 
-The parity runner now captures its event baseline before sending the H2
-request and waits up to two seconds for the required app events before taking
-the final observation. The affected case passed 1/1 locally after that change;
-this is selected harness evidence, not hosted validation or a server behavior
-fix. No accepted independent Coverage-MCP receipt exists. `7t4g` remains open.
+A separate follow-up batch on `codex/uvicorn-rs-coverage-events` adds nine
+coverage-only HTTP/2 response-event failure cases: early-hint/trailer event
+classification, field reads/conversion, and trailer mutex poisoning. It also
+shares response-header insertion error handling and borrows server control
+once when capturing startup state. The production build has no fault controls.
+
+Eight new cases passed in selected run `db30609fa0ad4e1c9dea760b6500fd4a`;
+the ninth initially reported the deliberately injected mutex-poison panic as
+unexpected. After declaring that exact panic for that selector, it passed
+alongside header-capacity recovery, **2/2**, in
+`451d18682bdf458e81b76799e8297a8e`. Both runs used instrumented extension
+SHA-256 `9e1196f079b1de3f787b4ed67669555ee385b390458a9a0413942bbc5d215288`.
+The two local reports are `target/kata-progress/http2-event-coverage-fixed.json`
+(SHA-256 `f18839f160d00b63d3b18d96b9283e65079ed2b71889a66a3a1082017c4da28b`)
+and `target/kata-progress/http2-trailer-and-header-recovery.json`
+(SHA-256 `f51f6f7f93df8bdfb5011bb809f8554cc29b76129f3ae42812a5cde6921f96c9`).
+They retain complete per-case attribution and their distinct source/runner
+identities. The normal early-hint/trailer comparisons and control-borrow error
+also passed on the preceding local draft. These are focused diagnostic
+receipts; they do not establish a new global coverage total or full matrix
+acceptance. The follow-up branch preserves the running #536 source.
 
 A historical diagnostic projection of the #524 artifact grouped its 120 missing regions
 into 37 functions in `src/lib.rs`; the largest groups are the `serve_forever`

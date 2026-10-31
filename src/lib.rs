@@ -197,6 +197,8 @@ enum CoverageFaultPoint {
     Http3BodyPumpErrorStop,
     AsgiEventTypeHttpResponseStartEq,
     AsgiEventTypeHttpResponseBodyEq,
+    AsgiEventTypeHttpResponseEarlyHintEq,
+    AsgiEventTypeHttpResponseTrailersEq,
     AsgiEventTypeWebSocketAcceptEq,
     AsgiEventTypeWebSocketCloseEq,
     AsgiEventTypeWebSocketSendEq,
@@ -328,6 +330,13 @@ enum CoverageFaultPoint {
     HttpResponseBodyChannelClosed,
     HttpResponseEarlyHintDisconnected,
     HttpResponseEarlyHintChannelClosed,
+    HttpResponseEarlyHintLinksGetItem,
+    HttpResponseEarlyHintLinksExtract,
+    HttpResponseTrailersHeadersGetItem,
+    HttpResponseTrailersHeadersExtract,
+    HttpResponseTrailersMoreTrailersGetItem,
+    HttpResponseTrailersMoreTrailersExtract,
+    HttpResponseTrailersMutexPoison,
     HttpResponseTrailersDisconnected,
     HttpResponseTrailersChannelClosed,
     HttpResponseTrailersChannelFull,
@@ -566,6 +575,12 @@ impl CoverageFaultPoint {
             Self::Http3BodyPumpErrorStop => "http3.body-pump.error.request-stop",
             Self::AsgiEventTypeHttpResponseStartEq => "asgi.event-type.http-response-start.eq",
             Self::AsgiEventTypeHttpResponseBodyEq => "asgi.event-type.http-response-body.eq",
+            Self::AsgiEventTypeHttpResponseEarlyHintEq => {
+                "asgi.event-type.http-response-early-hint.eq"
+            }
+            Self::AsgiEventTypeHttpResponseTrailersEq => {
+                "asgi.event-type.http-response-trailers.eq"
+            }
             Self::AsgiEventTypeWebSocketAcceptEq => "asgi.event-type.websocket-accept.eq",
             Self::AsgiEventTypeWebSocketCloseEq => "asgi.event-type.websocket-close.eq",
             Self::AsgiEventTypeWebSocketSendEq => "asgi.event-type.websocket-send.eq",
@@ -744,6 +759,17 @@ impl CoverageFaultPoint {
             Self::HttpResponseBodyChannelClosed => "http.response.body.channel-closed",
             Self::HttpResponseEarlyHintDisconnected => "http.response.early-hint.disconnected",
             Self::HttpResponseEarlyHintChannelClosed => "http.response.early-hint.channel-closed",
+            Self::HttpResponseEarlyHintLinksGetItem => "http.response.early-hint.links.get-item",
+            Self::HttpResponseEarlyHintLinksExtract => "http.response.early-hint.links.extract",
+            Self::HttpResponseTrailersHeadersGetItem => "http.response.trailers.headers.get-item",
+            Self::HttpResponseTrailersHeadersExtract => "http.response.trailers.headers.extract",
+            Self::HttpResponseTrailersMoreTrailersGetItem => {
+                "http.response.trailers.more-trailers.get-item"
+            }
+            Self::HttpResponseTrailersMoreTrailersExtract => {
+                "http.response.trailers.more-trailers.extract"
+            }
+            Self::HttpResponseTrailersMutexPoison => "http.response.trailers.mutex.poison",
             Self::HttpResponseTrailersDisconnected => "http.response.trailers.disconnected",
             Self::HttpResponseTrailersChannelClosed => "http.response.trailers.channel-closed",
             Self::HttpResponseTrailersChannelFull => "http.response.trailers.channel-full",
@@ -985,6 +1011,25 @@ macro_rules! coverage_value {
     ($fault_point:ident, $operation:expr_2021) => {{
         #[cfg(coverage)]
         let result = if coverage_fault_is_armed(CoverageFaultPoint::$fault_point) {
+            Err(PyMemoryError::new_err(concat!(
+                "coverage-only injected MemoryError at ",
+                stringify!($fault_point)
+            )))
+        } else {
+            $operation.map_err(PyErr::from)
+        };
+        #[cfg(not(coverage))]
+        let result = $operation;
+        result
+    }};
+}
+
+// Response-event failures must be one-shot: later lifespan events use the
+// same classifier and must still be able to complete server shutdown.
+macro_rules! coverage_once_value {
+    ($fault_point:ident, $operation:expr_2021) => {{
+        #[cfg(coverage)]
+        let result = if coverage_fault_take(CoverageFaultPoint::$fault_point) {
             Err(PyMemoryError::new_err(concat!(
                 "coverage-only injected MemoryError at ",
                 stringify!($fault_point)
@@ -2134,10 +2179,16 @@ fn classify_asgi_event_type(py: Python<'_>, value: Bound<'_, PyAny>) -> PyResult
         )? {
             return Ok(AsgiEventType::HttpResponseBody);
         }
-        if value.eq(pyo3::intern!(py, "http.response.early_hint"))? {
+        if coverage_once_value!(
+            AsgiEventTypeHttpResponseEarlyHintEq,
+            value.eq(pyo3::intern!(py, "http.response.early_hint"))
+        )? {
             return Ok(AsgiEventType::HttpResponseEarlyHint);
         }
-        if value.eq(pyo3::intern!(py, "http.response.trailers"))? {
+        if coverage_once_value!(
+            AsgiEventTypeHttpResponseTrailersEq,
+            value.eq(pyo3::intern!(py, "http.response.trailers"))
+        )? {
             return Ok(AsgiEventType::HttpResponseTrailers);
         }
         if coverage_value!(
@@ -3753,9 +3804,7 @@ impl AsgiIo {
                     let value = HeaderValue::from_bytes(&value)
                         .map_err(|_| PyRuntimeError::new_err("Invalid HTTP header value."))?;
                     header_order.push(name.clone());
-                    headers.try_append(name, value).map_err(|error| {
-                        PyRuntimeError::new_err(format!("HTTP response headers: {error}"))
-                    })?;
+                    append_response_header(&mut headers, name, value, "headers")?;
                 }
                 let content_length = headers
                     .get(http::header::CONTENT_LENGTH)
@@ -3917,11 +3966,15 @@ impl AsgiIo {
                         "unsupported ASGI HTTP event: http.response.early_hint",
                     ));
                 };
-                let links = message
-                    .get_item("links")?
-                    .map(|value| value.extract::<Vec<Bytes>>())
-                    .transpose()?
-                    .unwrap_or_default();
+                let links = coverage_once_value!(
+                    HttpResponseEarlyHintLinksGetItem,
+                    message.get_item("links")
+                )?;
+                let links = coverage_once_value!(
+                    HttpResponseEarlyHintLinksExtract,
+                    links.map(|value| value.extract::<Vec<Bytes>>()).transpose()
+                )?
+                .unwrap_or_default();
                 let mut response = Response::new(());
                 *response.status_mut() = StatusCode::EARLY_HINTS;
                 for link in links {
@@ -3975,14 +4028,36 @@ impl AsgiIo {
                         "ASGI app sent response.trailers without negotiating trailers",
                     ));
                 }
-                let headers_value = message.get_item("headers")?;
-                let header_values = extract_headers(headers_value)?;
-                let more_trailers = message
-                    .get_item("more_trailers")?
-                    .map(|value| value.extract::<bool>())
-                    .transpose()?
-                    .unwrap_or(false);
+                let headers_value = coverage_once_value!(
+                    HttpResponseTrailersHeadersGetItem,
+                    message.get_item("headers")
+                )?;
+                let header_values = coverage_once_value!(
+                    HttpResponseTrailersHeadersExtract,
+                    extract_headers(headers_value)
+                )?;
+                let more_trailers = coverage_once_value!(
+                    HttpResponseTrailersMoreTrailersGetItem,
+                    message.get_item("more_trailers")
+                )?;
+                let more_trailers = coverage_once_value!(
+                    HttpResponseTrailersMoreTrailersExtract,
+                    more_trailers
+                        .map(|value| value.extract::<bool>())
+                        .transpose()
+                )?
+                .unwrap_or(false);
                 let chunk = {
+                    #[cfg(coverage)]
+                    if coverage_fault_take(CoverageFaultPoint::HttpResponseTrailersMutexPoison) {
+                        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            let _guard = slf
+                                .response_trailer_headers
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner);
+                            coverage_panic("coverage-injected response trailers mutex poison");
+                        }));
+                    }
                     let mut accumulated = slf.response_trailer_headers.lock().map_err(|_| {
                         PyRuntimeError::new_err("HTTP response trailers lock poisoned")
                     })?;
@@ -4010,9 +4085,7 @@ impl AsgiIo {
                             .map_err(|_| PyRuntimeError::new_err("Invalid HTTP header name."))?;
                         let value = HeaderValue::from_bytes(&value)
                             .map_err(|_| PyRuntimeError::new_err("Invalid HTTP header value."))?;
-                        accumulated.try_append(name, value).map_err(|error| {
-                            PyRuntimeError::new_err(format!("HTTP response trailers: {error}"))
-                        })?;
+                        append_response_header(&mut accumulated, name, value, "trailers")?;
                     }
                     if more_trailers {
                         return Ok(py.None().into_bound(py));
@@ -5043,6 +5116,18 @@ fn extract_headers(value: Option<Bound<'_, PyAny>>) -> PyResult<Vec<(Bytes, Byte
         return Ok(Vec::new());
     };
     value.extract::<Vec<(Bytes, Bytes)>>()
+}
+
+fn append_response_header(
+    headers: &mut HeaderMap,
+    name: HeaderName,
+    value: HeaderValue,
+    kind: &str,
+) -> PyResult<()> {
+    headers
+        .try_append(name, value)
+        .map_err(|error| PyRuntimeError::new_err(format!("HTTP response {kind}: {error}")))?;
+    Ok(())
 }
 
 enum ResponseApplication {
@@ -6199,16 +6284,18 @@ fn serve<'py>(
     let serve_control_borrow =
         coverage_fault_take(CoverageFaultPoint::ServerServeControlBorrowConflict)
             .then(|| control.borrow_mut(py));
-    let cancellation = control.try_borrow(py)?.cancellation.clone();
-    let force_application_shutdown = control.try_borrow(py)?.force_application_shutdown.clone();
-    let startup_gate = control.try_borrow(py)?.startup_gate.clone();
-    let startup_signal =
-        ServerStartupSignal::new(control.try_borrow(py)?.startup.clone(), startup_gate);
-    let startup_acknowledgement = control
-        .try_borrow(py)?
-        .startup_acknowledgement
-        .as_ref()
-        .map(watch::Sender::subscribe);
+    let (cancellation, force_application_shutdown, startup_signal, startup_acknowledgement) = {
+        let control = control.try_borrow(py)?;
+        (
+            control.cancellation.clone(),
+            control.force_application_shutdown.clone(),
+            ServerStartupSignal::new(control.startup.clone(), control.startup_gate.clone()),
+            control
+                .startup_acknowledgement
+                .as_ref()
+                .map(watch::Sender::subscribe),
+        )
+    };
     #[cfg(coverage)]
     drop(serve_control_borrow);
     let cancel_on_drop = CancelOnDrop(cancellation.clone());

@@ -37,18 +37,24 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 ## Execution order and stopping rules
 
-### Current receipts — 2026-10-31 (PR run #531 and focused current-input receipts)
+### Current receipts — 2026-10-31 (full run #536 and focused follow-up)
 
 PR #19 remains draft/open against `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. This working batch starts from branch head
-`ed60fef231667468f01a42ba11417924b5ec3dd4`. It changes the h11 adapter/parser;
-the working runtime-source SHA-256 is
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. The h11 adapter/parser fix is committed at
+`6342b20402bf0cceabd8eafde3f067e1620bafba`; its runtime-source SHA-256 is
 `c00038a3885178b4bb1146fc315a51eb70c5e149a1742a16d3bdada8c7bee50f`. The
 latest full hosted run
 [#531](https://github.com/appunni-m/uvicorn-rs/actions/runs/41140694132) ran
 on branch head `48aba59dc12ab4fa9c6195d95d2fabd226b4a052`, merge ref
 `0e76ef265977050836044fcb6ef9550b1352fcda`. The two commits after that run changed only the input set and documentation.
-The h11 runtime change in this batch requires fresh hosted evidence.
+Fresh [CI #536](https://github.com/appunni-m/uvicorn-rs/actions/runs/41151116481)
+is running for the committed h11 batch. Its Rust quality, feature, MSRV,
+native-composition and release-evidence jobs passed. Parity and coverage are
+still running. A follow-up on `codex/uvicorn-rs-coverage-events` adds nine
+HTTP/2 response-event fault cases, consolidates control borrows and shares
+header insertion error handling. Those cases have focused passing receipts;
+see [coverage evidence](../coverage.md). Keep the follow-up separate while
+#536 runs, then batch remaining coverage work before another full run.
 
 The Linux installed-wheel public parity in #531 passed 719/719. Windows ran
 692 cases: 689 passed and three two-worker shutdown cases failed. Their only

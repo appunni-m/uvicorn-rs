@@ -80,6 +80,7 @@ COVERAGE_PANIC_MESSAGES = {
     "http3.native-app-task.panic-before-response-start": "coverage-injected ASGI request task panic",
     "python.task-future.panic-after-completion": "coverage-injected ASGI app task panic after final response body",
     "websocket.handshake.mutex.poison": "coverage-injected WebSocket handshake mutex poison",
+    "http.response.trailers.mutex.poison": "coverage-injected response trailers mutex poison",
     "http3.connection-task.panic": "coverage-injected HTTP/3 connection task panic",
     "http3.connection-task.panic-during-shutdown": "coverage-injected HTTP/3 connection task panic during shutdown",
     "http3.request-task.panic": "coverage-injected HTTP/3 request task panic",
@@ -184,10 +185,19 @@ FAULT_POINTS = {
     "http.response.body.channel-closed",
     "http.response.early-hint.disconnected",
     "http.response.early-hint.channel-closed",
+    "asgi.event-type.http-response-early-hint.eq",
+    "http.response.early-hint.links.get-item",
+    "http.response.early-hint.links.extract",
     "http.response.trailers.disconnected",
     "http.response.trailers.channel-closed",
     "http.response.trailers.channel-full",
     "http.response.trailers.full-send-closed",
+    "asgi.event-type.http-response-trailers.eq",
+    "http.response.trailers.headers.get-item",
+    "http.response.trailers.headers.extract",
+    "http.response.trailers.more-trailers.get-item",
+    "http.response.trailers.more-trailers.extract",
+    "http.response.trailers.mutex.poison",
     "http.response.body-consumer.pause",
     "http.response.body-poll.receiver-pending.pause",
     "http.app-task.panic-before-response-start",
@@ -2449,12 +2459,21 @@ def load_contract(
                 early_hint_fault = point in {
                     "http.response.early-hint.disconnected",
                     "http.response.early-hint.channel-closed",
+                    "asgi.event-type.http-response-early-hint.eq",
+                    "http.response.early-hint.links.get-item",
+                    "http.response.early-hint.links.extract",
                 }
                 trailer_fault = point in {
                     "http.response.trailers.disconnected",
                     "http.response.trailers.channel-closed",
                     "http.response.trailers.channel-full",
                     "http.response.trailers.full-send-closed",
+                    "asgi.event-type.http-response-trailers.eq",
+                    "http.response.trailers.headers.get-item",
+                    "http.response.trailers.headers.extract",
+                    "http.response.trailers.more-trailers.get-item",
+                    "http.response.trailers.more-trailers.extract",
+                    "http.response.trailers.mutex.poison",
                 }
                 has_trailer_negotiation = any(
                     name.lower() == "te" and value.lower() == "trailers"
@@ -11663,6 +11682,9 @@ def fault_contract_matches(
             in {
                 "http.response.early-hint.disconnected",
                 "http.response.early-hint.channel-closed",
+                "asgi.event-type.http-response-early-hint.eq",
+                "http.response.early-hint.links.get-item",
+                "http.response.early-hint.links.extract",
             }
             else 200
         )

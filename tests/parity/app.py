@@ -848,7 +848,7 @@ async def _app_impl(scope, receive, send):
         })
         _record("http2.response-trailers.first-send-returned")
         await send({
-            "type": "http.response.trailers",
+            "type": _ASGIEventType("http.response.trailers"),
             "headers": [
                 (b"x-asgi-trailer", b"last"),
                 (b"proxy-connection", b"keep-alive"),

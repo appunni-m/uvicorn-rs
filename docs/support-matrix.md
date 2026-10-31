@@ -15,11 +15,13 @@ candidate artifacts and downstream consumer checks remain open; see
 ## Current verification status (2026-10-31)
 
 PR #19 is draft against `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. This batch starts from
-`ed60fef231667468f01a42ba11417924b5ec3dd4` and changes the h11 adapter/parser;
-working runtime-source SHA-256 is
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. The h11 fix is committed at
+`6342b20402bf0cceabd8eafde3f067e1620bafba`; its runtime-source SHA-256 is
 `c00038a3885178b4bb1146fc315a51eb70c5e149a1742a16d3bdada8c7bee50f`.
-Its focused local receipts require a fresh clean hosted matrix.
+Its fresh clean hosted matrix is
+[CI #536](https://github.com/appunni-m/uvicorn-rs/actions/runs/41151116481),
+still running. A separate focused coverage follow-up is described on the
+[coverage page](coverage.md).
 
 Full hosted CI [#531](https://github.com/appunni-m/uvicorn-rs/actions/runs/41140694132)
 ran on the previous branch head `48aba59dc12ab4fa9c6195d95d2fabd226b4a052`.
