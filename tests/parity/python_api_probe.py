@@ -1308,11 +1308,27 @@ except KeyboardInterrupt:
     )
     if os.name == "nt":
         # The runner gives this probe a private console. A new process group
-        # disables Ctrl+C, so use one only for break-only tests. Keep the
-        # probe's own Ctrl+C handler harmless without setting SIG_IGN, which
-        # maps to Windows' inheritable console-ignore state.
+        # disables Ctrl+C, so use one only for break-only tests. Restore normal
+        # Ctrl+C processing before spawning the server because Windows passes
+        # the ignore state to child processes. Keep this probe's handler safe
+        # when the same console event is broadcast to it.
         if "SIGINT" not in shutdown_signal_names:
             process_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        else:
+            import ctypes
+
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel32.SetConsoleCtrlHandler.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_int,
+            ]
+            kernel32.SetConsoleCtrlHandler.restype = ctypes.c_int
+            if not kernel32.SetConsoleCtrlHandler(None, False):
+                raise ctypes.WinError(ctypes.get_last_error())
+            previous_windows_sigint_handler = signal.signal(
+                signal.SIGINT,
+                lambda _signum, _frame: None,
+            )
         previous_windows_sigbreak_handler = signal.signal(
             signal.SIGBREAK, signal.SIG_IGN
         )
@@ -1796,11 +1812,6 @@ except KeyboardInterrupt:
                         subprocess.CREATE_NEW_PROCESS_GROUP
                     )
                     if signal_name == "SIGINT":
-                        if previous_windows_sigint_handler is None:
-                            previous_windows_sigint_handler = signal.signal(
-                                signal.SIGINT,
-                                lambda _signum, _frame: None,
-                            )
                         windows_signal = signal.CTRL_C_EVENT
                     else:
                         windows_signal = signal.CTRL_BREAK_EVENT
