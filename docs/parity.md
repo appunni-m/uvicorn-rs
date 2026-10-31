@@ -1486,30 +1486,34 @@ startup, and native binding error paths. Their specific contracts verify
 observable failure handling and cleanup; they are not oracle-equivalence cases.
 The three `support.*` header-capacity rows use harness-only `public.*` selectors
 and ordinary valid ASGI input. They do not write a native fault-control file.
-They declare finite-capacity rejection and recovery contracts in the same
-result envelope, and remain outside the oracle-parity denominator. The
-`http1.response-header-capacity-at-map-limit` oracle case uses a bounded raw
-HTTP/1 observer, because Python's standard response parser caps the number of
-header lines. It receives 24,574 app fields plus the default `Server` and
-`Date` names, checks count and SHA-256 against Uvicorn 0.54.0, then verifies a
-healthy request on the same connection.
+They declare target support behavior in the same result envelope and remain
+outside the oracle-parity denominator. The HTTP/1 response-capacity oracle
+cases use a bounded raw-wire observer, because Python's standard response
+parser caps the number of header lines. They send 24,575, 24,576 and 32,769 app
+fields plus the default `Server` and `Date` names. Each compares status, body,
+count and SHA-256 against Uvicorn 0.54.0, then verifies a healthy request on the
+same connection. The candidate retains fields beyond the `http` 1.5.0
+`HeaderMap` boundary in an ordered transport sidecar. A target-only support
+contract checks delivery of the 32,769-field response from the installed normal
+wheel with the same digest and follow-up behavior.
 
-The HTTP/1 over-limit support case is intentionally target-only. A separate
-raw-wire diagnostic against the pinned `httptools` oracle confirms that
-Uvicorn accepts 24,575 app fields while `uvicorn-rs` reaches the finite
-`http` 1.5.0 map boundary after 24,574 application fields and the two defaults.
-It returns a catchable ASGI send error and recovers on the same connection after
-the app's 500 fallback. This is an implementation bound and controlled-error
-behavior, not parity above the map boundary. The separate
+The `http2.response-header-capacity-over-map-limit` case sends 24,576 distinct
+application fields through HTTP/2, with the client advertising a finite 2 MiB
+decoded header-list budget. It compares status, body, field count and SHA-256
+with Hypercorn 0.18.0, then checks that the stream ended and a same-connection
+`/scope` request succeeded. This is extension parity because Uvicorn 0.54.0
+does not provide HTTP/2. The HTTP/1 and HTTP/2 encoders retain overflow fields
+outside `http::HeaderMap`; H1 order reconstruction uses a linear index so large
+field lists do not trigger a quadratic scan.
+
+The separate
 `http2.response-trailer-capacity-delivery` oracle case sends 24,576 distinct
 trailers and compares their count, canonical SHA-256, stream completion, and a
 healthy same-connection request with Hypercorn 0.18.0. The
 `support.http2.response-trailer-capacity-reset-recovers` case sends the next
 distinct name and checks for zero partial trailers, an HTTP/2
-`RST_STREAM INTERNAL_ERROR`, and a healthy same-connection follow-up. Together
-these cases record the current `http` 1.5.0 map boundary and the wire recovery
-behavior at that boundary. Uvicorn's acceptance of 24,575 application names
-shows a remaining HTTP/1 compatibility gap at the dependency's maximum.
+`RST_STREAM INTERNAL_ERROR`, and a healthy same-connection follow-up. The
+HTTP/2 trailer cap is separate from HTTP response-header overflow handling.
 
 The HTTP/3 request-trailer input is another target-only support contract using
 ordinary protocol input, not an injected Rust fault. The current result schema

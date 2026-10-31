@@ -3,7 +3,7 @@
 use crate::hpack::BytesStr;
 
 use bytes::Bytes;
-use http::header::HeaderName;
+use http::header::{HeaderName, HeaderValue};
 use std::fmt;
 
 /// The order of response header fields to use when encoding an HTTP/2 response.
@@ -13,7 +13,10 @@ use std::fmt;
 /// must be retained on the wire. Header names absent from this sequence are
 /// encoded afterward using the map's normal iteration order.
 #[derive(Clone, Debug)]
-pub struct HeaderOrder(Vec<HeaderName>);
+pub struct HeaderOrder {
+    names: Vec<HeaderName>,
+    overflow_fields: Vec<(HeaderName, HeaderValue)>,
+}
 
 impl HeaderOrder {
     /// Creates a response header order from header names.
@@ -21,20 +24,37 @@ impl HeaderOrder {
     /// Include a name once for each field with that name. Repeated names retain
     /// the order of their values in the response's `HeaderMap`.
     pub fn new(names: impl IntoIterator<Item = HeaderName>) -> Self {
-        Self(names.into_iter().collect())
+        Self {
+            names: names.into_iter().collect(),
+            overflow_fields: Vec::new(),
+        }
     }
 
     /// Adds fields before the current sequence, such as server-generated
     /// default headers that precede application headers.
     pub fn prepend(&mut self, names: impl IntoIterator<Item = HeaderName>) {
         let mut prefix: Vec<_> = names.into_iter().collect();
-        prefix.append(&mut self.0);
-        self.0 = prefix;
+        prefix.append(&mut self.names);
+        self.names = prefix;
+    }
+
+    /// Adds a response field that could not be stored in `http::HeaderMap`.
+    ///
+    /// The transport encoders emit these validated fields alongside the map
+    /// entries, following the sequence supplied to [`HeaderOrder::new`].
+    pub fn append_overflow_field(&mut self, name: HeaderName, value: HeaderValue) {
+        self.overflow_fields.push((name, value));
     }
 
     /// Returns the ordered header names.
     pub fn names(&self) -> &[HeaderName] {
-        &self.0
+        &self.names
+    }
+
+    /// Returns response fields kept outside `HeaderMap` after its fixed
+    /// capacity is reached.
+    pub fn overflow_fields(&self) -> &[(HeaderName, HeaderValue)] {
+        &self.overflow_fields
     }
 }
 

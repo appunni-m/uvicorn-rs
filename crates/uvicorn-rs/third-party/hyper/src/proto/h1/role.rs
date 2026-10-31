@@ -1,3 +1,5 @@
+#[cfg(feature = "server")]
+use std::collections::{HashMap, VecDeque};
 use std::mem::MaybeUninit;
 
 #[cfg(feature = "client")]
@@ -1069,7 +1071,7 @@ fn drain_header_fields<'a>(
         return HeaderFieldDrain::Map(headers.drain());
     };
 
-    let mut expanded = Vec::with_capacity(headers.len());
+    let mut expanded = Vec::with_capacity(headers.len() + order.overflow_fields().len());
     let mut current_name: Option<HeaderName> = None;
     for (name, value) in headers.drain() {
         if let Some(name) = name {
@@ -1079,14 +1081,24 @@ fn drain_header_fields<'a>(
             expanded.push(Some((name.clone(), value)));
         }
     }
+    expanded.extend(order.overflow_fields().iter().cloned().map(Some));
+
+    // A response may legitimately contain tens of thousands of fields. Index
+    // each value once so restoring ASGI order stays linear instead of scanning
+    // the entire field list for every name.
+    let mut positions = HashMap::<HeaderName, VecDeque<usize>>::with_capacity(expanded.len());
+    for (index, field) in expanded.iter().enumerate() {
+        if let Some((name, _)) = field {
+            positions.entry(name.clone()).or_default().push_back(index);
+        }
+    }
 
     let mut ordered = Vec::with_capacity(expanded.len());
     for requested_name in order.names() {
-        if let Some(index) = expanded.iter().position(|field| {
-            field
-                .as_ref()
-                .map_or(false, |(name, _)| name == requested_name)
-        }) {
+        if let Some(index) = positions
+            .get_mut(requested_name)
+            .and_then(|indices| indices.pop_front())
+        {
             if let Some(field) = expanded[index].take() {
                 ordered.push(field);
             }

@@ -262,34 +262,35 @@ paired benchmark before it can be considered a general performance setting.
 Response and WebSocket acceptance headers use the `http` crate's finite
 `HeaderMap` storage. In the current lockfile (`http` 1.5.0), one map can hold
 24,576 distinct header names; repeated values for an existing name do not use
-another key slot. Configured response headers and WebSocket handshake fields
-also consume slots, so the number available to application-supplied names can
-be lower. This capacity is not configurable through the CLI.
+another key slot. For ASGI HTTP/1 and HTTP/2 responses, validated fields that
+do not fit in the map stay in an ordered sidecar on the response and are emitted
+by the vendored Hyper/H2 encoders. This keeps application header order and
+matches Uvicorn 0.54.0's HTTP/1 delivery behavior without changing the `http`
+dependency seen by downstream Rust consumers. HTTP/2 uses the same ordered
+sidecar as an extension beyond Uvicorn's protocol set. WebSocket acceptance
+and HTTP/3 responses still use the map's bounded capacity.
 
-HTTP header construction uses `try_append` before committing response state,
-then moves the finished map into the response. This turns the crate's map limit
-into a fallible ASGI send error instead of an infallible append. The HTTP/1
-boundary case sends 24,574 distinct application headers plus the default
-`Server` and `Date` names. A bounded raw-wire observer verifies the count and
-SHA-256 against Uvicorn 0.54.0 and confirms the next request succeeds on the
-same connection. WebSocket construction retains the application task guard
-until fallible handshake header assembly succeeds.
+The HTTP/1 raw-wire parity cases send 24,575, 24,576 and 32,769 distinct
+application headers, plus the default `Server` and `Date` fields. Each case
+matches Uvicorn 0.54.0 by status, body, count and SHA-256, then verifies a
+healthy request on the same connection. The raw observer is required because
+Python's standard response parser stops after 100 header lines. WebSocket
+construction retains the application task guard until fallible handshake
+header assembly succeeds. [RFC 9110 §5.4](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.4)
+does not define a universal field-count limit.
 
-The limit is an implementation resource bound, not a Uvicorn or HTTP-standard
-field-count limit. [RFC 9110 §5.4](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.4)
-defines no predefined field-section size, and
-the pinned Uvicorn `httptools` profile accepts 24,575 distinct application
-headers, one more than the candidate can fit after its default headers. The
-candidate returns a catchable send error beyond the map boundary; the
-target-only HTTP/1 case checks an application fallback response and healthy
-connection recovery. This is a bounded failure improvement over panicking while
-building the map, but it does not establish full Uvicorn compatibility for the
-next field. [RFC 9113 §10.5.1](https://www.rfc-editor.org/rfc/rfc9113.html#section-10.5.1)
-discusses field-block resource exhaustion risks. At
-the HTTP/2 trailer boundary, 24,576 distinct names match Hypercorn 0.18.0 by
-count and SHA-256; the stream ends normally. At 24,577, trailer assembly fails
-before a partial trailer block is sent. Because the response body is already
-committed, the server resets only that stream with `INTERNAL_ERROR`;
+The HTTP/2 `http2.response-header-capacity-over-map-limit` case sends 24,576
+distinct application fields through the same sidecar, checks status, body,
+count and SHA-256 against Hypercorn 0.18.0, and confirms stream completion plus
+a healthy request on the same connection. This is HTTP/2 extension evidence;
+Uvicorn does not provide an HTTP/2 server.
+
+[RFC 9113 §10.5.1](https://www.rfc-editor.org/rfc/rfc9113.html#section-10.5.1)
+discusses field-block resource exhaustion risks. At the HTTP/2 trailer boundary,
+24,576 distinct names match Hypercorn 0.18.0 by count and SHA-256; the stream
+ends normally. At 24,577, trailer assembly fails before a partial trailer block
+is sent. Because the response body is already committed, the server resets
+only that stream with `INTERNAL_ERROR`;
 [RFC 9113 §5.4.2](https://www.rfc-editor.org/rfc/rfc9113.html#section-5.4.2)
 defines stream-local errors signaled with `RST_STREAM`, and the
 same-connection `/scope` follow-up succeeds. Receipts are stored under

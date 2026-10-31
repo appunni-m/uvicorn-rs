@@ -1,5 +1,5 @@
 use super::{util, StreamDependency, StreamId};
-use crate::ext::Protocol;
+use crate::ext::{HeaderOrder, Protocol};
 use crate::frame::{Error, Frame, Head, Kind};
 use crate::hpack::{self, BytesStr};
 
@@ -8,7 +8,7 @@ use http::{uri, HeaderMap, Method, Request, StatusCode, Uri};
 
 use bytes::{Buf, BufMut, BytesMut};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fmt;
 use std::io::Cursor;
 use std::ops::ControlFlow;
@@ -147,14 +147,20 @@ impl Headers {
         stream_id: StreamId,
         pseudo: Pseudo,
         fields: HeaderMap,
-        order: Option<&[HeaderName]>,
+        order: Option<&HeaderOrder>,
     ) -> Self {
         let ordered_fields = order.map(|order| ordered_fields(&fields, order));
+        let field_size = calculate_headermap_size(&fields)
+            + order
+                .into_iter()
+                .flat_map(HeaderOrder::overflow_fields)
+                .map(|(name, value)| decoded_header_size(name.as_str().len(), value.len()))
+                .sum::<usize>();
         Headers {
             stream_id,
             stream_dep: None,
             header_block: HeaderBlock {
-                field_size: calculate_headermap_size(&fields),
+                field_size,
                 fields,
                 ordered_fields,
                 is_over_size: false,
@@ -1076,30 +1082,33 @@ impl HeaderBlock {
     }
 }
 
-fn ordered_fields(
-    fields: &HeaderMap,
-    order: &[HeaderName],
-) -> Vec<(HeaderName, HeaderValue)> {
-    let mut used = HashMap::<HeaderName, usize>::new();
-    let mut ordered = Vec::with_capacity(fields.len());
+fn ordered_fields(fields: &HeaderMap, order: &HeaderOrder) -> Vec<(HeaderName, HeaderValue)> {
+    let mut all_fields: Vec<_> = fields
+        .iter()
+        .map(|(name, value)| (name.clone(), value.clone()))
+        .collect();
+    all_fields.extend(order.overflow_fields().iter().cloned());
 
-    for name in order {
-        let position = used.entry(name.clone()).or_default();
-        if let Some(value) = fields.get_all(name).iter().nth(*position) {
-            ordered.push((name.clone(), value.clone()));
-            *position += 1;
+    let mut positions = HashMap::<HeaderName, VecDeque<usize>>::new();
+    for (index, (name, _)) in all_fields.iter().enumerate() {
+        positions.entry(name.clone()).or_default().push_back(index);
+    }
+
+    let mut emitted = vec![false; all_fields.len()];
+    let mut ordered = Vec::with_capacity(all_fields.len());
+    for name in order.names() {
+        if let Some(index) = positions.get_mut(name).and_then(VecDeque::pop_front) {
+            emitted[index] = true;
+            ordered.push(all_fields[index].clone());
         }
     }
 
-    let mut seen = HashMap::<HeaderName, usize>::new();
-    for (name, value) in fields.iter() {
-        let position = seen.entry(name.clone()).or_default();
-        if *position >= used.get(name).copied().unwrap_or_default() {
-            ordered.push((name.clone(), value.clone()));
-        }
-        *position += 1;
-    }
-
+    ordered.extend(
+        all_fields
+            .into_iter()
+            .zip(emitted)
+            .filter_map(|(field, was_emitted)| (!was_emitted).then_some(field)),
+    );
     ordered
 }
 

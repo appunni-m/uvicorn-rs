@@ -1316,7 +1316,7 @@ impl<B> StreamRef<B> {
                 stream.id,
                 response,
                 end_of_stream,
-                header_order.as_ref().map(HeaderOrder::names),
+                header_order.as_ref(),
             );
 
             actions

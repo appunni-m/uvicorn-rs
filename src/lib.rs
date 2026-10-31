@@ -2739,6 +2739,7 @@ struct ResponseStart {
     status: StatusCode,
     headers: HeaderMap,
     header_order: Vec<HeaderName>,
+    overflow_headers: Vec<(HeaderName, HeaderValue)>,
     content_length: Option<u64>,
     trailers: bool,
 }
@@ -3664,6 +3665,7 @@ struct AsgiIo {
     response_trailer_headers: StdMutex<HeaderMap>,
     response_trailer_header_names: AtomicUsize,
     default_response_header_names: Vec<HeaderName>,
+    response_header_overflow_supported: bool,
     request_allows_response_trailers: bool,
     http2_informational: Option<hyper::ext::Http2InformationalSender>,
     default_header_error: Option<InvalidDefaultHeader>,
@@ -3836,6 +3838,7 @@ impl AsgiIo {
                 )?;
                 let mut headers = HeaderMap::new();
                 let mut header_order = Vec::with_capacity(header_values.len());
+                let mut overflow_headers = Vec::new();
                 let mut unique_header_names = slf.default_response_header_names.len();
                 for (name, value) in header_values {
                     let name = HeaderName::from_bytes(&name)
@@ -3843,17 +3846,34 @@ impl AsgiIo {
                     let value = HeaderValue::from_bytes(&value)
                         .map_err(|_| PyRuntimeError::new_err("Invalid HTTP header value."))?;
                     header_order.push(name.clone());
-                    append_response_header(
-                        &mut headers,
-                        name,
-                        value,
-                        &mut unique_header_names,
-                        &slf.default_response_header_names,
-                        "headers",
-                    )?;
+                    if slf.response_header_overflow_supported {
+                        append_response_header_with_overflow(
+                            &mut headers,
+                            &mut overflow_headers,
+                            name,
+                            value,
+                            &mut unique_header_names,
+                            &slf.default_response_header_names,
+                        )?;
+                    } else {
+                        append_response_header(
+                            &mut headers,
+                            name,
+                            value,
+                            &mut unique_header_names,
+                            &slf.default_response_header_names,
+                            "headers",
+                        )?;
+                    }
                 }
-                let content_length = headers
-                    .get(http::header::CONTENT_LENGTH)
+                let content_length_value =
+                    headers.get(http::header::CONTENT_LENGTH).or_else(|| {
+                        overflow_headers
+                            .iter()
+                            .find(|(name, _)| name == http::header::CONTENT_LENGTH)
+                            .map(|(_, value)| value)
+                    });
+                let content_length = content_length_value
                     .and_then(|value| value.to_str().ok())
                     .and_then(|value| value.parse::<u64>().ok());
                 // Commit the state only after the event is fully validated.
@@ -3880,6 +3900,7 @@ impl AsgiIo {
                         status,
                         headers,
                         header_order,
+                        overflow_headers,
                         content_length,
                         trailers,
                     }))
@@ -3888,6 +3909,7 @@ impl AsgiIo {
                         status,
                         headers,
                         header_order,
+                        overflow_headers,
                         content_length,
                         trailers,
                     })
@@ -3897,6 +3919,7 @@ impl AsgiIo {
                     status,
                     headers,
                     header_order,
+                    overflow_headers,
                     content_length,
                     trailers,
                 });
@@ -5238,6 +5261,45 @@ fn append_response_header(
         })?;
     if is_new_name {
         *unique_header_names += 1;
+    }
+    Ok(())
+}
+
+fn append_response_header_with_overflow(
+    headers: &mut HeaderMap,
+    overflow_headers: &mut Vec<(HeaderName, HeaderValue)>,
+    name: HeaderName,
+    value: HeaderValue,
+    unique_header_names: &mut usize,
+    reserved_names: &[HeaderName],
+) -> PyResult<()> {
+    if overflow_headers
+        .iter()
+        .any(|(overflow_name, _)| overflow_name == &name)
+    {
+        overflow_headers.push((name, value));
+        return Ok(());
+    }
+
+    let is_new_name = !headers.contains_key(&name) && !reserved_names.contains(&name);
+    if is_new_name && *unique_header_names >= MAX_RESPONSE_HEADER_NAMES {
+        overflow_headers.push((name, value));
+        *unique_header_names += 1;
+        return Ok(());
+    }
+
+    match headers.try_append(name.clone(), value.clone()) {
+        Ok(_) => {
+            if is_new_name {
+                *unique_header_names += 1;
+            }
+        }
+        Err(_) => {
+            overflow_headers.push((name, value));
+            if is_new_name {
+                *unique_header_names += 1;
+            }
+        }
     }
     Ok(())
 }
@@ -9856,6 +9918,10 @@ async fn handle_request_parts(
     let default_header_error = context.server.default_header_error;
     let default_response_header_names =
         unique_default_response_header_names(&context.server, http_version);
+    let response_header_overflow_supported = matches!(
+        http_version,
+        Version::HTTP_10 | Version::HTTP_11 | Version::HTTP_2
+    );
     diagnostics.http_request_started();
     let response_latency_started = diagnostics.http_response_latency_started();
     let response_timing_diagnostics = diagnostics.clone();
@@ -9905,6 +9971,7 @@ async fn handle_request_parts(
                         response_trailer_headers: StdMutex::new(HeaderMap::new()),
                         response_trailer_header_names: AtomicUsize::new(0),
                         default_response_header_names,
+                        response_header_overflow_supported,
                         request_allows_response_trailers,
                         http2_informational,
                         default_header_error,
@@ -10035,10 +10102,12 @@ async fn handle_request_parts(
         receiver_pending_pause_active: false,
     }
     .boxed_unsync();
+    let mut header_order = HeaderOrder::new(start.header_order);
+    for (name, value) in start.overflow_headers {
+        header_order.append_overflow_field(name, value);
+    }
     let mut response = response(start.status, body, start.headers);
-    response
-        .extensions_mut()
-        .insert(HeaderOrder::new(start.header_order));
+    response.extensions_mut().insert(header_order);
     if matches!(http_version, Version::HTTP_10 | Version::HTTP_11) {
         response.extensions_mut().insert(Http1AutomaticDateHeader);
     }

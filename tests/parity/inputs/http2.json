@@ -625,6 +625,28 @@
       }
     },
     {
+      "case_id": "http2.response-header-capacity-over-map-limit",
+      "profile": "http2",
+      "operation": "http2.response-header-capacity-delivery",
+      "covers": [
+        "http2.response-header-capacity-delivery"
+      ],
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/response-header-capacity?count=24576",
+          "headers": [],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/scope",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
       "case_id": "http2.response-early-hints",
       "profile": "http2",
       "operation": "http2.response-early-hints",

@@ -570,7 +570,7 @@ FAULT_CONTRACTS = {
     "http-body-pump-shutdown-completes-task-before-abort",
     "http-request-body-conversion-error-caught",
     "server-startup-acknowledgement-drop-cleans-listener",
-    "http-response-header-capacity-recovery-followup-200",
+    "http-response-header-overflow-delivery-followup-200",
     "http2-response-trailer-capacity-limit-reset-followup-200",
     "websocket-header-capacity-error-followup-200",
     "http-start-error-close-followup-200",
@@ -1223,18 +1223,19 @@ def load_contract(
                 raise ParityError(f"{case_id}: fault point is not allow-listed: {fault['point']!r}")
             if not isinstance(fault["contract"], str) or fault["contract"] not in FAULT_CONTRACTS:
                 raise ParityError(f"{case_id}: unsupported fault contract: {fault['contract']!r}")
-            if fault["contract"] == "http-response-header-capacity-recovery-followup-200":
+            if fault["contract"] == "http-response-header-overflow-delivery-followup-200":
                 requests = case.get("request_sequence", [])
                 if (
-                    case.get("profile") != "http1"
-                    or case.get("operation") != "http.keepalive-sequence"
+                    case_id != "support.http1.response-header-overflow-delivers"
+                    or case.get("profile") != "http1"
+                    or case.get("operation") != "http.response-header-capacity-many-above-map-limit"
                     or fault["point"] != "public.http-response-header-capacity"
                     or len(requests) != 2
-                    or requests[0].get("path") != "/response-header-capacity?count=24575"
+                    or requests[0].get("path") != "/response-header-capacity?count=32769"
                     or requests[1].get("path") != "/scope"
                 ):
                     raise ParityError(
-                        f"{case_id}: public HTTP header capacity requires its finite response and recovery sequence"
+                        f"{case_id}: public HTTP header overflow requires 32,769 fields and a same-connection follow-up"
                     )
             elif fault["contract"] == "http2-response-trailer-capacity-limit-reset-followup-200":
                 requests = case.get("request_sequence", [])
@@ -4850,6 +4851,7 @@ def load_contract(
         ):
             if kind == "http2" and case["operation"] not in {
                 "http.concurrent-streams", "http.concurrent-stream-load",
+                "http2.response-header-capacity-delivery",
                 "http2.response-trailer-capacity-delivery",
                 "http2.response-trailer-capacity-rejection",
             }:
@@ -4860,23 +4862,44 @@ def load_contract(
             }:
                 raise ParityError(f"{case_id}: HTTP/3 sequences require a declared sequence operation")
             sequence_keys = {"case_id", "profile", "operation", "covers", "request_sequence"}
-            if case["operation"] == "http.response-header-capacity-delivery":
+            if case["operation"] in {
+                "http.response-header-capacity-delivery",
+                "http.response-header-capacity-one-above-map-limit",
+                "http.response-header-capacity-many-above-map-limit",
+            }:
                 requests = case["request_sequence"]
+                expected_count, expected_case_ids = {
+                    "http.response-header-capacity-delivery": (
+                        24575,
+                        {"http1.response-header-capacity-at-map-limit"},
+                    ),
+                    "http.response-header-capacity-one-above-map-limit": (
+                        24576,
+                        {"http1.response-header-capacity-one-above-map-limit"},
+                    ),
+                    "http.response-header-capacity-many-above-map-limit": (
+                        32769,
+                        {
+                            "http1.response-header-capacity-many-above-map-limit",
+                            "support.http1.response-header-overflow-delivers",
+                        },
+                    ),
+                }[case["operation"]]
                 if (
                     kind != "http1"
-                    or case_id != "http1.response-header-capacity-at-map-limit"
+                    or case_id not in expected_case_ids
                     or not isinstance(requests, list)
                     or len(requests) != 2
                     or any(not isinstance(request, dict) for request in requests)
                     or requests[0].get("path")
-                    != "/response-header-capacity?count=24575"
+                    != f"/response-header-capacity?count={expected_count}"
                     or requests[1].get("path") != "/scope"
                     or any(request.get("method") != "GET" for request in requests)
                     or any(request.get("headers") != [] for request in requests)
                     or any(request.get("body_base64") != "" for request in requests)
                 ):
                     raise ParityError(
-                        f"{case_id}: HTTP/1 response-header boundary requires 24,575 application names and a same-connection follow-up"
+                        f"{case_id}: HTTP/1 response-header boundary requires {expected_count:,} application names and a same-connection follow-up"
                     )
             if "load" in case:
                 sequence_keys.add("load")
@@ -4894,6 +4917,27 @@ def load_contract(
                     raise ParityError(f"{case_id}: h3_grease must be a boolean")
             exact_case_keys(case, sequence_keys, case_id)
             requests = case["request_sequence"]
+            if kind == "http2" and case["operation"] in {
+                "http2.response-header-capacity-delivery",
+            }:
+                if (
+                    not isinstance(requests, list)
+                    or len(requests) != 2
+                    or any(not isinstance(request, dict) for request in requests)
+                    or requests[0].get("method") != "GET"
+                    or requests[0].get("path") != "/response-header-capacity?count=24576"
+                    or requests[0].get("headers") != []
+                    or requests[0].get("body_base64") != ""
+                    or requests[1].get("method") != "GET"
+                    or requests[1].get("path") != "/scope"
+                    or requests[1].get("headers") != []
+                    or requests[1].get("body_base64") != ""
+                    or case.get("verification", "oracle-parity") != "oracle-parity"
+                    or "fault" in case
+                ):
+                    raise ParityError(
+                        f"{case_id}: HTTP/2 response-header overflow requires 24,576 distinct fields and a same-connection follow-up"
+                    )
             if kind == "http2" and case["operation"] in {
                 "http2.response-trailer-capacity-delivery",
                 "http2.response-trailer-capacity-rejection",
@@ -8797,6 +8841,125 @@ def http2_response_trailer_capacity_sequence(
         tls_socket.close()
 
 
+def http2_response_header_capacity_sequence(
+    port: int, requests: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Observe an oversized finite response-header block and connection reuse."""
+    context = ssl._create_unverified_context()
+    context.set_alpn_protocols(["h2"])
+    raw_socket = socket.create_connection(("127.0.0.1", port), timeout=10)
+    tls_socket = context.wrap_socket(raw_socket, server_hostname="localhost")
+    if tls_socket.selected_alpn_protocol() != "h2":
+        tls_socket.close()
+        raise ParityError("TLS did not negotiate HTTP/2 through ALPN")
+    connection = H2Connection(config=H2Configuration(client_side=True, header_encoding="utf-8"))
+    connection.local_settings[SettingCodes.MAX_HEADER_LIST_SIZE] = (
+        MAX_PARITY_HTTP2_RESPONSE_HEADER_LIST_SIZE
+    )
+    connection.decoder.max_header_list_size = MAX_PARITY_HTTP2_RESPONSE_HEADER_LIST_SIZE
+    connection.initiate_connection()
+    tls_socket.sendall(connection.data_to_send())
+
+    def receive_response(request: dict[str, Any]) -> tuple[dict[str, Any], str]:
+        stream_id = connection.get_next_available_stream_id()
+        connection.send_headers(
+            stream_id,
+            [
+                (":method", request["method"]),
+                (":scheme", "https"),
+                (":authority", f"localhost:{port}"),
+                (":path", request["path"]),
+                *((name.lower(), value) for name, value in request["headers"]),
+            ],
+            end_stream=True,
+        )
+        pending = connection.data_to_send()
+        if pending:
+            tls_socket.sendall(pending)
+
+        status: int | None = None
+        response_headers: list[tuple[str, str]] = []
+        response_body = bytearray()
+        terminal = "pending"
+        while terminal == "pending":
+            try:
+                received = tls_socket.recv(65536)
+            except TimeoutError:
+                terminal = "timeout"
+                break
+            if not received:
+                terminal = "connection_closed"
+                break
+            for event in connection.receive_data(received):
+                if isinstance(event, ResponseReceived) and event.stream_id == stream_id:
+                    for name, value in event.headers:
+                        if name == ":status":
+                            status = int(value)
+                        else:
+                            response_headers.append((name.lower(), value))
+                elif isinstance(event, DataReceived) and event.stream_id == stream_id:
+                    response_body.extend(event.data)
+                    connection.acknowledge_received_data(
+                        event.flow_controlled_length, stream_id
+                    )
+                elif isinstance(event, StreamReset) and event.stream_id == stream_id:
+                    terminal = "reset"
+                    break
+                elif isinstance(event, ConnectionTerminated):
+                    terminal = "connection_terminated"
+                    break
+                elif isinstance(event, StreamEnded) and event.stream_id == stream_id:
+                    terminal = "ended"
+                    break
+            pending = connection.data_to_send()
+            if pending:
+                tls_socket.sendall(pending)
+
+        capacity_headers = [
+            (name, value)
+            for name, value in response_headers
+            if name.startswith("x-capacity-")
+        ]
+        capacity_digest = hashlib.sha256()
+        for name, value in capacity_headers:
+            capacity_digest.update(name.encode("ascii") + b":" + value.encode("utf-8") + b"\n")
+        return (
+            {
+                "status": status,
+                "body_base64": base64.b64encode(response_body).decode("ascii"),
+                "capacity_header_count": len(capacity_headers),
+                "capacity_header_sha256": capacity_digest.hexdigest(),
+                "connection_closed": terminal == "connection_closed",
+            },
+            terminal,
+        )
+
+    try:
+        first, first_terminal = receive_response(requests[0])
+        followup: dict[str, Any] | None = None
+        followup_terminal: str | None = None
+        if first_terminal == "ended":
+            followup, followup_terminal = receive_response(requests[1])
+        if followup is None:
+            followup = {
+                "status": None,
+                "body_base64": "",
+                "capacity_header_count": 0,
+                "capacity_header_sha256": hashlib.sha256().hexdigest(),
+                "connection_closed": True,
+            }
+        return {
+            "responses": [first, followup],
+            "response_stream_terminal": first_terminal,
+            "connection_reused": followup_terminal == "ended",
+            "followup_status": followup.get("status"),
+            "followup_healthy": followup.get("status") == 200,
+        }
+    finally:
+        close_http2_connection(connection, tls_socket)
+        tls_socket.close()
+
+
 def http2_response_reset_request(
     port: int, specification: dict[str, Any], events_path: Path
 ) -> dict[str, Any]:
@@ -11333,6 +11496,12 @@ def execute_case(
             )
         if profile["id"] == "http2":
             if case["operation"] in {
+                "http2.response-header-capacity-delivery",
+            }:
+                return http2_response_header_capacity_sequence(
+                    server["port"], case["request_sequence"]
+                )
+            if case["operation"] in {
                 "http2.response-trailer-capacity-delivery",
                 "http2.response-trailer-capacity-rejection",
             }:
@@ -11352,7 +11521,11 @@ def execute_case(
         fault = case.get("fault")
         log_offset = len(read_server_log(server))
         events_before = len(read_events(server["events"]))
-        if case["operation"] == "http.response-header-capacity-delivery":
+        if case["operation"] in {
+            "http.response-header-capacity-delivery",
+            "http.response-header-capacity-one-above-map-limit",
+            "http.response-header-capacity-many-above-map-limit",
+        }:
             observation = http1_response_header_capacity_sequence(
                 server["port"],
                 case["request_sequence"],
@@ -12688,18 +12861,24 @@ def fault_contract_matches(
             == base64.b64encode(b"read-once").decode("ascii")
             and observation.get("fault_consumed") is True
         )
-    if fault["contract"] == "http-response-header-capacity-recovery-followup-200":
+    if fault["contract"] == "http-response-header-overflow-delivery-followup-200":
         responses = observation.get("responses", [])
         events = observation.get("application_events", [])
         return (
             isinstance(responses, list) and len(responses) == 2
             and all(isinstance(response, dict) for response in responses)
-            and responses[0].get("status") == 500
+            and responses[0].get("status") == 200
             and responses[0].get("body_base64")
-            == base64.b64encode(b"header capacity rejected").decode("ascii")
+            == base64.b64encode(b"headers accepted").decode("ascii")
+            and responses[0].get("capacity_header_count") == 32769
+            and responses[0].get("capacity_header_sha256")
+            == "1128506a84dad05f4afe923dcbe67864452429bfb55a34c9b748c5754eadb96e"
+            and responses[0].get("server_header_count") == 1
+            and responses[0].get("date_header_count") == 1
+            and responses[0].get("connection_closed") is False
             and responses[1].get("status") == 200
-            and "http.header-capacity.error:RuntimeError:HTTP response headers: maximum of 24576 distinct header names exceeded" in events
-            and "http.header-capacity.recovered" in events
+            and responses[1].get("connection_closed") is False
+            and not any(event.startswith("http.header-capacity.error:") for event in events)
         )
     if fault["contract"] == "http2-response-trailer-capacity-limit-reset-followup-200":
         responses = observation.get("responses", [])
@@ -15400,7 +15579,7 @@ def execute_profile(
                             "http-callback-error-cleans-task-followup-200",
                         }:
                             fault_observation = {**target_result, "server_log": target_raw["server_log"]}
-                        elif case["fault"]["contract"] == "http-response-header-capacity-recovery-followup-200":
+                        elif case["fault"]["contract"] == "http-response-header-overflow-delivery-followup-200":
                             fault_observation = {
                                 **target_result,
                                 "application_events": target_raw["application_events"],

@@ -116,12 +116,12 @@
 //! [`TcpListener`]: https://docs.rs/tokio-core/0.1/tokio_core/net/struct.TcpListener.html
 
 use crate::codec::{Codec, UserError};
+use crate::ext::HeaderOrder;
 use crate::frame::{self, Pseudo, PushPromiseHeaderError, Reason, Settings, StreamId};
 use crate::proto::{self, Config, Error, Prioritized};
 use crate::{FlowControl, PingPong, RecvStream, SendStream};
 
 use bytes::{Buf, Bytes};
-use http::header::HeaderName;
 use http::{HeaderMap, Method, Request, Response};
 use std::future::Future;
 use std::pin::Pin;
@@ -1573,7 +1573,7 @@ impl Peer {
         id: StreamId,
         response: Response<()>,
         end_of_stream: bool,
-        header_order: Option<&[HeaderName]>,
+        header_order: Option<&HeaderOrder>,
     ) -> frame::Headers {
         use http::response::Parts;
 

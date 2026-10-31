@@ -2884,28 +2884,29 @@ The pinned `http` crate gives `HeaderMap` finite compiled capacity. Its
 infallible `append` calls `expect` internally when capacity is exceeded. A valid
 ASGI application can supply enough distinct response or WebSocket acceptance
 headers to reach that path even though project code contains no panic macro.
-The implemented correction uses `try_append` and preserves its `MaxSizeReached`
-error through `Result` before response commitment or handshake task transfer.
+HTTP/1 and HTTP/2 response fields that exceed the map are retained in an ordered
+sidecar and emitted by their transport encoders. WebSocket acceptance remains
+bounded and uses `try_append` so capacity is returned as an error before
+handshake task transfer.
 
-The two declared target-only cases supply 32,769 distinct valid headers through the
-ordinary ASGI boundary. They declare the server's capacity/error contract in
-the existing target-only result envelope; they do not activate native fault
-controls and are not Uvicorn parity. The internal bucket ceiling is not a
-stable public maximum accepted-header count: distinct names, duplicate values,
-reserved handshake headers, and map growth affect capacity differently. The
-support matrix documents finite capacity without promising a universal numeric
-threshold. No regions may be excluded to hide this reachable failure.
+The target-only capacity cases use ordinary ASGI input, do not activate native
+fault controls, and are not Uvicorn parity. The HTTP/1 support case sends 32,769
+distinct response fields through the overflow sidecar and checks wire count,
+digest, and same-connection recovery. The WebSocket support case checks the
+bounded-capacity error, rejected handshake, application cleanup, and healthy
+follow-up. Uvicorn parity is covered separately for HTTP/1 response headers;
+WebSocket capacity still needs reference comparison before compatibility can
+close. No regions may be excluded to hide reachable behavior.
 
-The cases are `support.http1.response-header-capacity-error-recovers` and
+The cases are `support.http1.response-header-overflow-delivers` and
 `support.websocket.accept-header-capacity-error-recovers`. Their harness-only
 selectors are `public.http-response-header-capacity` and
 `public.websocket-accept-header-capacity`; neither is written to a native
-injection control. The HTTP contract requires the original capacity error to
-be handled with a small HTTP 500 and a healthy follow-up. The WebSocket contract
-requires the native capacity error, rejected handshake, application cleanup,
-and healthy follow-up. Both passed the preceding 447-case full attribution and
-all three complete repeats. Both also pass current attribution, all three
-complete repeats, and the selected normal-build audit.
+injection control. The HTTP/1 support result checks 32,769 fields and recovery;
+the separate H1 parity cases check 24,575, 24,576, and 32,769 fields against
+Uvicorn 0.54.0. The HTTP/2 parity case sends 24,576 fields and checks recovery
+against Hypercorn 0.18.0. These selected installed-wheel receipts do not replace
+the unified coverage gate or establish WebSocket parity.
 
 <a id="latest-incomplete-snapshot-445-cases-before-protocol-detection-cancellation-correction"></a>
 

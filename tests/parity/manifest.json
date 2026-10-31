@@ -1173,6 +1173,46 @@
       }
     },
     {
+      "id": "http2.response-header-capacity-delivery",
+      "kind": "protocol_operation",
+      "observe": [
+        "responses",
+        "response_stream_terminal",
+        "connection_reused",
+        "followup_status",
+        "followup_healthy"
+      ],
+      "compare": [
+        "responses",
+        "response_stream_terminal",
+        "connection_reused",
+        "followup_status",
+        "followup_healthy"
+      ],
+      "required_observations": {
+        "responses": [
+          {
+            "status": 200,
+            "body_base64": "aGVhZGVycyBhY2NlcHRlZA==",
+            "capacity_header_count": 24576,
+            "capacity_header_sha256": "3c5f5688fb627d81699d1ee6c4c62eb3af496142d461957b7418d6dd00f93506",
+            "connection_closed": false
+          },
+          {
+            "status": 200,
+            "body_base64": "eyJodHRwX3ZlcnNpb24iOiIyIiwibWV0aG9kIjoiR0VUIiwic2NoZW1lIjoiaHR0cHMiLCJwYXRoIjoiL3Njb3BlIiwicXVlcnlfc3RyaW5nX2Jhc2U2NCI6IiIsIngtcGFyaXR5IjoiIiwiYm9keV9iYXNlNjQiOiIifQ==",
+            "capacity_header_count": 0,
+            "capacity_header_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "connection_closed": false
+          }
+        ],
+        "response_stream_terminal": "ended",
+        "connection_reused": true,
+        "followup_status": 200,
+        "followup_healthy": true
+      }
+    },
+    {
       "id": "http2.response-trailer-capacity-delivery",
       "kind": "protocol_operation",
       "observe": [
@@ -1523,6 +1563,26 @@
           }
         ]
       }
+    },
+    {
+      "id": "http.response-header-capacity-one-above-map-limit",
+      "kind": "protocol_operation",
+      "observe": [
+        "responses"
+      ],
+      "compare": [
+        "responses"
+      ]
+    },
+    {
+      "id": "http.response-header-capacity-many-above-map-limit",
+      "kind": "protocol_operation",
+      "observe": [
+        "responses"
+      ],
+      "compare": [
+        "responses"
+      ]
     },
     {
       "id": "http.application-task-cleanup-observer",

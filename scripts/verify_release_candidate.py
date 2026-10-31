@@ -80,7 +80,7 @@ def verify_external_evidence(directory: Path, version: str, commit: str, linux: 
     if public["run"]["target"]["revision"] != commit or public["run"]["target"].get("dirty") is not False:
         raise ValueError("normal public parity is not from the clean expected commit")
     expected_cases = ["http1.scope-query-header-and-body",
-                      "support.http1.response-header-capacity-error-recovers",
+                      "support.http1.response-header-overflow-delivers",
                       "support.websocket.accept-header-capacity-error-recovers"]
     if (normal.get("parity_case_ids") != expected_cases
             or normal.get("parity") != {"selected": 3, "executed": 3, "passed": 3, "failed": 0, "infrastructure_failed": 0, "not_run": 0}):

@@ -495,10 +495,16 @@ where
                     );
 
                     // set Date header if it isn't already set if instructed
-                    if *me.date_header {
-                        res.headers_mut()
-                            .entry(::http::header::DATE)
-                            .or_insert_with(date::update_and_header_value);
+                    if *me.date_header && !res.headers().contains_key(::http::header::DATE) {
+                        if res
+                            .headers_mut()
+                            .try_append(::http::header::DATE, date::update_and_header_value())
+                            .is_err()
+                        {
+                            warn!("HTTP/2 response header capacity exceeded while adding Date");
+                            me.reply.send_reset(h2::Reason::INTERNAL_ERROR);
+                            return Poll::Ready(Err(crate::Error::new_user_header()));
+                        }
                     }
 
                     if let Some(connect_parts) = connect_parts.take() {

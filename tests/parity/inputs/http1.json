@@ -5101,21 +5101,61 @@
       ]
     },
     {
-      "case_id": "support.http1.response-header-capacity-error-recovers",
+      "case_id": "http1.response-header-capacity-one-above-map-limit",
       "profile": "http1",
-      "operation": "http.keepalive-sequence",
+      "operation": "http.response-header-capacity-one-above-map-limit",
+      "covers": ["http.response-header-capacity-one-above-map-limit"],
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/response-header-capacity?count=24576",
+          "headers": [],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/scope",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
+      "case_id": "http1.response-header-capacity-many-above-map-limit",
+      "profile": "http1",
+      "operation": "http.response-header-capacity-many-above-map-limit",
+      "covers": ["http.response-header-capacity-many-above-map-limit"],
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/response-header-capacity?count=32769",
+          "headers": [],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/scope",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
+      "case_id": "support.http1.response-header-overflow-delivers",
+      "profile": "http1",
+      "operation": "http.response-header-capacity-many-above-map-limit",
       "covers": [
-        "http.keepalive-sequence"
+        "http.response-header-capacity-many-above-map-limit"
       ],
       "verification": "fault-contract",
       "fault": {
         "point": "public.http-response-header-capacity",
-        "contract": "http-response-header-capacity-recovery-followup-200"
+        "contract": "http-response-header-overflow-delivery-followup-200"
       },
       "request_sequence": [
         {
           "method": "GET",
-          "path": "/response-header-capacity?count=24575",
+          "path": "/response-header-capacity?count=32769",
           "headers": [],
           "body_base64": ""
         },

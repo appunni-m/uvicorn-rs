@@ -26,7 +26,7 @@ from check_ci_evidence import (
 
 PRIMARY_CASE = "http1.scope-query-header-and-body"
 SUPPORT_CASES = {
-    "support.http1.response-header-capacity-error-recovers": "public.http-response-header-capacity",
+    "support.http1.response-header-overflow-delivers": "public.http-response-header-capacity",
     "support.websocket.accept-header-capacity-error-recovers": "public.websocket-accept-header-capacity",
 }
 CASE_IDS = (PRIMARY_CASE, *SUPPORT_CASES)

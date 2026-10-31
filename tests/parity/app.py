@@ -48,7 +48,12 @@ def _header_capacity_headers(query_string):
     count = int(value)
     if not 1 <= count <= 32769:
         raise ValueError("header-capacity fixture count is outside its bounded range")
-    return [(f"x-capacity-{index:x}".encode("ascii"), b"x") for index in range(count)]
+    headers = [
+        (f"x-capacity-{index:x}".encode("ascii"), b"x")
+        for index in range(count)
+    ]
+    headers.append((b"content-length", b"16"))
+    return headers
 
 
 def _scope_address(scope, key):
