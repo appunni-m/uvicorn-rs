@@ -92,6 +92,50 @@ if (
             _write("kill", signum, f"target_pid={pid}")
         return _original_kill(pid, signum)
 
+    def _console_process_snapshot() -> None:
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            get_console_process_list = kernel32.GetConsoleProcessList
+            get_console_process_list.argtypes = [
+                ctypes.POINTER(wintypes.DWORD),
+                wintypes.DWORD,
+            ]
+            get_console_process_list.restype = wintypes.DWORD
+            process_ids = (wintypes.DWORD * 128)()
+            count = int(get_console_process_list(process_ids, len(process_ids)))
+            if count == 0:
+                _write(
+                    "console-snapshot",
+                    signal.SIGINT,
+                    f"probe_pid={os.environ.get('ASGI_PARITY_TRACE_PROBE_PID', '?')} "
+                    f"winerror={ctypes.get_last_error()}",
+                )
+                return
+            attached_ids = [
+                int(process_ids[index]) for index in range(min(count, 128))
+            ]
+            probe_pid = os.environ.get("ASGI_PARITY_TRACE_PROBE_PID", "?")
+            probe_attached = (
+                str(probe_pid).isdigit() and int(probe_pid) in attached_ids
+            )
+            _write(
+                "console-snapshot",
+                signal.SIGINT,
+                f"probe_pid={probe_pid} attached_pids={attached_ids!r} "
+                f"probe_attached={probe_attached}",
+            )
+        except Exception as error:
+            _write(
+                "console-snapshot-error",
+                signal.SIGINT,
+                f"error={type(error).__name__}:{error}",
+            )
+
+    _console_process_snapshot()
+
     signal.signal = _trace_signal
     if _original_raise_signal is not None:
         signal.raise_signal = _trace_raise_signal

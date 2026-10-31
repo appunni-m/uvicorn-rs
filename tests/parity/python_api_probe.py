@@ -1121,6 +1121,7 @@ except KeyboardInterrupt:
             path for path in (signal_trace_site, environment.get("PYTHONPATH")) if path
         )
         environment["ASGI_PARITY_TRACE_ORACLE_SIGNAL_ACTIVE"] = "1"
+        environment["ASGI_PARITY_TRACE_PROBE_PID"] = str(os.getpid())
     if request.get("callable_instance"):
         environment["ASGI_PARITY_CALLABLE_INSTANCE"] = "1"
     if request.get("custom_http_protocol"):
@@ -1307,9 +1308,9 @@ except KeyboardInterrupt:
     )
     if os.name == "nt":
         # The runner gives this probe a private console. A new process group
-        # disables Ctrl+C, so use one only for break-only tests. Ignore Ctrl+C
-        # in the probe only after the server is spawned; children can inherit
-        # the ignored console state and then miss the shutdown event.
+        # disables Ctrl+C, so use one only for break-only tests. Keep the
+        # probe's own Ctrl+C handler harmless without setting SIG_IGN, which
+        # maps to Windows' inheritable console-ignore state.
         if "SIGINT" not in shutdown_signal_names:
             process_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
         previous_windows_sigbreak_handler = signal.signal(
@@ -1797,7 +1798,8 @@ except KeyboardInterrupt:
                     if signal_name == "SIGINT":
                         if previous_windows_sigint_handler is None:
                             previous_windows_sigint_handler = signal.signal(
-                                signal.SIGINT, signal.SIG_IGN
+                                signal.SIGINT,
+                                lambda _signum, _frame: None,
                             )
                         windows_signal = signal.CTRL_C_EVENT
                     else:
