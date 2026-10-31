@@ -26,13 +26,19 @@ only worker PID 3832 recorded SIGBREAK before exiting; PID 3252 recorded no
 signal handler event. This does not establish the event ordering or prove the
 oracle shim reached both worker groups.
 
-The trace wrapper missed the supervisor's `os.kill` requests because it watched
-Python's `SIGBREAK` value (`21`) while Uvicorn passes Windows'
-`CTRL_BREAK_EVENT` value (`1`) to `os.kill`. The next diagnostic records both
-control-event constants and the oracle workers' `CREATE_NEW_PROCESS_GROUP`
-creation flags. Rerun only the remaining case after that trace change; do not
-accept this compatibility result until all three focused cases pass. Full
-Windows parity is still required afterward.
+The corrected trace was used in focused CI [#563](https://github.com/appunni-m/uvicorn-rs/actions/runs/41236381416)
+on commit `b65e402a54ececa66297bd3f4e18fbb1ec6061c3`. The remaining case passed
+1/1 with zero infrastructure failures. Its artifact (`13055747302`, SHA-256
+`d41593e296eef99528f7bb9f8c08de1dde92f0b35da067af9da38181e4fe3f5a`) records
+both oracle workers created with `CREATE_NEW_PROCESS_GROUP` (`512`), the
+supervisor issuing `CTRL_BREAK_EVENT` (`1`) to each worker PID, and both workers
+handling `SIGBREAK` (`21`) and exiting cleanly. The other two selected cases
+passed in #562. Candidate runtime code did not change between those runs.
+
+Run #562's oracle-only timeout remains evidence of a possible delivery race;
+the successful trace does not explain why the earlier attempt missed a worker.
+The focused cases now have pass evidence, but the final Windows parity matrix
+must still pass on the release candidate before compatibility is accepted.
 
 PR #19 is draft and targets `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI

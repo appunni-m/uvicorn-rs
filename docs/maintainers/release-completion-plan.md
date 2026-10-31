@@ -61,16 +61,21 @@ the flag.
 
 Focused run [#562](https://github.com/appunni-m/uvicorn-rs/actions/runs/41235353193)
 on `a2908d3ac2b77e72e21ad5538c03f323ee8d4078` passed two of three cases. In
-`python-api.module-cli-two-workers-serve-request`, both oracle workers installed
-signal handlers and the supervisor received SIGINT, but only worker 3832
-recorded SIGBREAK and exited; worker 3252 had no recorded handler event. The
-candidate did not report a shutdown failure. The trace omitted the actual
-supervisor `os.kill` requests because the wrapper watched `SIGBREAK` (21) while
-Windows `CTRL_BREAK_EVENT` is passed as 1. The next diagnostic records the
-control-event codes and worker process-group creation flags. Rerun only this
-case after the trace change. Require 3/3 focused passes and zero infrastructure
-failures before accepting the fix; the full Windows matrix must still pass on
-the final candidate source.
+`python-api.module-cli-two-workers-serve-request`, the oracle timed out after
+only worker 3832 recorded SIGBREAK; the candidate did not report a shutdown
+failure. The trace omitted the supervisor `os.kill` requests because it watched
+`SIGBREAK` (21) while Windows `CTRL_BREAK_EVENT` is passed as 1.
+
+The corrected trace was used in focused run [#563](https://github.com/appunni-m/uvicorn-rs/actions/runs/41236381416)
+on `b65e402a54ececa66297bd3f4e18fbb1ec6061c3`. The remaining case passed 1/1
+with zero infrastructure failures. Artifact `13055747302` (SHA-256
+`d41593e296eef99528f7bb9f8c08de1dde92f0b35da067af9da38181e4fe3f5a`) records
+both workers created with `CREATE_NEW_PROCESS_GROUP` (`512`), per-worker
+`CTRL_BREAK_EVENT` (`1`) requests, and both workers handling `SIGBREAK` (`21`)
+before clean exit. The other two focused cases passed in #562, and candidate
+runtime code was unchanged between the runs. The prior oracle-only timeout may
+still reflect nondeterministic delivery; the final Windows matrix must pass on
+the release candidate before compatibility is accepted.
 
 ### Current PR validation — 2026-10-31
 
