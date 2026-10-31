@@ -1291,7 +1291,10 @@ except KeyboardInterrupt:
             expected_worker_count = int(environment.get("WEB_CONCURRENCY", "1"))
         except ValueError:
             expected_worker_count = 1
-    if request.get("reload"):
+    reload_requested = request.get("reload") or str(
+        environment.get("UVICORN_RELOAD", "")
+    ).strip().lower() in {"1", "true", "yes", "on"}
+    if reload_requested:
         expected_worker_count = 1
     expected_worker_count = max(1, expected_worker_count)
     configured_log_level = (
@@ -1302,7 +1305,7 @@ except KeyboardInterrupt:
     track_worker_startup = (
         os.name == "nt"
         and request.get("invocation") == "module-cli"
-        and expected_worker_count > 1
+        and (expected_worker_count > 1 or reload_requested)
         and str(configured_log_level).lower() == "info"
         and not request.get("log_config")
     )
