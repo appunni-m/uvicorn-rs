@@ -455,7 +455,6 @@ FAULT_POINTS = {
 PUBLIC_INPUT_CONTRACT_POINTS = {
     "public.http-response-header-capacity",
     "public.http2-response-trailer-capacity",
-    "public.websocket-accept-header-capacity",
 }
 ASGI_SCOPE_SUPPORT_CONTRACT_POINTS = {"public.asgi-spec-version"}
 # These selectors describe real protocol/application input. They are never
@@ -571,7 +570,6 @@ FAULT_CONTRACTS = {
     "http-request-body-conversion-error-caught",
     "server-startup-acknowledgement-drop-cleans-listener",
     "http-response-header-overflow-delivery-followup-200",
-    "websocket-header-capacity-error-followup-200",
     "http-start-error-close-followup-200",
     "http-response-body-error-followup-200",
     "http-response-backpressure-body-preserved-followup-200",
@@ -1031,6 +1029,7 @@ def load_contract(
         "server_header_values", "date_header_present",
         "streamed_before_completion", "disconnect_event", "followup_response",
         "handshake_status", "handshake_established", "handshake_accept_valid", "frame_sent",
+        "application_header_count", "application_header_sha256",
         "disconnect_code", "followup_status", "subprotocol", "ordered_messages", "state_response",
         "ordered_message_payload_bytes", "last_ordered_message",
         "process_terminated", "process_exit_code", "application_events", "close_code", "close_reason",
@@ -2688,19 +2687,6 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: WebSocket send-error contracts require their matching outbound-send workflow"
-                    )
-            elif fault["contract"] == "websocket-header-capacity-error-followup-200":
-                specification = case.get("websocket", {})
-                if (
-                    case.get("profile") != "websocket"
-                    or case.get("operation") != "websocket.fault-contract"
-                    or fault["point"] != "public.websocket-accept-header-capacity"
-                    or specification.get("path") != "/ws-header-capacity?count=32769"
-                    or specification.get("followup_path") != "/scope"
-                    or specification.get("messages") != []
-                ):
-                    raise ParityError(
-                        f"{case_id}: public WebSocket header capacity requires its finite handshake and recovery workflow"
                     )
             elif fault["contract"] == "websocket-registration-failure-cancels-app-followup-200":
                 specification = case.get("websocket", {})
@@ -5593,6 +5579,19 @@ def load_contract(
             exact_case_keys(case, case_keys, case_id)
             websocket = case["websocket"]
             websocket_keys = {"path", "subprotocols", "messages"}
+            if case["operation"] == "websocket.response-header-capacity-delivery":
+                websocket_keys.add("followup_path")
+                if (
+                    case["profile"] != "websocket"
+                    or websocket.get("path") != "/ws-header-capacity?count=32769"
+                    or websocket.get("messages") != []
+                    or websocket.get("subprotocols") != []
+                    or websocket.get("followup_path") != "/scope"
+                    or "fault" in case
+                ):
+                    raise ParityError(
+                        f"{case_id}: WebSocket response-header overflow requires the bounded 32,769-field handshake and follow-up"
+                    )
             if case["operation"] in {
                 "websocket.raw-frame-disconnect",
                 "websocket.fragmented-message-reassembly",
@@ -10430,6 +10429,86 @@ def websocket_raw_frame_observation(
     return observation
 
 
+def websocket_response_header_capacity_observation(
+    server: dict[str, Any], specification: dict[str, Any]
+) -> dict[str, Any]:
+    """Observe a large accepted handshake without a client's header-count cap."""
+
+    events_path = server["events"]
+    events_before = len(read_events(events_path))
+    client = socket.create_connection(("127.0.0.1", server["port"]), timeout=10)
+    client.settimeout(10)
+    response = bytearray()
+    delimiter = b"\r\n\r\n"
+    deadline = time.monotonic() + 10
+    try:
+        raw_request = (
+            f"GET {specification['path']} HTTP/1.1\r\n"
+            f"Host: 127.0.0.1:{server['port']}\r\n"
+            "Upgrade: websocket\r\n"
+            "Connection: Upgrade\r\n"
+            "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+            "Sec-WebSocket-Version: 13\r\n\r\n"
+        ).encode("ascii")
+        client.sendall(raw_request)
+        while delimiter not in response:
+            if time.monotonic() >= deadline:
+                raise ParityError("WebSocket header-capacity handshake timed out")
+            chunk = client.recv(16384)
+            if not chunk:
+                break
+            response.extend(chunk)
+            if len(response) > 8_388_608:
+                raise ParityError("WebSocket response headers exceeded the 8 MiB observation bound")
+    finally:
+        client.close()
+
+    header_block = bytes(response).split(delimiter, 1)[0]
+    lines = header_block.split(b"\r\n")
+    status_parts = lines[0].split() if lines else []
+    handshake_status = (
+        int(status_parts[1])
+        if len(status_parts) >= 2 and status_parts[1].isdigit()
+        else None
+    )
+    application_fields = []
+    handshake_accept_valid = False
+    for line in lines[1:]:
+        name, separator, value = line.partition(b":")
+        if not separator:
+            continue
+        normalized_name = name.strip().lower()
+        normalized_value = value.strip()
+        if normalized_name.startswith(b"x-capacity-"):
+            application_fields.append(normalized_name + b": " + normalized_value)
+        elif normalized_name == b"sec-websocket-accept":
+            handshake_accept_valid = normalized_value == b"s3pPLMBiTxaQ9kYGzzhZRbK+xOo="
+
+    cleanup_event = "websocket.header-capacity.cleanup-completed"
+    application_events = read_events(events_path)[events_before:]
+    deadline = time.monotonic() + 3
+    while cleanup_event not in application_events and time.monotonic() < deadline:
+        if server["process"].poll() is not None:
+            break
+        time.sleep(0.01)
+        application_events = read_events(events_path)[events_before:]
+
+    followup = http1_request(server["port"], {
+        "method": "GET",
+        "path": specification["followup_path"],
+        "headers": [],
+        "body_base64": "",
+    })
+    return {
+        "handshake_status": handshake_status,
+        "handshake_accept_valid": handshake_accept_valid,
+        "application_header_count": len(application_fields),
+        "application_header_sha256": hashlib.sha256(b"\n".join(application_fields)).hexdigest(),
+        "application_events": application_events,
+        "followup_status": followup["status"],
+    }
+
+
 def websocket_server_keepalive_observation(
     server: dict[str, Any], specification: dict[str, Any]
 ) -> dict[str, Any]:
@@ -11011,6 +11090,8 @@ def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[
         "handshake_status": "handshake_status",
         "handshake_established": "handshake_established",
         "handshake_accept_valid": "handshake_accept_valid",
+        "application_header_count": "application_header_count",
+        "application_header_sha256": "application_header_sha256",
         "frame_sent": "frame_sent",
         "disconnect_code": "disconnect_code",
         "followup_status": "followup_status",
@@ -11857,6 +11938,13 @@ def execute_case(
             return run_websocket_load_case(
                 server, profile, case, trust_anchor, h3_client
             )
+        if case.get("operation") == "websocket.response-header-capacity-delivery":
+            log_offset = len(read_server_log(server))
+            observation = websocket_response_header_capacity_observation(
+                server, case["websocket"]
+            )
+            observation["server_log"] = read_server_log(server)[log_offset:]
+            return observation
         if case.get("operation") in {
             "websocket.raw-frame-disconnect",
             "websocket.fragmented-message-reassembly",
@@ -12847,17 +12935,6 @@ def fault_contract_matches(
             and responses[1].get("status") == 200
             and responses[1].get("connection_closed") is False
             and not any(event.startswith("http.header-capacity.error:") for event in events)
-        )
-    if fault["contract"] == "websocket-header-capacity-error-followup-200":
-        followup = observation.get("followup_response")
-        events = observation.get("application_events", [])
-        return (
-            observation.get("handshake_status") == 500
-            and isinstance(followup, dict) and followup.get("status") == 200
-            and "websocket.header-capacity.accept-sent" in events
-            and "websocket.header-capacity.cleanup-completed" in events
-            and "uvicorn-rs: WebSocket request failed: WebSocket response header capacity exceeded"
-            in observation.get("server_log", "").splitlines()
         )
     if fault["contract"] in EAGER_REGISTRATION_CLEANUP_CONTRACTS:
         startup = fault["contract"] in EAGER_LIFESPAN_CLEANUP_CONTRACTS
@@ -15532,8 +15609,6 @@ def execute_profile(
                                 **target_result,
                                 "application_events": target_raw["application_events"],
                             }
-                        elif case["fault"]["contract"] == "websocket-header-capacity-error-followup-200":
-                            fault_observation = {**target_result, "server_log": target_raw["server_log"]}
                         elif case["fault"]["contract"] == "server-forced-task-completion-error-bounded-shutdown":
                             fault_observation = {**target_result, "server_log": target_raw["server_log"]}
                         elif case["fault"]["contract"] == "server-startup-failure":

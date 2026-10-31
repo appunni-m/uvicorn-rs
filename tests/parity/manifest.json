@@ -1859,6 +1859,28 @@
       }
     },
     {
+      "id": "websocket.response-header-capacity-delivery",
+      "kind": "protocol_operation",
+      "observe": [
+        "handshake_status",
+        "handshake_accept_valid",
+        "application_header_count",
+        "application_header_sha256",
+        "application_events",
+        "followup_status"
+      ],
+      "required_observations": {
+        "handshake_status": 101,
+        "handshake_accept_valid": true,
+        "application_header_count": 32769,
+        "application_events": [
+          "websocket.header-capacity.accept-sent",
+          "websocket.header-capacity.cleanup-completed"
+        ],
+        "followup_status": 200
+      }
+    },
+    {
       "id": "websocket.fragmented-message-reassembly",
       "kind": "protocol_operation",
       "observe": [

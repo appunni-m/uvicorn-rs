@@ -61,13 +61,14 @@ passes with warnings denied. These selected receipts do not establish a full
 coverage total or close the lifecycle task.
 
 The maintainer requires compatibility, a demonstrated improvement, or the
-applicable specification; documenting an exception is insufficient. Custom
-Python HTTP/WebSocket protocol classes and `ssl_context_factory` remain
-unimplemented. At the time of this diagnosis, the oversized-trailer probe was
-also unresolved because the oracle response exceeded the probe client's decoder
-limit. The focused follow-up below raises that finite budget and records live
-oracle parity for the candidate's trailer-overflow fix. That local result does
-not close the broader compatibility inventory.
+applicable specification; documenting an exception is insufficient. At the
+time of this diagnosis, custom Python HTTP/WebSocket protocol classes and
+`ssl_context_factory` were unimplemented. The oversized-trailer probe was also
+unresolved because the oracle response exceeded the probe client's decoder
+limit. The focused follow-up below records the subsequent hook implementation
+and raises that finite budget to establish live oracle parity for the
+candidate's trailer-overflow fix. Those local results do not close the broader
+compatibility inventory.
 
 ### Compatibility follow-up — 2026-10-31
 
@@ -110,7 +111,7 @@ the response was formed; the retained diagnostic is
 (SHA-256 `244f29161520a9969f80a5c3fd5facc491c8281d69883963da9b39af748063d1`).
 The bounded presence-check/`try_append` fix is included in the passing wheel.
 These are local dirty-source receipts; they do not replace the hosted protocol
-matrix or close WebSocket capacity compatibility.
+matrix.
 
 CI #546 on source `399b94e` recorded 750/751 installed-wheel parity cases; its
 only mismatch was the old 24,576-trailer fixture, which included the response
@@ -134,6 +135,28 @@ records 3/3 passed, no failures or infrastructure errors, and source digest
 formatting, all-feature Cargo check, and strict adapter Clippy pass. This run
 used a dirty worktree, so it is focused development evidence; consume the
 resulting exact-source hosted checks before it qualifies release.
+
+The same compatibility follow-up fixes WebSocket accept-header overflow in the
+Python ASGI adapter using the workspace-only patched-Hyper `HeaderOrder`
+sidecar. Its raw-wire case sends 32,769 application fields, including repeated
+`x-capacity-repeat` values at opposite ends of the sequence, and compares the
+101 handshake, all application fields, cleanup events, and a healthy `/scope`
+request with Uvicorn 0.54.0. The installed macOS ARM64 wheel
+`target/kata-progress/ws-header-capacity-20261031/wheels/uvicorn_rs-0.3.0-cp39-abi3-macosx_11_0_arm64.whl`
+(SHA-256 `fbc0f6c65cd7483a6e926230551aeab7f00d24cf3205fc1e15724fad629b281f`)
+passes the selected case 1/1. Oracle and target report the same application
+field digest `888c26f0d53fd3d783ebd0f6430234b3764417c4ddef6c42ad007d9b26a21219`.
+The report is
+`target/kata-progress/ws-header-capacity-20261031/parity.json` (SHA-256
+`494517adfb248fdbb7eb3886533b38a19cc214d3e1a77cbfb33c73af40b9ea8f`), bound
+to dirty source digest
+`8e0d13358f332c88153c9f5dafb57ba47e05fd6326d34c64b6e450d9518fd796`. This
+focused local receipt does not qualify the release source. PR #19 CI #547 ran
+before this case was added. Its public runner completed 753/753 comparisons,
+but the evidence checker rejected the declared
+`python.api.server-lifespan-auto-fallback` / `uvicorn-rs-shutdown-trace`
+normalization. The local checker now handles that exact pair; hosted verification
+is pending. The unified coverage job remained in progress at last inspection.
 
 The TLS floor has a standards-based proof in
 `target/ci537/obsolete-tls-controlled/coverage-report.json` (SHA-256

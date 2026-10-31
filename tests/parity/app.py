@@ -40,7 +40,7 @@ def observed_custom_loop_factory():
     return asyncio.new_event_loop()
 
 
-def _header_capacity_headers(query_string):
+def _header_capacity_headers(query_string, *, include_content_length=True):
     """Build a finite, input-selected list of distinct valid ASGI headers."""
     parameter, separator, value = query_string.partition(b"=")
     if parameter != b"count" or not separator or not value.isdigit():
@@ -52,7 +52,8 @@ def _header_capacity_headers(query_string):
         (f"x-capacity-{index:x}".encode("ascii"), b"x")
         for index in range(count)
     ]
-    headers.append((b"content-length", b"16"))
+    if include_content_length:
+        headers.append((b"content-length", b"16"))
     return headers
 
 
@@ -459,9 +460,14 @@ async def _app_impl(scope, receive, send):
             return
         if scope["path"] == "/ws-header-capacity":
             try:
+                headers = _header_capacity_headers(
+                    scope["query_string"], include_content_length=False
+                )
+                headers[0] = (b"x-capacity-repeat", b"first")
+                headers[-1] = (b"x-capacity-repeat", b"last")
                 await send({
                     "type": "websocket.accept",
-                    "headers": _header_capacity_headers(scope["query_string"]),
+                    "headers": headers,
                 })
                 _record("websocket.header-capacity.accept-sent")
                 await receive()

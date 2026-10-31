@@ -23,6 +23,8 @@ use http::{
         SEC_WEBSOCKET_PROTOCOL, SEC_WEBSOCKET_VERSION, UPGRADE,
     },
 };
+#[cfg(feature = "workspace-hyper-buffer-limit")]
+use hyper::ext::HeaderOrder;
 use hyper::upgrade::{self, OnUpgrade, Upgraded};
 use hyper_util::rt::TokioIo;
 #[cfg(coverage)]
@@ -68,6 +70,9 @@ pub struct WebSocketUpgrade {
     negotiated_extensions: Option<HeaderValue>,
     offered_subprotocols: Vec<Vec<u8>>,
     selected_subprotocol: Option<HeaderValue>,
+    #[cfg(feature = "workspace-hyper-buffer-limit")]
+    response_headers: Vec<(HeaderName, HeaderValue)>,
+    #[cfg(not(feature = "workspace-hyper-buffer-limit"))]
     response_headers: HeaderMap,
     max_message_size: Option<usize>,
 }
@@ -259,6 +264,9 @@ impl WebSocketUpgrade {
             negotiated_extensions,
             offered_subprotocols: handshake.offered_subprotocols,
             selected_subprotocol: None,
+            #[cfg(feature = "workspace-hyper-buffer-limit")]
+            response_headers: Vec::new(),
+            #[cfg(not(feature = "workspace-hyper-buffer-limit"))]
             response_headers: HeaderMap::new(),
             max_message_size: WebSocketConfig::default().max_message_size,
         })
@@ -325,14 +333,16 @@ impl WebSocketUpgrade {
     /// Adds an application response header to the accepted handshake.
     ///
     /// The connection, upgrade, accept, extension, and subprotocol headers
-    /// are managed by this type and cannot be overridden. Header capacity
-    /// errors are returned instead of panicking.
+    /// are managed by this type and cannot be overridden. With the workspace
+    /// adapter's patched Hyper feature, large response lists are preserved
+    /// beyond `HeaderMap`'s fixed capacity.
     ///
     /// # Errors
     ///
     /// Returns [`WebSocketUpgradeError::ReservedResponseHeader`] for a
-    /// protocol-managed header and [`WebSocketUpgradeError::HeaderCapacity`]
-    /// if the finite HTTP header map cannot accept another value.
+    /// protocol-managed header. Without the workspace adapter feature, this
+    /// also returns [`WebSocketUpgradeError::HeaderCapacity`] if the finite
+    /// HTTP header map cannot accept another value.
     pub fn with_header(
         mut self,
         name: HeaderName,
@@ -341,6 +351,9 @@ impl WebSocketUpgrade {
         if is_reserved_handshake_header(&name) {
             return Err(WebSocketUpgradeError::ReservedResponseHeader);
         }
+        #[cfg(feature = "workspace-hyper-buffer-limit")]
+        self.response_headers.push((name, value));
+        #[cfg(not(feature = "workspace-hyper-buffer-limit"))]
         self.response_headers
             .try_append(name, value)
             .map_err(|_| WebSocketUpgradeError::HeaderCapacity)?;
@@ -393,6 +406,10 @@ impl WebSocketUpgrade {
             max_message_size,
         } = self;
 
+        #[cfg(feature = "workspace-hyper-buffer-limit")]
+        let has_negotiated_extensions = negotiated_extensions.is_some();
+        #[cfg(feature = "workspace-hyper-buffer-limit")]
+        let has_selected_subprotocol = selected_subprotocol.is_some();
         #[cfg(coverage)]
         let accept_key_source = if take_derived_accept_key_header_value_fault() {
             "\r\n"
@@ -413,9 +430,32 @@ impl WebSocketUpgrade {
         if let Some(extensions) = negotiated_extensions.as_ref() {
             headers.insert(SEC_WEBSOCKET_EXTENSIONS, extensions.clone());
         }
-        if let Some(protocol) = selected_subprotocol {
-            headers.insert(SEC_WEBSOCKET_PROTOCOL, protocol);
+        if let Some(protocol) = selected_subprotocol.as_ref() {
+            headers.insert(SEC_WEBSOCKET_PROTOCOL, protocol.clone());
         }
+        #[cfg(feature = "workspace-hyper-buffer-limit")]
+        {
+            let mut header_names = vec![CONNECTION, UPGRADE, SEC_WEBSOCKET_ACCEPT];
+            if has_negotiated_extensions {
+                header_names.push(SEC_WEBSOCKET_EXTENSIONS);
+            }
+            if has_selected_subprotocol {
+                header_names.push(SEC_WEBSOCKET_PROTOCOL);
+            }
+            let mut overflow_fields = Vec::new();
+            for (name, value) in response_headers {
+                header_names.push(name.clone());
+                if headers.try_append(name.clone(), value.clone()).is_err() {
+                    overflow_fields.push((name, value));
+                }
+            }
+            let mut order = HeaderOrder::new(header_names);
+            for (name, value) in overflow_fields {
+                order.append_overflow_field(name, value);
+            }
+            response.extensions_mut().insert(order);
+        }
+        #[cfg(not(feature = "workspace-hyper-buffer-limit"))]
         for (name, value) in &response_headers {
             headers
                 .try_append(name.clone(), value.clone())

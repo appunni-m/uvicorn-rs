@@ -443,9 +443,26 @@ def normalize_operation_comparison_observation(
     for field, policy in operation.get("comparison_normalization", {}).items():
         require(field in normalized, f"comparison normalization field is absent: {field}")
         require(
-            policy == "python-process-diagnostics",
+            (operation.get("id"), policy) in {
+                ("cli.process", "python-process-diagnostics"),
+                (
+                    "python.api.server-lifespan-auto-fallback",
+                    "uvicorn-rs-shutdown-trace",
+                ),
+            },
             f"unsupported comparison normalization policy: {policy}",
         )
+        if policy == "uvicorn-rs-shutdown-trace":
+            stderr = base64.b64decode(normalized[field], validate=True)
+            normalized[field] = (
+                "uvicorn-rs-shutdown-trace",
+                tuple(
+                    line
+                    for line in stderr.splitlines()
+                    if not line.startswith(b"uvicorn-rs: shutdown-trace ")
+                ),
+            )
+            continue
         stderr = base64.b64decode(normalized[field], validate=True)
         lines = stderr.splitlines()
         traceback_header = b"Traceback (most recent call last):"

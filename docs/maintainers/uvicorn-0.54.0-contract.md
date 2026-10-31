@@ -11,8 +11,13 @@ a drop-in replacement.
 
 The maintainer requires full compatibility, a demonstrated improvement, or
 behavior matching the applicable specification. An unsupported-setting note
-does not satisfy that requirement. Custom HTTP/WebSocket protocol classes and
-`ssl_context_factory` remain implementation gaps in the public API.
+does not satisfy that requirement. The custom HTTP/WebSocket protocol-class
+hooks and `ssl_context_factory` are implemented at the Python integration
+boundary. Six focused local live-parity cases cover custom HTTP and WebSocket
+protocols, TLS context policy, lifespan state, and shutdown; their receipt is
+recorded in the [latest execution plan](release-completion-plan.md#compatibility-follow-up--2026-10-31).
+The exact-source hosted matrix is CI #547 and remains in progress, so these
+focused results do not close the wider Python API or platform inventory.
 
 The default TLS floor follows
 [RFC 8996 sections 4 and 5](https://www.rfc-editor.org/rfc/rfc8996.html#section-4):
@@ -23,12 +28,21 @@ required non-negotiation and recovery outcomes. See the
 [latest execution receipts](release-completion-plan.md#latest-diagnosis-2026-10-31).
 This proof does not establish arbitrary SSLContext-factory behavior.
 
-The 32,768-field response limit has no accepted compatibility receipt. The
-initial oversized-trailer experiment exceeded the oracle client's decoder
-budget. [RFC 9113 section 10.5.1](https://www.rfc-editor.org/rfc/rfc9113.html#section-10.5.1)
-discusses receiver limits; citing it alone does not prove equivalent outbound
-ASGI behavior. Delivery or a justified resource-failure contract with healthy
-recovery still needs verification before the protocol task can close.
+The `http` 1.5.0 `HeaderMap` stores 24,576 distinct names, and the adapter now
+preserves additional HTTP/1 and HTTP/2 response fields in an ordered sidecar.
+Focused local installed-wheel parity compares HTTP/1 counts 24,575, 24,576,
+and 32,769 with Uvicorn 0.54.0, and compares HTTP/2 response headers and
+24,576, 24,577, and 32,769 response trailers with Hypercorn 0.18.0. The trailer
+client uses a finite 2 MiB decoded header-list budget and checks stream
+completion plus same-connection recovery. The exact-source hosted CI #547 is
+still running; the local dirty-source receipts do not by themselves close the
+protocol inventory. The Python ASGI WebSocket accept path also preserves
+overflow fields under the workspace-only patched-Hyper feature. Its focused
+raw-wire installed-wheel parity case matches Uvicorn 0.54.0 for 32,769 fields,
+including the 101 status, field count/digest, cleanup events, and healthy
+follow-up. The direct Rust `WebSocketUpgrade` API without that feature keeps its
+bounded map behavior. The local dirty-source receipt does not establish the
+full WebSocket protocol inventory.
 
 ## Pinned authority
 
@@ -90,7 +104,7 @@ their exact input/source identities are recorded in the
 | Logging | `--log-config`, `--log-level`, `--access-log` / `--no-access-log`, `--use-colors` / `--no-use-colors` | Selected default startup, access, shutdown, and concurrency-limit warning events are compared for `uvicorn.run()`, `Config`/`Server.run()`, and module CLI requests. `python-api.run-applies-numeric-warning-log-level` verifies that API level 30 filters application DEBUG/INFO events while retaining WARNING and above; module CLI cases verify that `--log-level warning` suppresses startup/access INFO events, `UVICORN_LOG_LEVEL=debug` enables DEBUG application logs, and an explicit warning option overrides that debug environment value. `python-api.run-disables-access-log` and `python-api.module-cli-disables-access-log` verify access-log suppression while retaining other normalized lifecycle events. Custom JSON, INI, and YAML formatter cases compare through both public entry points; the YAML cases run with PyYAML from the benchmark dependency group, matching the package's `[standard]` extra. `python-api.module-cli-uses-log-config-from-environment` confirms that `UVICORN_LOG_CONFIG` overrides the built-in setting. Raw child logs remain in result artifacts; other levels, precedence combinations, color combinations, and exact traceback frames remain unverified. | `9kbx`, `gjpr`, `4fvf` |
 | Proxy and response headers | `--proxy-headers` / `--no-proxy-headers`, `--forwarded-allow-ips`, `--server-header` / `--no-server-header`, `--date-header` / `--no-date-header`, repeatable `--header` | proxy/server/date headers true; trusted IPs default from `FORWARDED_ALLOW_IPS` or `127.0.0.1,::1`. Selected `uvicorn.run()` inputs cover environment-only trust and explicit API override; module-CLI inputs cover environment-only trust, explicit CLI override of a conflicting environment value, and `--no-proxy-headers`. This does not verify all proxy/header flags or precedence combinations. | `9kbx`, `dv25`, `4fvf` |
 | Request/resource limits | `--root-path`, `--limit-concurrency`, `--limit-max-requests`, `--limit-max-requests-jitter`, `--timeout-keep-alive` | Empty root path; concurrency and request limit unset; jitter `0`; keep-alive `5` seconds. HTTP/1.1 target contract inputs cover ASCII `root_path` through the API and module CLI; they validate all three relevant ASGI scope values against explicit expectations and compare exit code, response receipt, shutdown signal, and timeout state with Uvicorn. Uvicorn 0.54.0 adds the configured prefix to `raw_path`, so response-body parity is not claimed for these cases. A separate case covers percent-encoded UTF-8 request-path decoding with an empty root path. A target conformance case checks Unicode `root_path` and original `raw_path` bytes; Uvicorn 0.54.0 rejects the Unicode prefix before ASGI invocation. HTTP/1.1 CLI, `uvicorn.run(limit_concurrency=1)`, and `Config`/`Server.run()` inputs verify the 503 behavior at limit 1. `cli.limit-max-requests-zero-exits-after-startup` checks the zero threshold, and `python-api.module-cli-limit-max-requests-exits-after-one-response` verifies one-request natural shutdown through `UVICORN_LIMIT_MAX_REQUESTS=1`; both match Uvicorn 0.54.0. `python-api.module-cli-limit-max-requests-jitter-stays-in-configured-range` checks that jitter 1 with a base limit of 2 exits naturally after 2 or 3 responses, preserving per-run counts but comparing the range rather than the randomized count. Negative jitter timing/message behavior remains unverified. `python-api.module-cli-timeout-keep-alive-closes-idle-connection` verifies that a one-second timeout closes an idle HTTP/1 connection after a two-second wait; the HTTP/2 zero-threshold limit and 503 response now have one selected oracle-parity case; concurrent-stream accounting, TLS, HTTP/3, other timeout values, and other request-limit values remain unverified. Backlog controls the OS accept queue. | `9kbx`, `dv25`, `4fvf` |
-| TLS | `--ssl-keyfile`, `--ssl-certfile`, `--ssl-keyfile-password`, `--ssl-version`, `--ssl-cert-reqs`, `--ssl-ca-certs`, `--ssl-ciphers` | Six focused mTLS inputs exercise trusted client certificates under default negotiation and TLS 1.2, optional anonymous clients with CA-backed and empty-root configuration, rejection of an untrusted client certificate with empty roots, and trusted TLS 1.2 client authentication through the module CLI. The Config/Server batch passed 5/5 and the separate module-CLI case passed 1/1 against Uvicorn 0.54.0; selected evidence does not establish full TLS parity. Other focused inputs verify TLS 1.2 negotiation, one TLS 1.2 cipher-string restriction, and one encrypted PKCS#8 key using AES-256-CBC/PBKDF2-HMAC-SHA1. The default enables TLS 1.2/1.3; QUIC remains TLS 1.3. Two selected traditional RSA PEM cases verify AES-256-CBC loading with the correct password and the wrong-password failure; encrypted EC PEM, AES-128/AES-192 variants, and other encryption combinations remain unverified. Legacy TLS 1.0/1.1 and arbitrary `ssl_context_factory` behavior remain unsupported by the native Rustls path. | `9kbx`, `dv25`, `4fvf` |
+| TLS | `--ssl-keyfile`, `--ssl-certfile`, `--ssl-keyfile-password`, `--ssl-version`, `--ssl-cert-reqs`, `--ssl-ca-certs`, `--ssl-ciphers` | Six focused mTLS inputs exercise trusted client certificates under default negotiation and TLS 1.2, optional anonymous clients with CA-backed and empty-root configuration, rejection of an untrusted client certificate with empty roots, and trusted TLS 1.2 client authentication through the module CLI. The Config/Server batch passed 5/5 and the separate module-CLI case passed 1/1 against Uvicorn 0.54.0; selected evidence does not establish full TLS parity. Other focused inputs verify TLS 1.2 negotiation, one TLS 1.2 cipher-string restriction, and one encrypted PKCS#8 key using AES-256-CBC/PBKDF2-HMAC-SHA1. The default enables TLS 1.2/1.3; QUIC remains TLS 1.3. Two selected traditional RSA PEM cases verify AES-256-CBC loading with the correct password and the wrong-password failure; encrypted EC PEM, AES-128/AES-192 variants, and other encryption combinations remain unverified. TLS 1.0/1.1 are rejected under RFC 8996, with selected wire cases checking a TLS 1.2 control and recovery. `ssl_context_factory` uses the Python TLS integration path; focused custom-context policy cases pass locally, while the full platform matrix remains pending CI #547. | `9kbx`, `dv25`, `4fvf` |
 | Command output | `--help`, `--version`, Click parse errors, missing/invalid app errors | version output includes Uvicorn version, Python implementation/version, and OS; startup failure uses exit status 3. Exact help/error text and stream placement are parity obligations. | `9kbx`, `4fvf` |
 
 Click's `auto_envvar_prefix="UVICORN"` binds command parameters such as

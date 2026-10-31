@@ -2884,29 +2884,30 @@ The pinned `http` crate gives `HeaderMap` finite compiled capacity. Its
 infallible `append` calls `expect` internally when capacity is exceeded. A valid
 ASGI application can supply enough distinct response or WebSocket acceptance
 headers to reach that path even though project code contains no panic macro.
-HTTP/1 and HTTP/2 response fields that exceed the map are retained in an ordered
-sidecar and emitted by their transport encoders. WebSocket acceptance remains
-bounded and uses `try_append` so capacity is returned as an error before
-handshake task transfer.
+HTTP/1 and HTTP/2 response fields beyond the map are retained in an ordered
+sidecar and emitted by their transport encoders. The Python ASGI adapter also
+uses an ordered sidecar for WebSocket acceptance fields when built with the
+workspace-only patched-Hyper feature. The direct Rust `WebSocketUpgrade` API
+without that feature retains its bounded-map error behavior.
 
-The target-only capacity cases use ordinary ASGI input, do not activate native
-fault controls, and are not Uvicorn parity. The HTTP/1 support case sends 32,769
-distinct response fields through the overflow sidecar and checks wire count,
-digest, and same-connection recovery. The WebSocket support case checks the
-bounded-capacity error, rejected handshake, application cleanup, and healthy
-follow-up. Uvicorn parity is covered separately for HTTP/1 response headers;
-WebSocket capacity still needs reference comparison before compatibility can
-close. No regions may be excluded to hide reachable behavior.
+The active HTTP/1 support case uses ordinary ASGI input, does not activate
+native fault controls, and is not Uvicorn parity. It sends 32,769 distinct
+response fields through the overflow sidecar and checks wire count, digest, and
+same-connection recovery. The WebSocket capacity case is now live parity rather
+than a target-only rejection contract: its raw-wire observer compares a 32,769-
+field handshake with Uvicorn 0.54.0, including the 101 status, field count and
+digest, application cleanup events, and healthy follow-up. The installed-wheel
+receipt is dirty-source development evidence; hosted exact-source validation is
+still required. No regions may be excluded to hide reachable behavior.
 
-The cases are `support.http1.response-header-overflow-delivers` and
-`support.websocket.accept-header-capacity-error-recovers`. Their harness-only
-selectors are `public.http-response-header-capacity` and
-`public.websocket-accept-header-capacity`; neither is written to a native
-injection control. The HTTP/1 support result checks 32,769 fields and recovery;
-the separate H1 parity cases check 24,575, 24,576, and 32,769 fields against
-Uvicorn 0.54.0. The HTTP/2 parity case sends 24,576 fields and checks recovery
-against Hypercorn 0.18.0. These selected installed-wheel receipts do not replace
-the unified coverage gate or establish WebSocket parity.
+The active target-only case is `support.http1.response-header-overflow-delivers`
+with harness-only selector `public.http-response-header-capacity`; it is not
+written to a native injection control. The live WebSocket parity case is
+`websocket.accept-response-header-capacity-delivery`. The HTTP/1 parity cases
+check 24,575, 24,576, and 32,769 response fields against Uvicorn 0.54.0. The
+HTTP/2 parity cases check response headers and trailers against Hypercorn 0.18.0.
+These selected installed-wheel receipts do not replace the unified coverage
+gate.
 
 <a id="latest-incomplete-snapshot-445-cases-before-protocol-detection-cancellation-correction"></a>
 

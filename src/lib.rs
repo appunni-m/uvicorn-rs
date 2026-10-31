@@ -16,6 +16,7 @@
 //! still copies at the language boundary. Bounded channels cap queued message
 //! counts, but an application controls the size of each individual message.
 
+use std::collections::{HashMap, VecDeque};
 use std::error::Error as StdError;
 use std::fmt;
 use std::future::Future;
@@ -11370,8 +11371,46 @@ fn apply_default_response_headers(
         .get::<Http1AutomaticDateHeader>()
         .is_some();
     let (mut parts, body) = response.into_parts();
-    let mut header_order_prefix = parts.extensions.get::<HeaderOrder>().map(|_| Vec::new());
+    let original_header_order = parts.extensions.remove::<HeaderOrder>();
+    if let Some(order) = original_header_order
+        .as_ref()
+        .filter(|order| !order.overflow_fields().is_empty())
+    {
+        let application_fields = ordered_response_header_fields(&parts.headers, order);
+        let mut headers = HeaderMap::new();
+        let mut names = Vec::new();
+        let mut overflow_fields = Vec::new();
+        append_default_response_header_fields(
+            server,
+            http1_automatic_date_header,
+            &mut headers,
+            &mut names,
+            &mut overflow_fields,
+            true,
+        )?;
+        for (name, value) in application_fields {
+            names.push(name.clone());
+            append_response_header_or_overflow(
+                &mut headers,
+                &mut overflow_fields,
+                name,
+                value,
+                true,
+            )?;
+        }
+        parts.headers = headers;
+        let mut order = HeaderOrder::new(names);
+        for (name, value) in overflow_fields {
+            order.append_overflow_field(name, value);
+        }
+        parts.extensions.insert(order);
+        return Ok(Response::from_parts(parts, body));
+    }
+
+    let mut header_order_prefix = original_header_order.as_ref().map(|_| Vec::new());
     let mut headers = HeaderMap::new();
+    let mut overflow_fields = Vec::new();
+    let allow_overflow = original_header_order.is_some();
     if server.date_header && !http1_automatic_date_header {
         let date = httpdate::fmt_http_date(std::time::SystemTime::now());
         #[cfg(coverage)]
@@ -11399,25 +11438,112 @@ fn apply_default_response_headers(
         if let Some(prefix) = &mut header_order_prefix {
             prefix.push(name.clone());
         }
-        headers.try_append(name, value).map_err(|error| {
-            std::io::Error::other(format!("HTTP response header capacity exceeded: {error}"))
-        })?;
+        append_response_header_or_overflow(
+            &mut headers,
+            &mut overflow_fields,
+            name,
+            value,
+            allow_overflow,
+        )?;
     }
     for (name, value) in &parts.headers {
-        headers
-            .try_append(name.clone(), value.clone())
-            .map_err(|error| {
-                std::io::Error::other(format!("HTTP response header capacity exceeded: {error}"))
-            })?;
+        append_response_header_or_overflow(
+            &mut headers,
+            &mut overflow_fields,
+            name.clone(),
+            value.clone(),
+            allow_overflow,
+        )?;
     }
     parts.headers = headers;
-    if let (Some(order), Some(prefix)) = (
-        parts.extensions.get_mut::<HeaderOrder>(),
-        header_order_prefix,
-    ) {
+    if let (Some(mut order), Some(prefix)) = (original_header_order, header_order_prefix) {
+        for (name, value) in overflow_fields {
+            order.append_overflow_field(name, value);
+        }
         order.prepend(prefix);
+        parts.extensions.insert(order);
     }
     Ok(Response::from_parts(parts, body))
+}
+
+fn ordered_response_header_fields(
+    headers: &HeaderMap,
+    order: &HeaderOrder,
+) -> Vec<(HeaderName, HeaderValue)> {
+    let mut fields: Vec<Option<(HeaderName, HeaderValue)>> = headers
+        .iter()
+        .map(|(name, value)| Some((name.clone(), value.clone())))
+        .collect();
+    fields.extend(order.overflow_fields().iter().cloned().map(Some));
+    let mut positions = HashMap::<HeaderName, VecDeque<usize>>::with_capacity(fields.len());
+    for (index, field) in fields.iter().enumerate() {
+        if let Some((name, _)) = field {
+            positions.entry(name.clone()).or_default().push_back(index);
+        }
+    }
+    let mut ordered = Vec::with_capacity(fields.len());
+    for name in order.names() {
+        if let Some(index) = positions.get_mut(name).and_then(VecDeque::pop_front) {
+            if let Some(field) = fields[index].take() {
+                ordered.push(field);
+            }
+        }
+    }
+    ordered.extend(fields.into_iter().flatten());
+    ordered
+}
+
+fn append_default_response_header_fields(
+    server: &ServerContext,
+    http1_automatic_date_header: bool,
+    headers: &mut HeaderMap,
+    names: &mut Vec<HeaderName>,
+    overflow_fields: &mut Vec<(HeaderName, HeaderValue)>,
+    allow_overflow: bool,
+) -> Result<(), std::io::Error> {
+    if server.date_header && !http1_automatic_date_header {
+        let date = httpdate::fmt_http_date(std::time::SystemTime::now());
+        #[cfg(coverage)]
+        let date_bytes =
+            if coverage_fault_take(CoverageFaultPoint::HttpResponseDateHeaderInvalidValue) {
+                &b"\r\n"[..]
+            } else {
+                date.as_bytes()
+            };
+        #[cfg(not(coverage))]
+        let date_bytes = date.as_bytes();
+        let value = HeaderValue::from_bytes(date_bytes).map_err(std::io::Error::other)?;
+        names.push(DATE);
+        append_response_header_or_overflow(headers, overflow_fields, DATE, value, allow_overflow)?;
+    }
+    for (name, value) in &server.default_headers {
+        let name = HeaderName::from_bytes(name)
+            .map_err(|_| invalid_default_header_error(InvalidDefaultHeader::Name))?;
+        let value = HeaderValue::from_bytes(value)
+            .map_err(|_| invalid_default_header_error(InvalidDefaultHeader::Value))?;
+        names.push(name.clone());
+        append_response_header_or_overflow(headers, overflow_fields, name, value, allow_overflow)?;
+    }
+    Ok(())
+}
+
+fn append_response_header_or_overflow(
+    headers: &mut HeaderMap,
+    overflow_fields: &mut Vec<(HeaderName, HeaderValue)>,
+    name: HeaderName,
+    value: HeaderValue,
+    allow_overflow: bool,
+) -> Result<(), std::io::Error> {
+    if let Err(error) = headers.try_append(name.clone(), value.clone()) {
+        if allow_overflow {
+            overflow_fields.push((name, value));
+        } else {
+            return Err(std::io::Error::other(format!(
+                "HTTP response header capacity exceeded: {error}"
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn response(status: StatusCode, body: ResponseBody, headers: HeaderMap) -> Response<ResponseBody> {

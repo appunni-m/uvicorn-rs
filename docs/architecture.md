@@ -267,8 +267,11 @@ do not fit in the map stay in an ordered sidecar on the response and are emitted
 by the vendored Hyper/H2 encoders. This keeps application header order and
 matches Uvicorn 0.54.0's HTTP/1 delivery behavior without changing the `http`
 dependency seen by downstream Rust consumers. HTTP/2 uses the same ordered
-sidecar as an extension beyond Uvicorn's protocol set. WebSocket acceptance
-and HTTP/3 responses still use the map's bounded capacity.
+sidecar as an extension beyond Uvicorn's protocol set. The Python ASGI adapter
+also uses the sidecar for WebSocket accept responses under its workspace-only
+patched-Hyper feature; the direct Rust `WebSocketUpgrade` API keeps its bounded
+map behavior when built without that feature. HTTP/3 response-header overflow
+is outside this focused change and remains unverified.
 
 The HTTP/1 raw-wire parity cases send 24,575, 24,576 and 32,769 distinct
 application headers, plus the default `Server` and `Date` fields. Each case
@@ -276,7 +279,12 @@ matches Uvicorn 0.54.0 by status, body, count and SHA-256, then verifies a
 healthy request on the same connection. The raw observer is required because
 Python's standard response parser stops after 100 header lines. WebSocket
 construction retains the application task guard until fallible handshake
-header assembly succeeds. [RFC 9110 §5.4](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.4)
+header assembly succeeds. A focused raw-wire WebSocket parity case sends
+32,769 application fields, including repeated values at opposite ends of the
+sequence, and matches Uvicorn 0.54.0's 101 status, field count and digest,
+cleanup events, and healthy `/scope` follow-up. The local installed-wheel
+receipt is dirty-source development evidence, not the release gate.
+[RFC 9110 §5.4](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.4)
 does not define a universal field-count limit.
 
 The HTTP/2 `http2.response-header-capacity-over-map-limit` case sends 24,576
@@ -286,17 +294,17 @@ a healthy request on the same connection. This is HTTP/2 extension evidence;
 Uvicorn does not provide an HTTP/2 server.
 
 [RFC 9113 §10.5.1](https://www.rfc-editor.org/rfc/rfc9113.html#section-10.5.1)
-discusses field-block resource exhaustion risks. At the HTTP/2 trailer boundary,
-24,576 distinct names match Hypercorn 0.18.0 by count and SHA-256; the stream
-ends normally. At 24,577, trailer assembly fails before a partial trailer block
-is sent. Because the response body is already committed, the server resets
-only that stream with `INTERNAL_ERROR`;
-[RFC 9113 §5.4.2](https://www.rfc-editor.org/rfc/rfc9113.html#section-5.4.2)
-defines stream-local errors signaled with `RST_STREAM`, and the
-same-connection `/scope` follow-up succeeds. Receipts are stored under
-`target/kata-progress/trailer-capacity-2026-10-31/`. The existing WebSocket
-capacity support contract covers handshake failure cleanup; see
-[historical coverage evidence](coverage.md#historical-targeted-verification-9-cases-fallible-header-assembly).
+discusses field-block resource exhaustion risks. The HTTP/2 trailer parity
+cases send 24,576, 24,577, and 32,769 distinct names with a finite 2 MiB client
+decoder budget. The ordered sidecar delivers all three responses to the same
+behavior as Hypercorn 0.18.0 by count and SHA-256, completes each stream, and
+keeps the same-connection `/scope` follow-up healthy. The selected local
+installed-wheel report is
+`target/kata-progress/trailer-overflow-parity-20261031/parity.json`; exact-source
+hosted CI #547 is still validating the committed change. The earlier
+WebSocket target-only rejection contract has been replaced by the live
+Uvicorn-capacity parity case described above; historical instrumentation
+evidence remains in [coverage history](coverage.md#public-header-capacity-contracts).
 
 ## Context, exceptions, and cancellation
 

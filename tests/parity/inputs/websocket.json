@@ -2530,17 +2530,12 @@
       }
     },
     {
-      "case_id": "support.websocket.accept-header-capacity-error-recovers",
+      "case_id": "websocket.accept-response-header-capacity-delivery",
       "profile": "websocket",
-      "operation": "websocket.fault-contract",
+      "operation": "websocket.response-header-capacity-delivery",
       "covers": [
-        "websocket.fault-contract"
+        "websocket.response-header-capacity-delivery"
       ],
-      "verification": "fault-contract",
-      "fault": {
-        "point": "public.websocket-accept-header-capacity",
-        "contract": "websocket-header-capacity-error-followup-200"
-      },
       "websocket": {
         "path": "/ws-header-capacity?count=32769",
         "subprotocols": [],
