@@ -181,6 +181,12 @@ enum CoverageFaultPoint {
     PythonSslKeyfileErrorContext,
     PythonSslKeyfileErrorCreateContext,
     PythonSslKeyfileRustDecryptError,
+    TraditionalPrivateKeyCipherInitError,
+    TlsProviderEmptyCipherSuites,
+    TlsClientVerifierEmptyRoots,
+    TlsQuicInvalidIdentity,
+    TlsProviderUnavailable,
+    ServerStartupAfterBindPause,
     Pkcs12OuterReaderTooLong,
     Pkcs12OuterSequenceDecode,
     Pkcs12OuterReaderFinish,
@@ -557,6 +563,12 @@ impl CoverageFaultPoint {
             Self::PythonSslKeyfileErrorContext => "python.ssl.keyfile-error.context",
             Self::PythonSslKeyfileErrorCreateContext => "python.ssl.keyfile-error.create-context",
             Self::PythonSslKeyfileRustDecryptError => "python.ssl.keyfile.rust-decrypt-error",
+            Self::TraditionalPrivateKeyCipherInitError => "tls.traditional-key.cipher-init-error",
+            Self::TlsProviderEmptyCipherSuites => "tls.provider.empty-cipher-suites",
+            Self::TlsClientVerifierEmptyRoots => "tls.client-verifier.empty-roots",
+            Self::TlsQuicInvalidIdentity => "tls.quic.invalid-identity",
+            Self::TlsProviderUnavailable => "tls.provider.unavailable",
+            Self::ServerStartupAfterBindPause => "server.startup.after-bind.pause",
             Self::Pkcs12OuterReaderTooLong => "python.pkcs12.reader.outer-too-long",
             Self::Pkcs12OuterSequenceDecode => "python.pkcs12.reader.outer-sequence-decode",
             Self::Pkcs12OuterReaderFinish => "python.pkcs12.reader.outer-finish",
@@ -4856,15 +4868,7 @@ impl LifespanRuntime {
             app_task.abort();
             let result = app_task.await;
             self.app_task.take();
-            return match result {
-                Ok(Ok(_)) => Err(PyRuntimeError::new_err(
-                    "ASGI app returned before lifespan.shutdown.complete",
-                )),
-                Ok(Err(error)) => Err(error),
-                Err(error) => Err(PyRuntimeError::new_err(format!(
-                    "ASGI lifespan task failed: {error}"
-                ))),
-            };
+            return lifespan_shutdown_result(result, false);
         }
         requests
             .send(LifespanMessage::Shutdown)
@@ -4891,24 +4895,28 @@ impl LifespanRuntime {
             },
             result = &mut *app_task => {
                 self.app_task.take();
-                return match result {
-                    Ok(Ok(_)) => Err(PyRuntimeError::new_err(
-                        "ASGI app returned before lifespan.shutdown.complete",
-                    )),
-                    Ok(Err(error)) => Err(error),
-                    Err(error) => Err(PyRuntimeError::new_err(format!("ASGI lifespan task failed: {error}"))),
-                };
+                return lifespan_shutdown_result(result, false);
             }
         }
         let result = app_task.await;
         self.app_task.take();
-        match result {
-            Ok(Ok(_)) => Ok(()),
-            Ok(Err(error)) => Err(error),
-            Err(error) => Err(PyRuntimeError::new_err(format!(
-                "ASGI lifespan task failed: {error}"
-            ))),
-        }
+        lifespan_shutdown_result(result, true)
+    }
+}
+
+fn lifespan_shutdown_result(
+    result: Result<PyResult<Py<PyAny>>, tokio::task::JoinError>,
+    shutdown_complete: bool,
+) -> PyResult<()> {
+    match result {
+        Ok(Ok(_)) if shutdown_complete => Ok(()),
+        Ok(Ok(_)) => Err(PyRuntimeError::new_err(
+            "ASGI app returned before lifespan.shutdown.complete",
+        )),
+        Ok(Err(error)) => Err(error),
+        Err(error) => Err(PyRuntimeError::new_err(format!(
+            "ASGI lifespan task failed: {error}"
+        ))),
     }
 }
 
@@ -5265,7 +5273,7 @@ async fn pump_http_request_body(
     let body_batch_max_wait = HTTP_REQUEST_BODY_BATCH_MAX_WAIT;
     let mut body_segments = Vec::new();
     let mut body_len = 0usize;
-    let mut body_started: Option<tokio::time::Instant> = None;
+    let mut body_started = tokio::time::Instant::now();
     let mut body_batch_timer =
         std::pin::pin!(tokio::time::sleep_until(tokio::time::Instant::now()));
     loop {
@@ -5303,12 +5311,10 @@ async fn pump_http_request_body(
                 drain_http_request_body(&mut body, &mut connection_closed, &cancellation, &request_cancellation).await;
                 return;
             }
-            _ = &mut body_batch_timer, if body_started.is_some() => {
+            _ = &mut body_batch_timer, if !body_segments.is_empty() => {
                 diagnostics.http_body_frame_wait_finished(frame_wait_started);
                 diagnostics.http_body_batch_timeout_flush();
-                if let Some(started) = body_started {
-                    diagnostics.http_request_body_batch_deadline_flush(started.elapsed());
-                }
+                diagnostics.http_request_body_batch_deadline_flush(body_started.elapsed());
                 None
             },
             frame = body.frame() => {
@@ -5325,7 +5331,6 @@ async fn pump_http_request_body(
                 more_body: true,
                 disconnected: false,
             };
-            body_started = None;
             if !send_http_request_message(
                 &mut body,
                 &sender,
@@ -5360,7 +5365,6 @@ async fn pump_http_request_body(
                                 more_body: true,
                                 disconnected: false,
                             };
-                            body_started = None;
                             if !send_http_request_message(
                                 &mut body,
                                 &sender,
@@ -5407,7 +5411,7 @@ async fn pump_http_request_body(
                             body_batch_timer
                                 .as_mut()
                                 .reset(started + body_batch_max_wait);
-                            body_started = Some(started);
+                            body_started = started;
                         }
                         body_len = body_len.saturating_add(data.len());
                         body_segments.push(data);
@@ -6529,14 +6533,14 @@ fn load_client_cert_verifier(
         return Ok(Arc::new(rustls::server::NoClientAuth));
     }
 
-    let supported_algs = rustls::crypto::CryptoProvider::get_default()
-        .map(|provider| provider.signature_verification_algorithms)
-        .unwrap_or_else(|| {
-            rustls::crypto::ring::default_provider().signature_verification_algorithms
-        });
+    let supported_algs = server_crypto_provider().signature_verification_algorithms;
     let trusted_verifier = if roots.is_empty() {
         None
     } else {
+        #[cfg(coverage)]
+        if coverage_fault_take(CoverageFaultPoint::TlsClientVerifierEmptyRoots) {
+            roots = rustls::RootCertStore::empty();
+        }
         let mut builder = rustls::server::WebPkiClientVerifier::builder(Arc::new(roots));
         if cert_reqs == 1 {
             builder = builder.allow_unauthenticated();
@@ -6892,45 +6896,19 @@ fn decrypt_traditional_encrypted_private_key(
     // IV was checked against `block_len` above. Keep initialization fallible
     // so an invariant violation is reported instead of panicking.
     let plaintext_len = match cipher {
-        TraditionalPrivateKeyCipher::Aes128 => cbc::Decryptor::<Aes128>::new_from_slices(&key, &iv)
-            .map_err(|_| {
-                PyValueError::new_err(
-                    "could not initialize traditional private-key cipher with validated lengths",
-                )
-            })?
-            .decrypt_padded::<Pkcs7>(&mut ciphertext)
-            .map(|plaintext| plaintext.len())
-            .map_err(|_| PyValueError::new_err("could not decrypt traditional private key"))?,
-        TraditionalPrivateKeyCipher::Aes192 => cbc::Decryptor::<Aes192>::new_from_slices(&key, &iv)
-            .map_err(|_| {
-                PyValueError::new_err(
-                    "could not initialize traditional private-key cipher with validated lengths",
-                )
-            })?
-            .decrypt_padded::<Pkcs7>(&mut ciphertext)
-            .map(|plaintext| plaintext.len())
-            .map_err(|_| PyValueError::new_err("could not decrypt traditional private key"))?,
-        TraditionalPrivateKeyCipher::Aes256 => cbc::Decryptor::<Aes256>::new_from_slices(&key, &iv)
-            .map_err(|_| {
-                PyValueError::new_err(
-                    "could not initialize traditional private-key cipher with validated lengths",
-                )
-            })?
-            .decrypt_padded::<Pkcs7>(&mut ciphertext)
-            .map(|plaintext| plaintext.len())
-            .map_err(|_| PyValueError::new_err("could not decrypt traditional private key"))?,
-        TraditionalPrivateKeyCipher::TdesEde3 => cbc::Decryptor::<TdesEde3>::new_from_slices(
-            &key, &iv,
-        )
-        .map_err(|_| {
-            PyValueError::new_err(
-                "could not initialize traditional private-key cipher with validated lengths",
-            )
-        })?
-        .decrypt_padded::<Pkcs7>(&mut ciphertext)
-        .map(|plaintext| plaintext.len())
-        .map_err(|_| PyValueError::new_err("could not decrypt traditional private key"))?,
-    };
+        TraditionalPrivateKeyCipher::Aes128 => {
+            decrypt_traditional_cipher::<cbc::Decryptor<Aes128>>(&key, &iv, &mut ciphertext)
+        }
+        TraditionalPrivateKeyCipher::Aes192 => {
+            decrypt_traditional_cipher::<cbc::Decryptor<Aes192>>(&key, &iv, &mut ciphertext)
+        }
+        TraditionalPrivateKeyCipher::Aes256 => {
+            decrypt_traditional_cipher::<cbc::Decryptor<Aes256>>(&key, &iv, &mut ciphertext)
+        }
+        TraditionalPrivateKeyCipher::TdesEde3 => {
+            decrypt_traditional_cipher::<cbc::Decryptor<TdesEde3>>(&key, &iv, &mut ciphertext)
+        }
+    }?;
     let private_key_der = ciphertext[..plaintext_len].to_vec();
     ciphertext.zeroize();
 
@@ -6943,6 +6921,28 @@ fn decrypt_traditional_encrypted_private_key(
         ),
     };
     Ok(Some(key))
+}
+
+fn decrypt_traditional_cipher<C>(key: &[u8], iv: &[u8], ciphertext: &mut [u8]) -> PyResult<usize>
+where
+    C: BlockModeDecrypt + KeyIvInit,
+{
+    #[cfg(coverage)]
+    let key = if coverage_fault_take(CoverageFaultPoint::TraditionalPrivateKeyCipherInitError) {
+        // Exercise the cipher library's real length rejection at its boundary.
+        &[][..]
+    } else {
+        key
+    };
+    C::new_from_slices(key, iv)
+        .map_err(|_| {
+            PyValueError::new_err(
+                "could not initialize traditional private-key cipher with validated lengths",
+            )
+        })?
+        .decrypt_padded::<Pkcs7>(ciphertext)
+        .map(|plaintext| plaintext.len())
+        .map_err(|_| PyValueError::new_err("could not decrypt traditional private key"))
 }
 
 #[derive(Clone, Copy)]
@@ -7120,6 +7120,20 @@ struct ServerTlsOptions<'a> {
     key_password: Option<&'a str>,
 }
 
+fn server_crypto_provider() -> Arc<rustls::crypto::CryptoProvider> {
+    #[cfg(coverage)]
+    let provider = if coverage_fault_take(CoverageFaultPoint::TlsProviderUnavailable) {
+        None
+    } else {
+        rustls::crypto::CryptoProvider::get_default()
+    };
+    #[cfg(not(coverage))]
+    let provider = rustls::crypto::CryptoProvider::get_default();
+    provider
+        .cloned()
+        .unwrap_or_else(|| Arc::new(rustls::crypto::ring::default_provider()))
+}
+
 fn load_tls_configs(
     py: Python<'_>,
     options: ServerTlsOptions<'_>,
@@ -7180,13 +7194,15 @@ fn load_tls_configs(
 
     let client_cert_verifier = load_client_cert_verifier(py, ca_certs, cert_reqs)?;
     let tcp_builder = if let Some(cipher_suites) = cipher_suites {
-        let provider = rustls::crypto::CryptoProvider::get_default()
-            .cloned()
-            .unwrap_or_else(|| Arc::new(rustls::crypto::ring::default_provider()));
+        let provider = server_crypto_provider();
         let mut provider = (*provider).clone();
         provider.cipher_suites.retain(|suite| {
             suite.tls13().is_some() || cipher_suites.contains(&u16::from(suite.suite()))
         });
+        #[cfg(coverage)]
+        if coverage_fault_take(CoverageFaultPoint::TlsProviderEmptyCipherSuites) {
+            provider.cipher_suites.clear();
+        }
         let provider = Arc::new(provider);
         let builder = rustls::ServerConfig::builder_with_provider(provider);
         if tls12_only {
@@ -7240,6 +7256,12 @@ fn load_tls_configs(
     let quic_tls_builder =
         rustls::ServerConfig::builder_with_protocol_versions(&[&rustls::version::TLS13]);
 
+    #[cfg(coverage)]
+    let key = if coverage_fault_take(CoverageFaultPoint::TlsQuicInvalidIdentity) {
+        rustls::pki_types::PrivateKeyDer::Pkcs8(vec![0_u8].into())
+    } else {
+        key
+    };
     let quic_tls = quic_tls_builder
         .with_client_cert_verifier(client_cert_verifier)
         .with_single_cert(cert_chain, key)
@@ -7739,12 +7761,13 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
         None
     };
     if startup_signal.was_cancelled() {
-        cancellation.cancelled().await;
-        if let Some(lifespan) = lifespan.as_mut() {
-            lifespan.shutdown().await?;
-        }
-        wait_for_lifespan_cleanup(&lifespan_cleanup_tasks, options.graceful_timeout).await;
-        return Ok(());
+        return finish_cancelled_startup(
+            lifespan,
+            &lifespan_cleanup_tasks,
+            options.graceful_timeout,
+            &cancellation,
+        )
+        .await;
     }
     let listener_setup = async {
         #[cfg(all(windows, uvicorn_rs_native_transport))]
@@ -8065,15 +8088,23 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
     if server.limit_max_requests == Some(0) {
         server.cancellation.cancel();
     }
+    #[cfg(coverage)]
+    if coverage_fault_take(CoverageFaultPoint::ServerStartupAfterBindPause) {
+        // Hold the resource-to-readiness handoff so a public cancellation can
+        // deterministically race with startup after sockets have been bound.
+        let _ =
+            tokio::time::timeout(std::time::Duration::from_secs(5), cancellation.cancelled()).await;
+    }
     if !startup_signal.mark_started() {
         drop(endpoint);
         drop(listener);
-        cancellation.cancelled().await;
-        if let Some(lifespan) = lifespan.as_mut() {
-            lifespan.shutdown().await?;
-        }
-        wait_for_lifespan_cleanup(&lifespan_cleanup_tasks, options.graceful_timeout).await;
-        return Ok(());
+        return finish_cancelled_startup(
+            lifespan,
+            &lifespan_cleanup_tasks,
+            options.graceful_timeout,
+            &cancellation,
+        )
+        .await;
     }
 
     if let Some(acknowledgement) = startup_acknowledgement.as_mut() {
@@ -8557,6 +8588,20 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
         return Err(error);
     }
     shutdown_result
+}
+
+async fn finish_cancelled_startup(
+    mut lifespan: Option<LifespanRuntime>,
+    cleanup_tasks: &TaskTracker,
+    graceful_timeout: Option<std::time::Duration>,
+    cancellation: &CancellationToken,
+) -> PyResult<()> {
+    cancellation.cancelled().await;
+    if let Some(lifespan) = lifespan.as_mut() {
+        lifespan.shutdown().await?;
+    }
+    wait_for_lifespan_cleanup(cleanup_tasks, graceful_timeout).await;
+    Ok(())
 }
 
 async fn wait_for_lifespan_cleanup(

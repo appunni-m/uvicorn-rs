@@ -92,6 +92,12 @@ RUST_PANIC_HEADER = re.compile(
     r"^thread '[^'\n]*'(?: \([0-9]+\))? panicked at "
     r"(?P<source>.+):[0-9]+:[0-9]+:$"
 )
+TLS_INITIALIZATION_FAILURES = {
+    "tls.traditional-key.cipher-init-error": "could not initialize traditional private-key cipher with validated lengths",
+    "tls.provider.empty-cipher-suites": "invalid TLS cipher selection:",
+    "tls.client-verifier.empty-roots": "invalid client CA configuration:",
+    "tls.quic.invalid-identity": "invalid HTTP/3 TLS identity:",
+}
 FAULT_POINTS = {
     "python.task-future.defer-task-transfer",
     "python.task-cancel.cancel.getattr",
@@ -126,11 +132,14 @@ FAULT_POINTS = {
     "server.connection.invalid-default-header.source-chain",
     "server.default-header.response-finalization",
     "server.python-locals.get-current",
+    "server.startup.after-bind.pause",
     "python.task-completion.allocate",
     "http.request.empty-body.channel-closed",
     "websocket.app-task.panic-before-handshake",
     "websocket.native-upgrade.extension-removed-after-dispatch",
     "server.quic-tls.config-error",
+    *TLS_INITIALIZATION_FAILURES,
+    "tls.provider.unavailable",
     "python.ssl.ca-verifier.import",
     "python.ssl.ca-verifier.protocol",
     "python.ssl.ca-verifier.context",
@@ -500,11 +509,14 @@ FAULT_CONTRACTS = {
     "python-ssl-ca-verifier-success-fallback-propagates",
     "python-ssl-keyfile-error-propagates",
     "python-ssl-keyfile-rust-decrypt-error-propagates",
+    "python-tls-initialization-error-propagates",
+    "python-tls-provider-fallback-serves",
     "python-pkcs12-reader-error-propagates",
     "http3-request-trailers-drained-as-body-only",
     "http-response-reset-cancels-deferred-task",
     "server-cancellation-schedule-error-bounded-shutdown",
     "server-startup-cancellation-shutdown-error-propagates",
+    "server-startup-cancelled-after-bind",
     "server-startup-bind-shutdown-error-logged",
     "http-500-then-followup-200",
     "http-response-build-error-closes-connection-followup-200",
@@ -1012,7 +1024,7 @@ def load_contract(
         "request_limit_range_satisfied",
         "server_started_before_shutdown", "serve_task_finished_before_shutdown",
         "server_started",
-        "startup_failure_wait_result", "dropped_control_wait_result",
+        "startup_failure_wait_result", "dropped_control_wait_result", "dropped_readiness_wait_result",
         "serve_raised", "serve_timed_out", "server_exit_code",
         "serve_exception_class", "serve_exception_message",
         "client_certificate_rejected", "negotiated_tls_version", "negotiated_tls_cipher",
@@ -2280,6 +2292,19 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: lifespan shutdown fault requires the shutdown-failure workflow"
                     )
+            elif fault["contract"] == "server-startup-cancelled-after-bind":
+                flags = {
+                    "python.api.server-startup-cancel-after-listener": "server_startup_cancel_after_listener",
+                    "python.api.server-startup-cancel-after-listener-without-lifespan": "server_startup_cancel_after_listener_without_lifespan",
+                }
+                flag = flags.get(case.get("operation"))
+                if (
+                    case.get("profile") != "python-api"
+                    or fault["point"] != "server.startup.after-bind.pause"
+                    or flag is None
+                    or case.get("api", {}).get(flag) is not True
+                ):
+                    raise ParityError(f"{case_id}: bound-listener pause requires the cancellation workflow")
             elif fault["contract"] == "server-startup-cancellation-shutdown-error-propagates":
                 if (
                     case.get("profile") != "python-api"
@@ -2344,6 +2369,32 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: native connection write faults require a held response during graceful shutdown"
+                    )
+            elif fault["contract"] in {
+                "python-tls-initialization-error-propagates",
+                "python-tls-provider-fallback-serves",
+            }:
+                run_http = case.get("api", {}).get("run_http", {})
+                point = fault["point"]
+                failure = fault["contract"] == "python-tls-initialization-error-propagates"
+                if (
+                    case.get("profile") != "python-api"
+                    or case.get("operation") != "python.api.run-http"
+                    or (point not in TLS_INITIALIZATION_FAILURES if failure
+                        else point != "tls.provider.unavailable")
+                    or run_http.get("invocation") != "config-server"
+                    or run_http.get("tls") is not True
+                    or (point == "tls.traditional-key.cipher-init-error" and (
+                        run_http.get("ssl_keyfile_format") != "traditional-rsa-aes128"
+                        or not run_http.get("ssl_keyfile_password")
+                    ))
+                    or (point == "tls.client-verifier.empty-roots" and (
+                        run_http.get("ssl_ca_certs") != "generated-ca"
+                        or run_http.get("ssl_cert_reqs") != 2
+                    ))
+                ):
+                    raise ParityError(
+                        f"{case_id}: TLS boundary faults require their declared TLS startup workflow"
                     )
             elif fault["contract"] == "python-ssl-ca-verifier-error-propagates":
                 run_http = case.get("api", {}).get("run_http", {})
@@ -2755,6 +2806,11 @@ def load_contract(
                     not startup_shutdown_error_case
                     and not startup_bind_shutdown_error_case
                     and not uds_permission_error_case
+                    and fault["contract"] != "server-startup-cancelled-after-bind"
+                    and fault["contract"] not in {
+                        "python-tls-initialization-error-propagates",
+                        "python-tls-provider-fallback-serves",
+                    }
                     and (
                         case["operation"] != "python.api.run-http"
                         or not (
@@ -2789,6 +2845,8 @@ def load_contract(
                 "python.api.server-startup-uds-socket-replacement-lifespan-cleanup": "server_startup_uds_socket_replacement_lifespan_cleanup",
                 "python.api.server-startup-failure-waiter": "server_startup_failure_waiter",
                 "python.api.server-startup-cancel-before-listener": "server_startup_cancel_before_listener",
+                "python.api.server-startup-cancel-after-listener": "server_startup_cancel_after_listener",
+                "python.api.server-startup-cancel-after-listener-without-lifespan": "server_startup_cancel_after_listener_without_lifespan",
                 "python.api.server-startup-cancel-shutdown-error": "server_startup_cancel_before_listener",
                 "python.api.server-startup-cancel-without-lifespan": "server_startup_cancel_without_lifespan",
                 "python.api.server-startup-cancel-during-prebound-transfer": "server_startup_cancel_during_prebound_transfer",
@@ -2924,6 +2982,7 @@ def load_contract(
                     "ssl_ca_certs",
                     "ssl_cert_reqs",
                     "ssl_version",
+                    "ssl_ciphers",
                     "client_tls",
                     "observe_unix_scope",
                     "host",
@@ -3191,6 +3250,14 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}.api.run_http.ssl_cert_reqs must be an integer and requires tls=true"
+                    )
+                if "ssl_ciphers" in run_http and (
+                    not isinstance(run_http["ssl_ciphers"], str)
+                    or not run_http["ssl_ciphers"]
+                    or not run_http.get("tls")
+                ):
+                    raise ParityError(
+                        f"{case_id}.api.run_http.ssl_ciphers must be a nonempty string and requires tls=true"
                     )
                 if "ssl_version" in run_http and (
                     type(run_http["ssl_version"]) is not int
@@ -4004,6 +4071,13 @@ def load_contract(
                     )
             elif case["operation"] in readiness_operations:
                 input_name = readiness_operations[case["operation"]]
+                if input_name in {
+                    "server_startup_cancel_after_listener",
+                    "server_startup_cancel_after_listener_without_lifespan",
+                } and case.get("verification") != "fault-contract":
+                    raise ParityError(
+                        f"{case_id}: the bound-listener pause requires target-only fault verification"
+                    )
                 exact_keys(case["api"], {input_name}, f"{case_id}.api")
                 if case["api"][input_name] is not True:
                     raise ParityError(f"{case_id}.api.{input_name} must be true")
@@ -11732,6 +11806,24 @@ def fault_contract_matches(
             and "coverage-injected Rust encrypted private-key decryption failure"
             in observation.get("fault_server_stderr", "")
         )
+    if fault["contract"] == "python-tls-initialization-error-propagates":
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("response_received") is False
+            and observation.get("process_exit_code") == 1
+            and observation.get("process_timed_out") is False
+            and TLS_INITIALIZATION_FAILURES[fault["point"]]
+            in observation.get("fault_server_stderr", "")
+        )
+    if fault["contract"] == "python-tls-provider-fallback-serves":
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("response_received") is True
+            and observation.get("response_status") == 200
+            and observation.get("shutdown_signal_sent") is True
+            and observation.get("process_exit_code") == 0
+            and observation.get("process_timed_out") is False
+        )
     if fault["contract"] == "python-pkcs12-reader-error-propagates":
         return (
             observation.get("fault_consumed") is True
@@ -12616,6 +12708,13 @@ def fault_contract_matches(
             observation.get("process_terminated") is True
             and isinstance(observation.get("process_exit_code"), int)
             and observation["process_exit_code"] != 0
+        )
+    if fault["contract"] == "server-startup-cancelled-after-bind":
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("serve_task_finished") is True
+            and observation.get("server_started_before_cancel") is False
+            and observation.get("server_started_before_shutdown") is False
         )
     if fault["contract"] == "server-startup-cancellation-shutdown-error-propagates":
         return (
@@ -13693,6 +13792,7 @@ def run_python_api_probe(
                 for name in (
                     "startup_failure_wait_result",
                     "dropped_control_wait_result",
+                    "dropped_readiness_wait_result",
                     "server_started_before_shutdown",
                     "serve_task_finished_before_shutdown",
                 )
@@ -13762,6 +13862,8 @@ def run_python_api_probe(
             observation["fault_consumed"] = fault_consumed
     if (
         "server_startup_cancel_before_listener" in case["api"]
+        or "server_startup_cancel_after_listener" in case["api"]
+        or "server_startup_cancel_after_listener_without_lifespan" in case["api"]
         or "server_startup_cancel_without_lifespan" in case["api"]
         or "server_startup_cancel_during_prebound_transfer" in case["api"]
         or "server_startup_cancel_during_prebound_transfer_without_lifespan" in case["api"]
@@ -13792,6 +13894,7 @@ def run_python_api_probe(
                     "application_events",
                     "server_started_before_shutdown",
                     "listener_transfer_blocked",
+                    "listener_accepting_after_cancel",
                 )
             }
         )
@@ -13951,8 +14054,10 @@ def execute_python_api_profile(
                 target = {name: target_raw[name] for name in operation["observe"]}
                 required = (
                     {}
-                    if fault["contract"]
-                    == "server-unix-listener-permission-error-startup-propagates"
+                    if fault["contract"] in {
+                        "server-unix-listener-permission-error-startup-propagates",
+                        "python-tls-initialization-error-propagates",
+                    }
                     else required_observations_for_case(case, operation)
                 )
                 matches = all(

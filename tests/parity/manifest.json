@@ -3299,6 +3299,7 @@
         "exit_code",
         "startup_failure_wait_result",
         "dropped_control_wait_result",
+        "dropped_readiness_wait_result",
         "server_started_before_shutdown",
         "serve_task_finished_before_shutdown"
       ],
@@ -3315,7 +3316,8 @@
         "serve_task_finished_before_shutdown": true
       },
       "target_requirements": {
-        "dropped_control_wait_result": false
+        "dropped_control_wait_result": false,
+        "dropped_readiness_wait_result": false
       }
     },
     {
@@ -3679,6 +3681,89 @@
         "process_exit_code": 3,
         "process_timed_out": false,
         "process_stderr_has_unhandled_task_warning": false
+      }
+    },
+    {
+      "id": "python.api.server-startup-cancel-after-listener",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "lifespan_startup_entered_before_cancel",
+        "server_started_before_cancel",
+        "serve_cancelled",
+        "serve_raised",
+        "serve_timed_out",
+        "serve_task_finished",
+        "listener_accepting_after_cancel",
+        "application_events",
+        "server_started_before_shutdown"
+      ],
+      "compare": [
+        "exit_code",
+        "lifespan_startup_entered_before_cancel",
+        "server_started_before_cancel",
+        "serve_cancelled",
+        "serve_task_finished",
+        "application_events"
+      ],
+      "required_observations": {
+        "exit_code": 0,
+        "lifespan_startup_entered_before_cancel": true,
+        "server_started_before_cancel": false,
+        "serve_cancelled": false,
+        "serve_raised": false,
+        "serve_timed_out": false,
+        "serve_task_finished": true,
+        "listener_accepting_after_cancel": false,
+        "application_events": [
+          "lifespan.startup",
+          "lifespan.shutdown"
+        ]
+      },
+      "target_requirements": {
+        "server_started_before_shutdown": false
+      }
+    },
+    {
+      "id": "python.api.server-startup-cancel-after-listener-without-lifespan",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "lifespan_startup_entered_before_cancel",
+        "server_started_before_cancel",
+        "serve_cancelled",
+        "serve_raised",
+        "serve_timed_out",
+        "serve_task_finished",
+        "listener_accepting_after_cancel",
+        "application_events",
+        "server_started_before_shutdown"
+      ],
+      "compare": [
+        "exit_code",
+        "lifespan_startup_entered_before_cancel",
+        "server_started_before_cancel",
+        "serve_cancelled",
+        "serve_raised",
+        "serve_timed_out",
+        "serve_task_finished",
+        "application_events"
+      ],
+      "required_observations": {
+        "exit_code": 0,
+        "lifespan_startup_entered_before_cancel": false,
+        "server_started_before_cancel": false,
+        "serve_cancelled": false,
+        "serve_raised": false,
+        "serve_timed_out": false,
+        "serve_raised": false,
+        "serve_timed_out": false,
+        "serve_task_finished": true,
+        "listener_accepting_after_cancel": false,
+        "application_events": []
+      },
+      "target_requirements": {
+        "server_started_before_shutdown": false
       }
     }
   ],

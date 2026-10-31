@@ -656,6 +656,7 @@ ssl_keyfile_password = json.loads(sys.argv[32])
 ssl_ca_certs = json.loads(sys.argv[33])
 ssl_cert_reqs = int(sys.argv[34])
 ssl_version = json.loads(sys.argv[35])
+ssl_ciphers = json.loads(sys.argv[36])
 proxy_headers = sys.argv[9] == "1"
 forwarded_allow_ips = json.loads(sys.argv[10])
 limit_concurrency = json.loads(sys.argv[11])
@@ -718,6 +719,8 @@ if ssl_cert_reqs != 0:
     options["ssl_cert_reqs"] = ssl_cert_reqs
 if ssl_version is not None:
     options["ssl_version"] = ssl_version
+if ssl_ciphers is not None:
+    options["ssl_ciphers"] = ssl_ciphers
 try:
     if invocation in {"config-server", "server-sockets"}:
         if invocation == "server-sockets":
@@ -952,6 +955,8 @@ except KeyboardInterrupt:
             command.extend(("--ssl-cert-reqs", str(ssl_cert_reqs)))
         if "ssl_version" in request and "UVICORN_SSL_VERSION" not in configured_environment:
             command.extend(("--ssl-version", str(ssl_version)))
+        if "ssl_ciphers" in request and "UVICORN_SSL_CIPHERS" not in configured_environment:
+            command.extend(("--ssl-ciphers", request["ssl_ciphers"]))
         if inherited_listeners and not fd_from_environment:
             command.extend(("--fd", str(inherited_listeners[0].fileno())))
         if request.get("factory"):
@@ -1041,6 +1046,7 @@ except KeyboardInterrupt:
             json.dumps(ssl_ca_certs),
             str(ssl_cert_reqs),
             json.dumps(request.get("ssl_version")),
+            json.dumps(request.get("ssl_ciphers")),
         ]
 
     environment = subprocess_environment()
@@ -2345,13 +2351,19 @@ async def server_serve_cancellation_observation(phase: str) -> dict[str, bool]:
 
 async def server_startup_cancel_before_listener_observation(
     lifespan_mode: str = "on",
+    cancel_phase: str = "before-listener",
 ) -> dict[str, object]:
-    """Cancel startup before bind and verify lifespan shutdown still runs."""
+    """Cancel at a declared startup boundary and observe bounded resource cleanup."""
 
     target = os.environ.get("ASGI_PARITY_SERVER_ID") == "uvicorn-rs"
     startup_entered = asyncio.Event()
     allow_startup_completion = asyncio.Event()
     application_events = []
+    port = 0
+    if cancel_phase == "after-listener":
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
+            reservation.bind(("127.0.0.1", 0))
+            port = reservation.getsockname()[1]
 
     async def app(scope, receive, send):
         if scope["type"] == "lifespan":
@@ -2369,7 +2381,7 @@ async def server_startup_cancel_before_listener_observation(
     if target:
         from uvicorn_rs import Server
 
-        server = Server(app, host="127.0.0.1", port=0, lifespan=lifespan_mode)
+        server = Server(app, host="127.0.0.1", port=port, lifespan=lifespan_mode)
     else:
         import uvicorn
 
@@ -2390,7 +2402,20 @@ async def server_startup_cancel_before_listener_observation(
     serve_raised = False
     serve_timed_out = False
     try:
-        if lifespan_mode == "off":
+        if cancel_phase == "after-listener":
+            allow_startup_completion.set()
+            fault_file = Path(os.environ["UVICORN_RS_COVERAGE_FAULT_FILE"])
+            deadline = asyncio.get_running_loop().time() + 5
+            while fault_file.read_text().strip():
+                if asyncio.get_running_loop().time() >= deadline:
+                    raise TimeoutError("server did not reach the bound-listener handoff")
+                await asyncio.sleep(0.001)
+            server_started_before_cancel = bool(getattr(server, "started", False))
+            # Repeated cancellation must remain idempotent in the handoff.
+            server.cancel_startup()
+            server.cancel_startup()
+            server.shutdown()
+        elif lifespan_mode == "off":
             if target:
                 # The serve coroutine publishes its native control before it
                 # schedules the Rust future. Cancel in that handoff window so
@@ -2425,7 +2450,17 @@ async def server_startup_cancel_before_listener_observation(
             serve_timed_out = True
         except BaseException:
             serve_raised = True
+        listener_accepting = None
+        if cancel_phase == "after-listener":
+            try:
+                connection = socket.create_connection(("127.0.0.1", port), timeout=0.2)
+            except OSError:
+                listener_accepting = False
+            else:
+                connection.close()
+                listener_accepting = True
         return {
+            "listener_accepting_after_cancel": listener_accepting,
             "lifespan_startup_entered_before_cancel": startup_entered.is_set(),
             "server_started_before_cancel": server_started_before_cancel,
             "serve_cancelled": serve_cancelled,
@@ -3007,6 +3042,7 @@ async def server_startup_failure_waiter_observation() -> dict[str, object]:
         "task": task,
         "startup_failure_wait_result": None,
         "dropped_control_wait_result": None,
+        "dropped_readiness_wait_result": None,
     }
     try:
         await asyncio.wait_for(lifespan_entered.wait(), timeout=5)
@@ -3017,6 +3053,8 @@ async def server_startup_failure_waiter_observation() -> dict[str, object]:
 
             control = _native.ServerControl(False)
             dropped_waiter = control.wait_startup_failed()
+            dropped_readiness_waiter = control.wait_started()
+            control.acknowledge_startup()
             del control
             dropped_control_wait_result = await asyncio.wait_for(
                 dropped_waiter, timeout=5
@@ -3024,6 +3062,9 @@ async def server_startup_failure_waiter_observation() -> dict[str, object]:
             _startup_failure_waiter_state[
                 "dropped_control_wait_result"
             ] = dropped_control_wait_result
+            _startup_failure_waiter_state["dropped_readiness_wait_result"] = (
+                await asyncio.wait_for(dropped_readiness_waiter, timeout=5)
+            )
 
         release_failure.set()
         if target:
@@ -3065,6 +3106,7 @@ def startup_failure_waiter_result_from_state(state) -> dict[str, object]:
     return {
         "startup_failure_wait_result": startup_failure_wait_result,
         "dropped_control_wait_result": state.get("dropped_control_wait_result"),
+        "dropped_readiness_wait_result": state.get("dropped_readiness_wait_result"),
         "server_started_before_shutdown": bool(
             server is not None and getattr(server, "started", False)
         ),
@@ -3367,6 +3409,20 @@ def main() -> None:
             "server_serve_cancellation": asyncio.run(
                 server_serve_cancellation_observation(
                     request["server_serve_cancellation"]["phase"]
+                )
+            ),
+        }
+        print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
+        return
+    if (
+        "server_startup_cancel_after_listener" in request
+        or "server_startup_cancel_after_listener_without_lifespan" in request
+    ):
+        observations = {
+            "server_startup_cancel_before_listener": asyncio.run(
+                server_startup_cancel_before_listener_observation(
+                    "off" if "server_startup_cancel_after_listener_without_lifespan" in request else "on",
+                    "after-listener",
                 )
             ),
         }

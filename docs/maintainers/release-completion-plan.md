@@ -20,7 +20,7 @@ a prerequisite for completing the repository work.
   `tests/parity/manifest.json`, its indexed inputs, `tests/native-core/manifest.json`,
   and `examples/native-fastapi-contracts/manifest.json`. Do not create a second
   operation inventory or require arbitrary combinations outside this contract.
-- The current manifest has 139 operations and 90 execution profiles. Those counts
+- The current manifest has 141 operations and 90 execution profiles. Those counts
   describe its inventory, not completeness of upstream compatibility.
 - Platform acceptance uses the existing CI profiles: Linux x86-64, macOS ARM64,
   Windows x86-64 on CPython 3.12.13, plus the declared Python 3.9 wheel-consumer
@@ -43,18 +43,39 @@ PR #19 remains draft/open against `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. The h11 adapter/parser fix is committed at
 `6342b20402bf0cceabd8eafde3f067e1620bafba`; its runtime-source SHA-256 is
 `c00038a3885178b4bb1146fc315a51eb70c5e149a1742a16d3bdada8c7bee50f`. The
-latest full hosted run
-[#531](https://github.com/appunni-m/uvicorn-rs/actions/runs/41140694132) ran
-on branch head `48aba59dc12ab4fa9c6195d95d2fabd226b4a052`, merge ref
-`0e76ef265977050836044fcb6ef9550b1352fcda`. The two commits after that run changed only the input set and documentation.
-Fresh [CI #536](https://github.com/appunni-m/uvicorn-rs/actions/runs/41151116481)
-is running for the committed h11 batch. Its Rust quality, feature, MSRV,
-native-composition and release-evidence jobs passed. Parity and coverage are
-still running. A follow-up on `codex/uvicorn-rs-coverage-events` adds nine
-HTTP/2 response-event fault cases, consolidates control borrows and shares
-header insertion error handling. Those cases have focused passing receipts;
-see [coverage evidence](../coverage.md). Keep the follow-up separate while
-#536 runs, then batch remaining coverage work before another full run.
+latest completed full hosted run is
+[CI #536](https://github.com/appunni-m/uvicorn-rs/actions/runs/41151116481).
+Its Rust quality, feature, MSRV, native-composition, release-evidence and Linux
+artifact jobs passed. Coverage completed all 1,351 indexed cases and all three
+verification repeats, but missed the gate at 14,137/14,251 regions and
+10,410/10,463 lines. All 114 uncovered regions and 53 lines are in `src/lib.rs`.
+The canonical report SHA-256 is
+`336eadc77922d0f981039c1ec8ad18c35229bf2199811ea960ceb7e9e98eea32`;
+its recorded merge ref is `15cf322f9f005b4823167620d0d17c570b992ff2`.
+Documentation #217 passed separately.
+
+Normal installed-wheel parity passed on Linux. macOS passed 728/729; the WSGI
+multi-chunk case differed only by a conditional background-drain log during
+immediate shutdown. Windows passed 698/702; four h11 cases had identical live
+oracle/target wire behavior and exit code 3, but stored fixture expectations
+required POSIX exit 0. Follow-up `bec2da6a2` removes those stored expectations,
+retains every live comparison field, rejects shared process timeouts, and uses
+the existing bounded post-response settling input for both multi-chunk WSGI
+cases. All six affected cases pass against the rebuilt normal wheel on macOS.
+Windows acceptance still needs a hosted receipt for the follow-up source.
+
+The coverage-events follow-up also includes nine passing HTTP/2 response-event
+fault cases, shared control borrows and header insertion error handling. The
+next adapter batch consolidates lifespan task results, cancellation cleanup and
+legacy cipher initialization; checks TLS boundary failures and provider fallback;
+observes dropped startup waiters; and exercises cancellation after socket bind,
+including a closed-port check after `serve()` returns. Focused receipts are
+retained under `target/ci536/`: lifespan refactor 7/7, corrected cipher selection
+6/6, cancellation/upload 9/9, and bound-port cleanup 2/2. The initial TLS batch
+retains its three unconsumed-fault failures; only the corrected input batch is
+passing evidence. These are diagnostic subsets, not a new full coverage total.
+Strict Clippy and formatting pass for the batch. Promote one reviewed batch and
+consume its full hosted report before making any full-matrix acceptance claim.
 
 The Linux installed-wheel public parity in #531 passed 719/719. Windows ran
 692 cases: 689 passed and three two-worker shutdown cases failed. Their only

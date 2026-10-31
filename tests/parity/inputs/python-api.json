@@ -6724,6 +6724,239 @@
           "incomplete_request_buffer_length": 1025
         }
       }
+    },
+    {
+      "case_id": "python-api.fault.traditional-key-cipher-init-error",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api-traditional-encrypted-rsa-aes128-key",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_keyfile_password": "uvicorn-rs-parity-legacy-key",
+          "ssl_keyfile_format": "traditional-rsa-aes128"
+        }
+      },
+      "verification": "fault-contract",
+      "fault": {
+        "point": "tls.traditional-key.cipher-init-error",
+        "contract": "python-tls-initialization-error-propagates"
+      }
+    },
+    {
+      "case_id": "python-api.fault.tls12-empty-cipher-provider",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/tls-boundary",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_version": 5,
+          "ssl_ciphers": "ECDHE-RSA-AES128-GCM-SHA256"
+        }
+      },
+      "verification": "fault-contract",
+      "fault": {
+        "point": "tls.provider.empty-cipher-suites",
+        "contract": "python-tls-initialization-error-propagates"
+      }
+    },
+    {
+      "case_id": "python-api.fault.tls-default-empty-cipher-provider",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/tls-boundary",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ciphers": "ECDHE-RSA-AES128-GCM-SHA256"
+        }
+      },
+      "verification": "fault-contract",
+      "fault": {
+        "point": "tls.provider.empty-cipher-suites",
+        "contract": "python-tls-initialization-error-propagates"
+      }
+    },
+    {
+      "case_id": "python-api.fault.tls-empty-client-root-store",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/tls-boundary",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ca_certs": "generated-ca",
+          "ssl_cert_reqs": 2
+        }
+      },
+      "verification": "fault-contract",
+      "fault": {
+        "point": "tls.client-verifier.empty-roots",
+        "contract": "python-tls-initialization-error-propagates"
+      }
+    },
+    {
+      "case_id": "python-api.fault.tls-invalid-quic-identity",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/tls-boundary",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true
+        }
+      },
+      "verification": "fault-contract",
+      "fault": {
+        "point": "tls.quic.invalid-identity",
+        "contract": "python-tls-initialization-error-propagates"
+      }
+    },
+    {
+      "case_id": "python-api.fault.tls-provider-fallback",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/tls-boundary",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ciphers": "ECDHE-RSA-AES128-GCM-SHA256"
+        }
+      },
+      "verification": "fault-contract",
+      "fault": {
+        "point": "tls.provider.unavailable",
+        "contract": "python-tls-provider-fallback-serves"
+      }
+    },
+    {
+      "case_id": "python-api.config-server-tls12-cipher-selection",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/tls-cipher-selection",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_version": 5,
+          "ssl_ciphers": "ECDHE-RSA-AES128-GCM-SHA256"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.config-server-default-version-cipher-selection",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/tls-cipher-selection",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 5,
+          "lifespan": "auto",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "ssl_ciphers": "ECDHE-RSA-AES128-GCM-SHA256"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.fault.server-startup-cancel-after-listener",
+      "profile": "python-api",
+      "operation": "python.api.server-startup-cancel-after-listener",
+      "covers": [
+        "python.api.server-startup-cancel-after-listener"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.startup.after-bind.pause",
+        "contract": "server-startup-cancelled-after-bind"
+      },
+      "api": {
+        "server_startup_cancel_after_listener": true
+      }
+    },
+    {
+      "case_id": "python-api.fault.server-startup-cancel-after-listener-without-lifespan",
+      "profile": "python-api",
+      "operation": "python.api.server-startup-cancel-after-listener-without-lifespan",
+      "covers": [
+        "python.api.server-startup-cancel-after-listener-without-lifespan"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.startup.after-bind.pause",
+        "contract": "server-startup-cancelled-after-bind"
+      },
+      "api": {
+        "server_startup_cancel_after_listener_without_lifespan": true
+      }
     }
   ]
 }
