@@ -15,6 +15,7 @@ if (
     _watched = {
         int(value)
         for value in (
+            getattr(signal, "SIGINT", None),
             getattr(signal, "SIGBREAK", None),
             getattr(signal, "SIGTERM", None),
         )
