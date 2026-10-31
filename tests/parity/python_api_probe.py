@@ -1780,10 +1780,17 @@ except KeyboardInterrupt:
                 time.sleep(0.2)
             try:
                 if os.name == "nt":
-                    # Target the process group created for this server so the
-                    # parity runner and unrelated console processes do not
-                    # receive its shutdown signal.
-                    process.send_signal(signal.CTRL_BREAK_EVENT)
+                    # Map the requested signal to the Windows console event
+                    # Uvicorn handles. Ctrl+C is SIGINT, which makes a second
+                    # signal force an in-flight shutdown; Ctrl+Break is
+                    # SIGBREAK, which only requests graceful shutdown. The
+                    # server runs in its own CREATE_NEW_PROCESS_GROUP.
+                    windows_signal = (
+                        signal.CTRL_C_EVENT
+                        if signal_name == "SIGINT"
+                        else signal.CTRL_BREAK_EVENT
+                    )
+                    process.send_signal(windows_signal)
                 else:
                     process.send_signal(getattr(signal, signal_name))
                 shutdown_signals_sent.append(signal_name)
