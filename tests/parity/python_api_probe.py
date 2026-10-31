@@ -1285,6 +1285,27 @@ except KeyboardInterrupt:
         environment["ASGI_PARITY_WORKER_CONTROL_STARTUP_READY_DIR"] = str(
             worker_control_startup_ready_directory
         )
+    expected_worker_count = request.get("workers")
+    if type(expected_worker_count) is not int:
+        try:
+            expected_worker_count = int(environment.get("WEB_CONCURRENCY", "1"))
+        except ValueError:
+            expected_worker_count = 1
+    if request.get("reload"):
+        expected_worker_count = 1
+    expected_worker_count = max(1, expected_worker_count)
+    configured_log_level = (
+        request.get("log_level")
+        or environment.get("UVICORN_LOG_LEVEL")
+        or "info"
+    )
+    track_worker_startup = (
+        os.name == "nt"
+        and request.get("invocation") == "module-cli"
+        and expected_worker_count > 1
+        and str(configured_log_level).lower() == "info"
+        and not request.get("log_config")
+    )
     worker_stall_directory = None
     worker_stall_marker = None
     worker_stall_resumer_stop = threading.Event()
@@ -1369,6 +1390,19 @@ except KeyboardInterrupt:
             listener.fileno() for listener in inherited_listeners
         )
 
+    stdout_chunks: list[bytes] = []
+    stderr_chunks: list[bytes] = []
+    output_reader_threads: list[threading.Thread] = []
+    output_chunks_lock = threading.Lock()
+
+    def drain_process_output(stream, chunks: list[bytes]) -> None:
+        while True:
+            chunk = stream.read1(4096)
+            if not chunk:
+                return
+            with output_chunks_lock:
+                chunks.append(chunk)
+
     try:
         process = subprocess.Popen(
             command,
@@ -1404,6 +1438,22 @@ except KeyboardInterrupt:
         if previous_windows_sigbreak_handler is not None:
             signal.signal(signal.SIGBREAK, previous_windows_sigbreak_handler)
         raise
+
+    if track_worker_startup:
+        for stream, chunks, name in (
+            (process.stdout, stdout_chunks, "stdout"),
+            (process.stderr, stderr_chunks, "stderr"),
+        ):
+            if stream is None:
+                continue
+            reader = threading.Thread(
+                target=drain_process_output,
+                args=(stream, chunks),
+                name=f"uvicorn-rs-parity-worker-{name}-reader",
+                daemon=True,
+            )
+            reader.start()
+            output_reader_threads.append(reader)
 
     def kill_server_process_group() -> None:
         if os.name == "nt":
@@ -1830,6 +1880,39 @@ except KeyboardInterrupt:
                 )
         if response is not None:
             time.sleep(request.get("post_response_settle_seconds", 0))
+        if response is not None and output_reader_threads and process.poll() is None:
+            started_worker_pids = set()
+            started_worker_marker = b"Started server process ["
+            startup_deadline = time.monotonic() + request["timeout_seconds"]
+            while (
+                len(started_worker_pids) < expected_worker_count
+                and process.poll() is None
+                and time.monotonic() < startup_deadline
+            ):
+                with output_chunks_lock:
+                    outputs = (b"".join(stdout_chunks), b"".join(stderr_chunks))
+                for output in outputs:
+                    for line in output.splitlines():
+                        marker_offset = line.find(started_worker_marker)
+                        if marker_offset < 0:
+                            continue
+                        pid_text = line[
+                            marker_offset + len(started_worker_marker) :
+                        ].split(b"]", 1)[0].strip()
+                        if pid_text.isdigit():
+                            started_worker_pids.add(int(pid_text))
+                if len(started_worker_pids) < expected_worker_count:
+                    time.sleep(0.025)
+            if (
+                process.poll() is None
+                and len(started_worker_pids) < expected_worker_count
+            ):
+                raise RuntimeError(
+                    "server did not report all configured workers as started "
+                    "before shutdown; "
+                    f"observed={len(started_worker_pids)} "
+                    f"expected={expected_worker_count}"
+                )
         for index, signal_name in enumerate(shutdown_signal_names):
             if process.poll() is not None:
                 break
@@ -1875,15 +1958,29 @@ except KeyboardInterrupt:
         shutdown_signal_sent = bool(shutdown_signals_sent)
         server_stdout = b""
         server_stderr = b""
-        try:
-            server_stdout, server_stderr = process.communicate(
-                timeout=request["timeout_seconds"]
-            )
-            process_timed_out = False
-        except subprocess.TimeoutExpired:
-            process_timed_out = True
-            kill_server_process_group()
-            server_stdout, server_stderr = process.communicate()
+        if output_reader_threads:
+            try:
+                process.wait(timeout=request["timeout_seconds"])
+                process_timed_out = False
+            except subprocess.TimeoutExpired:
+                process_timed_out = True
+                kill_server_process_group()
+                process.wait(timeout=5)
+            for reader in output_reader_threads:
+                reader.join(timeout=2)
+            with output_chunks_lock:
+                server_stdout = b"".join(stdout_chunks)
+                server_stderr = b"".join(stderr_chunks)
+        else:
+            try:
+                server_stdout, server_stderr = process.communicate(
+                    timeout=request["timeout_seconds"]
+                )
+                process_timed_out = False
+            except subprocess.TimeoutExpired:
+                process_timed_out = True
+                kill_server_process_group()
+                server_stdout, server_stderr = process.communicate()
         request_limit_range_satisfied = None
         if request_limit is not None and request_limit > 0 and request_limit_jitter >= 0:
             request_limit_range_satisfied = (
@@ -1922,7 +2019,17 @@ except KeyboardInterrupt:
     finally:
         if process.poll() is None or process_options.get("start_new_session"):
             kill_server_process_group()
-            process.communicate()
+            if output_reader_threads:
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
+            else:
+                process.communicate()
+        if output_reader_threads:
+            for reader in output_reader_threads:
+                reader.join(timeout=2)
         worker_stall_resumer_stop.set()
         if worker_stall_resumer is not None:
             worker_stall_resumer.join(timeout=1.0)
