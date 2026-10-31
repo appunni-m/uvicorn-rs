@@ -1115,11 +1115,27 @@ except KeyboardInterrupt:
         ]
 
     environment = subprocess_environment()
+    worker_count = request.get("workers")
+    if worker_count is None:
+        worker_environment = request.get("environment", {})
+        worker_count = worker_environment.get(
+            "UVICORN_WORKERS",
+            worker_environment.get(
+                "WEB_CONCURRENCY",
+                environment.get(
+                    "UVICORN_WORKERS",
+                    environment.get("WEB_CONCURRENCY", 1),
+                ),
+            ),
+        )
+    try:
+        has_multiple_workers = int(worker_count) > 1
+    except (TypeError, ValueError):
+        has_multiple_workers = False
     if (
         os.name == "nt"
         and os.environ.get("ASGI_PARITY_SERVER_ID") == "uvicorn"
-        and request.get("workers") is not None
-        and int(request["workers"]) > 1
+        and has_multiple_workers
     ):
         # Multi-worker Uvicorn-RS sends CTRL_BREAK_EVENT to each worker PID.
         # Give only those oracle inputs matching process-group support; reload
