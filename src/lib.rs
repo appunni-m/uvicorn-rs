@@ -2743,6 +2743,9 @@ struct ResponseStart {
     trailers: bool,
 }
 
+#[derive(Clone, Copy)]
+struct Http1AutomaticDateHeader;
+
 #[derive(Debug)]
 struct InvalidAsgiResponseStart {
     default_header_error: Option<InvalidDefaultHeader>,
@@ -3631,11 +3634,18 @@ impl LifespanMode {
     }
 }
 
+#[derive(Clone, Copy)]
+enum LifespanPhase {
+    Startup,
+    Shutdown,
+}
+
 enum LifespanEvent {
     StartupComplete,
     StartupFailed(String),
     ShutdownComplete,
     ShutdownFailed(String),
+    ApplicationException(LifespanPhase),
 }
 
 #[pyclass]
@@ -4595,10 +4605,45 @@ fn queue_websocket_message<'py>(
 struct LifespanIo {
     requests: Arc<Mutex<mpsc::Receiver<LifespanMessage>>>,
     events: mpsc::Sender<LifespanEvent>,
+    mode: LifespanMode,
+}
+
+impl LifespanIo {
+    fn send_event(&self, event: LifespanEvent) -> PyResult<()> {
+        #[cfg(coverage)]
+        let send_result =
+            if coverage_fault_is_armed(CoverageFaultPoint::LifespanSendEventChannelClosed) {
+                Err(TrySendError::Closed(event))
+            } else {
+                self.events.try_send(event)
+            };
+        #[cfg(not(coverage))]
+        let send_result = self.events.try_send(event);
+        send_result
+            .map_err(|error| PyOSError::new_err(format!("ASGI lifespan channel closed: {error}")))
+    }
 }
 
 #[pymethods]
 impl LifespanIo {
+    #[getter]
+    fn is_auto(&self) -> bool {
+        self.mode == LifespanMode::Auto
+    }
+
+    fn report_exception(&self, phase: &str) -> PyResult<()> {
+        let phase = match phase {
+            "startup" => LifespanPhase::Startup,
+            "shutdown" => LifespanPhase::Shutdown,
+            _ => {
+                return Err(PyValueError::new_err(
+                    "ASGI lifespan exception phase must be startup or shutdown",
+                ));
+            }
+        };
+        self.send_event(LifespanEvent::ApplicationException(phase))
+    }
+
     fn receive<'py>(slf: PyRef<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let requests = Arc::clone(&slf.requests);
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
@@ -4682,18 +4727,7 @@ impl LifespanIo {
                 )));
             }
         };
-        #[cfg(coverage)]
-        let send_result =
-            if coverage_fault_is_armed(CoverageFaultPoint::LifespanSendEventChannelClosed) {
-                Err(TrySendError::Closed(event))
-            } else {
-                slf.events.try_send(event)
-            };
-        #[cfg(not(coverage))]
-        let send_result = slf.events.try_send(event);
-        send_result.map_err(|error| {
-            PyOSError::new_err(format!("ASGI lifespan channel closed: {error}"))
-        })?;
+        slf.send_event(event)?;
         Ok(py.None().into_bound(py))
     }
 }
@@ -4705,6 +4739,7 @@ struct LifespanRuntime {
     state: Arc<Py<PyDict>>,
     requests: Option<mpsc::Sender<LifespanMessage>>,
     events: Option<mpsc::Receiver<LifespanEvent>>,
+    mode: LifespanMode,
 }
 
 impl LifespanRuntime {
@@ -4739,6 +4774,7 @@ impl LifespanRuntime {
                     LifespanIo {
                         requests: Arc::new(Mutex::new(request_rx)),
                         events: event_tx,
+                        mode,
                     },
                 )
             )?;
@@ -4807,6 +4843,7 @@ impl LifespanRuntime {
                     requests: Some(request_tx),
                     events: Some(event_rx),
                     app_task: Some(app_task),
+                    mode,
                 })),
                 Some(LifespanEvent::StartupFailed(message)) => {
                     app_task.as_mut().abort();
@@ -4816,6 +4853,28 @@ impl LifespanRuntime {
                     }
                     log_lifespan_error("Application startup failed. Exiting.");
                     Ok(None)
+                }
+                Some(LifespanEvent::ApplicationException(_phase)) => {
+                    // The Python wrapper has caught and recorded the original
+                    // exception on its owning loop. Wait for that wrapper task
+                    // to finish normally before deciding whether auto mode
+                    // falls back or strict mode rejects startup.
+                    let result = app_task.as_mut().await;
+                    app_task.into_handle();
+                    match result {
+                        Ok(Ok(_)) if mode == LifespanMode::On => {
+                            log_error(format_args!("Application startup failed. Exiting."));
+                            Ok(None)
+                        }
+                        Ok(Ok(_)) => Ok(Some(Self {
+                            state: Arc::new(state),
+                            requests: None,
+                            events: None,
+                            app_task: None,
+                            mode,
+                        })),
+                        result => Self::without_lifespan(result, state, mode),
+                    }
                 }
                 Some(_) => {
                     app_task.as_mut().abort();
@@ -4830,6 +4889,7 @@ impl LifespanRuntime {
                         requests: None,
                         events: None,
                         app_task: None,
+                        mode,
                     }))
                 }
                 None => {
@@ -4877,6 +4937,7 @@ impl LifespanRuntime {
             requests: None,
             events: None,
             app_task: None,
+            mode,
         }))
     }
 
@@ -4912,10 +4973,14 @@ impl LifespanRuntime {
             self.app_task.take();
             return lifespan_shutdown_result(result, false);
         }
-        requests
-            .send(LifespanMessage::Shutdown)
-            .await
-            .map_err(|_| PyRuntimeError::new_err("could not send ASGI lifespan shutdown"))?;
+        if requests.send(LifespanMessage::Shutdown).await.is_err() {
+            // The app can fail after startup has already completed. In that
+            // case Uvicorn's lifespan task has set its shutdown event and
+            // shutdown() returns without sending another message.
+            let result = app_task.await;
+            self.app_task.take();
+            return lifespan_shutdown_result(result, true);
+        }
         tokio::select! {
             biased;
             event = events.recv() => match event {
@@ -4931,6 +4996,16 @@ impl LifespanRuntime {
                     } else {
                         message
                     }));
+                }
+                Some(LifespanEvent::ApplicationException(phase)) => {
+                    if self.mode == LifespanMode::On
+                        && matches!(phase, LifespanPhase::Shutdown)
+                    {
+                        log_error(format_args!("Application shutdown failed. Exiting."));
+                    }
+                    let result = app_task.await;
+                    self.app_task.take();
+                    return lifespan_shutdown_result(result, true);
                 }
                 Some(_) => return Err(PyRuntimeError::new_err("unexpected ASGI lifespan event during shutdown")),
                 None => return Err(PyRuntimeError::new_err("ASGI lifespan channel closed during shutdown")),
@@ -9779,7 +9854,8 @@ async fn handle_request_parts(
         };
     #[cfg(not(coverage))]
     let default_header_error = context.server.default_header_error;
-    let default_response_header_names = unique_default_response_header_names(&context.server);
+    let default_response_header_names =
+        unique_default_response_header_names(&context.server, http_version);
     diagnostics.http_request_started();
     let response_latency_started = diagnostics.http_response_latency_started();
     let response_timing_diagnostics = diagnostics.clone();
@@ -9963,6 +10039,9 @@ async fn handle_request_parts(
     response
         .extensions_mut()
         .insert(HeaderOrder::new(start.header_order));
+    if matches!(http_version, Version::HTTP_10 | Version::HTTP_11) {
+        response.extensions_mut().insert(Http1AutomaticDateHeader);
+    }
     Ok(response)
 }
 
@@ -11165,10 +11244,15 @@ fn validated_default_headers(headers: &[(Bytes, Bytes)]) -> Vec<(HeaderName, Hea
         .collect()
 }
 
-fn unique_default_response_header_names(server: &ServerContext) -> Vec<HeaderName> {
+fn unique_default_response_header_names(
+    server: &ServerContext,
+    http_version: Version,
+) -> Vec<HeaderName> {
+    let date_header_stored_in_map =
+        server.date_header && !matches!(http_version, Version::HTTP_10 | Version::HTTP_11);
     let mut names =
-        Vec::with_capacity(server.default_headers.len() + usize::from(server.date_header));
-    if server.date_header {
+        Vec::with_capacity(server.default_headers.len() + usize::from(date_header_stored_in_map));
+    if date_header_stored_in_map {
         names.push(DATE);
     }
     for (name, _) in &server.default_headers {
@@ -11185,10 +11269,14 @@ fn apply_default_response_headers(
     server: &ServerContext,
     response: Response<ResponseBody>,
 ) -> Result<Response<ResponseBody>, std::io::Error> {
+    let http1_automatic_date_header = response
+        .extensions()
+        .get::<Http1AutomaticDateHeader>()
+        .is_some();
     let (mut parts, body) = response.into_parts();
     let mut header_order_prefix = parts.extensions.get::<HeaderOrder>().map(|_| Vec::new());
     let mut headers = HeaderMap::new();
-    if server.date_header {
+    if server.date_header && !http1_automatic_date_header {
         let date = httpdate::fmt_http_date(std::time::SystemTime::now());
         #[cfg(coverage)]
         let date_bytes =

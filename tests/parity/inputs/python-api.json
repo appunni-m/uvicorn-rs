@@ -3174,6 +3174,21 @@
       }
     },
     {
+      "case_id": "python-api.server-on-handles-lifespan-shutdown-app-exception",
+      "profile": "python-api",
+      "operation": "python.api.server-lifespan-shutdown-exception",
+      "covers": [
+        "python.api.server-lifespan-shutdown-exception"
+      ],
+      "api": {
+        "server_lifespan_startup": {
+          "lifespan": "on",
+          "app_lifespan": "raises-during-shutdown",
+          "timeout_seconds": 3
+        }
+      }
+    },
+    {
       "case_id": "python-api.server-on-rejects-unexpected-lifespan-startup-event",
       "profile": "python-api",
       "operation": "python.api.server-lifespan-startup",

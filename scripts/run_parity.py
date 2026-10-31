@@ -4282,6 +4282,7 @@ def load_contract(
                 "python.api.server-lifespan-startup",
                 "python.api.server-lifespan-auto-fallback",
                 "python.api.server-lifespan-early-return",
+                "python.api.server-lifespan-shutdown-exception",
             }:
                 exact_keys(case["api"], {"server_lifespan_startup"}, f"{case_id}.api")
                 startup = case["api"]["server_lifespan_startup"]
@@ -4294,18 +4295,31 @@ def load_contract(
                     "python.api.server-lifespan-startup": {"on"},
                     "python.api.server-lifespan-auto-fallback": {"auto"},
                     "python.api.server-lifespan-early-return": {"auto", "on"},
+                    "python.api.server-lifespan-shutdown-exception": {"on"},
                 }[case["operation"]]
                 if startup["lifespan"] not in expected_lifespan:
                     raise ParityError(
                         f"{case_id}.api.server_lifespan_startup.lifespan must be one of {sorted(expected_lifespan)}"
                     )
-                if startup["app_lifespan"] not in {
-                    "raises-before-startup",
-                    "unexpected-startup-event",
-                    "returns-before-startup-event",
-                }:
+                expected_app_lifespan = {
+                    "python.api.server-lifespan-startup": {
+                        "raises-before-startup",
+                        "unexpected-startup-event",
+                    },
+                    "python.api.server-lifespan-auto-fallback": {
+                        "raises-before-startup",
+                        "unexpected-startup-event",
+                    },
+                    "python.api.server-lifespan-early-return": {
+                        "returns-before-startup-event",
+                    },
+                    "python.api.server-lifespan-shutdown-exception": {
+                        "raises-during-shutdown",
+                    },
+                }[case["operation"]]
+                if startup["app_lifespan"] not in expected_app_lifespan:
                     raise ParityError(
-                        f"{case_id}.api.server_lifespan_startup.app_lifespan must be raises-before-startup, unexpected-startup-event, or returns-before-startup-event"
+                        f"{case_id}.api.server_lifespan_startup.app_lifespan must be one of {sorted(expected_app_lifespan)}"
                     )
                 timeout_seconds = startup["timeout_seconds"]
                 if type(timeout_seconds) is not int or not 2 <= timeout_seconds <= 8:
@@ -4850,14 +4864,14 @@ def load_contract(
                     or len(requests) != 2
                     or any(not isinstance(request, dict) for request in requests)
                     or requests[0].get("path")
-                    != "/response-header-capacity?count=24574"
+                    != "/response-header-capacity?count=24575"
                     or requests[1].get("path") != "/scope"
                     or any(request.get("method") != "GET" for request in requests)
                     or any(request.get("headers") != [] for request in requests)
                     or any(request.get("body_base64") != "" for request in requests)
                 ):
                     raise ParityError(
-                        f"{case_id}: HTTP/1 response-header boundary requires 24,574 application names and a same-connection follow-up"
+                        f"{case_id}: HTTP/1 response-header boundary requires 24,575 application names and a same-connection follow-up"
                     )
             if "load" in case:
                 sequence_keys.add("load")
@@ -7692,6 +7706,8 @@ def http1_response_header_capacity_sequence(
             "body_base64": base64.b64encode(body_bytes).decode("ascii"),
             "capacity_header_count": application_header_count,
             "capacity_header_sha256": application_header_digest.hexdigest(),
+            "server_header_count": len(headers.get(b"server", [])),
+            "date_header_count": len(headers.get(b"date", [])),
             "connection_closed": b"close" in b",".join(
                 headers.get(b"connection", [])
             ).lower(),

@@ -3299,6 +3299,13 @@ async def server_lifespan_startup_observation(request: dict) -> dict[str, object
                 startup = await receive()
                 if startup["type"] == "lifespan.startup":
                     await send({"type": "lifespan.shutdown.complete"})
+            if request["app_lifespan"] == "raises-during-shutdown":
+                startup = await receive()
+                if startup["type"] == "lifespan.startup":
+                    await send({"type": "lifespan.startup.complete"})
+                shutdown = await receive()
+                if shutdown["type"] == "lifespan.shutdown":
+                    raise RuntimeError("parity lifespan shutdown exception")
         elif scope["type"] == "http":
             await send({"type": "http.response.start", "status": 204, "headers": []})
             await send({"type": "http.response.body", "body": b""})

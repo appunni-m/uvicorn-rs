@@ -79,21 +79,29 @@ def log_concurrency_limit_rejection(
 async def invoke(app, scope, io):
     scope_type = scope.get("type")
     response_started = False
+    lifespan_phase = "startup"
+    lifespan_failure_signaled = False
     if scope_type == "lifespan":
         error_logger.info("Waiting for application startup.")
 
     async def receive():
+        nonlocal lifespan_phase
         result = io.receive()
         if isinstance(result, dict):
             message = result
         else:
             message = await result
-        if scope_type == "lifespan" and message.get("type") == "lifespan.shutdown":
-            error_logger.info("Waiting for application shutdown.")
+        if scope_type == "lifespan":
+            message_type = message.get("type")
+            if message_type == "lifespan.startup":
+                lifespan_phase = "startup"
+            elif message_type == "lifespan.shutdown":
+                lifespan_phase = "shutdown"
+                error_logger.info("Waiting for application shutdown.")
         return message
 
     async def send(message):
-        nonlocal response_started
+        nonlocal response_started, lifespan_failure_signaled
         if (
             scope_type == "http"
             and isinstance(message, dict)
@@ -114,6 +122,11 @@ async def invoke(app, scope, io):
                 error_logger.info("Application startup complete.")
             elif event_type == "lifespan.shutdown.complete":
                 error_logger.info("Application shutdown complete.")
+            elif event_type in (
+                "lifespan.startup.failed",
+                "lifespan.shutdown.failed",
+            ):
+                lifespan_failure_signaled = True
         elif scope_type == "http" and event_type == "http.response.start":
             if access_logger.hasHandlers():
                 client = scope.get("client")
@@ -133,6 +146,21 @@ async def invoke(app, scope, io):
     try:
         await app(scope, receive, send)
     except BaseException as error:
+        if scope_type == "lifespan":
+            # Keep Python exceptions on their owning asyncio loop. Uvicorn
+            # converts these failures into lifecycle state, so send the same
+            # state transition through the native bridge after logging them.
+            if lifespan_failure_signaled:
+                return
+            if io.is_auto:
+                error_logger.info("ASGI 'lifespan' protocol appears unsupported.")
+            else:
+                error_logger.error(
+                    "Exception in 'lifespan' protocol\n",
+                    exc_info=(type(error), error, error.__traceback__),
+                )
+            io.report_exception(lifespan_phase)
+            return
         if scope_type != "http":
             raise
         if response_started:

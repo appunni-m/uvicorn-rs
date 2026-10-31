@@ -1505,8 +1505,10 @@
             "status": 200,
             "content_type": null,
             "body_base64": "aGVhZGVycyBhY2NlcHRlZA==",
-            "capacity_header_count": 24574,
-            "capacity_header_sha256": "ce3366e5ba3acd8514a8cf336e56e7624b87e671682302aa42a06864d41f7c4f",
+            "capacity_header_count": 24575,
+            "capacity_header_sha256": "cd6a6f681ddbdf31466cc179a447e826f48da66d773abd498662f47ecd9f3f6b",
+            "server_header_count": 1,
+            "date_header_count": 1,
             "connection_closed": false
           },
           {
@@ -1515,6 +1517,8 @@
             "body_base64": "eyJodHRwX3ZlcnNpb24iOiIxLjEiLCJtZXRob2QiOiJHRVQiLCJzY2hlbWUiOiJodHRwIiwicGF0aCI6Ii9zY29wZSIsInF1ZXJ5X3N0cmluZ19iYXNlNjQiOiIiLCJ4LXBhcml0eSI6IiIsImJvZHlfYmFzZTY0IjoiIn0=",
             "capacity_header_count": 0,
             "capacity_header_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "server_header_count": 1,
+            "date_header_count": 1,
             "connection_closed": false
           }
         ]
@@ -3749,6 +3753,39 @@
       "compare": [
         "exit_code",
         "stderr_base64",
+        "server_started_before_shutdown",
+        "serve_task_finished_before_shutdown",
+        "serve_raised",
+        "serve_timed_out",
+        "server_exit_code",
+        "serve_exception_class"
+      ],
+      "required_observations": {
+        "exit_code": 0,
+        "server_started_before_shutdown": true,
+        "serve_task_finished_before_shutdown": false,
+        "serve_raised": false,
+        "serve_timed_out": true,
+        "server_exit_code": null
+      }
+    },
+    {
+      "id": "python.api.server-lifespan-shutdown-exception",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "stdout_base64",
+        "stderr_base64",
+        "server_started_before_shutdown",
+        "serve_task_finished_before_shutdown",
+        "serve_raised",
+        "serve_timed_out",
+        "server_exit_code",
+        "serve_exception_class",
+        "serve_exception_message"
+      ],
+      "compare": [
+        "exit_code",
         "server_started_before_shutdown",
         "serve_task_finished_before_shutdown",
         "serve_raised",
