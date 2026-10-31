@@ -872,7 +872,10 @@ async def _app_impl(scope, receive, send):
         _record("http2.response-trailers.final-send-returned")
         return
     if path == "/response-trailers-capacity":
-        headers = _header_capacity_headers(scope["query_string"])
+        # The shared capacity generator appends Content-Length for response
+        # header tests; that field is forbidden in HTTP/2 trailers, so keep
+        # this probe limited to its generated x-capacity fields.
+        headers = _header_capacity_headers(scope["query_string"])[:-1]
         await send({
             "type": "http.response.start",
             "status": 200,

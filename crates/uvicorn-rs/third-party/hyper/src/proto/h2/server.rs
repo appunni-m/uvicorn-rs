@@ -16,7 +16,7 @@ use crate::body::{Body, Incoming as IncomingBody};
 use crate::common::date;
 use crate::common::io::Compat;
 use crate::common::time::Time;
-use crate::ext::Protocol;
+use crate::ext::{Protocol, ResponseTrailerOrder};
 use crate::headers;
 use crate::proto::h2::ping::Recorder;
 use crate::proto::Dispatched;
@@ -543,9 +543,14 @@ where
                             headers::set_content_length_if_missing(res.headers_mut(), len);
                         }
 
+                        let trailer_order = res.extensions().get::<ResponseTrailerOrder>().cloned();
                         let body_tx = reply!(me, res, false);
                         H2StreamState::Body {
-                            pipe: PipeToSendStream::new(body, body_tx),
+                            pipe: PipeToSendStream::new_with_trailer_order(
+                                body,
+                                body_tx,
+                                trailer_order,
+                            ),
                         }
                     } else {
                         reply!(me, res, true);

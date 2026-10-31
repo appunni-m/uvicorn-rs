@@ -1484,10 +1484,10 @@ the allow-listed point, and `oracle_observation: null`. The historical 235
 fault-contract cases cover HTTP, WebSocket, HTTP/2, HTTP/3, lifespan, server
 startup, and native binding error paths. Their specific contracts verify
 observable failure handling and cleanup; they are not oracle-equivalence cases.
-The three `support.*` header-capacity rows use harness-only `public.*` selectors
-and ordinary valid ASGI input. They do not write a native fault-control file.
-They declare target support behavior in the same result envelope and remain
-outside the oracle-parity denominator. The HTTP/1 response-capacity oracle
+The `support.http1.response-header-overflow-delivers` row uses a harness-only
+`public.*` selector and ordinary valid ASGI input. It does not write a native
+fault-control file. It declares target support behavior in the same result
+envelope and remains outside the oracle-parity denominator. The HTTP/1 response-capacity oracle
 cases use a bounded raw-wire observer, because Python's standard response
 parser caps the number of header lines. They send 24,575, 24,576 and 32,769 app
 fields plus the default `Server` and `Date` names. Each compares status, body,
@@ -1506,14 +1506,14 @@ does not provide HTTP/2. The HTTP/1 and HTTP/2 encoders retain overflow fields
 outside `http::HeaderMap`; H1 order reconstruction uses a linear index so large
 field lists do not trigger a quadratic scan.
 
-The separate
-`http2.response-trailer-capacity-delivery` oracle case sends 24,576 distinct
-trailers and compares their count, canonical SHA-256, stream completion, and a
-healthy same-connection request with Hypercorn 0.18.0. The
-`support.http2.response-trailer-capacity-reset-recovers` case sends the next
-distinct name and checks for zero partial trailers, an HTTP/2
-`RST_STREAM INTERNAL_ERROR`, and a healthy same-connection follow-up. The
-HTTP/2 trailer cap is separate from HTTP response-header overflow handling.
+The HTTP/2 trailer-capacity oracle cases send 24,576, 24,577, and 32,769
+distinct trailers and compare their count, canonical SHA-256, stream completion,
+and a healthy same-connection request with Hypercorn 0.18.0. The candidate
+retains fields beyond the `http` 1.5.0 `HeaderMap` boundary in an ordered
+transport sidecar, matching the reference's delivery of these finite valid
+responses. Uvicorn 0.54.0 has no HTTP/2 server, so these are extension-parity
+cases against the pinned HTTP/2 reference rather than claims about Uvicorn's
+protocol set.
 
 The HTTP/3 request-trailer input is another target-only support contract using
 ordinary protocol input, not an injected Rust fault. The current result schema

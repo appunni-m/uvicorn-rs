@@ -244,6 +244,41 @@ impl HeaderOrder {
 #[cfg(all(feature = "server", feature = "http2"))]
 pub use h2::ext::HeaderOrder;
 
+/// Shared metadata used to preserve an HTTP/2 response's trailer field order.
+///
+/// The response body can finish producing trailers after Hyper has already
+/// sent the response headers. Store this extension on the response and share
+/// a completed `HeaderOrder` with the HTTP/2 body encoder when the trailer
+/// frame is produced.
+#[cfg(feature = "http2")]
+#[doc(hidden)]
+#[derive(Clone, Debug, Default)]
+pub struct ResponseTrailerOrder(std::sync::Arc<std::sync::Mutex<Option<h2::ext::HeaderOrder>>>);
+
+#[cfg(feature = "http2")]
+impl ResponseTrailerOrder {
+    /// Creates an empty shared response trailer order.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the completed order used to encode the response trailer fields.
+    #[doc(hidden)]
+    pub fn set(&self, order: h2::ext::HeaderOrder) {
+        *self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(order);
+    }
+
+    pub(crate) fn take(&self) -> Option<h2::ext::HeaderOrder> {
+        self.0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+    }
+}
+
 #[cfg(all(any(feature = "client", feature = "server"), feature = "http1"))]
 impl HeaderCaseMap {
     /// Returns a view of all spellings associated with that header name,

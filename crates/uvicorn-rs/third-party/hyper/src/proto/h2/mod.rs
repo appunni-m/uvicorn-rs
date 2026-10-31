@@ -12,6 +12,7 @@ use http::HeaderMap;
 use pin_project_lite::pin_project;
 
 use crate::body::Body;
+use crate::ext::ResponseTrailerOrder;
 
 pub(crate) mod ping;
 pub(crate) mod upgrade;
@@ -103,6 +104,7 @@ pin_project! {
         // it survives across `Poll::Pending` returns from `poll_capacity`; if
         // we left the chunk in a local, it would be dropped on every repoll.
         buffered_data: Option<Peeked<S::Data>>,
+        trailer_order: Option<ResponseTrailerOrder>,
         #[pin]
         stream: S,
     }
@@ -122,6 +124,22 @@ where
             body_tx: tx,
             data_done: false,
             buffered_data: None,
+            trailer_order: None,
+            stream,
+        }
+    }
+
+    #[cfg(feature = "server")]
+    fn new_with_trailer_order(
+        stream: S,
+        tx: SendStream<SendBuf<S::Data>>,
+        trailer_order: Option<ResponseTrailerOrder>,
+    ) -> PipeToSendStream<S> {
+        PipeToSendStream {
+            body_tx: tx,
+            data_done: false,
+            buffered_data: None,
+            trailer_order,
             stream,
         }
     }
@@ -238,8 +256,13 @@ where
                     } else if frame.is_trailers() {
                         // no more DATA, so give any capacity back
                         me.body_tx.reserve_capacity(0);
+                        let trailers = frame.into_trailers().unwrap_or_else(|_| unreachable!());
+                        let header_order = me
+                            .trailer_order
+                            .as_ref()
+                            .and_then(ResponseTrailerOrder::take);
                         me.body_tx
-                            .send_trailers(frame.into_trailers().unwrap_or_else(|_| unreachable!()))
+                            .send_trailers_with_order(trailers, header_order.as_ref())
                             .map_err(crate::Error::new_body_write)?;
                         return Poll::Ready(Ok(()));
                     } else {

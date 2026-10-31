@@ -571,7 +571,6 @@ FAULT_CONTRACTS = {
     "http-request-body-conversion-error-caught",
     "server-startup-acknowledgement-drop-cleans-listener",
     "http-response-header-overflow-delivery-followup-200",
-    "http2-response-trailer-capacity-limit-reset-followup-200",
     "websocket-header-capacity-error-followup-200",
     "http-start-error-close-followup-200",
     "http-response-body-error-followup-200",
@@ -1236,20 +1235,6 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: public HTTP header overflow requires 32,769 fields and a same-connection follow-up"
-                    )
-            elif fault["contract"] == "http2-response-trailer-capacity-limit-reset-followup-200":
-                requests = case.get("request_sequence", [])
-                if (
-                    case.get("profile") != "http2"
-                    or case.get("operation") != "http2.response-trailer-capacity-rejection"
-                    or fault["point"] != "public.http2-response-trailer-capacity"
-                    or len(requests) != 2
-                    or requests[0].get("path") != "/response-trailers-capacity?count=24577"
-                    or requests[0].get("headers") != [["te", "trailers"]]
-                    or requests[1].get("path") != "/scope"
-                ):
-                    raise ParityError(
-                        f"{case_id}: public HTTP/2 trailer capacity requires one over-limit response and a same-connection recovery request"
                     )
             elif fault["contract"] == "asgi-spec-version-2.5":
                 http_path = case.get("request", {}).get("path")
@@ -4853,7 +4838,8 @@ def load_contract(
                 "http.concurrent-streams", "http.concurrent-stream-load",
                 "http2.response-header-capacity-delivery",
                 "http2.response-trailer-capacity-delivery",
-                "http2.response-trailer-capacity-rejection",
+                "http2.response-trailer-capacity-one-over-parity",
+                "http2.response-trailer-capacity-large-parity",
             }:
                 raise ParityError(f"{case_id}: HTTP/2 request sequences require the concurrent-streams operation")
             if kind == "http3" and case["operation"] not in {
@@ -4940,27 +4926,15 @@ def load_contract(
                     )
             if kind == "http2" and case["operation"] in {
                 "http2.response-trailer-capacity-delivery",
-                "http2.response-trailer-capacity-rejection",
+                "http2.response-trailer-capacity-one-over-parity",
+                "http2.response-trailer-capacity-large-parity",
             }:
-                expected_count = (
-                    24576
-                    if case["operation"] == "http2.response-trailer-capacity-delivery"
-                    else 24577
-                )
+                expected_count = {
+                    "http2.response-trailer-capacity-delivery": 24576,
+                    "http2.response-trailer-capacity-one-over-parity": 24577,
+                    "http2.response-trailer-capacity-large-parity": 32769,
+                }[case["operation"]]
                 verification = case.get("verification", "oracle-parity")
-                expected_verification = (
-                    "oracle-parity"
-                    if case["operation"] == "http2.response-trailer-capacity-delivery"
-                    else "fault-contract"
-                )
-                fault = case.get("fault")
-                valid_fault = (
-                    case["operation"] == "http2.response-trailer-capacity-rejection"
-                    and isinstance(fault, dict)
-                    and fault.get("point") == "public.http2-response-trailer-capacity"
-                    and fault.get("contract")
-                    == "http2-response-trailer-capacity-limit-reset-followup-200"
-                )
                 if (
                     not isinstance(requests, list)
                     or len(requests) != 2
@@ -4974,15 +4948,8 @@ def load_contract(
                     or requests[1].get("path") != "/scope"
                     or requests[1].get("headers") != []
                     or requests[1].get("body_base64") != ""
-                    or verification != expected_verification
-                    or (
-                        case["operation"] == "http2.response-trailer-capacity-delivery"
-                        and "fault" in case
-                    )
-                    or (
-                        case["operation"] == "http2.response-trailer-capacity-rejection"
-                        and not valid_fault
-                    )
+                    or verification != "oracle-parity"
+                    or "fault" in case
                 ):
                     raise ParityError(
                         f"{case_id}: HTTP/2 trailer capacity requires its exact finite boundary input and same-connection follow-up"
@@ -8812,7 +8779,7 @@ def http2_response_trailer_capacity_sequence(
 
         application_events = read_events(events_path)[events_before:]
         expected_events: set[str] = set()
-        if first_terminal == "ended" and len(trailers) == 24576:
+        if first_terminal == "ended" and len(trailers) in {24576, 24577, 32769}:
             expected_events = {
                 "http2.response-trailer-capacity.first-send-returned",
                 "http2.response-trailer-capacity.final-send-returned",
@@ -11503,7 +11470,8 @@ def execute_case(
                 )
             if case["operation"] in {
                 "http2.response-trailer-capacity-delivery",
-                "http2.response-trailer-capacity-rejection",
+                "http2.response-trailer-capacity-one-over-parity",
+                "http2.response-trailer-capacity-large-parity",
             }:
                 return http2_response_trailer_capacity_sequence(
                     server["port"], case["request_sequence"], server["events"]
@@ -12879,26 +12847,6 @@ def fault_contract_matches(
             and responses[1].get("status") == 200
             and responses[1].get("connection_closed") is False
             and not any(event.startswith("http.header-capacity.error:") for event in events)
-        )
-    if fault["contract"] == "http2-response-trailer-capacity-limit-reset-followup-200":
-        responses = observation.get("responses", [])
-        return (
-            len(responses) == 2
-            and responses[0].get("status") == 200
-            and responses[0].get("body_base64")
-            == base64.b64encode(b"trailer capacity probe").decode("ascii")
-            and responses[1].get("status") == 200
-            and observation.get("response_trailer_count") == 0
-            and observation.get("response_trailer_sha256")
-            == hashlib.sha256().hexdigest()
-            and observation.get("response_stream_terminal") == "reset"
-            and observation.get("response_stream_reset_error_code")
-            == int(ErrorCodes.INTERNAL_ERROR)
-            and observation.get("connection_reused") is True
-            and observation.get("followup_status") == 200
-            and observation.get("followup_healthy") is True
-            and observation.get("application_events")
-            == ["http2.response-trailer-capacity.first-send-returned"]
         )
     if fault["contract"] == "websocket-header-capacity-error-followup-200":
         followup = observation.get("followup_response")

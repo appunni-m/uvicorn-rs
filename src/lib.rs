@@ -49,7 +49,7 @@ use http_body::{Body, Frame, SizeHint};
 use http_body_util::combinators::UnsyncBoxBody;
 use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming;
-use hyper::ext::HeaderOrder;
+use hyper::ext::{HeaderOrder, ResponseTrailerOrder};
 #[cfg(not(uvicorn_rs_native_transport))]
 use hyper::service::service_fn;
 #[cfg(not(uvicorn_rs_native_transport))]
@@ -2744,6 +2744,14 @@ struct ResponseStart {
     trailers: bool,
 }
 
+#[derive(Default)]
+struct ResponseTrailerFields {
+    headers: HeaderMap,
+    header_order: Vec<HeaderName>,
+    overflow_headers: Vec<(HeaderName, HeaderValue)>,
+    unique_header_names: usize,
+}
+
 #[derive(Clone, Copy)]
 struct Http1AutomaticDateHeader;
 
@@ -3662,8 +3670,8 @@ struct AsgiIo {
     response_body_completed: Arc<AtomicBool>,
     response_content_length_satisfied: Arc<AtomicBool>,
     response_trailers_expected: AtomicBool,
-    response_trailer_headers: StdMutex<HeaderMap>,
-    response_trailer_header_names: AtomicUsize,
+    response_trailer_fields: StdMutex<ResponseTrailerFields>,
+    response_trailer_order: Option<ResponseTrailerOrder>,
     default_response_header_names: Vec<HeaderName>,
     response_header_overflow_supported: bool,
     request_allows_response_trailers: bool,
@@ -4128,17 +4136,21 @@ impl AsgiIo {
                     if coverage_fault_take(CoverageFaultPoint::HttpResponseTrailersMutexPoison) {
                         let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                             let _guard = slf
-                                .response_trailer_headers
+                                .response_trailer_fields
                                 .lock()
                                 .unwrap_or_else(std::sync::PoisonError::into_inner);
                             coverage_panic("coverage-injected response trailers mutex poison");
                         }));
                     }
-                    let mut accumulated = slf.response_trailer_headers.lock().map_err(|_| {
+                    let mut accumulated = slf.response_trailer_fields.lock().map_err(|_| {
                         PyRuntimeError::new_err("HTTP response trailers lock poisoned")
                     })?;
-                    let mut unique_header_names =
-                        slf.response_trailer_header_names.load(Ordering::Acquire);
+                    let ResponseTrailerFields {
+                        headers: trailer_headers,
+                        header_order: trailer_header_order,
+                        overflow_headers,
+                        unique_header_names,
+                    } = &mut *accumulated;
                     for (name, value) in header_values {
                         let mut name = name.to_vec();
                         name.make_ascii_lowercase();
@@ -4163,22 +4175,30 @@ impl AsgiIo {
                             .map_err(|_| PyRuntimeError::new_err("Invalid HTTP header name."))?;
                         let value = HeaderValue::from_bytes(&value)
                             .map_err(|_| PyRuntimeError::new_err("Invalid HTTP header value."))?;
-                        append_response_header(
-                            &mut accumulated,
+                        let ordered_name = name.clone();
+                        append_response_header_with_overflow(
+                            trailer_headers,
+                            overflow_headers,
                             name,
                             value,
-                            &mut unique_header_names,
+                            unique_header_names,
                             &[],
-                            "trailers",
                         )?;
+                        trailer_header_order.push(ordered_name);
                     }
-                    slf.response_trailer_header_names
-                        .store(unique_header_names, Ordering::Release);
                     if more_trailers {
                         return Ok(py.None().into_bound(py));
                     }
                     if slf.request_allows_response_trailers {
-                        ResponseChunk::Trailers(std::mem::take(&mut *accumulated))
+                        let mut header_order =
+                            HeaderOrder::new(std::mem::take(trailer_header_order));
+                        for (name, value) in std::mem::take(overflow_headers) {
+                            header_order.append_overflow_field(name, value);
+                        }
+                        if let Some(shared_order) = &slf.response_trailer_order {
+                            shared_order.set(header_order);
+                        }
+                        ResponseChunk::Trailers(std::mem::take(trailer_headers))
                     } else {
                         ResponseChunk::End
                     }
@@ -9902,6 +9922,7 @@ async fn handle_request_parts(
             .get_all(http::header::TE)
             .iter()
             .any(|value| trim_ascii(value.as_bytes()).eq_ignore_ascii_case(b"trailers"));
+    let response_trailer_order = request_allows_response_trailers.then(ResponseTrailerOrder::new);
     let http2_informational = parts
         .extensions
         .get::<hyper::ext::Http2InformationalSender>()
@@ -9935,6 +9956,7 @@ async fn handle_request_parts(
     let app_response_started = Arc::clone(&response_started);
     let app_response_body_completed = Arc::clone(&response_body_completed);
     let app_response_content_length_satisfied = Arc::clone(&response_content_length_satisfied);
+    let app_response_trailer_order = response_trailer_order.clone();
     let preserve_application_on_disconnect = Arc::new(AtomicBool::new(false));
     let app_preserve_application_on_disconnect = Arc::clone(&preserve_application_on_disconnect);
     let app_task_tracker = context.server.pending_python_tasks.clone();
@@ -9968,8 +9990,8 @@ async fn handle_request_parts(
                         response_body_completed: app_response_body_completed,
                         response_content_length_satisfied: app_response_content_length_satisfied,
                         response_trailers_expected: AtomicBool::new(false),
-                        response_trailer_headers: StdMutex::new(HeaderMap::new()),
-                        response_trailer_header_names: AtomicUsize::new(0),
+                        response_trailer_fields: StdMutex::new(ResponseTrailerFields::default()),
+                        response_trailer_order: app_response_trailer_order,
                         default_response_header_names,
                         response_header_overflow_supported,
                         request_allows_response_trailers,
@@ -10108,6 +10130,11 @@ async fn handle_request_parts(
     }
     let mut response = response(start.status, body, start.headers);
     response.extensions_mut().insert(header_order);
+    if trailers_expected {
+        if let Some(trailer_order) = response_trailer_order {
+            response.extensions_mut().insert(trailer_order);
+        }
+    }
     if matches!(http_version, Version::HTTP_10 | Version::HTTP_11) {
         response.extensions_mut().insert(Http1AutomaticDateHeader);
     }

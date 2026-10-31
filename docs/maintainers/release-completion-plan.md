@@ -63,11 +63,11 @@ coverage total or close the lifecycle task.
 The maintainer requires compatibility, a demonstrated improvement, or the
 applicable specification; documenting an exception is insufficient. Custom
 Python HTTP/WebSocket protocol classes and `ssl_context_factory` remain
-unimplemented. The oversized-trailer live probe also remains unresolved:
-the native adapter rejects its field count while the oracle sends a field block
-that exceeds the probe client's decoder limit. Its failed diagnostic is retained
-at `target/ci537/trailer-capacity-parity.json`; it is not a passing fault contract.
-Resolve these differences before closing compatibility or starting benchmarks.
+unimplemented. At the time of this diagnosis, the oversized-trailer probe was
+also unresolved because the oracle response exceeded the probe client's decoder
+limit. The focused follow-up below raises that finite budget and records live
+oracle parity for the candidate's trailer-overflow fix. That local result does
+not close the broader compatibility inventory.
 
 ### Compatibility follow-up — 2026-10-31
 
@@ -111,6 +111,29 @@ the response was formed; the retained diagnostic is
 The bounded presence-check/`try_append` fix is included in the passing wheel.
 These are local dirty-source receipts; they do not replace the hosted protocol
 matrix or close WebSocket capacity compatibility.
+
+CI #546 on source `399b94e` recorded 750/751 installed-wheel parity cases; its
+only mismatch was the old 24,576-trailer fixture, which included the response
+header generator's `Content-Length` field as a trailer. The corrected fixture
+now excludes that field, and the current selected batch passes the valid
+24,576-trailer case plus the 24,577 and 32,769 overflow cases.
+
+The response-trailer follow-up exercises 24,576, 24,577 and 32,769 distinct
+trailers with the client's finite 2 MiB decoded header-list budget. It replaces
+the obsolete target-only reset contract with live parity against the pinned
+Hypercorn 0.18.0 HTTP/2 reference. The installed macOS ARM64 wheel
+`target/trailer-overflow-wheels/uvicorn_rs-0.3.0-cp39-abi3-macosx_11_0_arm64.whl`
+(SHA-256 `a78e0dae82eec99cad7b05983983017f65fbe0f86540eb549ba698587550ba4f`)
+passes all three cases, matching trailer count and digest, stream completion,
+both application send-return events, and healthy same-connection `/scope`
+responses. The selected report is
+`target/kata-progress/trailer-overflow-parity-20261031/parity.json` (SHA-256
+`1ddc653d52b81725c1e9bc492de13295ac063397b1cb4f1e27e18afa3739db2f`); it
+records 3/3 passed, no failures or infrastructure errors, and source digest
+`40e2475961a2b6e04a5e31d9546cca0a37e893c0b4a32b456ee957ca2884ae36`. Local
+formatting, all-feature Cargo check, and strict adapter Clippy pass. This run
+used a dirty worktree, so it is focused development evidence; consume the
+resulting exact-source hosted checks before it qualifies release.
 
 The TLS floor has a standards-based proof in
 `target/ci537/obsolete-tls-controlled/coverage-report.json` (SHA-256

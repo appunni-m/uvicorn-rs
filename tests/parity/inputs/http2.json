@@ -786,17 +786,34 @@
       ]
     },
     {
-      "case_id": "support.http2.response-trailer-capacity-reset-recovers",
+      "case_id": "http2.response-trailer-capacity-large-parity",
       "profile": "http2",
-      "operation": "http2.response-trailer-capacity-rejection",
+      "operation": "http2.response-trailer-capacity-large-parity",
       "covers": [
-        "http2.response-trailer-capacity-rejection"
+        "http2.response-trailer-capacity-large-parity"
       ],
-      "verification": "fault-contract",
-      "fault": {
-        "point": "public.http2-response-trailer-capacity",
-        "contract": "http2-response-trailer-capacity-limit-reset-followup-200"
-      },
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/response-trailers-capacity?count=32769",
+          "headers": [["te", "trailers"]],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/scope",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
+      "case_id": "http2.response-trailer-capacity-one-over-parity",
+      "profile": "http2",
+      "operation": "http2.response-trailer-capacity-one-over-parity",
+      "covers": [
+        "http2.response-trailer-capacity-one-over-parity"
+      ],
       "request_sequence": [
         {
           "method": "GET",

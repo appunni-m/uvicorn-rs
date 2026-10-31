@@ -1215,6 +1215,15 @@ impl<B> StreamRef<B> {
     }
 
     pub fn send_trailers(&mut self, trailers: HeaderMap) -> Result<(), UserError> {
+        self.send_trailers_with_order(trailers, None)
+    }
+
+    /// Sends response trailers using an optional response field order.
+    pub fn send_trailers_with_order(
+        &mut self,
+        trailers: HeaderMap,
+        header_order: Option<&HeaderOrder>,
+    ) -> Result<(), UserError> {
         let mut me = self.opaque.inner.lock().unwrap();
         let me = &mut *me;
 
@@ -1225,7 +1234,15 @@ impl<B> StreamRef<B> {
 
         me.counts.transition(stream, |counts, stream| {
             // Create the trailers frame
-            let frame = frame::Headers::trailers(stream.id, trailers);
+            let frame = if let Some(header_order) = header_order {
+                frame::Headers::trailers_with_order(
+                    stream.id,
+                    trailers,
+                    Some(header_order),
+                )
+            } else {
+                frame::Headers::trailers(stream.id, trailers)
+            };
 
             // Send the trailers frame
             actions

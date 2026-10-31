@@ -1252,7 +1252,33 @@
       }
     },
     {
-      "id": "http2.response-trailer-capacity-rejection",
+      "id": "http2.response-trailer-capacity-one-over-parity",
+      "kind": "protocol_operation",
+      "observe": [
+        "responses",
+        "response_trailer_count",
+        "response_trailer_sha256",
+        "response_stream_terminal",
+        "response_stream_reset_error_code",
+        "connection_reused",
+        "followup_status",
+        "followup_healthy",
+        "application_events"
+      ],
+      "compare": [
+        "responses",
+        "response_trailer_count",
+        "response_trailer_sha256",
+        "response_stream_terminal",
+        "response_stream_reset_error_code",
+        "connection_reused",
+        "followup_status",
+        "followup_healthy",
+        "application_events"
+      ]
+    },
+    {
+      "id": "http2.response-trailer-capacity-large-parity",
       "kind": "protocol_operation",
       "observe": [
         "responses",

@@ -171,16 +171,32 @@ impl Headers {
     }
 
     pub fn trailers(stream_id: StreamId, fields: HeaderMap) -> Self {
+        Self::trailers_with_order(stream_id, fields, None)
+    }
+
+    /// Creates a trailer HEADERS frame with an optional ordered field list.
+    pub(crate) fn trailers_with_order(
+        stream_id: StreamId,
+        fields: HeaderMap,
+        order: Option<&HeaderOrder>,
+    ) -> Self {
         let mut flags = HeadersFlag::default();
         flags.set_end_stream();
+        let ordered_fields = order.map(|order| ordered_fields(&fields, order));
+        let field_size = calculate_headermap_size(&fields)
+            + order
+                .into_iter()
+                .flat_map(HeaderOrder::overflow_fields)
+                .map(|(name, value)| decoded_header_size(name.as_str().len(), value.len()))
+                .sum::<usize>();
 
         Headers {
             stream_id,
             stream_dep: None,
             header_block: HeaderBlock {
-                field_size: calculate_headermap_size(&fields),
+                field_size,
                 fields,
-                ordered_fields: None,
+                ordered_fields,
                 is_over_size: false,
                 pseudo: Pseudo::default(),
             },

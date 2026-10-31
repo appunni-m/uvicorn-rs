@@ -1,4 +1,5 @@
 use crate::codec::UserError;
+use crate::ext::HeaderOrder;
 use crate::frame::Reason;
 use crate::proto::{self, WindowSize};
 
@@ -343,6 +344,17 @@ impl<B: Buf> SendStream<B> {
     /// is closed, no more data can be sent.
     pub fn send_trailers(&mut self, trailers: HeaderMap) -> Result<(), crate::Error> {
         self.inner.send_trailers(trailers).map_err(Into::into)
+    }
+
+    /// Sends trailers to the remote peer using an optional response field order.
+    pub fn send_trailers_with_order(
+        &mut self,
+        trailers: HeaderMap,
+        header_order: Option<&HeaderOrder>,
+    ) -> Result<(), crate::Error> {
+        self.inner
+            .send_trailers_with_order(trailers, header_order)
+            .map_err(Into::into)
     }
 
     /// Resets the stream.
