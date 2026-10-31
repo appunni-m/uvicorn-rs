@@ -94,6 +94,20 @@ inputs before full CI jobs start. Focused selected jobs stay independent.
 No runtime suite was repeated for this metadata correction; let #539 finish
 before advancing the PR again.
 
+The Linux normal wheel in #539 passed all 738 public cases, then its exclusion
+audit rejected a starred expansion in `FAULT_POINTS`: the audit deliberately
+uses literal AST extraction rather than executing the runner. Follow-up
+`0a8c86ff5` restores a literal registry retaining all 329 native selectors and
+adds an early release-evidence regression check. A fresh normal macOS 0.3.0
+wheel passes the repaired three-case binary/public audit, with every exclusion
+check passing (`target/normal-audit-030-receipt/receipt.json`, SHA-256
+`87ec21bb44177d866bffe890d31656249d5c5081489ff8b000e511cad5fb7c83`).
+Both acknowledgement-owner-loss regressions also pass on that installed normal
+wheel (`target/normal-audit-030-startup.json`, SHA-256
+`3e0d42dd5dccc3ea2c148bbc159cb339c2b345933c9866365a6e88857f546a8d`).
+These are selected normal-build receipts at `0a8c86ff5`; they do not turn
+#539's failed job into an accepted full run.
+
 ### Current receipts — 2026-10-31 (full run #536 and focused follow-up)
 
 PR #19 remains draft/open against `main` at
