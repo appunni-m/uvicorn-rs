@@ -39,44 +39,9 @@ so callers that initialize every field must update their literals (or use
 default for native Rust callers. Historical 0.2.2 receipts below retain their
 original versions and do not qualify the 0.3.0 candidate.
 
-PR #19 remains draft against `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`.
-[CI #537](https://github.com/appunni-m/uvicorn-rs/actions/runs/41175891140)
-checks head `9b0309406704e1d03c5f3e99a416f2b634d5f749`. Its Linux normal
-wheel passed all 731 live parity cases, then failed strict evidence validation
-on duplicate JSON fields. The MSRV job rejected TOML syntax before compiling,
-so new macOS/Windows package and Python-floor receipts were skipped. Both
-issues are corrected in the follow-up branch; their fixes still need hosted
-acceptance. The full coverage job remains active.
+PR #19 is open and draft against `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`, with source head `302f629f846a88425fb1cb4b019e85d9145d4a12`. CI [run 41226275306](https://github.com/appunni-m/uvicorn-rs/actions/runs/41226275306) passed the installed-wheel public parity matrix 754/754 on Linux x86-64 and macOS ARM64. At the latest check, Windows x86-64 candidate parity and three-repeat unified coverage were still running. The native FastAPI-RS composition job failed before its live inputs because the example lockfile omitted `socket2`. A local lockfile correction was checked against the pinned FastAPI-RS and Starlette-RS sources: the locked graph resolves without PyO3 and all 17 native inputs pass. That correction is committed locally as `3f85ee07e05f8feddb479be31699907c5c79cc19` and awaits hosted validation.
 
-The latest completed coverage report, from
-[CI #536](https://github.com/appunni-m/uvicorn-rs/actions/runs/41151116481),
-attributed and passed all 1,351 cases and three verification repeats, but
-missed the gate at 14,137/14,251 regions and 10,410/10,463 lines. It applies to
-the earlier source. No accepted current-source independent Coverage-MCP
-receipt or complete current-platform candidate bundle exists.
-
-[Documentation #218](https://github.com/appunni-m/uvicorn-rs/actions/runs/41175891137)
-passed for the #537 source. Later local fixes cover Content-Length completion,
-parser-specific CONNECT admission and WebSocket keepalive error handling.
-A normal macOS ARM64 wheel from clean commit `52c9e74a8d604d8489a71db387077cbcbb5ae753`
-passes its installed consumer checks and the nine affected public inputs;
-this subset is not full platform acceptance. Exact receipts are in the
-[maintainer completion plan](maintainers/release-completion-plan.md).
-
-No exact-main candidate is ready. Complete compatibility, 100% coverage and
-independent review, three-system performance evidence, clean artifact
-inspection and downstream consumers remain release gates. The older Linux
-ARM64 benchmark is incomplete and establishes no general Python FastAPI gain.
-Run parity before benchmarks. Create the immutable version tag only after the
-required evidence is accepted; publish the qualified artifacts in dependency
-order using the maintainer-directed path below.
-
-Main and version-tag protection rulesets, the `pypi` and `crates-io`
-environments, and trusted-publisher configuration were verified. The
-maintainer is the sole collaborator and allowed self-review for the current
-PyPI environment. See the [release completion plan](maintainers/release-completion-plan.md),
-[parity evidence](parity.md), and [coverage evidence](coverage.md).
+The current run does not qualify the final release source. Coverage, an accepted independent Coverage-MCP receipt, complete compatibility, matched three-system FastAPI benchmarks, exact final artifacts, and clean consumers remain required. The maintainer will run their own FastAPI applications after handoff. No `0.3.0` tag or package has been published. Release controls and trusted publishers are configured; see the [completion plan](maintainers/release-completion-plan.md) for exact sequencing.
 
 ## Registry and packaging audit (2026-10-27; earlier source snapshot)
 
@@ -154,18 +119,11 @@ and consumers are verified.
 | PyPI | uvicorn-rs | Optional Python compatibility client for standard Python ASGI applications. It is not required by the Python-free Rust library. |
 | Documentation | README, MkDocs site, and docs.rs | Repository docs deploy through GitHub Pages; crate API docs are generated from published Cargo archives. |
 
-The confirmed PyPI distribution name is `uvicorn-rs`, following the project's `pillow-rs` naming convention. It provides the `uvicorn` import namespace, `uvicorn` command, and `python -m uvicorn` entry point for in-place use. The root Cargo/PyO3 integration package remains `uvicorn-rs-py` internally; that is not the PyPI distribution name. The package also retains its `uvicorn-rs-py` console alias. The exact compatibility scope is recorded in the [support matrix](support-matrix.md); these names do not imply full Uvicorn parity. Cargo 0.2.1 was published from an earlier source commit, so the current-source candidate is synchronized to version 0.2.2. The Cargo manifests, Python project metadata, and lockfiles now say 0.2.2 in the local checkout, and the version synchronization check passes. Inspection artifacts were built from dirty HEAD `5b1ec29201c963d8590c989b07318bb7366d7922`: both Cargo archives, the PyPI sdist, and one macOS ARM64 abi3 wheel. Extracted-archive default and `http3` consumers and isolated Python install/import/CLI checks passed. The Cargo archives record `dirty: true`, so these are not clean, upload-eligible candidate artifacts. PyPI remains unpublished; no clean exact-source candidate or tag has been verified.
+The PyPI distribution is `uvicorn-rs`, following the project's `pillow-rs` naming convention. It provides the `uvicorn` import namespace, `uvicorn` command, and `python -m uvicorn` entry point for in-place use. The root Cargo/PyO3 integration package remains `uvicorn-rs-py`; that internal name and optional console alias are not the PyPI distribution name. The current source metadata declares version `0.3.0`, Python `>=3.9`, Uvicorn-style base dependencies, and a `[standard]` extra. As of 2026-10-31, crates.io lists `0.2.1` as the latest published version of both release crates, while `0.3.0` is not present; PyPI has no published `uvicorn-rs` project release. The exact compatibility scope is in the [support matrix](support-matrix.md). Historical `0.2.2` inspection receipts below are retained as historical evidence and do not describe the current candidate.
 
 The historical 0.1.0 Cargo bootstrap is recorded below. A registry API check on 2026-10-25 returned HTTP 404 for the then-removed `uvicorn-rs`, `uvicorn-rs-h3`, and `uvicorn-rs-h3-quinn` names; the subsequent `uvicorn-rs` 0.2.1 publication is recorded above. The old H3/Quinn package identities are not current release targets. The `uvicorn-rs` package vendors the H3 protocol and Quinn adapter source behind `http3`; it does not depend on separate project-owned H3 crates. `asgi-lifespan-protocol-rs` is the current lifecycle-contract package. The Python adapter depends on `uvicorn-rs`; Rust-native frameworks can depend on `uvicorn-rs` without Python.
 
-The published Cargo workspace packages are 0.2.1. The local candidate
-manifests declare 0.3.0. Dirty-source inspection artifacts exist as described
-above; no clean candidate archives are verified. PyPI 0.3.0 is absent.
-All published Cargo packages require Rust 1.85 or newer, the workspace MSRV
-verified by the locked CI lane.
-The PyPI package requires Python 3.9 or newer and uses the cp39-abi3 wheel ABI.
-The wheel matrix builds Linux x86-64, macOS ARM64, and Windows x86-64 artifacts.
-Those targets do not imply Linux ARM64, musl, or universal macOS wheels.
+As of 2026-10-31, the published Cargo workspace packages are `asgi-lifespan-protocol-rs` 0.2.1 and `uvicorn-rs` 0.2.1; neither has a published 0.3.0 version. The current source declares 0.3.0, uses Rust 1.85 or newer, and builds a Python wheel with the cp39-abi3 ABI for Linux x86-64, macOS ARM64, and Windows x86-64. These are platform targets, not evidence of Linux ARM64, musl, or universal macOS wheels. The 0.3.0 candidate remains unpublished until the final exact-source gates pass.
 
 `asgi-lifespan-protocol-rs` 0.2.0 is registry-visible with checksum
 `3b16049a572461b03e8b1eebe2723933e369f81ce17ecfbfdeafb7fd2cb16f68`. Its

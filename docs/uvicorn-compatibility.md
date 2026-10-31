@@ -13,38 +13,15 @@ published.
 
 ## Current status (2026-10-31)
 
-PR #19 remains draft against `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`.
-[CI #537](https://github.com/appunni-m/uvicorn-rs/actions/runs/41175891140)
-checks head `9b0309406704e1d03c5f3e99a416f2b634d5f749`. Its Linux normal
-wheel passed all 731 live parity cases, then failed strict evidence validation
-on duplicate JSON fields. The MSRV job rejected TOML syntax before compiling,
-so new macOS/Windows package and Python-floor receipts were skipped. Both
-issues are corrected in the follow-up branch; their fixes still need hosted
-acceptance. The full coverage job remains active.
-
-The latest completed coverage report, from
-[CI #536](https://github.com/appunni-m/uvicorn-rs/actions/runs/41151116481),
-attributed and passed all 1,351 cases and three verification repeats, but
-missed the gate at 14,137/14,251 regions and 10,410/10,463 lines. It applies to
-the earlier source. No accepted current-source independent Coverage-MCP
-receipt or complete current-platform candidate bundle exists.
-
-[Documentation #218](https://github.com/appunni-m/uvicorn-rs/actions/runs/41175891137)
-passed for the #537 source. Later local fixes cover Content-Length completion,
-parser-specific CONNECT admission and WebSocket keepalive error handling.
-A normal macOS ARM64 wheel from clean commit `52c9e74a8d604d8489a71db387077cbcbb5ae753`
-passes its installed consumer checks and the nine affected public inputs;
-this subset is not full platform acceptance. Exact receipts are in the
-[maintainer completion plan](maintainers/release-completion-plan.md).
+The `uvicorn-rs` PyPI distribution and version 0.3.0 are not published. PR #19 is still a draft. Its current CI [run 41226275306](https://github.com/appunni-m/uvicorn-rs/actions/runs/41226275306) passed the installed-wheel public parity matrix 754/754 on Linux x86-64 and macOS ARM64. Windows x86-64 parity and unified coverage were still running at the latest check. Full Uvicorn 0.54.0 replacement acceptance, independent coverage review, and clean final candidate artifacts remain open. No broad Python FastAPI performance gain is claimed; matched benchmarks follow compatibility.
 
 | What you need | Current state |
 | --- | --- |
 | Install from PyPI | `uvicorn-rs` has no published release. |
 | Use the `uvicorn` CLI or Python API | Implemented public inventory; complete platform acceptance remains open. |
-| Serve an ASGI app | 731 Linux live inputs pass on #537; its evidence job failed metadata validation. |
-| Use workers, reload, sockets or process controls | Maintained live inputs exist; current full macOS/Windows receipts remain pending. |
-| Install the Windows candidate | Current-source package qualification is pending. |
+| Serve an ASGI app | Linux and macOS ARM64 each passed 754/754 in run 41226275306; Windows and final-source acceptance remain open. |
+| Use workers, reload, sockets or process controls | The maintained input matrix is still undergoing cross-platform acceptance; consult the support matrix for specific verified behavior. |
+| Install the Windows candidate | Windows candidate parity and package qualification are still pending. |
 | Claim a performance advantage | No broad Python FastAPI gain is established. Benchmark work follows parity. |
 
 The Python 3.9 wheel-consumer check is a separate package claim. The pinned

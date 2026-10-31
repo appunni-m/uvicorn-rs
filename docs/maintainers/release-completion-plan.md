@@ -37,7 +37,32 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 ## Execution order and stopping rules
 
-### Latest diagnosis — 2026-10-31
+### Current PR validation — 2026-10-31
+
+PR #19 is open and draft against `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`, with pushed head
+`302f629f846a88425fb1cb4b019e85d9145d4a12`. CI run
+[41226275306](https://github.com/appunni-m/uvicorn-rs/actions/runs/41226275306)
+passed the full installed-wheel public matrix 754/754 on Linux x86-64 and
+macOS ARM64. Windows x86-64 candidate parity and three-repeat unified coverage
+were still running at the latest check. Native FastAPI-RS composition failed
+before live inputs because `examples/native-fastapi-contracts/Cargo.lock` did
+not list `socket2`. The exact pinned local dependency graph now resolves with
+`--locked`, excludes PyO3, and the native composition passes 17/17. That fix and
+a stale contract-doc correction are committed locally as
+`3f85ee07e05f8feddb479be31699907c5c79cc19`; they are not pushed yet so the live
+run can finish without cancellation. The current run therefore does not
+validate that correction.
+
+The Linux and macOS candidate artifacts are preliminary PR artifacts, not the
+final exact-main bundle. Coverage still needs 100% plus independent review;
+benchmarks remain behind compatibility. No 0.3.0 package or tag has been
+published. crates.io currently lists 0.2.1 for each release crate, and PyPI has
+no `uvicorn-rs` project release. The release sequence remains clean local Cargo
+publication of the lifecycle crate then the server crate, followed by the
+`release.yml` PyPI-only action.
+
+### Earlier diagnosis — 2026-10-31 (CI #537)
 
 [CI #537](https://github.com/appunni-m/uvicorn-rs/actions/runs/41175891140)
 finished all 1,370 cases and three verification repeats without case or
@@ -197,7 +222,7 @@ wheel (`target/normal-audit-030-startup.json`, SHA-256
 These are selected normal-build receipts at `0a8c86ff5`; they do not turn
 #539's failed job into an accepted full run.
 
-### Current receipts — 2026-10-31 (full run #536 and focused follow-up)
+### Earlier receipts — 2026-10-31 (full run #536 and focused follow-up)
 
 PR #19 remains draft/open against `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. The h11 adapter/parser fix is committed at
