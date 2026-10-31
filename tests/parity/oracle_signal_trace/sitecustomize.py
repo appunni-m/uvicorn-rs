@@ -147,6 +147,14 @@ if (
             raise
         if should_trace:
             _write("kill-return", signum, detail)
+        if (
+            control_event == "CTRL_BREAK_EVENT"
+            and os.environ.get("ASGI_PARITY_WINDOWS_WORKER_GROUPS") == "1"
+        ):
+            # Windows queues console control callbacks asynchronously. The
+            # oracle shim gives each individually addressed worker group a
+            # scheduling window before Uvicorn signals the next worker.
+            time.sleep(0.05)
         return result
 
     def _console_process_snapshot() -> None:
