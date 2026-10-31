@@ -18,6 +18,8 @@ if (
             getattr(signal, "SIGINT", None),
             getattr(signal, "SIGBREAK", None),
             getattr(signal, "SIGTERM", None),
+            getattr(signal, "CTRL_C_EVENT", None),
+            getattr(signal, "CTRL_BREAK_EVENT", None),
         )
         if value is not None
     }
@@ -88,9 +90,20 @@ if (
         return _original_raise_signal(signum)
 
     def _trace_kill(pid, signum):
-        if _number(signum) in _watched:
-            _write("kill", signum, f"target_pid={pid}")
-        return _original_kill(pid, signum)
+        if _number(signum) not in _watched:
+            return _original_kill(pid, signum)
+        _write("kill-start", signum, f"target_pid={pid}")
+        try:
+            result = _original_kill(pid, signum)
+        except OSError as error:
+            _write(
+                "kill-error",
+                signum,
+                f"target_pid={pid} error={type(error).__name__}:{error}",
+            )
+            raise
+        _write("kill-return", signum, f"target_pid={pid}")
+        return result
 
     def _console_process_snapshot() -> None:
         try:
