@@ -2945,6 +2945,7 @@
       "protocol": "native-core",
       "operation": "native-http1-concurrency-limit-observer-panic",
       "scenario": "http1-panics-http2-no-observer",
+      "http1_allow_authority_form": false,
       "path": "/ready",
       "expected_status": 503,
       "expected_body": "Service Unavailable",

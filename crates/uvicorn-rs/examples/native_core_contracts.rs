@@ -17226,6 +17226,9 @@ async fn run_isolated_http1_concurrency_limit_observer_panic_case(case: &Value) 
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
             limit_concurrency: Some(0),
+            http1_allow_authority_form: case["http1_allow_authority_form"]
+                .as_bool()
+                .ok_or_else(|| io::Error::other("request-target policy must be a boolean"))?,
             default_headers: vec![default_header.clone()],
             graceful_shutdown_timeout: Some(Duration::from_secs(1)),
             ..uvicorn_rs::ServerConfig::default()
@@ -17403,6 +17406,9 @@ async fn run_http1_concurrency_limit_observer_variant(
         shutdown_on_change(shutdown_receiver),
         uvicorn_rs::ServerConfig {
             limit_concurrency: Some(0),
+            http1_allow_authority_form: case["http1_allow_authority_form"]
+                .as_bool()
+                .ok_or_else(|| io::Error::other("request-target policy must be a boolean"))?,
             default_headers: vec![default_header.clone()],
             concurrency_limit_observer: Some(observer),
             graceful_shutdown_timeout: Some(Duration::from_secs(1)),

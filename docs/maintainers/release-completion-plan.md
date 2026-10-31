@@ -140,7 +140,15 @@ Wheel SHA-256: `26261cd60703aa911a3598dcd99a945262a88840fa06783ba5c437bca4700192
 consumer report: `9f8782c926bca881fbb35ff18ff22e14286b095b786e7b2f0de9a7a8aeda2763`;
 parity report: `ff09f9f6eee7e1e8b9ccb8b76265b18bfba1016e40b39fda577e58d943debcc0`.
 This is selected normal-build evidence, not a complete platform or release
-candidate receipt. The documentation refresh removes stale current-status
+candidate receipt. The existing native concurrency-observer contract now
+also disables HTTP/1 authority-form admission during its HTTP/2 control,
+verifying the HTTP/1-only policy does not change the H2 response. That selected
+case passes 1/1 in `target/ci536/h2-admission-policy/`.
+
+Focused Windows [CI #538](https://github.com/appunni-m/uvicorn-rs/actions/runs/41180292641)
+selects twelve affected public cases at `6f0cbda07`; all other CI jobs are
+skipped in that mode. It does not cancel or repeat #537's full coverage run.
+ The documentation refresh removes stale current-status
 claims and corrects the CLI map: the pinned Uvicorn 0.54.0 command does declare
 `--http2`. README documentation links are absolute so the PyPI description can
 resolve them. The strict MkDocs build and structural documentation audit pass;
