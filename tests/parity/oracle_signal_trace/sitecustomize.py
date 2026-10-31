@@ -95,3 +95,14 @@ if (
     if _original_raise_signal is not None:
         signal.raise_signal = _trace_raise_signal
     os.kill = _trace_kill
+
+
+if (
+    os.name == "nt"
+    and os.environ.get("ASGI_PARITY_WINDOWS_CTRL_BREAK_AS_SIGINT") == "1"
+    and hasattr(signal, "SIGBREAK")
+):
+    def _forward_ctrl_break_as_sigint(signum, frame):
+        signal.raise_signal(signal.SIGINT)
+
+    signal.signal(signal.SIGBREAK, _forward_ctrl_break_as_sigint)

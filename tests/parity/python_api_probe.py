@@ -38,6 +38,15 @@ def subprocess_environment() -> dict[str, str]:
     for name in ("PYTHONHOME", "PYTHONSTARTUP"):
         environment.pop(name, None)
     environment["PYTHONNOUSERSITE"] = "1"
+    if os.name == "nt" and hasattr(signal, "SIGBREAK"):
+        # CTRL_C_EVENT cannot be directed to a Windows process group. The
+        # per-server sitecustomize shim maps a targeted CTRL_BREAK_EVENT back
+        # to Uvicorn's SIGINT handler for graceful shutdown.
+        signal_site = str(Path(__file__).parent / "oracle_signal_trace")
+        environment["ASGI_PARITY_WINDOWS_CTRL_BREAK_AS_SIGINT"] = "1"
+        environment["PYTHONPATH"] = os.pathsep.join(
+            path for path in (signal_site, environment.get("PYTHONPATH")) if path
+        )
     if environment.get("ASGI_PARITY_COVERAGE_CAPTURE_SHUTDOWN") == "1":
         coverage_site = str(Path(__file__).parent / "coverage_site")
         environment["PYTHONPATH"] = os.pathsep.join(
@@ -1780,16 +1789,10 @@ except KeyboardInterrupt:
                 time.sleep(0.2)
             try:
                 if os.name == "nt":
-                    # Map the requested signal to the Windows console event
-                    # Uvicorn handles. Ctrl+C is SIGINT, which makes a second
-                    # signal force an in-flight shutdown; Ctrl+Break is
-                    # SIGBREAK, which only requests graceful shutdown. The
-                    # server runs in its own CREATE_NEW_PROCESS_GROUP.
-                    windows_signal = (
-                        signal.CTRL_C_EVENT
-                        if signal_name == "SIGINT"
-                        else signal.CTRL_BREAK_EVENT
-                    )
+                    # CTRL_C_EVENT with a nonzero process-group ID is not
+                    # delivered by Windows. CTRL_BREAK_EVENT is targetable;
+                    # the server's sitecustomize routes it to SIGINT.
+                    windows_signal = signal.CTRL_BREAK_EVENT
                     process.send_signal(windows_signal)
                 else:
                     process.send_signal(getattr(signal, signal_name))
