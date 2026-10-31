@@ -3726,6 +3726,9 @@
         "server_exit_code",
         "serve_exception_class"
       ],
+      "comparison_normalization": {
+        "stderr_base64": "uvicorn-rs-shutdown-trace"
+      },
       "required_observations": {
         "exit_code": 0,
         "server_started_before_shutdown": true,

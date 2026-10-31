@@ -1105,10 +1105,15 @@ def load_contract(
                 f"{operation.get('id')}.comparison_normalization",
             )
             if (
-                operation.get("id") != "cli.process"
-                or normalizations["stderr_base64"]
-                != "python-process-diagnostics"
-            ):
+                operation.get("id"),
+                normalizations["stderr_base64"],
+            ) not in {
+                ("cli.process", "python-process-diagnostics"),
+                (
+                    "python.api.server-lifespan-auto-fallback",
+                    "uvicorn-rs-shutdown-trace",
+                ),
+            }:
                 raise ParityError(
                     f"{operation.get('id')}: unsupported comparison normalization"
                 )
@@ -11068,6 +11073,16 @@ def normalize_operation_comparison_observation(
     for field, policy in operation.get("comparison_normalization", {}).items():
         if policy == "python-process-diagnostics":
             normalized[field] = normalize_cli_process_stderr(normalized[field])
+        elif policy == "uvicorn-rs-shutdown-trace":
+            stderr = base64.b64decode(normalized[field], validate=True)
+            normalized[field] = (
+                "uvicorn-rs-shutdown-trace",
+                tuple(
+                    line
+                    for line in stderr.splitlines()
+                    if not line.startswith(b"uvicorn-rs: shutdown-trace ")
+                ),
+            )
     return normalized
 
 
@@ -14904,12 +14919,20 @@ def execute_python_api_profile(
             oracle = {name: oracle_raw[name] for name in operation["observe"]}
             target = {name: target_raw[name] for name in operation["observe"]}
             fields = operation.get("compare", operation["observe"])
-            matches = {field: oracle[field] for field in fields} == {
-                field: target[field] for field in fields
-            }
+            oracle_comparison = normalize_operation_comparison_observation(
+                {field: oracle[field] for field in fields}, operation
+            )
+            target_comparison = normalize_operation_comparison_observation(
+                {field: target[field] for field in fields}, operation
+            )
+            matches = oracle_comparison == target_comparison
             difference = None
             if not matches:
-                differing_fields = [field for field in fields if oracle[field] != target[field]]
+                differing_fields = [
+                    field
+                    for field in fields
+                    if oracle_comparison[field] != target_comparison[field]
+                ]
                 difference = "Python API observations differ: " + ", ".join(differing_fields)
             required = required_observations_for_case(case, operation)
             if any(
