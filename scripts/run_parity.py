@@ -436,6 +436,7 @@ ASGI_SCOPE_SUPPORT_CONTRACT_POINTS = {"public.asgi-spec-version"}
 # native injection points and must not arm the coverage fault control.
 HARNESS_FAULT_POINTS = (
     {
+        "harness.server.startup-acknowledgement.drop",
         "http3.client.abort-after-body",
         "http3.client.peer-stop-before-response-headers",
         "http3.client.peer-stop-after-request-body-complete",
@@ -542,6 +543,7 @@ FAULT_CONTRACTS = {
     "http-body-pump-shutdown-aborts-hung-pump",
     "http-body-pump-shutdown-completes-task-before-abort",
     "http-request-body-conversion-error-caught",
+    "server-startup-acknowledgement-drop-cleans-listener",
     "http-response-header-capacity-recovery-followup-200",
     "websocket-header-capacity-error-followup-200",
     "http-start-error-close-followup-200",
@@ -1041,7 +1043,7 @@ def load_contract(
         "server_started_before_shutdown", "serve_task_finished_before_shutdown",
         "server_started",
         "startup_failure_wait_result", "dropped_control_wait_result", "dropped_readiness_wait_result",
-        "serve_raised", "serve_timed_out", "server_exit_code",
+        "serve_raised", "serve_timed_out", "server_exit_code", "listener_released",
         "serve_exception_class", "serve_exception_message",
         "client_certificate_rejected", "negotiated_tls_version", "negotiated_tls_cipher",
         "process_stderr_has_unhandled_task_warning",
@@ -2309,6 +2311,14 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: lifespan shutdown fault requires the shutdown-failure workflow"
                     )
+            elif fault["contract"] == "server-startup-acknowledgement-drop-cleans-listener":
+                if (
+                    case.get("profile") != "python-api"
+                    or case.get("operation") != "python.api.server-startup-acknowledgement-drop"
+                    or fault["point"] != "harness.server.startup-acknowledgement.drop"
+                    or case.get("api", {}).get("server_startup_acknowledgement_drop", {}).get("shutdown") not in {"complete", "failed"}
+                ):
+                    raise ParityError(f"{case_id}: acknowledgement loss requires the controller-drop workflow")
             elif fault["contract"] == "server-startup-cancelled-after-bind":
                 flags = {
                     "python.api.server-startup-cancel-after-listener": "server_startup_cancel_after_listener",
@@ -2848,7 +2858,10 @@ def load_contract(
                     not startup_shutdown_error_case
                     and not startup_bind_shutdown_error_case
                     and not uds_permission_error_case
-                    and fault["contract"] != "server-startup-cancelled-after-bind"
+                    and fault["contract"] not in {
+                        "server-startup-cancelled-after-bind",
+                        "server-startup-acknowledgement-drop-cleans-listener",
+                    }
                     and fault["contract"] not in {
                         "python-tls-initialization-error-propagates",
                         "python-tls-provider-fallback-serves",
@@ -2886,6 +2899,7 @@ def load_contract(
                 "python.api.server-startup-bind-failure-lifespan-cleanup": "server_startup_bind_failure_lifespan_cleanup",
                 "python.api.server-startup-uds-socket-replacement-lifespan-cleanup": "server_startup_uds_socket_replacement_lifespan_cleanup",
                 "python.api.server-startup-failure-waiter": "server_startup_failure_waiter",
+                "python.api.server-startup-acknowledgement-drop": "server_startup_acknowledgement_drop",
                 "python.api.server-startup-cancel-before-listener": "server_startup_cancel_before_listener",
                 "python.api.server-startup-cancel-after-listener": "server_startup_cancel_after_listener",
                 "python.api.server-startup-cancel-after-listener-without-lifespan": "server_startup_cancel_after_listener_without_lifespan",
@@ -4114,6 +4128,7 @@ def load_contract(
             elif case["operation"] in readiness_operations:
                 input_name = readiness_operations[case["operation"]]
                 if input_name in {
+                    "server_startup_acknowledgement_drop",
                     "server_startup_cancel_after_listener",
                     "server_startup_cancel_after_listener_without_lifespan",
                 } and case.get("verification") != "fault-contract":
@@ -4121,7 +4136,12 @@ def load_contract(
                         f"{case_id}: the bound-listener pause requires target-only fault verification"
                     )
                 exact_keys(case["api"], {input_name}, f"{case_id}.api")
-                if case["api"][input_name] is not True:
+                if input_name == "server_startup_acknowledgement_drop":
+                    drop = case["api"][input_name]
+                    exact_keys(drop, {"shutdown"}, f"{case_id}.api.{input_name}")
+                    if drop["shutdown"] not in {"complete", "failed"}:
+                        raise ParityError(f"{case_id}: acknowledgement-loss shutdown must be complete or failed")
+                elif case["api"][input_name] is not True:
                     raise ParityError(f"{case_id}.api.{input_name} must be true")
             elif case["operation"] == "python.api.server-lifespan-mode-validation":
                 exact_keys(case["api"], {"server_lifespan_mode"}, f"{case_id}.api")
@@ -12810,6 +12830,15 @@ def fault_contract_matches(
             and isinstance(observation.get("process_exit_code"), int)
             and observation["process_exit_code"] != 0
         )
+    if fault["contract"] == "server-startup-acknowledgement-drop-cleans-listener":
+        return (
+            observation.get("exit_code") == 0
+            and observation.get("serve_task_finished") is True
+            and observation.get("serve_raised") is True
+            and observation.get("serve_timed_out") is False
+            and observation.get("listener_released") is True
+            and observation.get("application_events") == ["lifespan.startup", "lifespan.shutdown"]
+        )
     if fault["contract"] == "server-startup-cancelled-after-bind":
         return (
             observation.get("fault_consumed") is True
@@ -13886,6 +13915,21 @@ def run_python_api_probe(
                 )
             }
         )
+    if "server_startup_acknowledgement_drop" in case["api"]:
+        try:
+            startup = json.loads(completed.stdout)["server_startup_acknowledgement_drop"]
+        except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+            diagnostic = completed.stderr.decode("utf-8", errors="replace")[-2000:]
+            raise ParityError(
+                f"{case['case_id']}: controller-drop probe has no structured result; "
+                f"exit={completed.returncode}, stderr={diagnostic!r}"
+            ) from error
+        if type(startup) is not dict:
+            raise ParityError(f"{case['case_id']}: controller-drop result must be an object")
+        observation.update({name: startup.get(name) for name in (
+            "serve_task_finished", "serve_raised", "serve_timed_out",
+            "listener_released", "application_events",
+        )})
     if "server_startup_failure_waiter" in case["api"]:
         try:
             startup = json.loads(completed.stdout)["server_startup_failure_waiter"]
@@ -14162,7 +14206,7 @@ def execute_python_api_profile(
                     coverage_profile_dir / "target"
                     if coverage_profile_dir is not None
                     else None,
-                    fault_point=fault["point"],
+                    fault_point=fault["point"] if fault["point"] in FAULT_POINTS else None,
                 )
                 raise_if_llvm_profile_write_failed(target_raw, case["case_id"])
                 target = {name: target_raw[name] for name in operation["observe"]}

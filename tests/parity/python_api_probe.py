@@ -3114,6 +3114,83 @@ def startup_failure_waiter_result_from_state(state) -> dict[str, object]:
     }
 
 
+async def server_startup_acknowledgement_drop_observation(shutdown: str) -> dict[str, object]:
+    """Drop the native startup controller before acknowledging request acceptance."""
+    from uvicorn_rs import _bridge, _native
+
+    application_events = []
+    shutdown_complete = asyncio.Event()
+
+    async def app(scope, receive, send):
+        if scope["type"] == "lifespan":
+            while True:
+                message = await receive()
+                application_events.append(message["type"])
+                if message["type"] == "lifespan.startup":
+                    await send({"type": "lifespan.startup.complete"})
+                elif message["type"] == "lifespan.shutdown":
+                    if shutdown == "failed":
+                        await send({
+                            "type": "lifespan.shutdown.failed",
+                            "message": "parity acknowledgement shutdown failure",
+                        })
+                    else:
+                        await send({"type": "lifespan.shutdown.complete"})
+                    shutdown_complete.set()
+                    return
+        else:
+            await send({"type": "http.response.start", "status": 200, "headers": []})
+            await send({"type": "http.response.body", "body": b"unexpected acceptance"})
+
+    with socket.socket() as reservation:
+        reservation.bind(("127.0.0.1", 0))
+        port = reservation.getsockname()[1]
+    control = _native.ServerControl(True)
+    task = asyncio.ensure_future(_native.serve(
+        app=app, invoke=_bridge.invoke, host="127.0.0.1", port=port,
+        uds=None, fd_transfer_path=None, backlog=2048, timeout_keep_alive=5,
+        certfile=None, keyfile=None, graceful_timeout=1, lifespan="on",
+        root_path="", default_headers=[], date_header=False, http2_enabled=False,
+        ws_max_size=16777216, ws_per_message_deflate=False,
+        ws_ping_interval=None, ws_ping_timeout=None, limit_concurrency=None,
+        limit_max_requests=None, limit_max_requests_jitter=0, control=control,
+        concurrency_limit_callback=_bridge.log_concurrency_limit_rejection,
+    ))
+    ready = control.wait_started()
+    raised = False
+    timed_out = False
+    try:
+        await asyncio.wait_for(ready, timeout=5)
+        # The serve future retains the receiver, not this acknowledgement
+        # sender. Dropping the owner is the actual injected channel failure.
+        del control
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=3)
+        except asyncio.TimeoutError:
+            timed_out = True
+        except Exception:
+            raised = True
+    finally:
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        try:
+            await asyncio.wait_for(shutdown_complete.wait(), timeout=2)
+        except asyncio.TimeoutError:
+            pass
+    with socket.socket() as listener:
+        try:
+            listener.bind(("127.0.0.1", port))
+            listener_released = True
+        except OSError:
+            listener_released = False
+    return {
+        "serve_task_finished": task.done(), "serve_raised": raised,
+        "serve_timed_out": timed_out, "listener_released": listener_released,
+        "application_events": application_events,
+    }
+
+
 async def server_lifespan_startup_observation(request: dict) -> dict[str, object]:
     """Observe strict lifespan startup through the public Config and Server APIs."""
 
@@ -3412,6 +3489,14 @@ def main() -> None:
                 )
             ),
         }
+        print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
+        return
+    if "server_startup_acknowledgement_drop" in request:
+        observations = {"server_startup_acknowledgement_drop": asyncio.run(
+            server_startup_acknowledgement_drop_observation(
+                request["server_startup_acknowledgement_drop"]["shutdown"]
+            )
+        )}
         print(json.dumps(observations, sort_keys=True, separators=(",", ":")))
         return
     if (

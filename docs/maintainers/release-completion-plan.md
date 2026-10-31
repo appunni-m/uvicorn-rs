@@ -20,7 +20,7 @@ a prerequisite for completing the repository work.
   `tests/parity/manifest.json`, its indexed inputs, `tests/native-core/manifest.json`,
   and `examples/native-fastapi-contracts/manifest.json`. Do not create a second
   operation inventory or require arbitrary combinations outside this contract.
-- The current manifest has 146 operations and 90 execution profiles. Those counts
+- The current manifest has 147 operations and 90 execution profiles. Those counts
   describe its inventory, not completeness of upstream compatibility.
 - Platform acceptance uses the existing CI profiles: Linux x86-64, macOS ARM64,
   Windows x86-64 on CPython 3.12.13, plus the declared Python 3.9 wheel-consumer
@@ -36,6 +36,38 @@ historical. A task closes on its own deliverable; downstream publication gates
 belong to the release tasks rather than being copied into every prerequisite.
 
 ## Execution order and stopping rules
+
+### Latest diagnosis — 2026-10-31
+
+[CI #537](https://github.com/appunni-m/uvicorn-rs/actions/runs/41175891140)
+finished all 1,370 cases and three verification repeats without case or
+infrastructure failures. Coverage is 14,239/14,270 regions and 10,505/10,523
+lines; the remaining 31 regions and 18 lines are in the Python adapter. Its
+canonical report SHA-256 is
+`977b37d6f24af9045d5949acca38d28b153f652e3397c8969fe0192f88126a6a`,
+bound to merge source `97acb84b93ad23ed0d4bf4d55f857a49fa46e6ba`.
+This is diagnostic evidence for subsequent changes, not acceptance of them.
+
+The follow-up fixes a startup-controller loss: dropping the acknowledgement
+owner after readiness previously let the server continue without acceptance
+being acknowledged. Rust now closes the listeners, completes lifespan cleanup,
+and reports the startup error. The new successful-shutdown fault plus the
+existing custom-loop startup case pass 2/2 in
+`target/ci537/startup-ack-final/coverage-report.json` (SHA-256
+`51a77fedf514ea2ee4cce6e0aaa5968a768a4f563b8d7fb712d0d23cff6448fc`).
+The shutdown-error variant and the existing console/TLS case pass 2/2 in
+`target/ci537/startup-ack-shutdown-error/coverage-report.json`. Adapter Clippy
+passes with warnings denied. These selected receipts do not establish a full
+coverage total or close the lifecycle task.
+
+The maintainer requires compatibility, a demonstrated improvement, or the
+applicable specification; documenting an exception is insufficient. Custom
+Python HTTP/WebSocket protocol classes and `ssl_context_factory` remain
+unimplemented. The oversized-trailer live probe also remains unresolved:
+the native adapter rejects its field count while the oracle sends a field block
+that exceeds the probe client's decoder limit. Its failed diagnostic is retained
+at `target/ci537/trailer-capacity-parity.json`; it is not a passing fault contract.
+Resolve these differences before closing compatibility or starting benchmarks.
 
 ### Current receipts — 2026-10-31 (full run #536 and focused follow-up)
 
@@ -79,7 +111,7 @@ consume its full hosted report before making any full-matrix acceptance claim.
 
 That batch was promoted at `9b0309406704e1d03c5f3e99a416f2b634d5f749`.
 [CI #537](https://github.com/appunni-m/uvicorn-rs/actions/runs/41175891140)
-is running its full coverage and Linux installed-wheel matrix; separate
+completed its full coverage and Linux installed-wheel matrix; separate
 [Documentation #218](https://github.com/appunni-m/uvicorn-rs/actions/runs/41175891137)
 passed. Its Cargo 1.85 job rejected the newly expanded multiline inline
 dependency table before compiling. Follow-up `c4d148a58` restores compatible
@@ -94,7 +126,7 @@ failed, and successful readiness. Bound/inherited TCP inspection and the native
 HTTP/3 default-header failure pass 6/6. These receipts are retained in
 `target/ci536/transitions/` and `target/ci536/listener-headers/`; the new header
 case brings the ASGI inventory to 1,112 cases. Strict Clippy and formatting pass.
-The existing full run remains active; no benchmark has started.
+That follow-up predates the completed full report above; no benchmark has started.
 
 The next batch fixes a confirmed Content-Length completion mismatch: after the
 wire body was complete, the adapter incorrectly rejected a valid empty ASGI
@@ -146,9 +178,9 @@ verifying the HTTP/1-only policy does not change the H2 response. That selected
 case passes 1/1 in `target/ci536/h2-admission-policy/`.
 
 Focused Windows [CI #538](https://github.com/appunni-m/uvicorn-rs/actions/runs/41180292641)
-selects twelve affected public cases at `6f0cbda07`; all other CI jobs are
-skipped in that mode. It does not cancel or repeat #537's full coverage run.
- The documentation refresh removes stale current-status
+passed twelve affected public cases at `6f0cbda07`; all other CI jobs were
+skipped in that mode. It did not repeat #537's full coverage run.
+The documentation refresh removes stale current-status
 claims and corrects the CLI map: the pinned Uvicorn 0.54.0 command does declare
 `--http2`. README documentation links are absolute so the PyPI description can
 resolve them. The strict MkDocs build and structural documentation audit pass;

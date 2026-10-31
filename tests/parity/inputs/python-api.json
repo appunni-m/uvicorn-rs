@@ -6957,6 +6957,42 @@
       "api": {
         "server_startup_cancel_after_listener_without_lifespan": true
       }
+    },
+    {
+      "case_id": "python-api.fault.startup-acknowledgement-owner-dropped",
+      "profile": "python-api",
+      "operation": "python.api.server-startup-acknowledgement-drop",
+      "covers": [
+        "python.api.server-startup-acknowledgement-drop"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "harness.server.startup-acknowledgement.drop",
+        "contract": "server-startup-acknowledgement-drop-cleans-listener"
+      },
+      "api": {
+        "server_startup_acknowledgement_drop": {
+          "shutdown": "complete"
+        }
+      }
+    },
+    {
+      "case_id": "python-api.fault.startup-acknowledgement-drop-shutdown-error",
+      "profile": "python-api",
+      "operation": "python.api.server-startup-acknowledgement-drop",
+      "covers": [
+        "python.api.server-startup-acknowledgement-drop"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "harness.server.startup-acknowledgement.drop",
+        "contract": "server-startup-acknowledgement-drop-cleans-listener"
+      },
+      "api": {
+        "server_startup_acknowledgement_drop": {
+          "shutdown": "failed"
+        }
+      }
     }
   ]
 }

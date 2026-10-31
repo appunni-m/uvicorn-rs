@@ -8070,7 +8070,21 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
                 _ = cancellation.cancelled() => break,
                 changed = acknowledgement.changed() => {
                     if changed.is_err() {
-                        break;
+                        // Losing the readiness controller must not open the
+                        // listeners before acceptance has been acknowledged.
+                        cancellation.cancel();
+                        drop(endpoint);
+                        drop(listener);
+                        finish_cancelled_startup(
+                            lifespan,
+                            &lifespan_cleanup_tasks,
+                            options.graceful_timeout,
+                            &cancellation,
+                        )
+                        .await?;
+                        return Err(PyRuntimeError::new_err(
+                            "startup acknowledgement channel closed",
+                        ));
                     }
                 }
             }

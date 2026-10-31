@@ -3840,6 +3840,18 @@
         "content_type",
         "body_bytes"
       ]
+    },
+    {
+      "id": "python.api.server-startup-acknowledgement-drop",
+      "kind": "command_operation",
+      "observe": [
+        "exit_code",
+        "serve_task_finished",
+        "serve_raised",
+        "serve_timed_out",
+        "listener_released",
+        "application_events"
+      ]
     }
   ],
   "inputs": [
