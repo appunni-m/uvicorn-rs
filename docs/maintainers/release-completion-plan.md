@@ -77,6 +77,25 @@ passing evidence. These are diagnostic subsets, not a new full coverage total.
 Strict Clippy and formatting pass for the batch. Promote one reviewed batch and
 consume its full hosted report before making any full-matrix acceptance claim.
 
+That batch was promoted at `9b0309406704e1d03c5f3e99a416f2b634d5f749`.
+[CI #537](https://github.com/appunni-m/uvicorn-rs/actions/runs/41175891140)
+is running its full coverage and Linux installed-wheel matrix; separate
+[Documentation #218](https://github.com/appunni-m/uvicorn-rs/actions/runs/41175891137)
+passed. Its Cargo 1.85 job rejected the newly expanded multiline inline
+dependency table before compiling. Follow-up `c4d148a58` restores compatible
+TOML syntax and passes the four required Rust 1.85 checks locally. The hosted
+platform-artifact jobs depend on MSRV, so this run cannot supply new macOS or
+Windows acceptance receipts.
+
+The next focused follow-up shares the atomic startup transition, TCP listener
+inspection, and fallible TLS protocol builder without removing their failure
+handling. Existing startup/TLS boundary cases pass 10/10, including cancelled,
+failed, and successful readiness. Bound/inherited TCP inspection and the native
+HTTP/3 default-header failure pass 6/6. These receipts are retained in
+`target/ci536/transitions/` and `target/ci536/listener-headers/`; the new header
+case brings the ASGI inventory to 1,112 cases. Strict Clippy and formatting pass.
+The existing full run remains active; no benchmark has started.
+
 The Linux installed-wheel public parity in #531 passed 719/719. Windows ran
 692 cases: 689 passed and three two-worker shutdown cases failed. Their only
 input changes since that run add a one-second startup settle. Focused Windows

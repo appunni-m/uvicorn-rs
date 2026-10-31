@@ -3285,6 +3285,31 @@
         "chunk_bytes": 4096
       },
       "h3_grease": false
+    },
+    {
+      "case_id": "fault.http3.native-default-header-error-resets-stream",
+      "profile": "http3",
+      "operation": "http3.injected-stream-error",
+      "covers": [
+        "http3.injected-stream-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.default-header.response-finalization",
+        "contract": "http3-stream-reset-on-runtime-error"
+      },
+      "server_options": {
+        "headers": [
+          "invalid name: value"
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": "",
+        "expect_response_error": true
+      }
     }
   ]
 }

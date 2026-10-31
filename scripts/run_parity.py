@@ -1367,6 +1367,7 @@ def load_contract(
                         "http3.response.non-data-frame",
                         "http3.response.body-send-error",
                         "http3.response.finish-error",
+                        "server.default-header.response-finalization",
                     }
                     or case.get("request", {}).get("expect_response_error") is not True
                 ):

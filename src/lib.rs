@@ -4949,26 +4949,19 @@ enum ServerStartupGate {
 struct ServerStartupSignal {
     sender: watch::Sender<ServerStartupState>,
     gate: Arc<AtomicU8>,
-    started: bool,
-    failed: bool,
 }
 
 impl ServerStartupSignal {
     fn new(sender: watch::Sender<ServerStartupState>, gate: Arc<AtomicU8>) -> Self {
-        Self {
-            sender,
-            gate,
-            started: false,
-            failed: false,
-        }
+        Self { sender, gate }
     }
 
-    fn mark_started(&mut self) -> bool {
+    fn transition(&self, gate: ServerStartupGate, state: ServerStartupState) -> bool {
         if self
             .gate
             .compare_exchange(
                 ServerStartupGate::Starting as u8,
-                ServerStartupGate::Started as u8,
+                gate as u8,
                 Ordering::AcqRel,
                 Ordering::Acquire,
             )
@@ -4976,41 +4969,20 @@ impl ServerStartupSignal {
         {
             return false;
         }
-        self.started = true;
-        self.sender.send_replace(ServerStartupState::Started);
+        self.sender.send_replace(state);
         true
     }
 
+    fn mark_started(&self) -> bool {
+        self.transition(ServerStartupGate::Started, ServerStartupState::Started)
+    }
+
     fn mark_failed(&mut self) {
-        if self
-            .gate
-            .compare_exchange(
-                ServerStartupGate::Starting as u8,
-                ServerStartupGate::Failed as u8,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            )
-            .is_err()
-        {
-            return;
-        }
-        self.failed = true;
-        self.sender.send_replace(ServerStartupState::Failed);
+        self.transition(ServerStartupGate::Failed, ServerStartupState::Failed);
     }
 
     fn mark_stopped(&mut self) {
-        if self
-            .gate
-            .compare_exchange(
-                ServerStartupGate::Starting as u8,
-                ServerStartupGate::Stopped as u8,
-                Ordering::AcqRel,
-                Ordering::Acquire,
-            )
-            .is_ok()
-        {
-            self.sender.send_replace(ServerStartupState::Stopped);
-        }
+        self.transition(ServerStartupGate::Stopped, ServerStartupState::Stopped);
     }
 
     fn was_cancelled(&self) -> bool {
@@ -5020,9 +4992,9 @@ impl ServerStartupSignal {
 
 impl Drop for ServerStartupSignal {
     fn drop(&mut self) {
-        if !self.started && !self.failed {
-            self.mark_stopped();
-        }
+        // A completed or cancelled startup already owns the gate, so this
+        // transition can only notify waiters left in the Starting state.
+        self.mark_stopped();
     }
 }
 
@@ -7134,6 +7106,16 @@ fn server_crypto_provider() -> Arc<rustls::crypto::CryptoProvider> {
         .unwrap_or_else(|| Arc::new(rustls::crypto::ring::default_provider()))
 }
 
+fn server_config_with_protocols(
+    provider: Arc<rustls::crypto::CryptoProvider>,
+    versions: &[&'static rustls::SupportedProtocolVersion],
+    error_context: &str,
+) -> PyResult<rustls::ConfigBuilder<rustls::ServerConfig, rustls::WantsVerifier>> {
+    rustls::ServerConfig::builder_with_provider(provider)
+        .with_protocol_versions(versions)
+        .map_err(|error| PyValueError::new_err(format!("{error_context}: {error}")))
+}
+
 fn load_tls_configs(
     py: Python<'_>,
     options: ServerTlsOptions<'_>,
@@ -7203,21 +7185,12 @@ fn load_tls_configs(
         if coverage_fault_take(CoverageFaultPoint::TlsProviderEmptyCipherSuites) {
             provider.cipher_suites.clear();
         }
-        let provider = Arc::new(provider);
-        let builder = rustls::ServerConfig::builder_with_provider(provider);
-        if tls12_only {
-            builder
-                .with_protocol_versions(&[&rustls::version::TLS12])
-                .map_err(|error| {
-                    PyValueError::new_err(format!("invalid TLS cipher selection: {error}"))
-                })?
+        let versions: &[&rustls::SupportedProtocolVersion] = if tls12_only {
+            &[&rustls::version::TLS12]
         } else {
-            builder
-                .with_safe_default_protocol_versions()
-                .map_err(|error| {
-                    PyValueError::new_err(format!("invalid TLS cipher selection: {error}"))
-                })?
-        }
+            rustls::DEFAULT_VERSIONS
+        };
+        server_config_with_protocols(Arc::new(provider), versions, "invalid TLS cipher selection")?
     } else {
         if tls12_only {
             rustls::ServerConfig::builder_with_protocol_versions(&[&rustls::version::TLS12])
@@ -7244,11 +7217,11 @@ fn load_tls_configs(
         provider
             .cipher_suites
             .retain(|suite| suite.tls13().is_none());
-        rustls::ServerConfig::builder_with_provider(Arc::new(provider))
-            .with_protocol_versions(&[&rustls::version::TLS12])
-            .map_err(|error| {
-                PyValueError::new_err(format!("invalid HTTP/3 TLS identity: {error}"))
-            })?
+        server_config_with_protocols(
+            Arc::new(provider),
+            &[&rustls::version::TLS12],
+            "invalid HTTP/3 TLS identity",
+        )?
     } else {
         rustls::ServerConfig::builder_with_protocol_versions(&[&rustls::version::TLS13])
     };
@@ -7270,6 +7243,20 @@ fn load_tls_configs(
         .map_err(|error| PyValueError::new_err(format!("invalid HTTP/3 TLS identity: {error}")))?;
 
     Ok((TlsAcceptor::from(Arc::new(tcp_tls)), quic_config))
+}
+
+fn tcp_listener_address(listener: &TcpListener, description: &str) -> PyResult<SocketAddr> {
+    #[cfg(coverage)]
+    let address = if coverage_fault_take(CoverageFaultPoint::ServerListenerLocalAddrError) {
+        Err(std::io::Error::other(
+            "coverage-injected listener address inspection error",
+        ))
+    } else {
+        listener.local_addr()
+    };
+    #[cfg(not(coverage))]
+    let address = listener.local_addr();
+    address.map_err(|error| PyOSError::new_err(format!("could not inspect {description}: {error}")))
 }
 
 async fn bind_tcp_listener(host: &str, port: u16, backlog: i32) -> std::io::Result<TcpListener> {
@@ -7781,17 +7768,12 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
                 })?;
                 listeners.push(listener);
             }
-            let server_addr = listeners
+            let first = listeners
                 .first()
                 .ok_or_else(|| {
                     PyValueError::new_err("at least one pre-bound TCP listener is required")
-                })?
-                .local_addr()
-                .map_err(|error| {
-                    PyOSError::new_err(format!(
-                        "could not inspect inherited TCP listener: {error}"
-                    ))
                 })?;
+            let server_addr = tcp_listener_address(first, "inherited TCP listener")?;
             let endpoint = if let Some(quic_config) = options.quic_config.take() {
                 Some(
                     uvicorn_rs::Http3Endpoint::bind(server_addr, quic_config).map_err(
@@ -7823,21 +7805,7 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
                 )?,
             };
             let ReceivedTcpListeners { first, remaining } = received;
-            #[cfg(coverage)]
-            let local_addr = {
-                if coverage_fault_take(CoverageFaultPoint::ServerListenerLocalAddrError) {
-                    Err(std::io::Error::other(
-                        "coverage-injected listener address inspection error",
-                    ))
-                } else {
-                    first.local_addr()
-                }
-            };
-            #[cfg(not(coverage))]
-            let local_addr = first.local_addr();
-            let server_addr = local_addr.map_err(|error| {
-                PyOSError::new_err(format!("could not inspect inherited TCP listener: {error}"))
-            })?;
+            let server_addr = tcp_listener_address(&first, "inherited TCP listener")?;
             let mut listeners = Vec::with_capacity(remaining.len() + 1);
             listeners.push(first);
             listeners.extend(remaining);
@@ -7870,23 +7838,7 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
                     )));
                 }
             };
-            let local_addr = {
-                #[cfg(coverage)]
-                if coverage_fault_take(CoverageFaultPoint::ServerListenerLocalAddrError) {
-                    Err(std::io::Error::other(
-                        "coverage-injected listener address inspection error",
-                    ))
-                } else {
-                    listener.local_addr()
-                }
-                #[cfg(not(coverage))]
-                {
-                    listener.local_addr()
-                }
-            };
-            let server_addr = local_addr.map_err(|error| {
-                PyOSError::new_err(format!("could not inspect bound listener: {error}"))
-            })?;
+            let server_addr = tcp_listener_address(&listener, "bound listener")?;
             (BoundListener::Tcp(vec![listener]), server_addr)
         };
         #[cfg(not(uvicorn_rs_native_transport))]
@@ -7925,25 +7877,7 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
             }
         };
         #[cfg(not(uvicorn_rs_native_transport))]
-        let server_addr = {
-            let local_addr = {
-                #[cfg(coverage)]
-                if coverage_fault_take(CoverageFaultPoint::ServerListenerLocalAddrError) {
-                    Err(std::io::Error::other(
-                        "coverage-injected listener address inspection error",
-                    ))
-                } else {
-                    listener.local_addr()
-                }
-                #[cfg(not(coverage))]
-                {
-                    listener.local_addr()
-                }
-            };
-            local_addr.map_err(|error| {
-                PyOSError::new_err(format!("could not inspect bound listener: {error}"))
-            })?
-        };
+        let server_addr = tcp_listener_address(&listener, "bound listener")?;
         #[cfg(uvicorn_rs_native_transport)]
         let endpoint = if matches!(&listener, BoundListener::Tcp(_)) {
             if let Some(quic_config) = options.quic_config.take() {
@@ -8211,11 +8145,7 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
             BoundListener::Tcp(listeners) => {
                 let mut listener_services = Vec::with_capacity(listeners.len());
                 for listener in listeners {
-                    let listener_addr = listener.local_addr().map_err(|error| {
-                        PyOSError::new_err(format!(
-                            "could not inspect inherited TCP listener: {error}"
-                        ))
-                    })?;
+                    let listener_addr = tcp_listener_address(&listener, "inherited TCP listener")?;
                     listener_services.push((
                         listener,
                         NativeAsgiService {
