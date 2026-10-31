@@ -4086,8 +4086,17 @@ def load_contract(
                         and case["operation"] == "python.api.run-websocket-keepalive-nan-timeout"
                         and value == {"$float": "nan"}
                     )
+                    infinite_interval_marker = (
+                        key == "ws_ping_interval"
+                        and case["operation"] == "python.api.run-websocket-keepalive-infinite-interval"
+                        and value == {"$float": "inf"}
+                    )
                     if key in run_websocket and value is not None and (
-                        not (nan_interval_marker or nan_timeout_marker)
+                        not (
+                            nan_interval_marker
+                            or nan_timeout_marker
+                            or infinite_interval_marker
+                        )
                         and (
                             type(value) not in {int, float}
                             or (type(value) is float and math.isnan(value))
@@ -4150,9 +4159,7 @@ def load_contract(
                     timeout = run_websocket.get("ws_ping_timeout")
                     idle_seconds = run_websocket.get("keepalive_idle_seconds")
                     if (
-                        type(interval) is not float
-                        or not math.isinf(interval)
-                        or interval < 0
+                        interval != {"$float": "inf"}
                         or type(timeout) not in {int, float}
                         or not math.isfinite(timeout)
                         or type(idle_seconds) not in {int, float}

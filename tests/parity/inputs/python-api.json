@@ -2738,7 +2738,9 @@
           "message": "infinite-interval-remains-open",
           "ws_max_size": 64,
           "ws_max_queue": 1,
-          "ws_ping_interval": Infinity,
+          "ws_ping_interval": {
+            "$float": "inf"
+          },
           "ws_ping_timeout": 0.3,
           "keepalive_idle_seconds": 0.35,
           "timeout_seconds": 5

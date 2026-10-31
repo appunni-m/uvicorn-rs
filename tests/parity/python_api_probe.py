@@ -1922,6 +1922,8 @@ def decode_setting(raw):
     value = json.loads(raw)
     if value == {"$float": "nan"}:
         return float("nan")
+    if value == {"$float": "inf"}:
+        return float("inf")
     return value
 
 async def app(scope, receive, send):
