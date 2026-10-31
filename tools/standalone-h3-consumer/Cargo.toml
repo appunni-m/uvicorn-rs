@@ -11,7 +11,7 @@ publish = false
 bytes = "1"
 http = "1"
 http-body-util = "0.1"
-uvicorn-rs = { version = "0.2.2", features = ["http3"] }
+uvicorn-rs = { version = "0.3.0", features = ["http3"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 rustls-pemfile = "2"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }

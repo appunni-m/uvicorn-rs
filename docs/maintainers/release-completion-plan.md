@@ -82,6 +82,18 @@ The first diagnostic's unjustified required alert code failed and is retained
 in `target/ci537/obsolete-tls/`; it is not accepted evidence. This establishes
 the default listener's version floor, not custom TLS-factory compatibility.
 
+[CI #539](https://github.com/appunni-m/uvicorn-rs/actions/runs/41183934112)
+qualifies head `dae3c94bc51ea23f3be6358023a637edf2093ff5`. Its native
+composition job found nested consumer locks omitted from the 0.3.0 bump.
+The follow-up synchronizes all three consumer locks and the standalone H3
+registry requirement. All three pinned dependency graphs resolve offline with
+`--locked` and exclude PyO3; the refreshed native-Starlette example compiles.
+Receipts are in `target/ci537/consumer-lock-verification.json` and
+`consumer-starlette-build-current.log`. The version guard now checks these
+inputs before full CI jobs start. Focused selected jobs stay independent.
+No runtime suite was repeated for this metadata correction; let #539 finish
+before advancing the PR again.
+
 ### Current receipts — 2026-10-31 (full run #536 and focused follow-up)
 
 PR #19 remains draft/open against `main` at

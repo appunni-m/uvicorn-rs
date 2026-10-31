@@ -62,9 +62,12 @@ jobs:
         with:
           python-version: "3.12.13"
       - name: Exercise exact-run handoff and fail-closed receipt cases
-        run: python scripts/test_coverage_mcp_handoff.py
+        run: |
+          python scripts/check_release_version.py
+          python scripts/test_coverage_mcp_handoff.py
 
   rust:
+    needs: release-evidence-contracts
     if: github.event_name != 'workflow_dispatch' || inputs.mode == 'full'
     name: Rust formatting, lints, feature builds and documentation
     runs-on: ubuntu-24.04
@@ -141,6 +144,7 @@ jobs:
           overwrite: true
 
   native-framework-composition:
+    needs: release-evidence-contracts
     if: github.event_name != 'workflow_dispatch' || inputs.mode == 'full'
     name: Pinned native FastAPI-RS composition inputs
     runs-on: ubuntu-24.04
@@ -211,6 +215,7 @@ jobs:
             --locked -- "$workspace/uvicorn-rs/examples/native-fastapi-contracts/manifest.json"
 
   msrv:
+    needs: release-evidence-contracts
     if: github.event_name != 'workflow_dispatch' || inputs.mode == 'full'
     name: Compile the exact Rust minimum
     runs-on: ubuntu-24.04
@@ -230,6 +235,7 @@ jobs:
             cargo check -p uvicorn-rs --all-targets --features http3 --locked
 
   python-package:
+    needs: release-evidence-contracts
     if: github.event_name != 'workflow_dispatch' || inputs.mode == 'full'
     name: Complete public parity on the installed normal wheel
     runs-on: ubuntu-24.04
@@ -437,6 +443,7 @@ jobs:
           overwrite: true
 
   unified-coverage:
+    needs: release-evidence-contracts
     if: github.event_name != 'workflow_dispatch' || inputs.mode == 'full'
     name: All parity and fault contracts, 100% native regions and lines
     runs-on: ubuntu-24.04

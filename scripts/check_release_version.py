@@ -12,6 +12,12 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)")
+CONSUMER_LOCKS = (
+    "examples/native-fastapi-contracts/Cargo.lock",
+    "examples/native-starlette-server/Cargo.lock",
+    "tools/standalone-h3-consumer/Cargo.lock",
+)
+HTTP3_CONSUMER_MANIFEST = "tools/standalone-h3-consumer/Cargo.toml"
 
 
 def project_versions(root: Path = ROOT, expected: str | None = None) -> dict[str, str]:
@@ -25,6 +31,8 @@ def project_versions(root: Path = ROOT, expected: str | None = None) -> dict[str
             "pyproject.toml",
             "Cargo.lock",
             "uv.lock",
+            *CONSUMER_LOCKS,
+            HTTP3_CONSUMER_MANIFEST,
         )
     }
     cargo = documents["Cargo.toml"]["package"]
@@ -224,6 +232,23 @@ def project_versions(root: Path = ROOT, expected: str | None = None) -> dict[str
         )["version"],
         "uv.lock": locked_package("uv.lock", "uvicorn-rs", editable=True)["version"],
     }
+    for lock_name in CONSUMER_LOCKS:
+        for package_name in ("uvicorn-rs", "asgi-lifespan-protocol-rs"):
+            versions[f"{lock_name}:{package_name}"] = locked_package(
+                lock_name, package_name
+            )["version"]
+    consumer_dependency = documents[HTTP3_CONSUMER_MANIFEST].get("dependencies", {}).get(
+        "uvicorn-rs"
+    )
+    if (
+        not isinstance(consumer_dependency, dict)
+        or "path" in consumer_dependency
+        or consumer_dependency.get("features") != ["http3"]
+    ):
+        raise ValueError(
+            "the standalone HTTP/3 consumer must use the versioned registry dependency with http3"
+        )
+    versions[f"{HTTP3_CONSUMER_MANIFEST}:uvicorn-rs"] = consumer_dependency.get("version")
     expected = expected if expected is not None else versions["Cargo.toml"]
     if not isinstance(expected, str) or VERSION.fullmatch(expected) is None:
         raise ValueError("version must use canonical MAJOR.MINOR.PATCH")
