@@ -15,7 +15,7 @@ does not satisfy that requirement. The custom HTTP/WebSocket protocol-class
 hooks and `ssl_context_factory` are implemented at the Python integration
 boundary. Six focused local live-parity cases cover custom HTTP and WebSocket
 protocols, TLS context policy, lifespan state, and shutdown; their receipt is
-recorded in the [latest execution plan](release-completion-plan.md#compatibility-follow-up--2026-10-31).
+recorded in the [latest execution plan](release-completion-plan.md#compatibility-follow-up-2026-10-31).
 The exact-source hosted matrix is CI #547 and remains in progress, so these
 focused results do not close the wider Python API or platform inventory.
 

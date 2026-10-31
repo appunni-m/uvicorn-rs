@@ -70,7 +70,7 @@ and raises that finite budget to establish live oracle parity for the
 candidate's trailer-overflow fix. Those local results do not close the broader
 compatibility inventory.
 
-### Compatibility follow-up — 2026-10-31
+### Compatibility follow-up 2026-10-31
 
 The extension hooks were implemented after the preceding diagnosis. Focused
 live Uvicorn 0.54.0 parity passed all six affected custom HTTP/WebSocket
