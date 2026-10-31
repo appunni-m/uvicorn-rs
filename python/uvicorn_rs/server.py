@@ -44,6 +44,7 @@ class Server:
         _defer_startup_acceptance=False,
         ws_per_message_deflate=True,
         _http1_max_buffer_size=None,
+        _http1_allow_authority_form=True,
         ssl_ca_certs=None,
         ssl_cert_reqs=0,
         _tls12_only=False,
@@ -141,6 +142,7 @@ class Server:
         self.ws_max_size = ws_max_size
         self.ws_per_message_deflate = ws_per_message_deflate
         self.http1_max_buffer_size = _http1_max_buffer_size
+        self._http1_allow_authority_form = _http1_allow_authority_form
         self.limit_concurrency = limit_concurrency
         self.ws_ping_interval = ws_ping_interval
         self.ws_ping_timeout = ws_ping_timeout
@@ -277,6 +279,7 @@ class Server:
                     self.ws_max_queue,
                     self.websocket_enabled,
                     prebound_sockets,
+                    self._http1_allow_authority_form,
                 )
             )
             if listener_transfer_stopped is not None:

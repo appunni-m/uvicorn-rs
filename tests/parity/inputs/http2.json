@@ -1125,6 +1125,25 @@
         ],
         "body_base64": ""
       }
+    },
+    {
+      "case_id": "http2.application-returns-before-required-trailers",
+      "profile": "http2",
+      "operation": "http2.incomplete-response-trailers",
+      "covers": [
+        "http2.incomplete-response-trailers"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/response-trailers-missing",
+        "headers": [
+          [
+            "te",
+            "trailers"
+          ]
+        ],
+        "body_base64": ""
+      }
     }
   ]
 }

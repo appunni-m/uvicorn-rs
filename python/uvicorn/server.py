@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import importlib.util
 import logging
 import os
 import random
@@ -273,6 +274,13 @@ class Server:
                     + 1
                     if self.config.http == "h11"
                     else None
+                ),
+                _http1_allow_authority_form=(
+                    self.config.http != "httptools"
+                    and (
+                        self.config.http != "auto"
+                        or importlib.util.find_spec("httptools") is None
+                    )
                 ),
                 limit_concurrency=self.config.limit_concurrency,
                 limit_max_requests=self.limit_max_requests,

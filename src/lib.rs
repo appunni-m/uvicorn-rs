@@ -162,6 +162,7 @@ enum CoverageFaultPoint {
     PythonAsgiReceiveBorrowConflict,
     ServerControlShutdownBorrowConflict,
     ServerServeControlBorrowConflict,
+    ServerConcurrencyLimitCallback,
     ServerGracefulTimeoutOverflow,
     ServerGetCurrentLocals,
     PythonTaskCompletionAllocate,
@@ -471,6 +472,7 @@ enum CoverageFaultPoint {
     WebSocketPeerReadFailureUnavailable,
     WebSocketPeerReadFailureWatchFallback,
     WebSocketDriverSendError,
+    WebSocketKeepaliveCloseSendError,
     WebSocketDriverDrainSendError,
     ServerTcpAddressLookupEmpty,
     ServerTcpSocketCreateError,
@@ -540,6 +542,7 @@ impl CoverageFaultPoint {
             Self::PythonAsgiReceiveBorrowConflict => "python.asgi-receive.borrow-conflict",
             Self::ServerControlShutdownBorrowConflict => "server.control.shutdown.borrow-conflict",
             Self::ServerServeControlBorrowConflict => "server.serve.control.borrow-conflict",
+            Self::ServerConcurrencyLimitCallback => "server.concurrency-limit.callback",
             Self::ServerGracefulTimeoutOverflow => "server.graceful-timeout.overflow",
             Self::ServerGetCurrentLocals => "server.python-locals.get-current",
             Self::PythonTaskCompletionAllocate => "python.task-completion.allocate",
@@ -973,6 +976,7 @@ impl CoverageFaultPoint {
                 "websocket.peer-read-failed.watch-fallback"
             }
             Self::WebSocketDriverSendError => "websocket.driver.send-error",
+            Self::WebSocketKeepaliveCloseSendError => "websocket.keepalive.close-send-error",
             Self::WebSocketDriverDrainSendError => "websocket.driver.drain-send-error",
         }
     }
@@ -1959,6 +1963,7 @@ struct ServeOptions {
     backlog: i32,
     timeout_keep_alive: std::time::Duration,
     http1_max_buffer_size: Option<usize>,
+    http1_allow_authority_form: bool,
     root_path: String,
     tcp_tls: Option<TlsAcceptor>,
     quic_config: Option<uvicorn_rs::Http3ServerConfig>,
@@ -2887,6 +2892,15 @@ enum ResponseChunk {
     Body(BodyChunk),
     Trailers(HeaderMap),
     End,
+}
+
+impl ResponseChunk {
+    fn completes_response(&self, trailers_expected: bool) -> bool {
+        match self {
+            Self::Body(body) => !trailers_expected && !body.more_body,
+            Self::Trailers(_) | Self::End => true,
+        }
+    }
 }
 
 enum RequestBody {
@@ -3877,16 +3891,23 @@ impl AsgiIo {
                 Ok(py.None().into_bound(py))
             }
             AsgiEventType::HttpResponseBody => {
-                let final_body_after_content_length = slf
+                let body_after_content_length = slf
                     .response_content_length_satisfied
                     .load(Ordering::Acquire)
-                    && message
+                    && (message
                         .get_item("more_body")
                         .ok()
                         .flatten()
                         .and_then(|value| value.extract::<bool>().ok())
-                        == Some(false);
-                if (slf.connection_closed.is_closed() && !final_body_after_content_length)
+                        == Some(false)
+                        || message.get_item("body").ok().flatten().is_none_or(|value| {
+                            value.extract::<Bytes>().is_ok_and(|body| body.is_empty())
+                        }));
+                // Hyper can finish an HTTP/1 transport at Content-Length
+                // before ASGI sends its empty terminal events. Keep accepting
+                // those events even when the client closes after reading the
+                // complete wire body; the retained consumer drains them.
+                if (slf.connection_closed.is_closed() && !body_after_content_length)
                     || slf.request_disconnected.load(Ordering::Acquire)
                 {
                     return Err(PyOSError::new_err(
@@ -5115,6 +5136,18 @@ enum ResponseApplication {
     Completed(Result<PyResult<Py<PyAny>>, tokio::task::JoinError>),
 }
 
+impl ResponseApplication {
+    fn observe_completed(self) -> Option<tokio::task::JoinHandle<PyResult<Py<PyAny>>>> {
+        match self {
+            Self::Running(task) => Some(task),
+            Self::Completed(result) => {
+                observe_app_after_response(result);
+                None
+            }
+        }
+    }
+}
+
 struct AsgiBody {
     receiver: mpsc::Receiver<ResponseChunk>,
     application: Option<ResponseApplication>,
@@ -5170,19 +5203,13 @@ impl Drop for AsgiBody {
                 let trailers_expected = self.trailers_expected;
                 self.app_task_tracker.spawn(async move {
                     while let Some(chunk) = receiver.recv().await {
-                        let response_complete = match chunk {
-                            ResponseChunk::Body(body) => !trailers_expected && !body.more_body,
-                            ResponseChunk::Trailers(_) | ResponseChunk::End => true,
-                        };
-                        if response_complete {
+                        if chunk.completes_response(trailers_expected) {
                             break;
                         }
                     }
-                    let result = match application {
-                        ResponseApplication::Running(task) => task.await,
-                        ResponseApplication::Completed(result) => result,
-                    };
-                    observe_app_after_response(result);
+                    if let Some(task) = application.observe_completed() {
+                        observe_app_after_response(task.await);
+                    }
                 });
             }
         } else if let Some(ResponseApplication::Running(task)) = &self.application {
@@ -5845,13 +5872,10 @@ impl AsgiBody {
         // A final ASGI body completes the transport, while the application may
         // still run background work. Transfer that work to the server now so
         // neither another body poll nor transport teardown delays completion.
-        match application {
-            ResponseApplication::Running(task) => {
-                self.app_task_tracker.spawn(async move {
-                    observe_app_after_response(task.await);
-                });
-            }
-            ResponseApplication::Completed(result) => observe_app_after_response(result),
+        if let Some(task) = application.observe_completed() {
+            self.app_task_tracker.spawn(async move {
+                observe_app_after_response(task.await);
+            });
         }
         self.defer_completed_app_result_once = false;
     }
@@ -5861,6 +5885,7 @@ impl AsgiBody {
         application: ResponseApplication,
         chunk: ResponseChunk,
     ) -> Poll<Option<Result<Frame<Bytes>, BoxError>>> {
+        let response_complete = chunk.completes_response(self.trailers_expected);
         match chunk {
             ResponseChunk::Body(chunk) => {
                 self.response_body_bytes = self
@@ -5875,11 +5900,11 @@ impl AsgiBody {
                 }
                 if !chunk.more_body {
                     self.record_final_body_available();
-                    if self.trailers_expected {
+                    if response_complete {
+                        self.finish_response(application);
+                    } else {
                         self.body_completed = true;
                         self.application = Some(application);
-                    } else {
-                        self.finish_response(application);
                     }
                 } else {
                     self.application = Some(application);
@@ -6141,7 +6166,7 @@ fn tcp_listener_from_detached_socket(
 }
 
 #[pyfunction]
-#[pyo3(signature = (app, invoke, host, port, uds, fd_transfer_path, backlog, timeout_keep_alive, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, http2_enabled, ws_max_size, ws_per_message_deflate, ws_ping_interval, ws_ping_timeout, limit_concurrency, limit_max_requests, limit_max_requests_jitter, control, concurrency_limit_callback, http1_max_buffer_size=None, ssl_ca_certs=None, ssl_cert_reqs=0, tls12_only=false, ssl_cipher_suites=None, ssl_keyfile_password=None, ws_max_queue=None, websocket_enabled=true, prebound_sockets=None))]
+#[pyo3(signature = (app, invoke, host, port, uds, fd_transfer_path, backlog, timeout_keep_alive, certfile, keyfile, graceful_timeout, lifespan, root_path, default_headers, date_header, http2_enabled, ws_max_size, ws_per_message_deflate, ws_ping_interval, ws_ping_timeout, limit_concurrency, limit_max_requests, limit_max_requests_jitter, control, concurrency_limit_callback, http1_max_buffer_size=None, ssl_ca_certs=None, ssl_cert_reqs=0, tls12_only=false, ssl_cipher_suites=None, ssl_keyfile_password=None, ws_max_queue=None, websocket_enabled=true, prebound_sockets=None, http1_allow_authority_form=true))]
 #[expect(
     clippy::too_many_arguments,
     reason = "the native callable keeps its established Python argument signature"
@@ -6182,6 +6207,7 @@ fn serve<'py>(
     ws_max_queue: Option<usize>,
     websocket_enabled: bool,
     prebound_sockets: Option<Vec<Py<PyAny>>>,
+    http1_allow_authority_form: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     let lifespan_mode = LifespanMode::from_python(&lifespan)?;
     let websocket_keepalive =
@@ -6278,30 +6304,26 @@ fn serve<'py>(
     let concurrency_limit_callback = Arc::new(concurrency_limit_callback);
     let concurrency_limit_observer: uvicorn_rs::ConcurrencyLimitObserver = Arc::new(move |event| {
         Python::attach(|py| {
-            let version = match event.version() {
-                http::Version::HTTP_09 => "0.9",
-                http::Version::HTTP_10 => "1.0",
-                http::Version::HTTP_11 => "1.1",
-                http::Version::HTTP_2 => "2",
-                http::Version::HTTP_3 => "3",
-                _ => "",
-            };
+            let version = asgi_http_version(event.version());
             let path = if event.uri().path().is_empty() {
                 "/"
             } else {
                 event.uri().path()
             };
             let query = event.uri().query().unwrap_or_default();
-            if let Err(error) = concurrency_limit_callback.call1(
-                py,
-                (
-                    event.peer_addr().ip().to_string(),
-                    event.peer_addr().port(),
-                    event.method().as_str(),
-                    path,
-                    query,
-                    version,
-                ),
+            if let Err(error) = coverage_once_value!(
+                ServerConcurrencyLimitCallback,
+                concurrency_limit_callback.call1(
+                    py,
+                    (
+                        event.peer_addr().ip().to_string(),
+                        event.peer_addr().port(),
+                        event.method().as_str(),
+                        path,
+                        query,
+                        version,
+                    ),
+                )
             ) {
                 error.print(py);
             }
@@ -6320,6 +6342,7 @@ fn serve<'py>(
             backlog,
             timeout_keep_alive,
             http1_max_buffer_size,
+            http1_allow_authority_form,
             root_path,
             tcp_tls,
             quic_config,
@@ -8093,6 +8116,7 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
             graceful_shutdown_timeout: options.graceful_timeout,
             http1_keep_alive_timeout: Some(options.timeout_keep_alive),
             http1_max_buffer_size: options.http1_max_buffer_size,
+            http1_allow_authority_form: options.http1_allow_authority_form,
             http2_enabled: server.http2_enabled,
             limit_concurrency: server.limit_concurrency,
             default_headers: validated_default_headers(&server.default_headers),
@@ -10381,13 +10405,20 @@ async fn close_websocket_after_ping_timeout<S: WebSocketTransport>(
     driver_error: &mut Option<BoxError>,
 ) -> bool {
     state.store(2, Ordering::Release);
-    match tokio::time::timeout(
-        std::time::Duration::from_millis(100),
-        socket.send_message(Message::Close(Some(CloseFrame {
-            code: CloseCode::from(1011),
-            reason: "keepalive ping timeout".into(),
-        }))),
-    )
+    match tokio::time::timeout(std::time::Duration::from_millis(100), async {
+        #[cfg(coverage)]
+        if coverage_fault_take(CoverageFaultPoint::WebSocketKeepaliveCloseSendError) {
+            return Err(Box::new(std::io::Error::other(
+                "coverage-injected keepalive close send failure",
+            )) as BoxError);
+        }
+        socket
+            .send_message(Message::Close(Some(CloseFrame {
+                code: CloseCode::from(1011),
+                reason: "keepalive ping timeout".into(),
+            })))
+            .await
+    })
     .await
     {
         Ok(Ok(())) | Err(_) => {}
@@ -10876,6 +10907,18 @@ fn observe_app_before_response_start(
     Ok(())
 }
 
+fn asgi_http_version(version: Version) -> &'static str {
+    if version == Version::HTTP_10 {
+        "1.0"
+    } else if version == Version::HTTP_2 {
+        "2"
+    } else if version == Version::HTTP_3 {
+        "3"
+    } else {
+        "1.1"
+    }
+}
+
 fn build_scope<'py>(
     py: Python<'py>,
     request: &http::request::Parts,
@@ -10893,18 +10936,7 @@ fn build_scope<'py>(
     set_scope_state(py, &scope, context.state)?;
     coverage_try!(
         HttpScopeHttpVersionSetItem,
-        scope.set_item(
-            "http_version",
-            if request.version == Version::HTTP_10 {
-                "1.0"
-            } else if request.version == Version::HTTP_2 {
-                "2"
-            } else if request.version == Version::HTTP_3 {
-                "3"
-            } else {
-                "1.1"
-            },
-        )
+        scope.set_item("http_version", asgi_http_version(request.version))
     );
     coverage_try!(
         HttpScopeMethodSetItem,

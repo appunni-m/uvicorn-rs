@@ -782,6 +782,13 @@ async def _app_impl(scope, receive, send):
     if path == "/response-trailers-before-start":
         await send({"type": "http.response.trailers", "headers": []})
         return
+    if path == "/response-trailers-missing":
+        await send({
+            "type": "http.response.start", "status": 200,
+            "headers": [], "trailers": True,
+        })
+        await send({"type": "http.response.body", "body": b"complete"})
+        return
     if path == "/response-trailers-before-body-complete":
         await send({
             "type": "http.response.start",
@@ -1131,6 +1138,20 @@ async def _app_impl(scope, receive, send):
             }
         )
         await send({"type": "http.response.body", "body": b"invalid"})
+        return
+
+    if path == "/content-length-empty-body-drain":
+        await send({
+            "type": "http.response.start", "status": 200,
+            "headers": [(b"content-length", b"8"), (b"content-type", b"text/plain")],
+        })
+        await send({"type": "http.response.body", "body": b"complete", "more_body": True})
+        _record("response.content-length.first-send-returned")
+        await asyncio.sleep(0.05)
+        await send({"type": "http.response.body", "body": b"", "more_body": True})
+        _record("response.content-length.empty-send-returned")
+        await send({"type": "http.response.body", "body": b"", "more_body": False})
+        _record("response.content-length.final-send-returned")
         return
 
     if path == "/response-burst":

@@ -544,6 +544,7 @@ where
             info_service,
             connection_options.error_observer.cloned(),
             connection_options.concurrency_limit_observer.cloned(),
+            true, // HTTP/3 does not use HTTP/1 request-target forms.
             peer_addr,
             connection_options.service_error_policy,
             connection_options.request_concurrency.clone(),

@@ -1261,6 +1261,11 @@ pub struct ServerConfig {
     /// workspace-only `workspace-hyper-buffer-limit` feature accepts any
     /// positive value and requires the patched workspace Hyper dependency.
     pub http1_max_buffer_size: Option<usize>,
+    /// Whether HTTP/1 authority-form request targets (used by CONNECT) are
+    /// accepted. Defaults to `true`. Set to `false` when adapting an
+    /// application whose HTTP parser rejects these targets; rejection occurs
+    /// before concurrency admission and returns HTTP 400.
+    pub http1_allow_authority_form: bool,
     /// Whether TCP connections accept HTTP/2, including prior-knowledge h2c.
     /// TLS callers must configure their acceptor's ALPN list consistently.
     pub http2_enabled: bool,
@@ -1308,6 +1313,10 @@ impl fmt::Debug for ServerConfig {
             .field("graceful_shutdown_timeout", &self.graceful_shutdown_timeout)
             .field("http1_keep_alive_timeout", &self.http1_keep_alive_timeout)
             .field("http1_max_buffer_size", &self.http1_max_buffer_size)
+            .field(
+                "http1_allow_authority_form",
+                &self.http1_allow_authority_form,
+            )
             .field("http2_enabled", &self.http2_enabled)
             .field(
                 "application_startup_timeout",
@@ -1915,6 +1924,7 @@ impl Default for ServerConfig {
             graceful_shutdown_timeout: Some(Duration::from_secs(30)),
             http1_keep_alive_timeout: None,
             http1_max_buffer_size: None,
+            http1_allow_authority_form: true,
             http2_enabled: true,
             application_startup_timeout: Duration::from_secs(30),
             application_shutdown_timeout: Duration::from_secs(30),
@@ -2615,6 +2625,7 @@ where
         .map(|limit| Arc::new(RequestConcurrency::new(limit)));
     let default_headers = Arc::new(config.default_headers.clone());
     let http1_max_buffer_size = config.http1_max_buffer_size;
+    let http1_allow_authority_form = config.http1_allow_authority_form;
     #[cfg(coverage)]
     if take_listener_admission_closed_fault() {
         connection_slots.close();
@@ -2685,6 +2696,7 @@ where
                                     date_header,
                                     http1_keep_alive_timeout,
                                     http1_max_buffer_size,
+                                    http1_allow_authority_form,
                                     http2_enabled,
                                     request_concurrency: request_concurrency.clone(),
                                     default_headers: Arc::clone(&default_headers),
@@ -2719,6 +2731,7 @@ where
                                 date_header,
                                 http1_keep_alive_timeout,
                                 http1_max_buffer_size,
+                                http1_allow_authority_form,
                                 http2_enabled,
                                 request_concurrency,
                                 default_headers,
@@ -2959,6 +2972,7 @@ where
     let request_concurrency = admission.request_concurrency.clone();
     let default_headers = Arc::clone(&admission.default_headers);
     let http1_max_buffer_size = config.http1_max_buffer_size;
+    let http1_allow_authority_form = config.http1_allow_authority_form;
     #[cfg(coverage)]
     if take_listener_admission_closed_fault() {
         connection_slots.close();
@@ -3062,6 +3076,7 @@ where
                                     date_header,
                                     http1_keep_alive_timeout,
                                     http1_max_buffer_size,
+                                    http1_allow_authority_form,
                                     http2_enabled,
                                     request_concurrency: request_concurrency.clone(),
                                     default_headers: Arc::clone(&default_headers),
@@ -3096,6 +3111,7 @@ where
                                 date_header,
                                 http1_keep_alive_timeout,
                                 http1_max_buffer_size,
+                                http1_allow_authority_form,
                                 http2_enabled,
                                 request_concurrency,
                                 default_headers,
@@ -3307,6 +3323,7 @@ struct ConnectionOptions<'a> {
     date_header: bool,
     http1_keep_alive_timeout: Option<Duration>,
     http1_max_buffer_size: Option<usize>,
+    http1_allow_authority_form: bool,
     http2_enabled: bool,
     request_concurrency: Option<Arc<RequestConcurrency>>,
     default_headers: Arc<Vec<(HeaderName, HeaderValue)>>,
@@ -3531,6 +3548,7 @@ where
         date_header,
         http1_keep_alive_timeout,
         http1_max_buffer_size,
+        http1_allow_authority_form,
         http2_enabled,
         request_concurrency,
         default_headers,
@@ -3582,6 +3600,7 @@ where
         ),
         error_observer.cloned(),
         concurrency_limit_observer.cloned(),
+        http1_allow_authority_form,
         peer_addr,
         service_error_policy,
         request_concurrency,
@@ -3969,6 +3988,7 @@ where
     readiness_error: Option<S::Error>,
     error_observer: Option<ServerErrorObserver>,
     concurrency_limit_observer: Option<ConcurrencyLimitObserver>,
+    http1_allow_authority_form: bool,
     peer_addr: SocketAddr,
     service_error_policy: ServiceErrorPolicy,
     request_concurrency: Option<Arc<RequestConcurrency>>,
@@ -3987,6 +4007,7 @@ where
             readiness_error: None,
             error_observer: self.error_observer.clone(),
             concurrency_limit_observer: self.concurrency_limit_observer.clone(),
+            http1_allow_authority_form: self.http1_allow_authority_form,
             peer_addr: self.peer_addr,
             service_error_policy: self.service_error_policy,
             request_concurrency: self.request_concurrency.clone(),
@@ -4001,10 +4022,15 @@ impl<S, B, RequestBody> ServiceErrorResponse<S, B, RequestBody>
 where
     S: Service<Request<RequestBody>>,
 {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "constructs the per-connection service admission policy"
+    )]
     fn new(
         inner: S,
         error_observer: Option<ServerErrorObserver>,
         concurrency_limit_observer: Option<ConcurrencyLimitObserver>,
+        http1_allow_authority_form: bool,
         peer_addr: SocketAddr,
         service_error_policy: ServiceErrorPolicy,
         request_concurrency: Option<Arc<RequestConcurrency>>,
@@ -4015,6 +4041,7 @@ where
             readiness_error: None,
             error_observer,
             concurrency_limit_observer,
+            http1_allow_authority_form,
             peer_addr,
             service_error_policy,
             request_concurrency,
@@ -4074,6 +4101,18 @@ where
     }
 
     fn call(&mut self, request: Request<RequestBody>) -> Self::Future {
+        if !self.http1_allow_authority_form
+            && matches!(request.version(), Version::HTTP_10 | Version::HTTP_11)
+            && request.uri().authority().is_some()
+            && request.uri().scheme().is_none()
+        {
+            return FutureEither::Right(ready(Ok(server_generated_response(
+                StatusCode::BAD_REQUEST,
+                b"Invalid HTTP request received.",
+                self.default_headers.as_slice(),
+                true,
+            ))));
+        }
         if let Some(error) = self.readiness_error.take() {
             tracing::error!(%error, "HTTP application service became unavailable");
             return FutureEither::Right(ready(Ok(internal_server_error())));
@@ -4282,16 +4321,32 @@ where
     B: Body<Data = Bytes> + Send + 'static,
     B::Error: Into<BoxBodyError> + Send + Sync + 'static,
 {
-    let mut response = Response::new(BodyEither::Right(Full::new(Bytes::from_static(
+    server_generated_response(
+        StatusCode::SERVICE_UNAVAILABLE,
         b"Service Unavailable",
-    ))));
-    *response.status_mut() = StatusCode::SERVICE_UNAVAILABLE;
+        default_headers,
+        close_connection,
+    )
+}
+
+fn server_generated_response<B>(
+    status: StatusCode,
+    body: &'static [u8],
+    default_headers: &[(HeaderName, HeaderValue)],
+    close_connection: bool,
+) -> ResponseOnError<B>
+where
+    B: Body<Data = Bytes> + Send + 'static,
+    B::Error: Into<BoxBodyError> + Send + Sync + 'static,
+{
+    let mut response = Response::new(BodyEither::Right(Full::new(Bytes::from_static(body))));
+    *response.status_mut() = status;
     let headers = response.headers_mut();
     headers.insert(
         CONTENT_TYPE,
         HeaderValue::from_static("text/plain; charset=utf-8"),
     );
-    headers.insert(CONTENT_LENGTH, HeaderValue::from_static("19"));
+    headers.insert(CONTENT_LENGTH, HeaderValue::from(body.len()));
     if close_connection {
         headers.insert(CONNECTION, HeaderValue::from_static("close"));
     }

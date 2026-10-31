@@ -2603,6 +2603,29 @@
         "messages": [],
         "expect_close": true
       }
+    },
+    {
+      "case_id": "fault.websocket.keepalive-close-send-error-followup-200",
+      "profile": "websocket",
+      "operation": "websocket.keepalive-close-transport-error",
+      "covers": [
+        "websocket.keepalive-close-transport-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "websocket.keepalive.close-send-error",
+        "contract": "websocket-keepalive-close-error-followup-200"
+      },
+      "server_options": {
+        "ws_ping_interval": 0.1,
+        "ws_ping_timeout": 0.3
+      },
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [],
+        "messages": [],
+        "followup_path": "/state"
+      }
     }
   ]
 }

@@ -1126,13 +1126,19 @@
           {
             "status": 103,
             "headers": [
-              ["link", "</style.css>; rel=preload; as=style"]
+              [
+                "link",
+                "</style.css>; rel=preload; as=style"
+              ]
             ]
           },
           {
             "status": 103,
             "headers": [
-              ["link", "</app.js>; rel=preload; as=script"]
+              [
+                "link",
+                "</app.js>; rel=preload; as=script"
+              ]
             ]
           }
         ],
@@ -1155,8 +1161,14 @@
       "required_observations": {
         "status": 200,
         "response_trailers": [
-          ["x-asgi-trailer", "first"],
-          ["x-asgi-trailer", "last"]
+          [
+            "x-asgi-trailer",
+            "first"
+          ],
+          [
+            "x-asgi-trailer",
+            "last"
+          ]
         ]
       }
     },
@@ -2626,7 +2638,7 @@
       "required_observations": {
         "response_received": true,
         "response_status": 200,
-      "shutdown_signal_sent": true
+        "shutdown_signal_sent": true
       }
     },
     {
@@ -2668,7 +2680,9 @@
       "required_observations": {
         "response_received": true,
         "response_status": 200,
-        "shutdown_signals_sent": ["SIGINT"],
+        "shutdown_signals_sent": [
+          "SIGINT"
+        ],
         "process_timed_out": false,
         "graceful_shutdown_cancellation_observed": true
       }
@@ -3756,8 +3770,6 @@
         "serve_cancelled": false,
         "serve_raised": false,
         "serve_timed_out": false,
-        "serve_raised": false,
-        "serve_timed_out": false,
         "serve_task_finished": true,
         "listener_accepting_after_cancel": false,
         "application_events": []
@@ -3765,9 +3777,72 @@
       "target_requirements": {
         "server_started_before_shutdown": false
       }
+    },
+    {
+      "id": "websocket.keepalive-close-transport-error",
+      "kind": "protocol_operation",
+      "observe": [
+        "handshake_status",
+        "handshake_accept_valid",
+        "first_server_ping_received",
+        "pong_sent",
+        "second_server_ping_received",
+        "timeout_close_received",
+        "connection_closed",
+        "fault_consumed",
+        "followup_response"
+      ]
+    },
+    {
+      "id": "http.response-content-length-drain",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "body_bytes",
+        "application_events"
+      ],
+      "required_observations": {
+        "status": 200,
+        "body_bytes": "Y29tcGxldGU=",
+        "application_events": [
+          "response.content-length.first-send-returned",
+          "response.content-length.empty-send-returned",
+          "response.content-length.final-send-returned"
+        ]
+      }
+    },
+    {
+      "id": "http2.incomplete-response-trailers",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "body_bytes",
+        "response_trailers",
+        "connection_closed"
+      ]
+    },
+    {
+      "id": "http.concurrency-limit-callback-failure",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "body_bytes",
+        "fault_consumed"
+      ]
+    },
+    {
+      "id": "http.authority-form-rejected",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "body_bytes"
+      ]
     }
   ],
-    "inputs": [
+  "inputs": [
     "inputs/python-api.json",
     "inputs/cli.json",
     "inputs/http1.json",

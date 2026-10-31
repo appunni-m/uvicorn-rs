@@ -20,7 +20,7 @@ a prerequisite for completing the repository work.
   `tests/parity/manifest.json`, its indexed inputs, `tests/native-core/manifest.json`,
   and `examples/native-fastapi-contracts/manifest.json`. Do not create a second
   operation inventory or require arbitrary combinations outside this contract.
-- The current manifest has 141 operations and 90 execution profiles. Those counts
+- The current manifest has 146 operations and 90 execution profiles. Those counts
   describe its inventory, not completeness of upstream compatibility.
 - Platform acceptance uses the existing CI profiles: Linux x86-64, macOS ARM64,
   Windows x86-64 on CPython 3.12.13, plus the declared Python 3.9 wheel-consumer
@@ -95,6 +95,37 @@ HTTP/3 default-header failure pass 6/6. These receipts are retained in
 `target/ci536/transitions/` and `target/ci536/listener-headers/`; the new header
 case brings the ASGI inventory to 1,112 cases. Strict Clippy and formatting pass.
 The existing full run remains active; no benchmark has started.
+
+The next batch fixes a confirmed Content-Length completion mismatch: after the
+wire body was complete, the adapter incorrectly rejected a valid empty ASGI
+body event when the client closed. It now drains those events through the
+application's terminal send. A live input retains all three completed send
+observations. A second live input verifies returning without required HTTP/2
+trailers. Their focused checks, including the WSGI final-body neighbor, pass
+3/3 in `target/ci536/body-completion-fixed/`.
+
+The adapter also preserves parser-specific CONNECT admission: httptools rejects
+an authority-form URL with HTTP 400 before the concurrency check, whereas h11
+accepts it and can return HTTP 503. This is a Rust request-target policy; the
+Python integration only selects the configured parser's policy. The standalone
+Rust default continues to accept authority-form targets. A seven-case batch
+covering both parser selections, HTTP/1.0 admission, observer failure,
+Content-Length completion, missing HTTP/2 trailers and WebSocket close-send
+failure passes 7/7 in `target/ci536/authority-policy-fixed/`. The separate native
+configuration/debug contract passes 1/1 in `target/ci536/authority-native-config/`.
+The inventory now contains 1,119 ASGI cases. The first CONNECT probe's 400/503
+mismatch and the initial unarmed WebSocket fault attempt remain failed
+diagnostics; their corrected inputs are the passing receipts.
+
+CI #537's Linux normal wheel passed all 731 live parity cases, then failed the
+strict evidence check on duplicate `serve_raised` and `serve_timed_out` JSON
+fields. The duplicate metadata is removed, and manifest/input loading now
+rejects duplicate fields before building or executing cases. This fixes the
+evidence failure; it does not turn that hosted job into a passing receipt.
+Rust 1.85 all-feature compilation and the CI's applicable strict Clippy modes
+pass locally for this follow-up. A broader Clippy invocation without the
+required coverage cfg failed on the existing coverage-only contract example
+and vendored H3 test lints; it is not a supported CI check or passing evidence.
 
 The Linux installed-wheel public parity in #531 passed 719/719. Windows ran
 692 cases: 689 passed and three two-worker shutdown cases failed. Their only

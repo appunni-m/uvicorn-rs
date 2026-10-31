@@ -5728,6 +5728,97 @@
         ],
         "body_base64": ""
       }
+    },
+    {
+      "case_id": "http1.content-length-drains-empty-body-events",
+      "profile": "http1",
+      "operation": "http.response-content-length-drain",
+      "covers": [
+        "http.response-content-length-drain"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/content-length-empty-body-drain",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "fault.http1.concurrency-log-callback-failure-keeps-503",
+      "profile": "http1",
+      "operation": "http.concurrency-limit-callback-failure",
+      "covers": [
+        "http.concurrency-limit-callback-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.concurrency-limit.callback",
+        "contract": "server-concurrency-callback-error-preserves-503"
+      },
+      "server_options": {
+        "limit_concurrency": 1
+      },
+      "request": {
+        "method": "GET",
+        "path": "/scope?callback=failure",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http1.http10-concurrency-limit-keeps-503",
+      "profile": "http1",
+      "operation": "http.concurrency-limit",
+      "covers": [
+        "http.concurrency-limit"
+      ],
+      "server_options": {
+        "limit_concurrency": 1
+      },
+      "request": {
+        "method": "GET",
+        "path": "/scope?version=1.0",
+        "http_version": "1.0",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http1.httptools-authority-form-rejected-before-concurrency",
+      "profile": "http1",
+      "operation": "http.authority-form-rejected",
+      "covers": [
+        "http.authority-form-rejected"
+      ],
+      "server_options": {
+        "limit_concurrency": 1
+      },
+      "request": {
+        "method": "CONNECT",
+        "path": "localhost:443",
+        "http_version": "1.1",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http1.h11-authority-form-concurrency-limit-keeps-503",
+      "profile": "http1",
+      "operation": "http.concurrency-limit",
+      "covers": [
+        "http.concurrency-limit"
+      ],
+      "server_options": {
+        "limit_concurrency": 1,
+        "http": "h11"
+      },
+      "request": {
+        "method": "CONNECT",
+        "path": "localhost:443",
+        "http_version": "1.1",
+        "headers": [],
+        "body_base64": ""
+      }
     }
   ]
 }

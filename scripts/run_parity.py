@@ -128,6 +128,7 @@ FAULT_POINTS = {
     "python.asgi-receive.borrow-conflict",
     "server.control.shutdown.borrow-conflict",
     "server.serve.control.borrow-conflict",
+    "server.concurrency-limit.callback",
     "server.graceful-timeout.overflow",
     "server.connection.invalid-default-header.source-chain",
     "server.default-header.response-finalization",
@@ -423,6 +424,7 @@ FAULT_POINTS = {
     "websocket.driver.incoming-binary-receiver-closed",
     "websocket.driver.outgoing-channel-closed",
     "websocket.driver.send-error",
+    "websocket.keepalive.close-send-error",
     "websocket.driver.drain-send-error",
 }
 PUBLIC_INPUT_CONTRACT_POINTS = {
@@ -504,6 +506,7 @@ FAULT_CONTRACTS = {
     "asgi-spec-version-2.5",
     "server-connection-invalid-default-header-source-chain",
     "server-default-header-finalization-error-closes-connection",
+    "server-concurrency-callback-error-preserves-503",
     "http2-response-event-fault-consumed-and-status-observed",
     "python-ssl-ca-verifier-error-propagates",
     "python-ssl-ca-verifier-success-fallback-propagates",
@@ -601,6 +604,7 @@ FAULT_CONTRACTS = {
     "server-native-connection-error-during-shutdown",
     "websocket-server-shutdown-force-abort",
     "websocket-driver-send-error-followup-200",
+    "websocket-keepalive-close-error-followup-200",
     "websocket-driver-send-error-cancels-app",
     "websocket-registration-failure-cancels-app-followup-200",
     "websocket-handshake-error-followup-200",
@@ -906,11 +910,23 @@ def validate_load_input(case: dict[str, Any], kind: str) -> None:
         raise ParityError(f"{case['case_id']}: HTTP load profile and operation do not match")
 
 
+def load_contract_json(path: Path) -> Any:
+    def unique_fields(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        value: dict[str, Any] = {}
+        for name, item in pairs:
+            if name in value:
+                raise ParityError(f"duplicate JSON field in {path}: {name}")
+            value[name] = item
+        return value
+
+    return json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique_fields)
+
+
 def load_contract(
     manifest_path: Path = MANIFEST_PATH,
     fixture_root: Path = FIXTURES,
 ) -> tuple[dict[str, Any], dict[str, Any], list[Path]]:
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = load_contract_json(manifest_path)
     exact_keys(
         manifest,
         {
@@ -1127,7 +1143,7 @@ def load_contract(
     profile_case_counts = {profile_id: 0 for profile_id in profiles}
     input_cases = []
     for input_path in indexed_paths:
-        input_document = json.loads(input_path.read_text(encoding="utf-8"))
+        input_document = load_contract_json(input_path)
         exact_keys(input_document, {"schema", "cases"}, f"parity input {input_path.name}")
         if input_document["schema"] != INPUT_SCHEMA:
             raise ParityError(f"unsupported input schema in {input_path.name}: {input_document['schema']!r}")
@@ -2484,6 +2500,15 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: source-chain filtering requires an invalid default-header API request"
                     )
+            elif fault["contract"] == "server-concurrency-callback-error-preserves-503":
+                if (
+                    case.get("profile") != "http1"
+                    or case.get("operation") != "http.concurrency-limit-callback-failure"
+                    or fault["point"] != "server.concurrency-limit.callback"
+                    or case.get("server_options", {}).get("limit_concurrency") != 1
+                    or case.get("request", {}).get("method") != "GET"
+                ):
+                    raise ParityError(f"{case_id}: concurrency callback failures require a rejected HTTP/1 request")
             elif fault["contract"] == "server-default-header-finalization-error-closes-connection":
                 headers = case.get("server_options", {}).get("headers", [])
                 request = case.get("request", {})
@@ -2557,6 +2582,22 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: WebSocket shutdown timeout requires the held-session cancellation workflow"
+                    )
+            elif fault["contract"] == "websocket-keepalive-close-error-followup-200":
+                websocket = case.get("websocket", {})
+                options = case.get("server_options", {})
+                if (
+                    case.get("profile") != "websocket"
+                    or case.get("operation") != "websocket.keepalive-close-transport-error"
+                    or fault["point"] != "websocket.keepalive.close-send-error"
+                    or websocket.get("path") != "/ws"
+                    or websocket.get("messages") != []
+                    or websocket.get("followup_path") != "/state"
+                    or options.get("ws_ping_interval") != 0.1
+                    or options.get("ws_ping_timeout") != 0.3
+                ):
+                    raise ParityError(
+                        f"{case_id}: keepalive close errors require the bounded idle-session and follow-up workflow"
                     )
             elif fault["contract"] in {
                 "websocket-driver-send-error-followup-200",
@@ -5189,8 +5230,21 @@ def load_contract(
                 base64.b64decode(request["body_base64"], validate=True)
             except (ValueError, TypeError) as error:
                 raise ParityError(f"{case_id}: invalid request body base64") from error
-            if not isinstance(request["path"], str) or not request["path"].startswith("/"):
-                raise ParityError(f"{case_id}: request path must be origin-form")
+            authority_form = False
+            if kind == "http1" and request["method"] == "CONNECT" and isinstance(request["path"], str):
+                try:
+                    authority = urlsplit("//" + request["path"])
+                    authority_form = bool(
+                        authority.netloc == request["path"] and authority.hostname
+                        and authority.port is not None and 1 <= authority.port <= 65535
+                        and authority.username is None and authority.password is None
+                        and not authority.path and not authority.query and not authority.fragment
+                        and request["path"].isascii()
+                    )
+                except ValueError:
+                    pass
+            if not isinstance(request["path"], str) or not (request["path"].startswith("/") or authority_form):
+                raise ParityError(f"{case_id}: request path must be origin-form or an HTTP/1 CONNECT authority")
             if not isinstance(request["headers"], list) or any(
                 not isinstance(header, list)
                 or len(header) != 2
@@ -8011,6 +8065,7 @@ def http2_request(
     observe_response_extensions: bool = False,
     events_path: Path | None = None,
     expected_application_events: list[str] | None = None,
+    reject_timeout: bool = False,
 ) -> dict[str, Any]:
     body = base64.b64decode(request["body_base64"], validate=True)
     context = ssl._create_unverified_context()
@@ -8073,6 +8128,8 @@ def http2_request(
             try:
                 received = tls_socket.recv(65536)
             except TimeoutError:
+                if reject_timeout:
+                    raise ParityError("HTTP/2 response did not finish before the client timeout")
                 result = observation()
                 result["connection_closed"] = True
                 return result
@@ -9661,6 +9718,7 @@ def websocket_server_keepalive_observation(
         "timeout_close_received": False,
         "timeout_close_code": None,
         "timeout_close_reason": None,
+        "connection_closed": False,
     }
 
     def read_exactly(reader: Any, size: int) -> bytes:
@@ -9769,7 +9827,10 @@ def websocket_server_keepalive_observation(
 
         try:
             close_opcode, close_payload = read_frame(reader)
-        except (EOFError, OSError, TimeoutError):
+        except TimeoutError:
+            return observation
+        except (EOFError, OSError):
+            observation["connection_closed"] = True
             return observation
         observation["timeout_close_received"] = close_opcode == 0x8
         if close_opcode == 0x8 and len(close_payload) >= 2:
@@ -10721,20 +10782,34 @@ def execute_case(
                         observe_tls_version=case["operation"] == "tls.protocol-version",
                         observe_tls_cipher=case["operation"] == "tls.negotiated-cipher",
                     )
+            event_offset = len(read_events(server["events"]))
             observation = http1_request(
                 server["port"], case["request"], ssl_context=ssl_context
             )
+            if case["operation"] == "http.response-content-length-drain":
+                deadline = time.monotonic() + 2
+                events = read_events(server["events"])[event_offset:]
+                while (
+                    "response.content-length.final-send-returned" not in events
+                    and time.monotonic() < deadline
+                ):
+                    time.sleep(0.005)
+                    events = read_events(server["events"])[event_offset:]
+                observation["application_events"] = events
             if (
                 fault is not None
                 and fault["contract"]
-                == "server-default-header-finalization-error-closes-connection"
+                in {
+                    "server-default-header-finalization-error-closes-connection",
+                    "server-concurrency-callback-error-preserves-503",
+                }
             ):
                 if (
                     fault_control_path is None
                     or fault_control_path.read_text(encoding="utf-8").strip()
                     == fault["point"]
                 ):
-                    raise ParityError("default-header finalization fault was not consumed")
+                    raise ParityError("HTTP response fault was not consumed")
                 observation["fault_consumed"] = True
             return observation
         if profile_id == "http2":
@@ -10742,11 +10817,13 @@ def execute_case(
                 "http2.response-early-hints",
                 "http2.response-trailers",
                 "http2.response-trailers-without-te",
+                "http2.incomplete-response-trailers",
             }
             observation = http2_request(
                 server["port"],
                 case["request"],
                 observe_response_extensions=response_extension_operation,
+                reject_timeout=case["operation"] == "http2.incomplete-response-trailers",
                 events_path=server["events"]
                 if case["operation"] in {
                     "http2.response-early-hints",
@@ -11016,6 +11093,23 @@ def execute_case(
             )
             observation["server_log"] = read_server_log(server)[log_offset:]
             return observation
+        if case.get("fault", {}).get("contract") == "websocket-keepalive-close-error-followup-200":
+            control = server.get("coverage_fault_control_path")
+            if control is None:
+                raise ParityError("keepalive close failures require the instrumented fault controller")
+            control.write_text(case["fault"]["point"], encoding="utf-8")
+            try:
+                event_offset = len(read_events(server["events"]))
+                observation = websocket_server_keepalive_observation(server, case["websocket"])
+                observation["fault_consumed"] = control.read_text(encoding="utf-8").strip() == ""
+                observation["followup"] = http1_request(server["port"], {
+                    "method": "GET", "path": case["websocket"]["followup_path"],
+                    "headers": [], "body_base64": "",
+                })
+                observation["application_events"] = read_events(server["events"])[event_offset:]
+                return observation
+            finally:
+                control.write_text("", encoding="utf-8")
         if case.get("operation") in {
             "websocket.server-keepalive",
             "websocket.server-keepalive-mismatched-pong",
@@ -11743,6 +11837,12 @@ def fault_contract_matches(
                 and event.get("message") == "Invalid HTTP header name."
                 for event in stderr_events
             )
+        )
+    if fault["contract"] == "server-concurrency-callback-error-preserves-503":
+        return (
+            observation.get("status") == 503
+            and observation.get("body_bytes") == "U2VydmljZSBVbmF2YWlsYWJsZQ=="
+            and observation.get("fault_consumed") is True
         )
     if fault["contract"] == "server-default-header-finalization-error-closes-connection":
         return (
@@ -12778,6 +12878,19 @@ def fault_contract_matches(
             and "websocket.hold" in events
             and "websocket.app-cancelled" in events
             and observation.get("fault_consumed") is True
+        )
+    if fault["contract"] == "websocket-keepalive-close-error-followup-200":
+        followup = observation.get("followup_response")
+        return (
+            observation.get("handshake_status") == 101
+            and observation.get("handshake_accept_valid") is True
+            and observation.get("first_server_ping_received") is True
+            and observation.get("pong_sent") is True
+            and observation.get("second_server_ping_received") is True
+            and observation.get("timeout_close_received") is False
+            and observation.get("connection_closed") is True
+            and observation.get("fault_consumed") is True
+            and isinstance(followup, dict) and followup.get("status") == 200
         )
     if fault["contract"] == "websocket-driver-send-error-followup-200":
         followup = observation.get("followup_response")
@@ -14733,6 +14846,8 @@ def execute_profile(
                                 **target_result,
                                 "fault_consumed": target_raw.get("fault_consumed"),
                             }
+                        elif case["fault"]["contract"] == "websocket-keepalive-close-error-followup-200":
+                            fault_observation = {**target_raw, **target_result}
                         elif case["fault"]["contract"] in {
                             "websocket-driver-send-error-followup-200",
                             "websocket-driver-send-error-cancels-app",
