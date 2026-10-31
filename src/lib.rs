@@ -94,16 +94,84 @@ use uvicorn_rs::{
 };
 
 #[cfg(not(coverage))]
-fn write_shutdown_trace(message: fmt::Arguments<'_>) {
+fn shutdown_trace_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
-    if *ENABLED.get_or_init(|| std::env::var_os("UVICORN_RS_SHUTDOWN_TRACE").is_some()) {
-        let line = format!(
-            "uvicorn-rs: shutdown-trace pid={} {message}\n",
-            std::process::id()
-        );
-        let mut stderr = std::io::stderr().lock();
-        let _ = std::io::Write::write_all(&mut stderr, line.as_bytes());
+    *ENABLED.get_or_init(|| std::env::var_os("UVICORN_RS_SHUTDOWN_TRACE").is_some())
+}
+
+#[cfg(not(coverage))]
+fn write_shutdown_trace(message: fmt::Arguments<'_>) {
+    if !shutdown_trace_enabled() {
+        return;
     }
+    let line = format!(
+        "uvicorn-rs: shutdown-trace pid={} {message}\n",
+        std::process::id()
+    );
+    let mut stderr = std::io::stderr().lock();
+    let _ = std::io::Write::write_all(&mut stderr, line.as_bytes());
+}
+
+#[cfg(not(coverage))]
+struct ShutdownTraceHeartbeat {
+    tokio: Option<tokio::task::JoinHandle<()>>,
+    stop_os_thread: Arc<AtomicBool>,
+    os_thread: Option<std::thread::JoinHandle<()>>,
+}
+
+#[cfg(not(coverage))]
+impl Drop for ShutdownTraceHeartbeat {
+    fn drop(&mut self) {
+        self.stop_os_thread.store(true, Ordering::Release);
+        if let Some(tokio) = &self.tokio {
+            tokio.abort();
+        }
+    }
+}
+
+#[cfg(not(coverage))]
+fn spawn_shutdown_trace_heartbeat(
+    cancellation: CancellationToken,
+) -> Option<ShutdownTraceHeartbeat> {
+    if !shutdown_trace_enabled() {
+        return None;
+    }
+
+    let stop_os_thread = Arc::new(AtomicBool::new(false));
+    let os_thread_stop = Arc::clone(&stop_os_thread);
+    let tokio_cancellation = cancellation.clone();
+    let os_thread = std::thread::Builder::new()
+        .name("uvicorn-rs-shutdown-trace".into())
+        .spawn(move || {
+            while !os_thread_stop.load(Ordering::Acquire) {
+                std::thread::sleep(std::time::Duration::from_millis(250));
+                if cancellation.is_cancelled() {
+                    write_shutdown_trace(format_args!(
+                        "os-thread.heartbeat cancelled=true thread={:?}",
+                        std::thread::current().id()
+                    ));
+                    break;
+                }
+            }
+        })
+        .ok()?;
+    let tokio = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(250));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
+            let cancelled = tokio_cancellation.is_cancelled();
+            write_shutdown_trace(format_args!(
+                "tokio-worker.heartbeat cancelled={cancelled} thread={:?}",
+                std::thread::current().id()
+            ));
+        }
+    });
+    Some(ShutdownTraceHeartbeat {
+        tokio: Some(tokio),
+        stop_os_thread,
+        os_thread: Some(os_thread),
+    })
 }
 
 #[cfg(not(coverage))]
@@ -8379,6 +8447,8 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
             ..uvicorn_rs::ServerConfig::default()
         };
         shutdown_trace!("native-transport-start");
+        #[cfg(not(coverage))]
+        let shutdown_heartbeat = spawn_shutdown_trace_heartbeat(cancellation.clone());
         let result = match listener {
             BoundListener::Tcp(listeners) => {
                 let mut listener_services = Vec::with_capacity(listeners.len());
@@ -8454,6 +8524,17 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
                 }
             }
         };
+        #[cfg(not(coverage))]
+        if let Some(mut heartbeat) = shutdown_heartbeat {
+            heartbeat.stop_os_thread.store(true, Ordering::Release);
+            if let Some(os_thread) = heartbeat.os_thread.take() {
+                let _ = os_thread.join();
+            }
+            if let Some(tokio) = heartbeat.tokio.take() {
+                tokio.abort();
+                let _ = tokio.await;
+            }
+        }
         if let Err(error) = result {
             match error {
                 uvicorn_rs::ServeError::GracefulShutdownTimedOut => log_error(format_args!(

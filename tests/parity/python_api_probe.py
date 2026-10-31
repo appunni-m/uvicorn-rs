@@ -39,11 +39,8 @@ def subprocess_environment() -> dict[str, str]:
         environment.pop(name, None)
     environment["PYTHONNOUSERSITE"] = "1"
     if os.name == "nt" and hasattr(signal, "SIGBREAK"):
-        # CTRL_C_EVENT cannot be directed to a Windows process group. The
-        # per-server sitecustomize shim maps a targeted CTRL_BREAK_EVENT back
-        # to Uvicorn's SIGINT handler for graceful shutdown.
+        # Keep the reference signal tracer available to server subprocesses.
         signal_site = str(Path(__file__).parent / "oracle_signal_trace")
-        environment["ASGI_PARITY_WINDOWS_CTRL_BREAK_AS_SIGINT"] = "1"
         environment["PYTHONPATH"] = os.pathsep.join(
             path for path in (signal_site, environment.get("PYTHONPATH")) if path
         )
@@ -1300,15 +1297,24 @@ except KeyboardInterrupt:
         )
         worker_stall_resumer.start()
     process_options = {}
+    previous_windows_sigint_handler = None
     previous_windows_sigbreak_handler = None
     shutdown_signal_name = request.get("shutdown_signal", "SIGINT")
     if shutdown_signal_name not in {"SIGINT", "SIGTERM"}:
         raise ValueError("run_http shutdown_signal must be SIGINT or SIGTERM")
+    shutdown_signal_names = request.get(
+        "shutdown_signal_sequence", [shutdown_signal_name]
+    )
     if os.name == "nt":
-        process_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-        # The runner gives this probe a private console. Ignore Ctrl+Break in
-        # the probe so the event reaches the server tree without terminating
-        # this observer process or the parity coordinator.
+        # The runner gives this probe a private console. Broadcast console
+        # events to its server tree and keep the probe itself alive. A new
+        # process group disables Ctrl+C, so use one only for break-only tests.
+        if "SIGINT" in shutdown_signal_names:
+            previous_windows_sigint_handler = signal.signal(
+                signal.SIGINT, signal.SIG_IGN
+            )
+        else:
+            process_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
         previous_windows_sigbreak_handler = signal.signal(
             signal.SIGBREAK, signal.SIG_IGN
         )
@@ -1350,6 +1356,8 @@ except KeyboardInterrupt:
             worker_stall_resumer.join(timeout=1.0)
         if worker_stall_directory is not None:
             worker_stall_directory.cleanup()
+        if previous_windows_sigint_handler is not None:
+            signal.signal(signal.SIGINT, previous_windows_sigint_handler)
         if previous_windows_sigbreak_handler is not None:
             signal.signal(signal.SIGBREAK, previous_windows_sigbreak_handler)
         raise
@@ -1764,9 +1772,6 @@ except KeyboardInterrupt:
             finally:
                 connection.close()
 
-        shutdown_signal_names = request.get(
-            "shutdown_signal_sequence", [shutdown_signal_name]
-        )
         shutdown_signals_sent = []
         if signal_hold_marker is not None:
             hold_deadline = time.monotonic() + request["timeout_seconds"]
@@ -1789,11 +1794,26 @@ except KeyboardInterrupt:
                 time.sleep(0.2)
             try:
                 if os.name == "nt":
-                    # CTRL_C_EVENT with a nonzero process-group ID is not
-                    # delivered by Windows. CTRL_BREAK_EVENT is targetable;
-                    # the server's sitecustomize routes it to SIGINT.
-                    windows_signal = signal.CTRL_BREAK_EVENT
-                    process.send_signal(windows_signal)
+                    process_group = process_options.get("creationflags") == (
+                        subprocess.CREATE_NEW_PROCESS_GROUP
+                    )
+                    if signal_name == "SIGINT":
+                        windows_signal = signal.CTRL_C_EVENT
+                    else:
+                        windows_signal = signal.CTRL_BREAK_EVENT
+                    if process_group and signal_name == "SIGTERM":
+                        process.send_signal(windows_signal)
+                    else:
+                        import ctypes
+
+                        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+                        kernel32.GenerateConsoleCtrlEvent.argtypes = [
+                            ctypes.c_uint,
+                            ctypes.c_uint,
+                        ]
+                        kernel32.GenerateConsoleCtrlEvent.restype = ctypes.c_int
+                        if not kernel32.GenerateConsoleCtrlEvent(windows_signal, 0):
+                            raise ctypes.WinError(ctypes.get_last_error())
                 else:
                     process.send_signal(getattr(signal, signal_name))
                 shutdown_signals_sent.append(signal_name)
@@ -1879,6 +1899,8 @@ except KeyboardInterrupt:
             inherited_listener.close()
         if bind_conflict_listener is not None:
             bind_conflict_listener.close()
+        if previous_windows_sigint_handler is not None:
+            signal.signal(signal.SIGINT, previous_windows_sigint_handler)
         if previous_windows_sigbreak_handler is not None:
             signal.signal(signal.SIGBREAK, previous_windows_sigbreak_handler)
 
