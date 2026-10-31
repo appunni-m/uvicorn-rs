@@ -866,6 +866,28 @@ async def _app_impl(scope, receive, send):
         })
         _record("http2.response-trailers.final-send-returned")
         return
+    if path == "/response-trailers-capacity":
+        headers = _header_capacity_headers(scope["query_string"])
+        await send({
+            "type": "http.response.start",
+            "status": 200,
+            "headers": [],
+            "trailers": True,
+        })
+        await send({"type": "http.response.body", "body": b"trailer capacity probe"})
+        await send({
+            "type": "http.response.trailers",
+            "headers": headers[:-1],
+            "more_trailers": True,
+        })
+        _record("http2.response-trailer-capacity.first-send-returned")
+        await send({
+            "type": "http.response.trailers",
+            "headers": headers[-1:],
+            "more_trailers": False,
+        })
+        _record("http2.response-trailer-capacity.final-send-returned")
+        return
     if path == "/response-headers-order":
         await send({
             "type": "http.response.start",

@@ -1173,6 +1173,71 @@
       }
     },
     {
+      "id": "http2.response-trailer-capacity-delivery",
+      "kind": "protocol_operation",
+      "observe": [
+        "responses",
+        "response_trailer_count",
+        "response_trailer_sha256",
+        "response_stream_terminal",
+        "response_stream_reset_error_code",
+        "connection_reused",
+        "followup_status",
+        "followup_healthy",
+        "application_events"
+      ],
+      "compare": [
+        "responses",
+        "response_trailer_count",
+        "response_trailer_sha256",
+        "response_stream_terminal",
+        "response_stream_reset_error_code",
+        "connection_reused",
+        "followup_status",
+        "followup_healthy",
+        "application_events"
+      ],
+      "required_observations": {
+        "response_trailer_count": 24576,
+        "response_trailer_sha256": "77d4b42a577d6b50f5d0dfda7481edfd9194505d6a1a32e5492d8ef8b035fde4",
+        "response_stream_terminal": "ended",
+        "response_stream_reset_error_code": null,
+        "connection_reused": true,
+        "followup_status": 200,
+        "followup_healthy": true,
+        "application_events": [
+          "http2.response-trailer-capacity.first-send-returned",
+          "http2.response-trailer-capacity.final-send-returned"
+        ]
+      }
+    },
+    {
+      "id": "http2.response-trailer-capacity-rejection",
+      "kind": "protocol_operation",
+      "observe": [
+        "responses",
+        "response_trailer_count",
+        "response_trailer_sha256",
+        "response_stream_terminal",
+        "response_stream_reset_error_code",
+        "connection_reused",
+        "followup_status",
+        "followup_healthy",
+        "application_events"
+      ],
+      "compare": [
+        "responses",
+        "response_trailer_count",
+        "response_trailer_sha256",
+        "response_stream_terminal",
+        "response_stream_reset_error_code",
+        "connection_reused",
+        "followup_status",
+        "followup_healthy",
+        "application_events"
+      ]
+    },
+    {
       "id": "http2.response-trailers-without-te",
       "kind": "protocol_operation",
       "observe": [
@@ -1427,6 +1492,33 @@
       "observe": [
         "responses"
       ]
+    },
+    {
+      "id": "http.response-header-capacity-delivery",
+      "kind": "protocol_operation",
+      "observe": [
+        "responses"
+      ],
+      "required_observations": {
+        "responses": [
+          {
+            "status": 200,
+            "content_type": null,
+            "body_base64": "aGVhZGVycyBhY2NlcHRlZA==",
+            "capacity_header_count": 24574,
+            "capacity_header_sha256": "ce3366e5ba3acd8514a8cf336e56e7624b87e671682302aa42a06864d41f7c4f",
+            "connection_closed": false
+          },
+          {
+            "status": 200,
+            "content_type": "application/json",
+            "body_base64": "eyJodHRwX3ZlcnNpb24iOiIxLjEiLCJtZXRob2QiOiJHRVQiLCJzY2hlbWUiOiJodHRwIiwicGF0aCI6Ii9zY29wZSIsInF1ZXJ5X3N0cmluZ19iYXNlNjQiOiIiLCJ4LXBhcml0eSI6IiIsImJvZHlfYmFzZTY0IjoiIn0=",
+            "capacity_header_count": 0,
+            "capacity_header_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "connection_closed": false
+          }
+        ]
+      }
     },
     {
       "id": "http.application-task-cleanup-observer",

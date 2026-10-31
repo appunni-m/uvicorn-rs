@@ -5081,6 +5081,26 @@
       }
     },
     {
+      "case_id": "http1.response-header-capacity-at-map-limit",
+      "profile": "http1",
+      "operation": "http.response-header-capacity-delivery",
+      "covers": ["http.response-header-capacity-delivery"],
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/response-header-capacity?count=24574",
+          "headers": [],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/scope",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
       "case_id": "support.http1.response-header-capacity-error-recovers",
       "profile": "http1",
       "operation": "http.keepalive-sequence",
@@ -5095,7 +5115,7 @@
       "request_sequence": [
         {
           "method": "GET",
-          "path": "/response-header-capacity?count=32769",
+          "path": "/response-header-capacity?count=24575",
           "headers": [],
           "body_base64": ""
         },

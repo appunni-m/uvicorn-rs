@@ -742,6 +742,55 @@
       }
     },
     {
+      "case_id": "http2.response-trailer-capacity-delivery-at-limit",
+      "profile": "http2",
+      "operation": "http2.response-trailer-capacity-delivery",
+      "covers": [
+        "http2.response-trailer-capacity-delivery"
+      ],
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/response-trailers-capacity?count=24576",
+          "headers": [["te", "trailers"]],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/scope",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
+      "case_id": "support.http2.response-trailer-capacity-reset-recovers",
+      "profile": "http2",
+      "operation": "http2.response-trailer-capacity-rejection",
+      "covers": [
+        "http2.response-trailer-capacity-rejection"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "public.http2-response-trailer-capacity",
+        "contract": "http2-response-trailer-capacity-limit-reset-followup-200"
+      },
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/response-trailers-capacity?count=24577",
+          "headers": [["te", "trailers"]],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/scope",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
       "case_id": "http2.invalid-response-trailer-name",
       "profile": "http2",
       "operation": "http.invalid-asgi-message-status",

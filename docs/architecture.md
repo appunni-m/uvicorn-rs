@@ -259,23 +259,43 @@ paired benchmark before it can be considered a general performance setting.
 
 ## Header capacity and response commitment
 
-Response and WebSocket acceptance headers use the pinned `http` crate's finite
-`HeaderMap` storage. Its internal bucket ceiling does not define a stable
-public accepted-header count; distinct names, duplicate values, map growth, and
-reserved handshake headers affect capacity differently. This is a compiled
-capacity boundary, not a configurable CLI limit.
+Response and WebSocket acceptance headers use the `http` crate's finite
+`HeaderMap` storage. In the current lockfile (`http` 1.5.0), one map can hold
+24,576 distinct header names; repeated values for an existing name do not use
+another key slot. Configured response headers and WebSocket handshake fields
+also consume slots, so the number available to application-supplied names can
+be lower. This capacity is not configurable through the CLI.
 
-HTTP header construction uses `try_append`
-before committing response state, then moves the finished map into the
-response. WebSocket construction retains the application task guard until
-fallible handshake header assembly succeeds. Capacity failures follow the
-native `Result` channel and existing public failure/cleanup behavior. Both valid
-large-header support contracts passed a nine-case targeted snapshot, including
-the small HTTP 500 recovery, rejected WebSocket handshake, application cleanup,
-and healthy follow-ups. Both also pass attribution and all three complete
-repeats in the historical shared-write 448-case full verification and the selected normal-build
-audit. See
-[coverage evidence](coverage.md#historical-targeted-verification-9-cases-fallible-header-assembly).
+HTTP header construction uses `try_append` before committing response state,
+then moves the finished map into the response. This turns the crate's map limit
+into a fallible ASGI send error instead of an infallible append. The HTTP/1
+boundary case sends 24,574 distinct application headers plus the default
+`Server` and `Date` names. A bounded raw-wire observer verifies the count and
+SHA-256 against Uvicorn 0.54.0 and confirms the next request succeeds on the
+same connection. WebSocket construction retains the application task guard
+until fallible handshake header assembly succeeds.
+
+The limit is an implementation resource bound, not a Uvicorn or HTTP-standard
+field-count limit. [RFC 9110 §5.4](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.4)
+defines no predefined field-section size, and
+the pinned Uvicorn `httptools` profile accepts 24,575 distinct application
+headers, one more than the candidate can fit after its default headers. The
+candidate returns a catchable send error beyond the map boundary; the
+target-only HTTP/1 case checks an application fallback response and healthy
+connection recovery. This is a bounded failure improvement over panicking while
+building the map, but it does not establish full Uvicorn compatibility for the
+next field. [RFC 9113 §10.5.1](https://www.rfc-editor.org/rfc/rfc9113.html#section-10.5.1)
+discusses field-block resource exhaustion risks. At
+the HTTP/2 trailer boundary, 24,576 distinct names match Hypercorn 0.18.0 by
+count and SHA-256; the stream ends normally. At 24,577, trailer assembly fails
+before a partial trailer block is sent. Because the response body is already
+committed, the server resets only that stream with `INTERNAL_ERROR`;
+[RFC 9113 §5.4.2](https://www.rfc-editor.org/rfc/rfc9113.html#section-5.4.2)
+defines stream-local errors signaled with `RST_STREAM`, and the
+same-connection `/scope` follow-up succeeds. Receipts are stored under
+`target/kata-progress/trailer-capacity-2026-10-31/`. The existing WebSocket
+capacity support contract covers handshake failure cleanup; see
+[historical coverage evidence](coverage.md#historical-targeted-verification-9-cases-fallible-header-assembly).
 
 ## Context, exceptions, and cancellation
 

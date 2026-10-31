@@ -1484,10 +1484,32 @@ the allow-listed point, and `oracle_observation: null`. The historical 235
 fault-contract cases cover HTTP, WebSocket, HTTP/2, HTTP/3, lifespan, server
 startup, and native binding error paths. Their specific contracts verify
 observable failure handling and cleanup; they are not oracle-equivalence cases.
-The two `support.*` header-capacity rows use harness-only `public.*` selectors
+The three `support.*` header-capacity rows use harness-only `public.*` selectors
 and ordinary valid ASGI input. They do not write a native fault-control file.
-They declare the target's finite-capacity rejection and recovery contract in
-the same result envelope, and remain outside the oracle-parity denominator.
+They declare finite-capacity rejection and recovery contracts in the same
+result envelope, and remain outside the oracle-parity denominator. The
+`http1.response-header-capacity-at-map-limit` oracle case uses a bounded raw
+HTTP/1 observer, because Python's standard response parser caps the number of
+header lines. It receives 24,574 app fields plus the default `Server` and
+`Date` names, checks count and SHA-256 against Uvicorn 0.54.0, then verifies a
+healthy request on the same connection.
+
+The HTTP/1 over-limit support case is intentionally target-only. A separate
+raw-wire diagnostic against the pinned `httptools` oracle confirms that
+Uvicorn accepts 24,575 app fields while `uvicorn-rs` reaches the finite
+`http` 1.5.0 map boundary after 24,574 application fields and the two defaults.
+It returns a catchable ASGI send error and recovers on the same connection after
+the app's 500 fallback. This is an implementation bound and controlled-error
+behavior, not parity above the map boundary. The separate
+`http2.response-trailer-capacity-delivery` oracle case sends 24,576 distinct
+trailers and compares their count, canonical SHA-256, stream completion, and a
+healthy same-connection request with Hypercorn 0.18.0. The
+`support.http2.response-trailer-capacity-reset-recovers` case sends the next
+distinct name and checks for zero partial trailers, an HTTP/2
+`RST_STREAM INTERNAL_ERROR`, and a healthy same-connection follow-up. Together
+these cases record the current `http` 1.5.0 map boundary and the wire recovery
+behavior at that boundary. Uvicorn's acceptance of 24,575 application names
+shows a remaining HTTP/1 compatibility gap at the dependency's maximum.
 
 The HTTP/3 request-trailer input is another target-only support contract using
 ordinary protocol input, not an injected Rust fault. The current result schema

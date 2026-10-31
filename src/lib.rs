@@ -3652,6 +3652,8 @@ struct AsgiIo {
     response_content_length_satisfied: Arc<AtomicBool>,
     response_trailers_expected: AtomicBool,
     response_trailer_headers: StdMutex<HeaderMap>,
+    response_trailer_header_names: AtomicUsize,
+    default_response_header_names: Vec<HeaderName>,
     request_allows_response_trailers: bool,
     http2_informational: Option<hyper::ext::Http2InformationalSender>,
     default_header_error: Option<InvalidDefaultHeader>,
@@ -3824,13 +3826,21 @@ impl AsgiIo {
                 )?;
                 let mut headers = HeaderMap::new();
                 let mut header_order = Vec::with_capacity(header_values.len());
+                let mut unique_header_names = slf.default_response_header_names.len();
                 for (name, value) in header_values {
                     let name = HeaderName::from_bytes(&name)
                         .map_err(|_| PyRuntimeError::new_err("Invalid HTTP header name."))?;
                     let value = HeaderValue::from_bytes(&value)
                         .map_err(|_| PyRuntimeError::new_err("Invalid HTTP header value."))?;
                     header_order.push(name.clone());
-                    append_response_header(&mut headers, name, value, "headers")?;
+                    append_response_header(
+                        &mut headers,
+                        name,
+                        value,
+                        &mut unique_header_names,
+                        &slf.default_response_header_names,
+                        "headers",
+                    )?;
                 }
                 let content_length = headers
                     .get(http::header::CONTENT_LENGTH)
@@ -4094,6 +4104,8 @@ impl AsgiIo {
                     let mut accumulated = slf.response_trailer_headers.lock().map_err(|_| {
                         PyRuntimeError::new_err("HTTP response trailers lock poisoned")
                     })?;
+                    let mut unique_header_names =
+                        slf.response_trailer_header_names.load(Ordering::Acquire);
                     for (name, value) in header_values {
                         let mut name = name.to_vec();
                         name.make_ascii_lowercase();
@@ -4118,8 +4130,17 @@ impl AsgiIo {
                             .map_err(|_| PyRuntimeError::new_err("Invalid HTTP header name."))?;
                         let value = HeaderValue::from_bytes(&value)
                             .map_err(|_| PyRuntimeError::new_err("Invalid HTTP header value."))?;
-                        append_response_header(&mut accumulated, name, value, "trailers")?;
+                        append_response_header(
+                            &mut accumulated,
+                            name,
+                            value,
+                            &mut unique_header_names,
+                            &[],
+                            "trailers",
+                        )?;
                     }
+                    slf.response_trailer_header_names
+                        .store(unique_header_names, Ordering::Release);
                     if more_trailers {
                         return Ok(py.None().into_bound(py));
                     }
@@ -5123,13 +5144,34 @@ fn append_response_header(
     headers: &mut HeaderMap,
     name: HeaderName,
     value: HeaderValue,
+    unique_header_names: &mut usize,
+    reserved_names: &[HeaderName],
     kind: &str,
 ) -> PyResult<()> {
+    let is_new_name = !headers.contains_key(&name) && !reserved_names.contains(&name);
+    if is_new_name && *unique_header_names >= MAX_RESPONSE_HEADER_NAMES {
+        return Err(PyRuntimeError::new_err(format!(
+            "HTTP response {kind}: maximum of {MAX_RESPONSE_HEADER_NAMES} distinct header names exceeded"
+        )));
+    }
     headers
         .try_append(name, value)
-        .map_err(|error| PyRuntimeError::new_err(format!("HTTP response {kind}: {error}")))?;
+        .map_err(|_| {
+            PyRuntimeError::new_err(format!(
+                "HTTP response {kind}: maximum of {MAX_RESPONSE_HEADER_NAMES} distinct header names exceeded"
+            ))
+        })?;
+    if is_new_name {
+        *unique_header_names += 1;
+    }
     Ok(())
 }
+
+/// Maximum number of distinct names retained in one HTTP response header map.
+/// `http` 1.5.0 caps its 2^15 index slots at 75% usable capacity, or 24,576
+/// unique names. Keep the adapter's check aligned with that dependency limit so
+/// it reports a Python error instead of relying on an infallible map append.
+const MAX_RESPONSE_HEADER_NAMES: usize = 24_576;
 
 enum ResponseApplication {
     Running(tokio::task::JoinHandle<PyResult<Py<PyAny>>>),
@@ -9737,6 +9779,7 @@ async fn handle_request_parts(
         };
     #[cfg(not(coverage))]
     let default_header_error = context.server.default_header_error;
+    let default_response_header_names = unique_default_response_header_names(&context.server);
     diagnostics.http_request_started();
     let response_latency_started = diagnostics.http_response_latency_started();
     let response_timing_diagnostics = diagnostics.clone();
@@ -9784,6 +9827,8 @@ async fn handle_request_parts(
                         response_content_length_satisfied: app_response_content_length_satisfied,
                         response_trailers_expected: AtomicBool::new(false),
                         response_trailer_headers: StdMutex::new(HeaderMap::new()),
+                        response_trailer_header_names: AtomicUsize::new(0),
+                        default_response_header_names,
                         request_allows_response_trailers,
                         http2_informational,
                         default_header_error,
@@ -11120,6 +11165,22 @@ fn validated_default_headers(headers: &[(Bytes, Bytes)]) -> Vec<(HeaderName, Hea
         .collect()
 }
 
+fn unique_default_response_header_names(server: &ServerContext) -> Vec<HeaderName> {
+    let mut names =
+        Vec::with_capacity(server.default_headers.len() + usize::from(server.date_header));
+    if server.date_header {
+        names.push(DATE);
+    }
+    for (name, _) in &server.default_headers {
+        if let Ok(name) = HeaderName::from_bytes(name) {
+            if !names.contains(&name) {
+                names.push(name);
+            }
+        }
+    }
+    names
+}
+
 fn apply_default_response_headers(
     server: &ServerContext,
     response: Response<ResponseBody>,
@@ -11139,7 +11200,9 @@ fn apply_default_response_headers(
         #[cfg(not(coverage))]
         let date_bytes = date.as_bytes();
         let value = HeaderValue::from_bytes(date_bytes).map_err(std::io::Error::other)?;
-        headers.append(DATE, value);
+        headers.try_append(DATE, value).map_err(|error| {
+            std::io::Error::other(format!("HTTP response header capacity exceeded: {error}"))
+        })?;
         if let Some(prefix) = &mut header_order_prefix {
             prefix.push(DATE);
         }
@@ -11152,10 +11215,16 @@ fn apply_default_response_headers(
         if let Some(prefix) = &mut header_order_prefix {
             prefix.push(name.clone());
         }
-        headers.append(name, value);
+        headers.try_append(name, value).map_err(|error| {
+            std::io::Error::other(format!("HTTP response header capacity exceeded: {error}"))
+        })?;
     }
     for (name, value) in &parts.headers {
-        headers.append(name.clone(), value.clone());
+        headers
+            .try_append(name.clone(), value.clone())
+            .map_err(|error| {
+                std::io::Error::other(format!("HTTP response header capacity exceeded: {error}"))
+            })?;
     }
     parts.headers = headers;
     if let (Some(order), Some(prefix)) = (

@@ -20,7 +20,7 @@ a prerequisite for completing the repository work.
   `tests/parity/manifest.json`, its indexed inputs, `tests/native-core/manifest.json`,
   and `examples/native-fastapi-contracts/manifest.json`. Do not create a second
   operation inventory or require arbitrary combinations outside this contract.
-- The current manifest has 148 operations and 90 execution profiles. Those counts
+- The current manifest has 151 operations and 90 execution profiles. Those counts
   describe its inventory, not completeness of upstream compatibility.
 - Platform acceptance uses the existing CI profiles: Linux x86-64, macOS ARM64,
   Windows x86-64 on CPython 3.12.13, plus the declared Python 3.9 wheel-consumer
@@ -68,6 +68,40 @@ the native adapter rejects its field count while the oracle sends a field block
 that exceeds the probe client's decoder limit. Its failed diagnostic is retained
 at `target/ci537/trailer-capacity-parity.json`; it is not a passing fault contract.
 Resolve these differences before closing compatibility or starting benchmarks.
+
+### Compatibility follow-up — 2026-10-31
+
+The extension hooks were implemented after the preceding diagnosis. Focused
+live Uvicorn 0.54.0 parity passed all six affected custom HTTP/WebSocket
+protocol and TLS factory cases on the current local source; the receipt is
+`target/kata-progress/custom-hooks-2026-10-31/current-hook-parity.json` (SHA-256
+`75467f1cc662df6c5555a2b1f161c135609cf5602be28a7f698ef75ef352c110`). This
+does not close the full imports/API or platform compatibility inventories.
+
+The current `http` 1.5.0 `HeaderMap` uses 32,768 raw index slots but exposes at
+most 24,576 unique entries at its 75% load threshold. The selected HTTP/1
+boundary case passes against Uvicorn 0.54.0 at 24,574 app fields plus the two
+default names; its corrected source-bound report is
+`target/kata-progress/trailer-capacity-2026-10-31/http1-map-boundary-current.json`
+(SHA-256 `90f166f8beb86a2d727ba93a9f083be99d6cd2e6422ee0a23aaf40e36fea3304`).
+The grouped run also passed the H1 controlled-error recovery case, H2 delivery
+at 24,576 trailers, and H2 stream-reset recovery at 24,577. Its H1 exact-boundary
+status was initially failed only because the expected digest omitted three
+characters. The full grouped report is
+`target/kata-progress/trailer-capacity-2026-10-31/grouped-run-stale-h1-digest.json`
+(SHA-256 `43f5668d71829451123f818b81ef895660c7311409762004c67238a41154c3e8`).
+The H1 case then passed on the same server source after correcting that fixture
+digest, in the report cited above. No server code changed between those receipts.
+
+The pinned Uvicorn `httptools` oracle accepts 24,575 distinct app headers plus
+the same two defaults. The candidate reports a catchable `RuntimeError`, lets
+the ASGI app return its fallback 500, and serves `/scope` on the same connection.
+The adapter's fallible append prevents the panic that the `http` crate's
+infallible append path would otherwise trigger, but this remains a one-field
+Uvicorn behavior difference and is not closed by documentation alone. Retain it
+as a compatibility review item until its controlled-failure improvement is
+accepted or the map capacity is raised without changing downstream dependency
+resolution.
 
 The TLS floor has a standards-based proof in
 `target/ci537/obsolete-tls-controlled/coverage-report.json` (SHA-256
