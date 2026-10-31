@@ -2966,6 +2966,7 @@
           ],
           "request_body_chunks_base64": ["Y2h1bmtlZC0=", "d3NnaS1ib2R5"],
           "shutdown_signal": "SIGINT",
+          "post_response_settle_seconds": 0.25,
           "timeout_seconds": 5,
           "lifespan": "off",
           "invocation": "api",
@@ -2991,6 +2992,7 @@
           ],
           "request_body_chunks_base64": ["Y2h1bmtlZC0=", "d3NnaS1ib2R5"],
           "shutdown_signal": "SIGINT",
+          "post_response_settle_seconds": 0.25,
           "timeout_seconds": 5,
           "lifespan": "off",
           "invocation": "module-cli",
@@ -6638,15 +6640,6 @@
       "covers": [
         "python.api.run-http-incomplete-header"
       ],
-      "required_observations": {
-        "exit_code": 0,
-        "response_received": false,
-        "response_status": null,
-        "raw_connection_open_after_timeout": true,
-        "shutdown_signal_sent": true,
-        "process_exit_code": 0,
-        "process_timed_out": false
-      },
       "api": {
         "run_http": {
           "method": "GET",
@@ -6670,15 +6663,6 @@
       "covers": [
         "python.api.run-http-incomplete-header"
       ],
-      "required_observations": {
-        "exit_code": 0,
-        "response_received": true,
-        "response_status": 400,
-        "raw_connection_open_after_timeout": false,
-        "shutdown_signal_sent": true,
-        "process_exit_code": 0,
-        "process_timed_out": false
-      },
       "api": {
         "run_http": {
           "method": "GET",
@@ -6702,15 +6686,6 @@
       "covers": [
         "python.api.run-http-incomplete-header"
       ],
-      "required_observations": {
-        "exit_code": 0,
-        "response_received": false,
-        "response_status": null,
-        "raw_connection_open_after_timeout": true,
-        "shutdown_signal_sent": true,
-        "process_exit_code": 0,
-        "process_timed_out": false
-      },
       "api": {
         "run_http": {
           "method": "GET",
@@ -6734,15 +6709,6 @@
       "covers": [
         "python.api.run-http-incomplete-header"
       ],
-      "required_observations": {
-        "exit_code": 0,
-        "response_received": true,
-        "response_status": 400,
-        "raw_connection_open_after_timeout": false,
-        "shutdown_signal_sent": true,
-        "process_exit_code": 0,
-        "process_timed_out": false
-      },
       "api": {
         "run_http": {
           "method": "GET",

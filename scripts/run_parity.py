@@ -13559,6 +13559,11 @@ def run_python_api_probe(
             ) from error
         if type(run_http_observation) is not dict:
             raise ParityError(f"{case['case_id']}: HTTP API observation must be an object")
+        if run_http_observation.get("process_timed_out"):
+            raise ParityError(
+                f"{case['case_id']}: {server_id} HTTP API server exceeded its "
+                "shutdown timeout"
+            )
         shutdown_trace_output = os.environ.get("UVICORN_RS_SHUTDOWN_TRACE_OUTPUT")
         trace_oracle_signal = (
             server_id == "uvicorn"
