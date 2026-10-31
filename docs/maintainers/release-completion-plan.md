@@ -698,9 +698,9 @@ compatibility acceptance or the start of benchmarks.
 ## m8mx — Publish and verify the consolidated release
 
 **Work:** Once zep3, x3az and v5fe qualify, recheck the exact source, immutable
-tag, selected artifacts and current registry state. For the 0.2.2 candidate,
+tag, selected artifacts and current registry state. For the 0.3.0 candidate,
 the maintainer requested local Cargo publication before PyPI. The 2026-10-30
-crates.io API snapshot shows both crate names at unyanked 0.2.1, so 0.2.2 is an
+crates.io API snapshot shows both crate names at unyanked 0.2.1, so 0.3.0 is an
 update, not a first publication. From a separate clean checkout of the exact
 accepted tag, compare both `cargo package --locked` archives with the candidate;
 publish `asgi-lifespan-protocol-rs` first, wait for its exact index checksum,
@@ -729,6 +729,24 @@ Python ASGI and native framework evidence. Do not edit changelogs.
 surface, required artifact, consumer, metric or release gate lacks evidence.
 Use a requirement-by-requirement closure audit, not an accumulation of status
 comments. Do not manufacture completion to meet a date.
+
+## Current candidate version
+
+The synchronized candidate is **0.3.0**. The parser-specific admission fix adds
+the public `ServerConfig::http1_allow_authority_form` field to the exhaustive
+0.2.1 struct, requiring a minor bump for Rust callers with complete struct
+literals. Cargo/Python manifests and workspace lock entries are synchronized.
+Historical 0.2.2 receipts retain their original source and version. The release
+version guard, locked offline Cargo metadata, locked offline uv validation, and
+strict documentation build pass for the updated metadata.
+
+Focused Windows CI [#538](https://github.com/appunni-m/uvicorn-rs/actions/runs/41180292641)
+passed all 12 selected cases at `6f0cbda07`, with zero infrastructure failures.
+Its artifact SHA-256 is
+`531fbd2a57e6ad3034e9ca061d98f946584e6741e03ec722f14193672cf9ffb6`;
+the parity report SHA-256 is
+`99f044e32fe5840a3e6bee04faab928d314be05fb01f71e4daa73166800ecc80`.
+This subset does not replace the full current-platform acceptance run.
 
 ## Focused commands and evidence reuse
 

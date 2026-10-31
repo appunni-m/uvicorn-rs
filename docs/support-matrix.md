@@ -50,7 +50,7 @@ acceptance. Full Uvicorn 0.54.0 compatibility and 100% coverage are not
 established.
 
 Cargo `uvicorn-rs` and `asgi-lifespan-protocol-rs` are published at 0.2.1;
-0.2.2 is still a candidate. The PyPI `uvicorn-rs` project remains unpublished.
+0.3.0 is still a candidate. The PyPI `uvicorn-rs` project remains unpublished.
 The `release.yml` PyPI pending publisher is saved, and the maintainer confirms
 both crates.io Trusted Publisher entries are already configured. No candidate
 is accepted for publication. Benchmarks remain behind complete parity; the

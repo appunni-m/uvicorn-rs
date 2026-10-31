@@ -45,7 +45,7 @@ dependencies = [
 
 [[package]]
 name = "asgi-lifespan-protocol-rs"
-version = "0.2.2"
+version = "0.3.0"
 
 [[package]]
 name = "assert_matches"
@@ -1830,7 +1830,7 @@ checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
 
 [[package]]
 name = "uvicorn-rs"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "asgi-lifespan-protocol-rs",
  "assert_matches",
@@ -1879,7 +1879,7 @@ dependencies = [
 
 [[package]]
 name = "uvicorn-rs-py"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "aes",
  "base64",

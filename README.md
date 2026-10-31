@@ -11,7 +11,7 @@ distribution `uvicorn-rs`. The optional internal Cargo/PyO3 adapter remains
 `.github/workflows/release.yml` publishes, while `candidate.yml` verifies
 artifacts. Both crates.io Trusted Publisher entries and the PyPI publisher are
 already configured. crates.io currently lists both Cargo crates at 0.2.1;
-PyPI has no `uvicorn-rs` release. The 0.2.2 candidate is not release-qualified.
+PyPI has no `uvicorn-rs` release. The 0.3.0 candidate is not release-qualified.
 See [release status](https://appunni-m.github.io/uvicorn-rs/releases/).
 
 The latest hosted [CI #537](https://github.com/appunni-m/uvicorn-rs/actions/runs/41175891140)
