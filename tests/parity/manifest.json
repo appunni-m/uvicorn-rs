@@ -3852,6 +3852,27 @@
         "listener_released",
         "application_events"
       ]
+    },
+    {
+      "id": "tls.reject-obsolete-version",
+      "kind": "protocol_operation",
+      "observe": [
+        "handshake_rejected",
+        "tls_alert_level",
+        "tls_alert_description",
+        "followup_status",
+        "supported_tls_client_hello_admitted"
+      ],
+      "required_observations": {
+        "handshake_rejected": true,
+        "followup_status": 200,
+        "supported_tls_client_hello_admitted": true
+      },
+      "compare": [
+        "handshake_rejected",
+        "followup_status",
+        "supported_tls_client_hello_admitted"
+      ]
     }
   ],
   "inputs": [

@@ -52,7 +52,7 @@ diagnostics, that limit is stated in the option description.
 | --ssl-certfile PATH | Unset | PEM certificate chain. Supply it together with --ssl-keyfile to enable TLS and experimental HTTP/3. |
 | --ssl-keyfile PATH | Unset | PEM private key paired with --ssl-certfile. |
 | --ssl-keyfile-password TEXT | Unset | Password for a PKCS#8 `ENCRYPTED PRIVATE KEY` PEM. Traditional encrypted PEM formats have not been qualified. |
-| --ssl-version INTEGER | `ssl.PROTOCOL_TLS_SERVER` | The default allows TLS 1.2 and 1.3. `ssl.PROTOCOL_TLSv1_2` restricts TCP HTTPS to TLS 1.2; QUIC keeps TLS 1.3 as required by HTTP/3. TLS 1.0 and 1.1 remain unsupported by Rustls. |
+| --ssl-version INTEGER | `ssl.PROTOCOL_TLS_SERVER` | The default allows TLS 1.2 and 1.3. `ssl.PROTOCOL_TLSv1_2` restricts TCP HTTPS to TLS 1.2; QUIC keeps TLS 1.3 as required by HTTP/3. TLS 1.0 and 1.1 are rejected, as required by [RFC 8996 sections 4 and 5](https://www.rfc-editor.org/rfc/rfc8996.html#section-4). |
 | --ssl-cert-reqs INTEGER | `ssl.CERT_NONE` | Selects client-certificate policy: `CERT_NONE`, `CERT_OPTIONAL`, or `CERT_REQUIRED`. When a CA bundle is provided, presented client certificates are verified against it. |
 | --ssl-ca-certs PATH | Unset | PEM trust bundle for verifying client certificates when `--ssl-cert-reqs` requests client authentication. |
 | --timeout-graceful-shutdown SECONDS | None | Maximum time to drain active work. The default `None` has no deadline, matching Uvicorn; an explicit value bounds the drain. A focused parity case verifies the default can wait more than 10 seconds for lifespan shutdown. |

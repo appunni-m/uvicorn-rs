@@ -1046,6 +1046,8 @@ def load_contract(
         "serve_raised", "serve_timed_out", "server_exit_code", "listener_released",
         "serve_exception_class", "serve_exception_message",
         "client_certificate_rejected", "negotiated_tls_version", "negotiated_tls_cipher",
+        "tls_alert_level", "tls_alert_description",
+        "supported_tls_client_hello_admitted",
         "process_stderr_has_unhandled_task_warning",
         "first_response_body_base64", "second_response_body_base64", "reload_observed",
         "process_stdout_base64", "process_stderr_base64",
@@ -4833,6 +4835,16 @@ def load_contract(
                     raise ParityError(f"{case_id}: request-sequence headers must be pairs of strings")
         elif "request" in case and supports_http_request:
             case_keys = {"case_id", "profile", "operation", "covers", "request"}
+            if "tls_client_hello" in case:
+                case_keys.add("tls_client_hello")
+                if (
+                    kind != "http1-tls"
+                    or case["operation"] != "tls.reject-obsolete-version"
+                    or case["tls_client_hello"] not in {"TLSv1.0", "TLSv1.1"}
+                ):
+                    raise ParityError(f"{case_id}: obsolete TLS probe requires a TLS 1.0 or 1.1 ClientHello")
+            elif case["operation"] == "tls.reject-obsolete-version":
+                raise ParityError(f"{case_id}: obsolete TLS probe requires tls_client_hello")
             if "server_options" in case:
                 case_keys.add("server_options")
                 server_options = case["server_options"]
@@ -7014,6 +7026,73 @@ def response_observation(status: int, headers: list[tuple[str, str]], body: byte
             [name, values] for name, values in sorted(response_header_values_by_name.items())
         ],
         "connection_closed": False,
+    }
+
+
+def tls_client_hello_reply(port: int, wire_version: bytes) -> tuple[int | None, bytes]:
+    """Read one server record for an otherwise identical finite ClientHello."""
+    # Offer old-version suites and a TLS 1.2 suite. The supported-version
+    # control can then prove that the same cipher/extension offer is usable.
+    ciphers = b"\xc0\x2f\xc0\x13\x00\x2f\x00\xff"
+
+    def extension(kind: int, data: bytes) -> bytes:
+        return struct.pack("!HH", kind, len(data)) + data
+
+    hostname = b"localhost"
+    server_name = b"\x00" + struct.pack("!H", len(hostname)) + hostname
+    extensions = b"".join((
+        extension(0, struct.pack("!H", len(server_name)) + server_name),
+        extension(10, b"\x00\x04\x00\x17\x00\x1d"),
+        extension(11, b"\x01\x00"),
+        extension(13, b"\x00\x04\x04\x01\x08\x04"),
+    ))
+    hello = (
+        wire_version + os.urandom(32) + b"\x00"
+        + struct.pack("!H", len(ciphers)) + ciphers + b"\x01\x00"
+        + struct.pack("!H", len(extensions)) + extensions
+    )
+    handshake = b"\x01" + len(hello).to_bytes(3, "big") + hello
+    record = b"\x16" + wire_version + struct.pack("!H", len(handshake)) + handshake
+
+    def receive_exact(connection: socket.socket, size: int) -> bytes:
+        received = bytearray()
+        while len(received) < size:
+            try:
+                chunk = connection.recv(size - len(received))
+            except ConnectionResetError:
+                break
+            if not chunk:
+                break
+            received.extend(chunk)
+        return bytes(received)
+
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as connection:
+        connection.sendall(record)
+        header = receive_exact(connection, 5)
+        # Preserve the peer's actual alert or EOF/reset. Do not manufacture
+        # protocol_version alerts. A timeout remains an infrastructure error.
+        if len(header) != 5:
+            return (None if not header else -1), header
+        length = int.from_bytes(header[3:5], "big")
+        if length > (1 << 14) + 2048:
+            raise ParityError("obsolete TLS probe received an invalid record size")
+        return header[0], receive_exact(connection, length)
+
+
+def obsolete_tls_client_hello(port: int, version: str) -> dict[str, Any]:
+    """Observe RFC 8996 rejection and a TLS 1.2 ClientHello positive control."""
+    wire_version = {"TLSv1.0": b"\x03\x01", "TLSv1.1": b"\x03\x02"}[version]
+    kind, payload = tls_client_hello_reply(port, wire_version)
+    alert = kind == 21 and len(payload) == 2
+    control_kind, control_payload = tls_client_hello_reply(port, b"\x03\x03")
+    return {
+        "handshake_rejected": kind is None or (alert and payload[0] == 2),
+        "tls_alert_level": payload[0] if alert else None,
+        "tls_alert_description": payload[1] if alert else None,
+        "supported_tls_client_hello_admitted": (
+            control_kind == 22 and len(control_payload) >= 6
+            and control_payload[0] == 2 and control_payload[4:6] == b"\x03\x03"
+        ),
     }
 
 
@@ -10267,6 +10346,9 @@ def project_observation(raw: dict[str, Any], operation: dict[str, Any]) -> dict[
         "client_certificate_rejected": "client_certificate_rejected",
         "negotiated_tls_version": "negotiated_tls_version",
         "negotiated_tls_cipher": "negotiated_tls_cipher",
+        "tls_alert_level": "tls_alert_level",
+        "tls_alert_description": "tls_alert_description",
+        "supported_tls_client_hello_admitted": "supported_tls_client_hello_admitted",
         "body_bytes": "body_base64",
         "ordered_body_bytes": "body_base64",
         "early_hints": "early_hints",
@@ -10772,6 +10854,11 @@ def execute_case(
                 if trust_anchor is None:
                     raise ParityError("HTTPS profile is missing its generated trust anchor")
                 ssl_context = ssl.create_default_context(cafile=str(trust_anchor))
+                if case["operation"] == "tls.reject-obsolete-version":
+                    observation = obsolete_tls_client_hello(server["port"], case["tls_client_hello"])
+                    followup = http1_request(server["port"], case["request"], ssl_context=ssl_context)
+                    observation["followup_status"] = followup["status"]
+                    return observation
                 if case.get("client_tls") is True:
                     client_certificate = server.get("client_certificate")
                     client_key = server.get("client_key")

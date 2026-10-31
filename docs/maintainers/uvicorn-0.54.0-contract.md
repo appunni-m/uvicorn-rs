@@ -7,6 +7,29 @@ the Kata owner for implementation, and the parity evidence
 route. It is version scoped; it does not claim that uvicorn-rs-py is currently
 a drop-in replacement.
 
+## Acceptance of known differences
+
+The maintainer requires full compatibility, a demonstrated improvement, or
+behavior matching the applicable specification. An unsupported-setting note
+does not satisfy that requirement. Custom HTTP/WebSocket protocol classes and
+`ssl_context_factory` remain implementation gaps in the public API.
+
+The default TLS floor follows
+[RFC 8996 sections 4 and 5](https://www.rfc-editor.org/rfc/rfc8996.html#section-4):
+TLS 1.0 and 1.1 must not negotiate. Two selected live inputs verify rejection
+against Uvicorn, admission of a matching TLS 1.2 ClientHello and a healthy
+follow-up request. They retain alert/EOF diagnostics while comparing the
+required non-negotiation and recovery outcomes. See the
+[latest execution receipts](release-completion-plan.md#latest-diagnosis-2026-10-31).
+This proof does not establish arbitrary SSLContext-factory behavior.
+
+The 32,768-field response limit has no accepted compatibility receipt. The
+initial oversized-trailer experiment exceeded the oracle client's decoder
+budget. [RFC 9113 section 10.5.1](https://www.rfc-editor.org/rfc/rfc9113.html#section-10.5.1)
+discusses receiver limits; citing it alone does not prove equivalent outbound
+ASGI behavior. Delivery or a justified resource-failure contract with healthy
+recovery still needs verification before the protocol task can close.
+
 ## Pinned authority
 
 The baseline is the upstream Uvicorn `0.54.0` tag at commit

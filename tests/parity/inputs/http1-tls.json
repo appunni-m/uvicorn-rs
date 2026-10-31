@@ -136,6 +136,36 @@
         "headers": [],
         "body_base64": ""
       }
+    },
+    {
+      "case_id": "http1-tls.rejects-tlsv1-0-and-recovers",
+      "profile": "http1-tls",
+      "operation": "tls.reject-obsolete-version",
+      "covers": [
+        "tls.reject-obsolete-version"
+      ],
+      "tls_client_hello": "TLSv1.0",
+      "request": {
+        "method": "GET",
+        "path": "/scope?parity=obsolete-tls-recovery",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http1-tls.rejects-tlsv1-1-and-recovers",
+      "profile": "http1-tls",
+      "operation": "tls.reject-obsolete-version",
+      "covers": [
+        "tls.reject-obsolete-version"
+      ],
+      "tls_client_hello": "TLSv1.1",
+      "request": {
+        "method": "GET",
+        "path": "/scope?parity=obsolete-tls-recovery",
+        "headers": [],
+        "body_base64": ""
+      }
     }
   ]
 }

@@ -20,7 +20,7 @@ a prerequisite for completing the repository work.
   `tests/parity/manifest.json`, its indexed inputs, `tests/native-core/manifest.json`,
   and `examples/native-fastapi-contracts/manifest.json`. Do not create a second
   operation inventory or require arbitrary combinations outside this contract.
-- The current manifest has 147 operations and 90 execution profiles. Those counts
+- The current manifest has 148 operations and 90 execution profiles. Those counts
   describe its inventory, not completeness of upstream compatibility.
 - Platform acceptance uses the existing CI profiles: Linux x86-64, macOS ARM64,
   Windows x86-64 on CPython 3.12.13, plus the declared Python 3.9 wheel-consumer
@@ -68,6 +68,19 @@ the native adapter rejects its field count while the oracle sends a field block
 that exceeds the probe client's decoder limit. Its failed diagnostic is retained
 at `target/ci537/trailer-capacity-parity.json`; it is not a passing fault contract.
 Resolve these differences before closing compatibility or starting benchmarks.
+
+The TLS floor has a standards-based proof in
+`target/ci537/obsolete-tls-controlled/coverage-report.json` (SHA-256
+`241768145fed4745e7ca57654e4ccd7e1111cc028a2585dd6a5401c4cc7a6381`):
+two public cases pass against Uvicorn 0.54.0. Each sends a TLS 1.0 or 1.1
+ClientHello on the wire, checks rejection, admits an otherwise identical
+TLS 1.2 control, and completes a healthy HTTPS request. No extension was rebuilt
+for these input/runner-only changes. RFC 8996 requires non-negotiation; it does
+not mandate equal alert descriptions. The oracle's EOF and target's fatal
+protocol-version alert remain visible in the receipt and are not compared.
+The first diagnostic's unjustified required alert code failed and is retained
+in `target/ci537/obsolete-tls/`; it is not accepted evidence. This establishes
+the default listener's version floor, not custom TLS-factory compatibility.
 
 ### Current receipts — 2026-10-31 (full run #536 and focused follow-up)
 
