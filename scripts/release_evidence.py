@@ -41,6 +41,7 @@ PLATFORMS = {
     "windows-x86_64": "x86_64-pc-windows-msvc",
 }
 LICENSES = ("LICENSE", "LICENSE-BSD-3-Clause", "LICENSE-MIT")
+PYTHON_LICENSES = (*LICENSES, "LICENSE-PSF-2.0")
 LICENSE_EXPRESSION = "BSD-3-Clause OR MIT"
 CRATE_DIRS = {
     "asgi-lifespan-protocol-rs": ROOT / "crates/asgi-lifespan-protocol-rs",
@@ -79,7 +80,8 @@ LEGACY_TRANSPORT_ONLY_FAULT_POINTS = frozenset({
 REQUIRED = (
     # Bind the LF checkout policy into otherwise byte-sensitive source receipts.
     ".gitattributes",
-    "Cargo.toml", "Cargo.lock", "pyproject.toml", "uv.lock", "README.md", "src/lib.rs", *LICENSES,
+    "Cargo.toml", "Cargo.lock", "pyproject.toml", "uv.lock", "README.md", "src/lib.rs",
+    *PYTHON_LICENSES,
     "crates/asgi-lifespan-protocol-rs/Cargo.toml", "crates/asgi-lifespan-protocol-rs/README.md",
     *(f"crates/asgi-lifespan-protocol-rs/{name}" for name in LICENSES),
     "crates/uvicorn-rs/Cargo.toml", "crates/uvicorn-rs/README.md",
@@ -244,9 +246,12 @@ def license_contract() -> None:
     python = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     if cargo.get("license") != LICENSE_EXPRESSION or python.get("license") != LICENSE_EXPRESSION:
         raise ValueError("Cargo and Python license expressions must be BSD-3-Clause OR MIT")
-    if set(python.get("license-files", [])) != set(LICENSES):
-        raise ValueError("Python metadata must declare all three project license files")
-    for name in LICENSES:
+    python_license_files = python.get("license-files", [])
+    if (not isinstance(python_license_files, list)
+            or set(python_license_files) != set(PYTHON_LICENSES)
+            or len(python_license_files) != len(PYTHON_LICENSES)):
+        raise ValueError("Python metadata must declare all project and bundled-Uvicorn license files")
+    for name in PYTHON_LICENSES:
         if not (ROOT / name).read_bytes().strip():
             raise ValueError(f"empty license file: {name}")
     for crate_name, directory in CRATE_DIRS.items():
@@ -391,8 +396,8 @@ def package_metadata(data: bytes, version: str) -> object:
                           ("License-Expression", LICENSE_EXPRESSION), ("Requires-Python", ">=3.9")):
         if metadata.get_all(key) != [expected]:
             raise ValueError(f"package metadata {key} must be exactly {expected!r}")
-    if sorted(metadata.get_all("License-File", [])) != sorted(LICENSES):
-        raise ValueError("package metadata must include exactly three License-File fields")
+    if sorted(metadata.get_all("License-File", [])) != sorted(PYTHON_LICENSES):
+        raise ValueError("package metadata must include exactly four declared License-File fields")
     packaged_readme = metadata.get_payload(decode=True).decode("utf-8")
     checkout_readme = (ROOT / "README.md").read_text(encoding="utf-8")
     if normalize_line_endings(packaged_readme) != normalize_line_endings(checkout_readme):
@@ -466,7 +471,7 @@ def inspect_wheel(path: Path, version: str, expected_platform: str | None = None
                 raise ValueError(f"wheel RECORD hash/size mismatch: {name}")
     if recorded != set(contents):
         raise ValueError("wheel RECORD does not account for every packaged file")
-    for name in LICENSES:
+    for name in PYTHON_LICENSES:
         if contents[f"{prefix}/licenses/{name}"] != (ROOT / name).read_bytes():
             raise ValueError(f"packaged license differs: {name}")
     python_sources = {}
@@ -489,7 +494,7 @@ def inspect_wheel(path: Path, version: str, expected_platform: str | None = None
     if native_names[0].endswith(".pyd") != (platform_name == "windows-x86_64"):
         raise ValueError("native library extension does not match wheel platform")
     allowed = {metadata_name, wheel_name, record_name, f"{prefix}/entry_points.txt", *native_names}
-    allowed.update(f"{prefix}/licenses/{name}" for name in LICENSES)
+    allowed.update(f"{prefix}/licenses/{name}" for name in PYTHON_LICENSES)
     allowed.update(python_sources)
     extras = set(contents) - allowed
     if any(not re.fullmatch(re.escape(prefix) + r"/sboms/[^/]+\.json", name) for name in extras):
