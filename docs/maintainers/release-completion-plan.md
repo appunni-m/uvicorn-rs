@@ -127,6 +127,11 @@ pass locally for this follow-up. A broader Clippy invocation without the
 required coverage cfg failed on the existing coverage-only contract example
 and vendored H3 test lints; it is not a supported CI check or passing evidence.
 
+The WebSocket timer now uses an optional sleep guarded by the presence of a
+deadline, instead of an async branch that waits forever when keepalive is
+disabled. Existing timed-out, timeout-disabled, infinite-interval and
+keepalive-disabled inputs pass 4/4 in `target/ci536/optional-keepalive/`.
+
 The Linux installed-wheel public parity in #531 passed 719/719. Windows ran
 692 cases: 689 passed and three two-worker shutdown cases failed. Their only
 input changes since that run add a one-second startup settle. Focused Windows

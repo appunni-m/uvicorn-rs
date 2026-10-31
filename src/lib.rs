@@ -10525,13 +10525,9 @@ where
                 ).await.is_ok();
                 break;
             }
-            _ = async {
-                if let Some(deadline) = keepalive_deadline {
-                    tokio::time::sleep_until(deadline).await;
-                } else {
-                    std::future::pending::<()>().await;
-                }
-            } => {
+            _ = futures_util::future::OptionFuture::from(
+                keepalive_deadline.map(tokio::time::sleep_until)
+            ), if keepalive_deadline.is_some() => {
                 let now = tokio::time::Instant::now();
                 let ping_timed_out = pending_ping
                     .as_ref()
