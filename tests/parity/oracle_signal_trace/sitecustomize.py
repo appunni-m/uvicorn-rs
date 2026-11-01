@@ -151,10 +151,11 @@ if (
             control_event == "CTRL_BREAK_EVENT"
             and os.environ.get("ASGI_PARITY_WINDOWS_WORKER_GROUPS") == "1"
         ):
-            # Windows queues console control callbacks asynchronously. The
-            # oracle shim gives each individually addressed worker group a
-            # scheduling window before Uvicorn signals the next worker.
-            time.sleep(0.05)
+            # Windows queues console control callbacks asynchronously. Leave
+            # enough time for this worker group to enter its handler before
+            # Uvicorn signals the next worker; a 50 ms gap can overlap queued
+            # CTRL_BREAK_EVENT delivery on the hosted Windows runner.
+            time.sleep(0.25)
         return result
 
     def _console_process_snapshot() -> None:
