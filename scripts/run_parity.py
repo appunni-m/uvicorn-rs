@@ -323,6 +323,7 @@ FAULT_POINTS = {
     "server.prebound-transfer.accept-error",
     "server.prebound-transfer.read-error",
     "server.prebound-transfer.recv-error",
+    "server.prebound-transfer.recv-would-block",
     "server.prebound-transfer.missing-marker",
     "server.prebound-transfer.unexpected-ancillary",
     "server.prebound-transfer.control-truncated",
@@ -626,6 +627,7 @@ FAULT_CONTRACTS = {
     "http-connection-lifetime-closed-disconnect-followup-200",
     "http-immediate-disconnect-message-error-followup-200",
     "server-startup-failure",
+    "server-prebound-transfer-would-block-retries-and-serves",
     "server-unix-listener-permission-error-startup-propagates",
     "server-lifespan-startup-auto-fallback",
     "server-lifespan-startup-auto-fallback-logger-failure-ignored",
@@ -1274,6 +1276,24 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: HTTP/3 request-trailer conformance requires a body upload with trailing headers"
+                    )
+            elif fault["contract"] == "server-prebound-transfer-would-block-retries-and-serves":
+                request = case.get("request", {})
+                server_options = case.get("server_options", {})
+                if (
+                    case.get("profile") != "http1"
+                    or case.get("operation") != "http.scope-and-body"
+                    or fault["point"] != "server.prebound-transfer.recv-would-block"
+                    or not isinstance(server_options, dict)
+                    or server_options.get("inherited_fd") is not True
+                    or not isinstance(request, dict)
+                    or request.get("method") != "GET"
+                    or request.get("path") != "/scope?prebound-retry=would-block"
+                    or request.get("headers") != []
+                    or request.get("body_base64") != ""
+                ):
+                    raise ParityError(
+                        f"{case_id}: prebound receive WouldBlock requires the inherited-listener HTTP/1.1 retry probe"
                     )
             elif fault["contract"] in {
                 "http-500-then-followup-200", "http-callback-error-followup-200",
@@ -5163,6 +5183,7 @@ def load_contract(
                     allowed_options.add("http")
                     allowed_options.add("h11_max_incomplete_event_size")
                     allowed_options.add("ws")
+                    allowed_options.add("inherited_fd")
                 if kind in {"http1", "http2"}:
                     allowed_options.add("reset_contextvars")
                 if kind == "http1-tls":
@@ -5195,6 +5216,17 @@ def load_contract(
                 ) is not bool:
                     raise ParityError(
                         f"{case_id}: server_options.proxy_headers must be a boolean"
+                    )
+                if "inherited_fd" in server_options and (
+                    type(server_options["inherited_fd"]) is not bool
+                    or (
+                        server_options["inherited_fd"] is True
+                        and case.get("fault", {}).get("contract")
+                        != "server-prebound-transfer-would-block-retries-and-serves"
+                    )
+                ):
+                    raise ParityError(
+                        f"{case_id}: inherited_fd is reserved for the prebound receive retry fault contract"
                     )
                 if "forwarded_allow_ips" in server_options and not isinstance(
                     server_options["forwarded_allow_ips"], str
@@ -11952,6 +11984,8 @@ def execute_case(
         if (
             fault_control_path is not None
             and fault["point"] != "http3.legacy-path.selection"
+            and fault["contract"]
+            != "server-prebound-transfer-would-block-retries-and-serves"
         ):
             control_point = fault["point"] if fault["point"] in FAULT_POINTS else ""
             fault_control_path.write_text(control_point, encoding="utf-8")
@@ -12024,6 +12058,21 @@ def execute_case(
                     == fault["point"]
                 ):
                     raise ParityError("HTTP response fault was not consumed")
+                observation["fault_consumed"] = True
+            if (
+                fault is not None
+                and fault["contract"]
+                == "server-prebound-transfer-would-block-retries-and-serves"
+            ):
+                if (
+                    fault_control_path is None
+                    or fault_control_path.read_text(encoding="utf-8").strip()
+                    == fault["point"]
+                    or observation.get("status") != 200
+                ):
+                    raise ParityError(
+                        "prebound receive WouldBlock was not consumed before serving HTTP 200"
+                    )
                 observation["fault_consumed"] = True
             return observation
         if profile_id == "http2":
@@ -14052,6 +14101,11 @@ def fault_contract_matches(
                 and "lifespan.shutdown" in events
             )
         return observation.get("startup_failed") is True
+    if fault["contract"] == "server-prebound-transfer-would-block-retries-and-serves":
+        return (
+            observation.get("status") == 200
+            and observation.get("fault_consumed") is True
+        )
     if fault["contract"] == "server-lifespan-startup-auto-fallback":
         followup = observation.get("followup_response")
         return (
@@ -15806,6 +15860,7 @@ def start_profile_servers(
                     or case.get("fault", {}).get("contract") in {
                         "server-eager-lifespan-registration-cleanup",
                         "server-eager-lifespan-registration-cleanup-timeout",
+                        "server-prebound-transfer-would-block-retries-and-serves",
                     }
                 )
             ),
@@ -15948,6 +16003,7 @@ def execute_profile(
         or case.get("fault", {}).get("contract") in {
             "server-eager-lifespan-registration-cleanup",
             "server-eager-lifespan-registration-cleanup-timeout",
+            "server-prebound-transfer-would-block-retries-and-serves",
         }
     ]
     legacy_http3_fault_cases = [
@@ -16153,6 +16209,11 @@ def execute_profile(
                             fault_observation = {**target_result, "server_log": target_raw["server_log"]}
                         elif case["fault"]["contract"] == "server-startup-failure":
                             fault_observation = {**target_result, "server_log": read_server_log(target)}
+                        elif case["fault"]["contract"] == "server-prebound-transfer-would-block-retries-and-serves":
+                            fault_observation = {
+                                **target_result,
+                                "fault_consumed": target_raw.get("fault_consumed"),
+                            }
                         elif case["fault"]["contract"] == "server-unix-listener-permission-error-startup-propagates":
                             fault_observation = {
                                 **target_result,

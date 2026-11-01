@@ -462,6 +462,7 @@ enum CoverageFaultPoint {
     ServerPreboundAcceptError,
     ServerPreboundReadError,
     ServerPreboundRecvError,
+    ServerPreboundRecvWouldBlock,
     ServerPreboundMissingMarker,
     ServerPreboundUnexpectedAncillary,
     ServerPreboundControlTruncated,
@@ -923,6 +924,7 @@ impl CoverageFaultPoint {
             Self::ServerPreboundAcceptError => "server.prebound-transfer.accept-error",
             Self::ServerPreboundReadError => "server.prebound-transfer.read-error",
             Self::ServerPreboundRecvError => "server.prebound-transfer.recv-error",
+            Self::ServerPreboundRecvWouldBlock => "server.prebound-transfer.recv-would-block",
             Self::ServerPreboundMissingMarker => "server.prebound-transfer.missing-marker",
             Self::ServerPreboundUnexpectedAncillary => {
                 "server.prebound-transfer.unexpected-ancillary"
@@ -7776,7 +7778,9 @@ async fn receive_prebound_tcp_listeners(
                     #[cfg(coverage)]
                     // Inject at the syscall result to exercise its real error conversion.
                     let message =
-                        if coverage_fault_take(CoverageFaultPoint::ServerPreboundRecvError) {
+                        if coverage_fault_take(CoverageFaultPoint::ServerPreboundRecvWouldBlock) {
+                            Err(rustix::io::Errno::AGAIN)
+                        } else if coverage_fault_take(CoverageFaultPoint::ServerPreboundRecvError) {
                             Err(rustix::io::Errno::CONNRESET)
                         } else {
                             recvmsg(

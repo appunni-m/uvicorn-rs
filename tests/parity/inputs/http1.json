@@ -64,6 +64,24 @@
       }
     },
     {
+      "case_id": "fault.http1.prebound-transfer.recv-would-block-retries-and-serves",
+      "profile": "http1",
+      "operation": "http.scope-and-body",
+      "covers": ["http.scope-and-body"],
+      "server_options": {"inherited_fd": true},
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.prebound-transfer.recv-would-block",
+        "contract": "server-prebound-transfer-would-block-retries-and-serves"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/scope?prebound-retry=would-block",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
       "case_id": "http1.limit-concurrency-returns-503-at-connection-limit",
       "profile": "http1",
       "operation": "http.concurrency-limit",
