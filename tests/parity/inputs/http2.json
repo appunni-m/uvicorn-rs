@@ -326,6 +326,25 @@
       }
     },
     {
+      "case_id": "fault.http2.generated-date-header-error-resets-stream-after-overflow",
+      "profile": "http2",
+      "operation": "http.application-status",
+      "covers": [
+        "http.application-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.response.date-header.invalid-value",
+        "contract": "http2-response-header-build-error-resets-stream-followup-200"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/response-header-capacity?count=32769",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
       "case_id": "fault.http2.scope-extension-response-trailers-set-item",
       "profile": "http2",
       "operation": "http.application-status",

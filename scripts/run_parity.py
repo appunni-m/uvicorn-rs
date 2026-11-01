@@ -1698,10 +1698,13 @@ def load_contract(
                     case.get("profile") != "http2"
                     or case.get("operation") != "http.application-status"
                     or fault["point"] != "http.response.date-header.invalid-value"
-                    or case.get("request", {}).get("path") != "/state"
+                    or case.get("request", {}).get("path") not in {
+                        "/state",
+                        "/response-header-capacity?count=32769",
+                    }
                 ):
                     raise ParityError(
-                        f"{case_id}: HTTP/2 response-header faults require the Date-header build error on /state"
+                        f"{case_id}: HTTP/2 response-header faults require the Date-header build error on a declared response path"
                     )
             elif fault["contract"] == "http2-500-generic-error-body":
                 is_application_panic = (
@@ -4911,13 +4914,22 @@ def load_contract(
             }:
                 raise ParityError(f"{case_id}: HTTP/3 sequences require a declared sequence operation")
             sequence_keys = {"case_id", "profile", "operation", "covers", "request_sequence"}
-            if case_id == "http1.response-header-capacity-reserved-default-name":
+            if case_id in {
+                "http1.response-header-capacity-reserved-default-name",
+                "http1.response-header-overflow-with-default-header",
+            }:
                 sequence_keys.add("server_options")
-                if case.get("server_options") != {
-                    "headers": ["x-capacity-0: default"]
-                }:
+                expected_server_options = {
+                    "http1.response-header-capacity-reserved-default-name": {
+                        "headers": ["x-capacity-0: default"]
+                    },
+                    "http1.response-header-overflow-with-default-header": {
+                        "headers": ["x-capacity-default: configured"]
+                    },
+                }[case_id]
+                if case.get("server_options") != expected_server_options:
                     raise ParityError(
-                        f"{case_id}: reserved-name boundary requires its one declared default header"
+                        f"{case_id}: response-header capacity case requires its declared default header"
                     )
             if case["operation"] in {
                 "http.response-header-capacity-delivery",
@@ -4953,6 +4965,8 @@ def load_contract(
                                 "/response-header-repeated-capacity?count=32770",
                             "http1.response-header-overflow-repeated-name":
                                 "/response-header-overflow-repeat?count=32769",
+                            "http1.response-header-overflow-with-default-header":
+                                "/response-header-capacity?count=32769",
                             "support.http1.response-header-overflow-delivers":
                                 "/response-header-capacity?count=32769",
                         },
@@ -4960,6 +4974,7 @@ def load_contract(
                             "http1.response-header-capacity-many-above-map-limit",
                             "http1.response-header-repeated-values-above-map-limit",
                             "http1.response-header-overflow-repeated-name",
+                            "http1.response-header-overflow-with-default-header",
                             "support.http1.response-header-overflow-delivers",
                         },
                     ),
