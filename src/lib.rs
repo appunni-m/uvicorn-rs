@@ -4936,7 +4936,10 @@ impl LifespanRuntime {
             event = async {
                 #[cfg(coverage)]
                 if coverage_fault_take(CoverageFaultPoint::LifespanStartEventChannelClosed) {
-                    return None;
+                    // Exercise a real receiver-side closure. Returning `None`
+                    // directly skips the app's failed send and therefore
+                    // cannot validate the auto-mode startup fallback.
+                    event_rx.close();
                 }
                 event_rx.recv().await
             } => match event {
