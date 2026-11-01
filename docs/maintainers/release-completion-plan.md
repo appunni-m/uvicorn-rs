@@ -65,6 +65,34 @@ contains the result. This selected run is not full compatibility or unified
 coverage evidence. The current documentation source passes the strict local
 MkDocs build; no hosted docs run was started for the documentation-only commit.
 
+The three public installed-candidate parity artifacts from CI #596 were also
+inspected directly. Linux x86-64 artifact `13083890925` and macOS ARM64
+artifact `13084595078` each completed 782/782 cases with no failures,
+infrastructure errors, or not-run cases. Windows x86-64 artifact `13084281950`
+completed 749/755 with zero behavioral mismatches and six infrastructure
+timeouts. Those six cases are `python-api.module-cli-two-workers-serve-request`,
+`python-api.module-cli-two-workers-from-uvicorn-workers-environment`,
+`python-api.module-cli-two-workers-stop-on-sigterm`,
+`python-api.module-cli-web-concurrency-two-workers-serve-request`,
+`python-api.module-cli-explicit-workers-overrides-web-concurrency`, and
+`python-api.module-cli-worker-restarts-after-two-crashes`. Focused Windows
+artifact `13086090330` passes those exact six cases 6/6.
+
+Each inspected report is a clean installed-candidate run. Its 114 indexed
+parity-input hashes and manifest hash match current `develop`. Of the 212
+recorded target source-file hashes, 211 match; the only difference is
+`src/lib.rs`. The report's `src/lib.rs` matches commit `16cc3e974`, and the
+Windows focused report's matches `1341cd94f`. The only change from those source
+revisions to current `develop` is the `#[cfg(coverage)]` fault-injection point
+for the prebound-listener `recvmsg` error; the ordinary release build excludes
+that branch. Thus the inspected cases cover the current ordinary runtime,
+including custom HTTP/WebSocket protocols, `ssl_context_factory`, and the
+header/trailer capacity cases, without rerunning them. The focused Windows
+receipt supplements the six infrastructure timeouts but does not turn the
+full Windows matrix into one green exact-source run. Keep the complete
+installed-wheel and final-source release gates open until the reviewed final
+source has its qualifying matrix.
+
 Full CI
 [#596](https://github.com/appunni-m/uvicorn-rs/actions/runs/41305880925)
 completed its three-repeat matrix on older source
