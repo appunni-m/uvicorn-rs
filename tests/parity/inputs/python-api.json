@@ -8158,6 +8158,30 @@
           "observe_tls": true
         }
       }
+    },
+    {
+      "case_id": "python-api.ssl-context-factory-preserves-http2-alpn",
+      "profile": "python-api",
+      "operation": "python.api.run-http",
+      "covers": [
+        "python.api.run-http"
+      ],
+      "api": {
+        "run_http": {
+          "method": "GET",
+          "path": "/python-api",
+          "shutdown_signal": "SIGINT",
+          "timeout_seconds": 6,
+          "lifespan": "on",
+          "invocation": "config-server",
+          "root_path": "",
+          "tls": true,
+          "http2": true,
+          "ssl_context_factory": true,
+          "observe_scope": true,
+          "observe_tls": true
+        }
+      }
     }
   ]
 }

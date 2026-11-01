@@ -3119,6 +3119,7 @@ def load_contract(
                     "ssl_version",
                     "ssl_ciphers",
                     "client_tls",
+                    "http2",
                     "observe_unix_scope",
                     "host",
                     "fd",
@@ -3305,6 +3306,16 @@ def load_contract(
                     raise ParityError(f"{case_id}.api.run_http.uds must be a boolean")
                 if "tls" in run_http and type(run_http["tls"]) is not bool:
                     raise ParityError(f"{case_id}.api.run_http.tls must be a boolean")
+                if "http2" in run_http and type(run_http["http2"]) is not bool:
+                    raise ParityError(f"{case_id}.api.run_http.http2 must be a boolean")
+                if run_http.get("http2") and (
+                    run_http["invocation"] != "config-server"
+                    or not run_http.get("tls")
+                    or not run_http.get("ssl_context_factory")
+                ):
+                    raise ParityError(
+                        f"{case_id}: HTTP/2 TLS context-factory parity requires Config/Server, TLS, and ssl_context_factory"
+                    )
                 if "ssl_keyfile_password" in run_http and (
                     not isinstance(run_http["ssl_keyfile_password"], str)
                     or not run_http["ssl_keyfile_password"]

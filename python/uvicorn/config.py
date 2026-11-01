@@ -533,7 +533,15 @@ class Config:
                 self.http, _NATIVE_HTTP_PROTOCOLS
             )
 
-        alpn_protocols = getattr(self.http_protocol_class, "alpn_protocols", None)
+        # Preserve the upstream AutoZttpProtocol TLS policy while the Rust
+        # runtime owns HTTP/2 parsing. ssl_context_factory's default helper
+        # must advertise h2 so HTTP/2 clients negotiate the protocol before
+        # sending the connection preface.
+        alpn_protocols = (
+            ["h2", "http/1.1"]
+            if self.http2
+            else getattr(self.http_protocol_class, "alpn_protocols", None)
+        )
         if self.ssl_context_factory is not None:
             def default_ssl_context_factory() -> ssl.SSLContext:
                 if not self.ssl_certfile:

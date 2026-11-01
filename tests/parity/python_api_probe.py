@@ -439,7 +439,8 @@ def custom_loop_factory():
 def parity_ssl_context_factory(config, default_ssl_context_factory):
     context = default_ssl_context_factory()
     context.maximum_version = ssl.TLSVersion.TLSv1_2
-    context.set_alpn_protocols(["uvicorn-rs-parity"])
+    if os.environ.get("ASGI_PARITY_HTTP2") != "1":
+        context.set_alpn_protocols(["uvicorn-rs-parity"])
     return context
 
 class ParityCustomHTTPProtocol(asyncio.Protocol):
@@ -778,6 +779,9 @@ if ssl_version is not None:
     options["ssl_version"] = ssl_version
 if ssl_ciphers is not None:
     options["ssl_ciphers"] = ssl_ciphers
+if os.environ.get("ASGI_PARITY_HTTP2") == "1":
+    options["http"] = "zttp"
+    options["http2"] = True
 if os.environ.get("ASGI_PARITY_CUSTOM_HTTP_PROTOCOL") == "1":
     options["http"] = (
         "__main__:ParityCustomHTTPProtocol"
@@ -1163,6 +1167,8 @@ except KeyboardInterrupt:
         environment["ASGI_PARITY_CUSTOM_HTTP_PROTOCOL_IMPORT_PATH"] = "1"
     if request.get("ssl_context_factory"):
         environment["ASGI_PARITY_SSL_CONTEXT_FACTORY"] = "1"
+    if request.get("http2"):
+        environment["ASGI_PARITY_HTTP2"] = "1"
     if request.get("implicit_factory"):
         environment["ASGI_PARITY_IMPLICIT_FACTORY"] = "1"
     if wsgi_streaming_probe:
@@ -1548,7 +1554,9 @@ except KeyboardInterrupt:
             raise RuntimeError("TLS client context is missing its trust anchor")
         context = ssl.create_default_context(cafile=str(trust_anchor))
         if request.get("ssl_context_factory"):
-            context.set_alpn_protocols(["uvicorn-rs-parity"])
+            context.set_alpn_protocols(
+                ["h2"] if request.get("http2") else ["uvicorn-rs-parity"]
+            )
         if request.get("ssl_version") == ssl.PROTOCOL_TLSv1_2:
             context.minimum_version = ssl.TLSVersion.TLSv1_2
             context.maximum_version = ssl.TLSVersion.TLSv1_2
@@ -1564,6 +1572,108 @@ except KeyboardInterrupt:
                 keyfile=client_key,
             )
         return context
+
+    def http2_api_request(port: int, context: ssl.SSLContext) -> dict:
+        """Send one HTTP/2 request and retain TLS ALPN as a public observation."""
+        from h2.config import H2Configuration
+        from h2.connection import H2Connection
+        from h2.events import DataReceived, ResponseReceived, StreamEnded
+
+        # HTTP/1.1 probes use short retry polling; this client performs one
+        # synchronous TLS, HTTP/2-preface, and response exchange instead.
+        h2_timeout = max(connection_timeout, 5.0)
+        raw_socket = socket.create_connection(
+            (probe_host, port), timeout=h2_timeout
+        )
+        tls_socket = context.wrap_socket(raw_socket, server_hostname="localhost")
+        tls_socket.settimeout(h2_timeout)
+        negotiated_alpn = tls_socket.selected_alpn_protocol()
+        tls_version = tls_socket.version()
+        if negotiated_alpn != "h2":
+            tls_socket.close()
+            return {
+                "status": None,
+                "content_type": None,
+                "body_base64": "",
+                "observed_headers": {
+                    name.lower(): [] for name in request.get("observe_headers", [])
+                },
+                "tls_version": tls_version,
+                "tls_alpn_protocol": negotiated_alpn,
+            }
+
+        connection = H2Connection(
+            config=H2Configuration(client_side=True, header_encoding="utf-8")
+        )
+        connection.initiate_connection()
+        tls_socket.sendall(connection.data_to_send())
+        stream_id = connection.get_next_available_stream_id()
+        body = request_body if isinstance(request_body, bytes) else b""
+        headers = [
+            (":method", request["method"]),
+            (":scheme", "https"),
+            (":authority", f"localhost:{port}"),
+            (":path", request["path"]),
+        ]
+        headers.extend(
+            (name.lower(), value) for name, value in request.get("request_headers", [])
+        )
+        if body and not any(name.lower() == "content-length" for name, _ in headers):
+            headers.append(("content-length", str(len(body))))
+        # The stock zttp HTTP/2 oracle does not complete ASGI receive when
+        # END_STREAM is carried by HEADERS alone. An explicit terminal DATA
+        # frame preserves the same no-body request while letting this probe
+        # isolate TLS ALPN and Config behavior.
+        connection.send_headers(stream_id, headers, end_stream=False)
+        connection.send_data(stream_id, body, end_stream=True)
+        tls_socket.sendall(connection.data_to_send())
+
+        status = None
+        response_headers: list[tuple[str, str]] = []
+        response_body = bytearray()
+        try:
+            while True:
+                received = tls_socket.recv(65536)
+                if not received:
+                    break
+                ended = False
+                for event in connection.receive_data(received):
+                    if isinstance(event, ResponseReceived) and event.stream_id == stream_id:
+                        for name, value in event.headers:
+                            if name == ":status":
+                                status = int(value)
+                            else:
+                                response_headers.append((name.lower(), value))
+                    elif isinstance(event, DataReceived) and event.stream_id == stream_id:
+                        response_body.extend(event.data)
+                        connection.acknowledge_received_data(
+                            event.flow_controlled_length, stream_id
+                        )
+                    elif isinstance(event, StreamEnded) and event.stream_id == stream_id:
+                        ended = True
+                pending = connection.data_to_send()
+                if pending:
+                    tls_socket.sendall(pending)
+                if ended:
+                    break
+        finally:
+            tls_socket.close()
+
+        header_values: dict[str, list[str]] = {}
+        for name, value in response_headers:
+            header_values.setdefault(name, []).append(value)
+        content_types = header_values.get("content-type", [])
+        return {
+            "status": status,
+            "content_type": content_types[0] if content_types else None,
+            "body_base64": base64.b64encode(response_body).decode("ascii"),
+            "observed_headers": {
+                name.lower(): header_values.get(name.lower(), [])
+                for name in request.get("observe_headers", [])
+            },
+            "tls_version": tls_version,
+            "tls_alpn_protocol": negotiated_alpn,
+        }
 
     request_limit = None
     request_limit_jitter = 0
@@ -1648,6 +1758,27 @@ except KeyboardInterrupt:
             made_progress = False
             for listener_index, listener_port in enumerate(probe_ports):
                 if listener_responses[listener_index] is not None:
+                    continue
+                if request.get("http2"):
+                    try:
+                        listener_response = http2_api_request(
+                            listener_port, make_client_tls_context()
+                        )
+                    except (OSError, TimeoutError) as error:
+                        if isinstance(error, ConnectionRefusedError):
+                            continue
+                        listener_response = {
+                            "status": None,
+                            "content_type": None,
+                            "body_base64": "",
+                            "observed_headers": {},
+                            "client_error": f"{type(error).__name__}: {error}",
+                        }
+                    listener_responses[listener_index] = listener_response
+                    response_count += 1
+                    made_progress = True
+                    if listener_index == 0:
+                        response = listener_response
                     continue
                 if uds_path is not None and request.get("tls"):
                     tls_context = make_client_tls_context()
