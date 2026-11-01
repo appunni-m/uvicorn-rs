@@ -863,6 +863,8 @@ class Server:
         self._should_exit = False
         self.force_exit = False
         self._shutdown_logged = False
+        self._native_wait_status_checked = False
+        self._native_shutdown_started_at: float | None = None
         self.last_notified = 0.0
         self._native_server: Any = None
         self._native_task: asyncio.Task[None] | None = None
@@ -888,20 +890,28 @@ class Server:
             # Cancel the Rust accept loop before synchronous logging so a slow
             # log handler cannot postpone transport shutdown after a signal.
             write_shutdown_trace("server-native-shutdown.request")
+            if self._native_shutdown_started_at is None:
+                self._native_shutdown_started_at = time.monotonic()
             self._native_server.shutdown()
             write_shutdown_trace("server-native-shutdown.returned")
             self._log_shutdown_status()
 
     def _log_shutdown_status(self) -> None:
-        """Report shutdown before native draining waits on ASGI tasks."""
+        """Report shutdown immediately after stopping native acceptance."""
         if self._shutdown_logged:
             return
         logger.info("Shutting down")
-        if self.server_state.tasks:
+        self._shutdown_logged = True
+
+    def _log_native_wait_status(self) -> None:
+        """Report tasks still active after Uvicorn's shutdown grace period."""
+        if self._native_wait_status_checked:
+            return
+        self._native_wait_status_checked = True
+        if self.server_state.tasks and not self.force_exit:
             logger.info(
                 "Waiting for background tasks to complete. (CTRL+C to force quit)"
             )
-        self._shutdown_logged = True
 
     @cached_property
     def limit_max_requests(self) -> int | None:
@@ -1452,12 +1462,29 @@ class Server:
                     self._tls_context_proxy.close_accepting()
                 if self._custom_websocket_proxy is not None:
                     self._custom_websocket_proxy.close_accepting()
+                if self._native_shutdown_started_at is None:
+                    self._native_shutdown_started_at = time.monotonic()
                 native_server.shutdown()
 
             if native_task.done():
                 break
             counter = (counter + 1) % 864000
-            await asyncio.wait((native_task,), timeout=0.1)
+            wait_timeout = 0.1
+            if (
+                self._native_shutdown_started_at is not None
+                and not self._native_wait_status_checked
+            ):
+                wait_timeout = max(
+                    0.0,
+                    0.1 - (time.monotonic() - self._native_shutdown_started_at),
+                )
+            await asyncio.wait((native_task,), timeout=wait_timeout)
+            if (
+                self._native_shutdown_started_at is not None
+                and not self._native_wait_status_checked
+                and time.monotonic() - self._native_shutdown_started_at >= 0.1
+            ):
+                self._log_native_wait_status()
 
         await native_task
 
