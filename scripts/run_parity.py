@@ -2629,10 +2629,11 @@ def load_contract(
                         )
                     )
                     or request.get("method") != "GET"
-                    or request.get("path") != "/state"
+                    or request.get("path")
+                    not in {"/state", "/response-header-capacity?count=32769"}
                 ):
                     raise ParityError(
-                        f"{case_id}: default-header finalization faults require one invalid configured header and a /state request"
+                        f"{case_id}: default-header finalization faults require one invalid configured header and a /state or overflow-capacity request"
                     )
             elif fault["contract"] == "http2-response-event-fault-consumed-and-status-observed":
                 point = fault["point"]
