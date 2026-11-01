@@ -15466,6 +15466,29 @@ def raise_if_llvm_profile_write_failed(
                 )
 
 
+def python_api_observation_summary(
+    observation: dict[str, Any], fields: list[str]
+) -> dict[str, Any]:
+    """Keep useful side evidence when the other Python API probe fails."""
+    summary: dict[str, Any] = {}
+    for field in fields:
+        if field in {
+            "stdout_base64",
+            "stderr_base64",
+            "response_body_base64",
+            "listener_responses",
+        }:
+            continue
+        value = observation.get(field)
+        if field == "server_log_events" and isinstance(value, dict):
+            stderr = value.get("stderr")
+            if isinstance(stderr, list):
+                summary[field] = stderr[-6:]
+            continue
+        summary[field] = value
+    return summary
+
+
 def required_observations_for_case(
     case: dict[str, Any], operation: dict[str, Any]
 ) -> dict[str, Any]:
@@ -15556,15 +15579,44 @@ def execute_python_api_profile(
                     flush=True,
                 )
                 continue
-            oracle_raw = run_python_api_probe(case, "uvicorn")
-            target_raw = run_python_api_probe(
-                case,
-                "uvicorn-rs",
-                coverage_profile_dir / "target"
-                if coverage_profile_dir is not None
-                else None,
-            )
-            raise_if_llvm_profile_write_failed(target_raw, case["case_id"])
+            side_observations: dict[str, dict[str, Any]] = {}
+            side_errors: dict[str, dict[str, str]] = {}
+            for server_id in ("uvicorn", "uvicorn-rs"):
+                try:
+                    observation = run_python_api_probe(
+                        case,
+                        server_id,
+                        coverage_profile_dir / "target"
+                        if server_id == "uvicorn-rs"
+                        and coverage_profile_dir is not None
+                        else None,
+                    )
+                    if server_id == "uvicorn-rs":
+                        raise_if_llvm_profile_write_failed(
+                            observation, case["case_id"]
+                        )
+                    side_observations[server_id] = observation
+                except Exception as error:
+                    side_errors[server_id] = {
+                        "class": type(error).__name__,
+                        "message": str(error)[:1800],
+                    }
+            if side_errors:
+                details = {
+                    "errors": side_errors,
+                    "observations": {
+                        server_id: python_api_observation_summary(
+                            observation, operation["observe"]
+                        )
+                        for server_id, observation in side_observations.items()
+                    },
+                }
+                raise ParityError(
+                    "Python API side execution was incomplete: "
+                    + json.dumps(details, sort_keys=True, separators=(",", ":"))
+                )
+            oracle_raw = side_observations["uvicorn"]
+            target_raw = side_observations["uvicorn-rs"]
             oracle = {name: oracle_raw[name] for name in operation["observe"]}
             target = {name: target_raw[name] for name in operation["observe"]}
             fields = case.get(
