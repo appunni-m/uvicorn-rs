@@ -6,27 +6,27 @@
 <a id="current-unified-coverage-status-2026-10-29"></a>
 <a id="current-unified-coverage-status-2026-10-30"></a>
 <a id="current-unified-coverage-status-2026-10-31"></a>
+<a id="current-unified-coverage-status-2026-11-01"></a>
 
-## Current unified coverage status (2026-10-31)
+## Current unified coverage status (2026-11-01)
 
 The latest completed full report is from
-[CI #536](https://github.com/appunni-m/uvicorn-rs/actions/runs/41151116481),
-head `6342b20402bf0cceabd8eafde3f067e1620bafba`, merge ref
-`15cf322f9f005b4823167620d0d17c570b992ff2`. All 1,351 indexed cases and the
-three full verification repeats passed. Coverage remains below 100%:
-**14,137/14,251 regions** (114 missing) and **10,410/10,463 lines** (53 missing).
-Its report SHA-256 is
-`336eadc77922d0f981039c1ec8ad18c35229bf2199811ea960ceb7e9e98eea32`.
-All missing regions are in the Python adapter. This report is diagnostic for
-that earlier source, not acceptance for later fixes.
+[CI #537](https://github.com/appunni-m/uvicorn-rs/actions/runs/41175891140),
+bound to merge source `97acb84b93ad23ed0d4bf4d55f857a49fa46e6ba`. All 1,370
+indexed cases and three verification repeats passed. Coverage remains below
+100%: **14,239/14,270 regions** (31 missing) and **10,505/10,523 lines**
+(18 missing). Its report SHA-256 is
+`977b37d6f24af9045d5949acca38d28b153f652e3397c8969fe0192f88126a6a`. This
+report is diagnostic for that earlier source, not acceptance for later fixes.
 
-[CI #537](https://github.com/appunni-m/uvicorn-rs/actions/runs/41175891140)
-is running the next complete coverage matrix at head
-`9b0309406704e1d03c5f3e99a416f2b634d5f749`. Additional focused startup, TLS,
-listener, response-completion and WebSocket receipts are recorded in the
-[completion plan](maintainers/release-completion-plan.md). They do not supply
-a new global coverage total. No current-source independent Coverage-MCP
-receipt is accepted; `7t4g` remains open. The normal build excludes fault controls.
+The next complete coverage matrix is active in PR #19 CI
+[run 41272503277](https://github.com/appunni-m/uvicorn-rs/actions/runs/41272503277),
+head `e0eb4e4989509d0c8a0adac5de78c256f625b4b0`, job `124748194519`. It is
+attributing every indexed case and repeating the complete matrix three times;
+no final total is available yet. Four local commits, including the deterministic
+Windows upload-fixture correction, remain unpushed until this run terminates.
+No current-source independent Coverage-MCP receipt is accepted; `7t4g` remains
+open. The normal build excludes fault controls.
 
 ### Earlier focused coverage batches
 

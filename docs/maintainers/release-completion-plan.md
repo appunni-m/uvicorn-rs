@@ -77,30 +77,38 @@ runtime code was unchanged between the runs. The prior oracle-only timeout may
 still reflect nondeterministic delivery; the final Windows matrix must pass on
 the release candidate before compatibility is accepted.
 
-### Current PR validation — 2026-10-31
+### Current PR validation — 2026-11-01 (CI #583)
 
 PR #19 is open and draft against `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`, with pushed head
-`302f629f846a88425fb1cb4b019e85d9145d4a12`. CI run
-[41226275306](https://github.com/appunni-m/uvicorn-rs/actions/runs/41226275306)
-passed the full installed-wheel public matrix 754/754 on Linux x86-64 and
-macOS ARM64. Windows x86-64 candidate parity and three-repeat unified coverage
-were still running at the latest check. Native FastAPI-RS composition failed
-before live inputs because `examples/native-fastapi-contracts/Cargo.lock` did
-not list `socket2`. The exact pinned local dependency graph now resolves with
-`--locked`, excludes PyO3, and the native composition passes 17/17. That fix and
-a stale contract-doc correction are committed locally as
-`3f85ee07e05f8feddb479be31699907c5c79cc19`; they are not pushed yet so the live
-run can finish without cancellation. The current run therefore does not
-validate that correction.
+`e0eb4e4989509d0c8a0adac5de78c256f625b4b0`. CI run
+[41272503277](https://github.com/appunni-m/uvicorn-rs/actions/runs/41272503277)
+passed the installed-wheel public matrix 755/755 on Linux x86-64 and macOS
+ARM64. Windows x86-64 ran 728 cases: 727 passed and one failed in
+`http1.upload-remains-after-one-asgi-receive`, with zero infrastructure
+failures. Rust quality, MSRV, and the pinned 17-input native FastAPI-RS
+composition passed. The macOS ARM64 candidate artifact and consumer passed;
+the Linux x86-64 candidate artifact job failed before compilation because the
+Rust toolchain download timed out. The three-repeat unified coverage job is
+still active.
 
-The Linux and macOS candidate artifacts are preliminary PR artifacts, not the
-final exact-main bundle. Coverage still needs 100% plus independent review;
-benchmarks remain behind compatibility. No 0.3.0 package or tag has been
-published. crates.io currently lists 0.2.1 for each release crate, and PyPI has
-no `uvicorn-rs` project release. The release sequence remains clean local Cargo
-publication of the lifecycle crate then the server crate, followed by the
-`release.yml` PyPI-only action.
+The local release worktree contains four commits through `4dc186f6f` ahead of
+the pushed PR head, plus documentation updates recording
+the current parity, coverage, release, architecture, and composition evidence.
+The functional changes include a deterministic handshake for the Windows
+upload parity fixture, a refreshed standalone H3 consumer lock, and a CLI
+evidence note. The selected upload case passed 1/1 locally on macOS; hosted
+Windows validation is pending. Do not push while the coverage job is active
+because a PR push cancels it. After it reaches a terminal state, push the batch
+and run the exact updated source once. Coverage remains unaccepted until the
+exact final source reaches 100% and receives its independent review.
+Benchmarks remain behind complete compatibility and parity.
+
+No 0.3.0 package or tag has been published. The release sequence remains
+clean local Cargo publication of the lifecycle crate then the server crate,
+followed by the `release.yml` PyPI-only action. The registry audit dated
+2026-11-01 found 0.2.1 as the latest Cargo version and no PyPI `uvicorn-rs`
+release.
 
 ### Earlier diagnosis — 2026-10-31 (CI #537)
 

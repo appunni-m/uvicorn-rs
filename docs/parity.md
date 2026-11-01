@@ -2,9 +2,28 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Current source status (2026-10-31)
+## Current source status (2026-11-01)
 
-### Windows worker signal follow-up (2026-11-01)
+### PR #19 CI #583 — current public parity
+
+CI [run 41272503277](https://github.com/appunni-m/uvicorn-rs/actions/runs/41272503277)
+checks pushed head `e0eb4e4989509d0c8a0adac5de78c256f625b4b0` against `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. The installed normal wheel passed
+755/755 public cases on Linux x86-64 and macOS ARM64. Windows x86-64 executed
+728 cases: 727 passed and `http1.upload-remains-after-one-asgi-receive`
+failed, with zero infrastructure failures. Rust quality, MSRV, and the pinned
+17-input native FastAPI-RS composition passed. The macOS candidate artifact and
+consumer passed; the Linux candidate artifact job stopped before compilation
+because the Rust toolchain download timed out. The three-repeat unified coverage
+job is still active. A local fixture change now synchronizes the HTTP/1 upload
+sender with the app's first receive; its selected case passed 1/1 on macOS, but
+hosted Windows validation is pending. No benchmark matrix has started because
+full compatibility remains incomplete.
+
+The prior Windows worker signal diagnostics and earlier source runs below are
+retained as historical evidence, not current-head acceptance.
+
+### Prior Windows worker signal follow-up (CI #559)
 
 PR #19 CI [#559](https://github.com/appunni-m/uvicorn-rs/actions/runs/41229020477)
 completed on head `4477b96d9fe2828d8f99e4f47945bcb202e59d8c` (merge ref

@@ -5,7 +5,7 @@
 This document describes the PyO3/ASGI implementation for the PyPI distribution
 `uvicorn-rs` and the Python-free Cargo server crate `uvicorn-rs`. The root Cargo
 integration package and optional extra console script are named
-`uvicorn-rs-py`. A read-only registry check on 2026-10-30 found Cargo 0.2.1
+`uvicorn-rs-py`. A read-only registry check on 2026-11-01 found Cargo 0.2.1
 versions of `uvicorn-rs` and `asgi-lifespan-protocol-rs`; no PyPI version of
 `uvicorn-rs` has been published. The PyPI Trusted Publisher is configured for
 `appunni-m/uvicorn-rs`, workflow `release.yml`, environment `pypi`.
@@ -22,25 +22,18 @@ Historical hosted CI on clean commit
 [`94c89b79c1f2a8e5f90b2171ee28ca929444a7f5`](https://github.com/appunni-m/uvicorn-rs/commit/94c89b79c1f2a8e5f90b2171ee28ca929444a7f5)
 passed the unified 761-case coverage matrix; that run is not current release
 evidence. The latest hosted candidate run is CI
-[#514](https://github.com/appunni-m/uvicorn-rs/actions/runs/41064798064) on PR
-head `e6064abdaa43fc13f064a026f9c346dc790bed46`. Linux x86-64 and macOS ARM64
-installed-wheel parity each passed 718/718 cases. Windows x86-64 passed 687 of
-691 cases; its four failures are confined to multi-worker process behavior,
-and Windows candidate-consumer checks were skipped. Linux and macOS candidate
-artifacts and consumers passed. Rust quality, MSRV, native FastAPI-RS
-composition, and release-evidence checks passed.
-
-The three-repeat unified coverage matrix completed but missed the 100% gate at
-14,118/14,243 regions and 10,402/10,461 lines. The report has no accepted
-independent Coverage-MCP review. Focused Windows diagnostics
-[#522](https://github.com/appunni-m/uvicorn-rs/actions/runs/41078744177) and
-[#523](https://github.com/appunni-m/uvicorn-rs/actions/runs/41085775055) each
-passed one worker case with shutdown tracing. Run #523 did not reproduce the
-SIGTERM-labelled case's earlier timeout; its trace records both processes
-exiting 0 after orderly shutdown. The cause of the #514 failures remains
-unconfirmed. Complete Uvicorn compatibility and the three-system benchmark
-remain open. See the
-[current coverage record](coverage.md#current-unified-coverage-status-2026-10-30),
+[#583](https://github.com/appunni-m/uvicorn-rs/actions/runs/41272503277) on PR
+head `e0eb4e4989509d0c8a0adac5de78c256f625b4b0`. Installed-wheel public parity
+passed 755/755 on Linux x86-64 and macOS ARM64. Windows x86-64 passed 727/728;
+the only failure was `http1.upload-remains-after-one-asgi-receive`, with zero
+infrastructure failures. Rust quality, MSRV, and the pinned native FastAPI-RS
+composition passed. The macOS ARM64 candidate artifact and consumer passed;
+the Linux x86-64 candidate artifact job stopped before compilation when its
+Rust toolchain download timed out. The three-repeat unified coverage job is
+active, and no accepted independent Coverage-MCP receipt is available. A local
+deterministic upload-fixture correction awaits hosted Windows validation.
+Complete Uvicorn compatibility and the three-system benchmark remain open. See
+the [current coverage record](coverage.md#current-unified-coverage-status-2026-11-01),
 [parity evidence](parity.md), and [benchmark status](benchmark-status.md).
 The PyPI distribution provides the `uvicorn` namespace and primary
 `uvicorn`/`python -m uvicorn` commands. The root Cargo/PyO3 integration package

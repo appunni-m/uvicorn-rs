@@ -2,7 +2,7 @@
 
 A Rust-first server for ASGI applications and Rust services.
 
-## Project status (2026-10-31)
+## Project status (2026-11-01)
 
 The target release is a Python-free `uvicorn-rs` server crate with HTTP/3
 behind `http3`, the separate `asgi-lifespan-protocol-rs` crate, and the PyPI
@@ -10,19 +10,21 @@ distribution `uvicorn-rs`. The optional internal Cargo/PyO3 adapter remains
 `uvicorn-rs-py`; the PyPI package provides the `uvicorn` imports and command.
 `.github/workflows/release.yml` publishes, while `candidate.yml` verifies
 artifacts. Both crates.io Trusted Publisher entries and the PyPI publisher are
-already configured. crates.io currently lists both Cargo crates at 0.2.1;
-PyPI has no `uvicorn-rs` release. The 0.3.0 candidate is not release-qualified.
+already configured. A read-only registry check on 2026-11-01 confirmed both
+Cargo crates at 0.2.1 and no PyPI `uvicorn-rs` release. The 0.3.0 candidate is
+not release-qualified.
 See [release status](https://appunni-m.github.io/uvicorn-rs/releases/).
 
-The latest hosted [CI #537](https://github.com/appunni-m/uvicorn-rs/actions/runs/41175891140)
-checks PR #19 at `9b0309406704e1d03c5f3e99a416f2b634d5f749`.
-Its Linux wheel passed 731/731 live parity cases, then failed evidence
-validation on duplicate JSON metadata. Its MSRV job rejected TOML syntax;
-macOS and Windows qualification was consequently skipped. Both failures are
-corrected in the follow-up branch and selected affected checks pass locally.
-Full coverage is still running. Separate
-[Documentation #218](https://github.com/appunni-m/uvicorn-rs/actions/runs/41175891137)
-passed. The [completion plan](https://appunni-m.github.io/uvicorn-rs/maintainers/release-completion-plan/)
+The latest hosted [CI #583](https://github.com/appunni-m/uvicorn-rs/actions/runs/41272503277)
+checks PR #19 at `e0eb4e4989509d0c8a0adac5de78c256f625b4b0` against `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Installed-wheel public parity
+passed 755/755 on Linux x86-64 and macOS ARM64. Windows x86-64 passed 727/728;
+the only failure was the HTTP/1 upload-arrival parity case. Rust quality, MSRV,
+and native FastAPI-RS composition passed. The macOS candidate artifact and
+consumer passed; the Linux candidate build stopped before compilation when
+the Rust toolchain download timed out. Unified coverage is still running, and
+the local deterministic upload-fixture correction awaits hosted Windows
+validation. The [completion plan](https://appunni-m.github.io/uvicorn-rs/maintainers/release-completion-plan/)
 records source identities, remaining gates, and focused receipts.
 
 The Python package is **not yet a drop-in Uvicorn replacement**. Keep using

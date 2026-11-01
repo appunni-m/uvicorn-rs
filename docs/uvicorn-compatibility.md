@@ -11,17 +11,17 @@ install `uvicorn-rs` and upstream `uvicorn` in the same environment. The
 replacement and rollback steps below apply only after a compatible version is
 published.
 
-## Current status (2026-10-31)
+## Current status (2026-11-01)
 
-The `uvicorn-rs` PyPI distribution and version 0.3.0 are not published. PR #19 is still a draft. Its current CI [run 41226275306](https://github.com/appunni-m/uvicorn-rs/actions/runs/41226275306) passed the installed-wheel public parity matrix 754/754 on Linux x86-64 and macOS ARM64. Windows x86-64 parity and unified coverage were still running at the latest check. Full Uvicorn 0.54.0 replacement acceptance, independent coverage review, and clean final candidate artifacts remain open. No broad Python FastAPI performance gain is claimed; matched benchmarks follow compatibility.
+The `uvicorn-rs` PyPI distribution and version 0.3.0 are not published. PR #19 is still a draft. CI [run 41272503277](https://github.com/appunni-m/uvicorn-rs/actions/runs/41272503277) passed the installed-wheel public parity matrix 755/755 on Linux x86-64 and macOS ARM64. Windows x86-64 passed 727/728; the only failure was `http1.upload-remains-after-one-asgi-receive`. Unified coverage is still running. Full Uvicorn 0.54.0 replacement acceptance, independent coverage review, and clean final candidate artifacts remain open. No broad Python FastAPI performance gain is claimed; matched benchmarks follow compatibility.
 
 | What you need | Current state |
 | --- | --- |
 | Install from PyPI | `uvicorn-rs` has no published release. |
 | Use the `uvicorn` CLI or Python API | Implemented public inventory; complete platform acceptance remains open. |
-| Serve an ASGI app | Linux and macOS ARM64 each passed 754/754 in run 41226275306; Windows and final-source acceptance remain open. |
+| Serve an ASGI app | Linux and macOS ARM64 each passed 755/755 in run 41272503277; Windows and final-source acceptance remain open. |
 | Use workers, reload, sockets or process controls | The maintained input matrix is still undergoing cross-platform acceptance; consult the support matrix for specific verified behavior. |
-| Install the Windows candidate | Windows candidate parity and package qualification are still pending. |
+| Install the Windows candidate | Windows parity has one pending HTTP/1 upload-arrival case; final Windows package qualification remains open. |
 | Claim a performance advantage | No broad Python FastAPI gain is established. Benchmark work follows parity. |
 
 The Python 3.9 wheel-consumer check is a separate package claim. The pinned
