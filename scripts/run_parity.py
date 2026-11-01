@@ -10,6 +10,7 @@ import errno
 import hashlib
 import http.client
 import importlib
+from importlib.machinery import PathFinder
 import ipaddress
 import io
 import json
@@ -6188,16 +6189,40 @@ def runtime_identity(manifest: dict[str, Any]) -> tuple[dict[str, Any], dict[str
     ).stdout.strip()
     dirty = bool(subprocess.run(["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip())
     rustc = subprocess.run(["rustc", "--version"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
-    package = importlib.import_module("uvicorn_rs")
     if INSTALLED_CANDIDATE_MODE:
+        # Inspect installed-wheel identity without importing the server package.
+        # Importing uvicorn_rs initializes its process-wide Tokio runtime; this
+        # coordinator only needs the extension path and must not start a server
+        # runtime before it launches the oracle and candidate subprocesses.
+        package_spec = PathFinder.find_spec("uvicorn_rs", sys.path)
+        if (
+            package_spec is None
+            or package_spec.origin is None
+            or package_spec.submodule_search_locations is None
+        ):
+            raise ParityError(
+                "installed-candidate mode could not find an installed uvicorn_rs package"
+            )
         checkout_adapter = (ROOT / "python" / "uvicorn_rs").resolve()
-        package_path = Path(package.__file__).resolve()
+        package_path = Path(package_spec.origin).resolve()
         if package_path.is_relative_to(checkout_adapter):
             raise ParityError(
                 "installed-candidate mode resolved uvicorn_rs from the checkout "
                 f"instead of the installed wheel: {package_path}"
             )
-    native_extension = Path(importlib.import_module("uvicorn_rs._native").__file__).resolve()
+        native_spec = PathFinder.find_spec(
+            "uvicorn_rs._native", package_spec.submodule_search_locations
+        )
+        if native_spec is None or native_spec.origin is None:
+            raise ParityError(
+                "installed-candidate mode could not find uvicorn_rs._native in the installed wheel"
+            )
+        native_extension = Path(native_spec.origin).resolve()
+    else:
+        package = importlib.import_module("uvicorn_rs")
+        native_extension = Path(
+            importlib.import_module("uvicorn_rs._native").__file__
+        ).resolve()
     try:
         native_extension_path = str(native_extension.relative_to(ROOT))
     except ValueError:
