@@ -8155,7 +8155,11 @@ def http1_streaming_request(
             for chunk in chunks[1:]:
                 try:
                     client.sendall(f"{len(chunk):x}\r\n".encode() + chunk + b"\r\n")
-                except (BrokenPipeError, ConnectionResetError):
+                except (
+                    BrokenPipeError,
+                    ConnectionResetError,
+                    ConnectionAbortedError,
+                ):
                     connection_closed = True
                     break
             if not connection_closed:
@@ -8168,7 +8172,11 @@ def http1_streaming_request(
                             for name, value in specification.get("trailers", [])
                         )
                         client.sendall(("0\r\n" + trailer_lines + "\r\n").encode("ascii"))
-                except (BrokenPipeError, ConnectionResetError):
+                except (
+                    BrokenPipeError,
+                    ConnectionResetError,
+                    ConnectionAbortedError,
+                ):
                     connection_closed = True
             if (
                 send_first_chunk_before_wait_event
@@ -8182,7 +8190,7 @@ def http1_streaming_request(
 
         try:
             status_line = reader.readline()
-        except ConnectionResetError:
+        except (ConnectionResetError, ConnectionAbortedError):
             status_line = b""
         if not status_line:
             if concurrent_upload_sender is not None:
@@ -8218,7 +8226,7 @@ def http1_streaming_request(
                     if content_length is not None
                     else reader.read()
                 )
-            except ConnectionResetError:
+            except (ConnectionResetError, ConnectionAbortedError):
                 response_body = b""
             if concurrent_upload_sender is not None:
                 concurrent_upload_sender.join(timeout=10)
@@ -8241,7 +8249,11 @@ def http1_streaming_request(
             for chunk in chunks[1:]:
                 try:
                     client.sendall(f"{len(chunk):x}\r\n".encode() + chunk + b"\r\n")
-                except (BrokenPipeError, ConnectionResetError):
+                except (
+                    BrokenPipeError,
+                    ConnectionResetError,
+                    ConnectionAbortedError,
+                ):
                     connection_closed = True
                     break
             if not connection_closed:
@@ -8254,13 +8266,22 @@ def http1_streaming_request(
                             for name, value in specification.get("trailers", [])
                         )
                         client.sendall(("0\r\n" + trailer_lines + "\r\n").encode("ascii"))
-                except (BrokenPipeError, ConnectionResetError):
+                except (
+                    BrokenPipeError,
+                    ConnectionResetError,
+                    ConnectionAbortedError,
+                ):
                     connection_closed = True
         response_chunks = [early_body]
         try:
             while (chunk := read_http1_chunk(reader)) is not None:
                 response_chunks.append(chunk)
-        except (BrokenPipeError, ConnectionResetError, ParityError):
+        except (
+            BrokenPipeError,
+            ConnectionResetError,
+            ConnectionAbortedError,
+            ParityError,
+        ):
             connection_closed = True
         if concurrent_upload_sender is not None:
             concurrent_upload_sender.join(timeout=10)
@@ -8271,13 +8292,21 @@ def http1_streaming_request(
             for chunk in chunks[1:]:
                 try:
                     client.sendall(f"{len(chunk):x}\r\n".encode() + chunk + b"\r\n")
-                except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                except (
+                    BrokenPipeError,
+                    ConnectionResetError,
+                    ConnectionAbortedError,
+                ):
                     connection_closed = True
                     break
             if not connection_closed:
                 try:
                     client.sendall(b"0\r\n\r\n")
-                except (BrokenPipeError, ConnectionResetError):
+                except (
+                    BrokenPipeError,
+                    ConnectionResetError,
+                    ConnectionAbortedError,
+                ):
                     connection_closed = True
         fault_consumed = None
         if fault_point is not None and fault_control_path is not None:
