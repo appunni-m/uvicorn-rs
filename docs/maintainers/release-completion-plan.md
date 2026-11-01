@@ -39,11 +39,21 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 Draft [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21) promotes
 `develop` to `main`, from base `86e72e181d00feca1b4db7f30377d5d9d4345b83` to
-head `65b8fced8e7df5f17a79a42d5092273c81d2f0b2`. The PR replaces closed,
+head `6ab1c3da370c61819ca14c351aaba58962da9ff9`. The PR replaces closed,
 unmerged PR #19. Current `develop` contains executable source
-`1341cd94fc7780281c1bce5cdb0b6f3d4683af76` plus a documentation-only status
-refresh. Active edits stay on `develop`; `main` remains the promotion target.
-No feature branch is checked out for this work.
+`1341cd94fc7780281c1bce5cdb0b6f3d4683af76` plus documentation-only status
+refreshes. Active edits stay on `develop`; `main` remains the promotion
+target.
+
+After fetching `origin`, the listed `windows-worker-groups`,
+`uvicorn-rs-compat-hooks`, and `uvicorn-rs-coverage-events` refs have no
+branch-only commits relative to `develop`. `windows-oracle-signal-trace` has
+one additional test-diagnostic commit; `windows-shutdown-diagnostic` has five
+older diagnostic commits. Their unique changes add tracing and diagnostic
+runtime controls, not release fixes. `develop` already contains newer
+shutdown and listener-poll tracing. No source change from these refs is being
+merged wholesale; release work remains on `develop` and promotes through PR
+#21.
 
 Focused Windows CI
 [#598](https://github.com/appunni-m/uvicorn-rs/actions/runs/41311364502) on
@@ -55,23 +65,26 @@ coverage evidence. The current documentation source passes the strict local
 MkDocs build; no hosted docs run was started for the documentation-only commit.
 
 Full CI
-[#596](https://github.com/appunni-m/uvicorn-rs/actions/runs/41305880925) is
-still running its complete three-repeat parity and coverage matrix on older
-source `16cc3e974f4ad0b9d046f081fe67ba1c872ee0c7`. It has no final coverage
-total and cannot qualify current `develop`. Linux x86-64 and macOS ARM64
-candidate package and consumer checks passed on that older source. Windows
-candidate parity failed at 749/755 with six shutdown infrastructure timeouts
-(four candidate and two stock-Uvicorn oracle cases); Windows consumer checks
-were skipped.
+[#596](https://github.com/appunni-m/uvicorn-rs/actions/runs/41305880925)
+completed its three-repeat matrix on older source
+`16cc3e974f4ad0b9d046f081fe67ba1c872ee0c7`. Parity passed 1,425/1,425 cases,
+but the unified coverage gate failed at **14,743/14,823 regions** and
+**10,841/10,888 lines** (80 regions and 47 lines missing). The coverage
+archive is artifact `13085817127`, SHA-256
+`596ed1dae91fc4a4ba2c0452a1c977248253b7153a75782b917da2f3075f2622`. Linux
+x86-64 and macOS ARM64 candidate package and consumer checks passed on that
+older source. Windows candidate parity completed 749/755 with zero behavioral
+mismatches and six shutdown infrastructure timeouts (four candidate and two
+stock-Uvicorn oracle cases); Windows consumer checks were skipped. This run
+cannot qualify current `develop`.
 
-The latest completed full coverage report, CI #537, remains below the gate at
-14,239/14,270 regions and 10,505/10,523 lines on earlier source
-`97acb84b93ad23ed0d4bf4d55f857a49fa46e6ba`. It is diagnostic only. No 100%
-unified report or accepted independent Coverage-MCP receipt is bound to the
-current source; `b8k7` and `7t4g` remain open. Current-source full parity,
-compatibility, benchmark, and candidate release gates also remain open. Do not
-merge PR #21 or publish until those gates have qualifying evidence on the final
-source and exact Cargo/PyPI artifacts and clean consumers are verified.
+CI #596 is now the latest completed full coverage report, but its source is
+older than current `develop`. No 100% unified report or accepted independent
+Coverage-MCP receipt is bound to the current source; `b8k7` and `7t4g` remain
+open. Current-source full parity, compatibility, benchmark, and candidate
+release gates also remain open. Keep PR #21 in draft; do not merge or publish
+until those gates have qualifying evidence on the final source and exact
+Cargo/PyPI artifacts and clean consumers are verified.
 
 ### Earlier release-candidate snapshot — 2026-11-01 (PR #21 / CI #594)
 

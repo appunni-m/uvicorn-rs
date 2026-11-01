@@ -11,23 +11,25 @@
 ## Current unified coverage status (2026-11-01)
 
 The latest completed full report is from
-[CI #537](https://github.com/appunni-m/uvicorn-rs/actions/runs/41175891140),
-bound to merge source `97acb84b93ad23ed0d4bf4d55f857a49fa46e6ba`. All 1,370
-indexed cases and three verification repeats passed. Coverage remains below
-100%: **14,239/14,270 regions** (31 missing) and **10,505/10,523 lines**
-(18 missing). Its report SHA-256 is
-`977b37d6f24af9045d5949acca38d28b153f652e3397c8969fe0192f88126a6a`. This
-report is diagnostic for that earlier source, not acceptance for later fixes.
+[CI #596](https://github.com/appunni-m/uvicorn-rs/actions/runs/41305880925),
+on source `16cc3e974f4ad0b9d046f081fe67ba1c872ee0c7`. All 1,425 indexed cases
+and three verification repeats passed. Coverage remains below 100%:
+**14,743/14,823 regions** (80 missing) and **10,841/10,888 lines** (47
+missing). Its report archive is artifact
+[`13085817127`](https://github.com/appunni-m/uvicorn-rs/actions/runs/41305880925/artifacts/13085817127),
+SHA-256 `596ed1dae91fc4a4ba2c0452a1c977248253b7153a75782b917da2f3075f2622`.
+This report is diagnostic for that earlier source, not acceptance for later
+`develop` changes.
 
-Full CI [#596](https://github.com/appunni-m/uvicorn-rs/actions/runs/41305880925)
-is still running the complete three-repeat parity and coverage matrix on
-`16cc3e974f4ad0b9d046f081fe67ba1c872ee0c7`. Its unified coverage job has not
-reported a final total, and this source predates current `develop` head
-`1341cd94fc7780281c1bce5cdb0b6f3d4683af76`; it cannot qualify that head. In
-the same older-source run, Linux x86-64 and macOS ARM64 candidate package
-checks passed. Windows candidate parity failed at 749/755 with six shutdown
+Full CI #596 completed on older source `16cc3e974f4ad0b9d046f081fe67ba1c872ee0c7`.
+Its three-repeat parity execution passed 1,425/1,425 cases, but the unified
+coverage gate failed at the totals above. Linux x86-64 and macOS ARM64
+candidate package and consumer checks passed. Windows candidate parity
+completed 749/755 with zero behavioral mismatches and six shutdown
 infrastructure timeouts (four target and two stock-Uvicorn oracle cases), so
-the Windows consumer checks were skipped.
+the Windows consumer checks were skipped. The source predates current
+`develop` executable source `1341cd94fc7780281c1bce5cdb0b6f3d4683af76`; the
+run cannot qualify that source.
 
 Focused Windows CI
 [#598](https://github.com/appunni-m/uvicorn-rs/actions/runs/41311364502) on
