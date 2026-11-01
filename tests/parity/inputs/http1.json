@@ -996,7 +996,7 @@
       ],
       "request_stream": {
         "method": "POST",
-        "path": "/read-first-upload-delayed-response",
+        "path": "/read-first-upload-synchronized-response",
         "headers": [],
         "chunks_base64": [
           "Zmlyc3QtY2h1bms=",

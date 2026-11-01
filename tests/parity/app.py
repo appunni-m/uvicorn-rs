@@ -1221,15 +1221,16 @@ async def _app_impl(scope, receive, send):
         _record("http.body-pump.app-response-finished")
         return
 
-    if path in {"/read-first-upload", "/read-first-upload-delayed-response"}:
+    if path in {
+        "/read-first-upload",
+        "/read-first-upload-delayed-response",
+        "/read-first-upload-synchronized-response",
+    }:
         # Consume exactly one ASGI request event, then stop reading. The body
         # returned by the server may combine wire chunks differently, so the
         # observation is deliberately independent of the chunk boundary.
         first_request = await receive()
-        if path == "/read-first-upload-delayed-response":
-            # Keep the ASGI task alive after its first receive. The HTTP/1.1
-            # parity input releases the rest of the upload after this event,
-            # while HTTP/3 uses the delay to fill its bounded request queue.
+        if path == "/read-first-upload-synchronized-response":
             if scope["http_version"] == "1.1":
                 if (
                     first_request.get("type") == "http.request"
@@ -1238,6 +1239,19 @@ async def _app_impl(scope, receive, send):
                     _record("http1.upload.first-asgi-receive-more-body")
                 else:
                     _record("http1.upload.first-asgi-receive-ended")
+                release_path = Path(os.environ["ASGI_PARITY_STREAM_RELEASE"])
+                deadline = asyncio.get_running_loop().time() + 5
+                while (
+                    not release_path.exists()
+                    and asyncio.get_running_loop().time() < deadline
+                ):
+                    await asyncio.sleep(0.005)
+                if not release_path.exists():
+                    _record("http1.upload.remainder-release-timeout")
+                    raise RuntimeError("HTTP/1.1 upload sender did not release the ASGI app")
+        elif path == "/read-first-upload-delayed-response":
+            # Keep the ASGI task alive after its first receive. The HTTP/1.1
+            # delay lets HTTP/3 fill its bounded request queue.
             await asyncio.sleep(0.1)
         await _respond(
             send,

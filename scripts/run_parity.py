@@ -8169,6 +8169,15 @@ def http1_streaming_request(
                         client.sendall(("0\r\n" + trailer_lines + "\r\n").encode("ascii"))
                 except (BrokenPipeError, ConnectionResetError):
                     connection_closed = True
+            if (
+                send_first_chunk_before_wait_event
+                and wait_event is not None
+                and specification.get("send_all_before_read", False)
+                and not connection_closed
+            ):
+                # Release an app-side checkpoint only after the complete
+                # request body and terminal chunk have been written.
+                events_path.with_suffix(".stream-release").touch()
 
         try:
             status_line = reader.readline()
