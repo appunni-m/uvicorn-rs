@@ -1284,6 +1284,7 @@ dependencies = [
  "hyper-util",
  "pin-project-lite",
  "quinn",
+ "socket2",
  "tokio",
  "tokio-rustls",
  "tokio-tungstenite",
