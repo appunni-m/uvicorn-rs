@@ -2468,11 +2468,11 @@ def load_contract(
                     or fault["point"] not in PYTHON_SSL_CA_VERIFIER_FAULT_POINTS
                     or run_http.get("invocation") != "config-server"
                     or run_http.get("tls") is not True
-                    or run_http.get("ssl_ca_certs") != "malformed-ca"
+                    or run_http.get("ssl_ca_certs") != "trusted-ca-aux"
                     or run_http.get("ssl_cert_reqs") != 2
                 ):
                     raise ParityError(
-                        f"{case_id}: Python SSL CA helper faults require malformed-CA Config/Server startup"
+                        f"{case_id}: Python SSL CA helper faults require an OpenSSL-valid, Rust-invalid Config/Server startup"
                     )
             elif fault["contract"] == "python-ssl-ca-verifier-success-fallback-propagates":
                 run_http = case.get("api", {}).get("run_http", {})
@@ -2835,7 +2835,7 @@ def load_contract(
                 helper_error_case = (
                     fault["contract"] == "python-ssl-ca-verifier-error-propagates"
                     and fault["point"] in PYTHON_SSL_CA_VERIFIER_FAULT_POINTS
-                    and run_http.get("ssl_ca_certs") == "malformed-ca"
+                    and run_http.get("ssl_ca_certs") == "trusted-ca-aux"
                 )
                 fallback_error_case = (
                     fault["contract"]
@@ -3336,6 +3336,7 @@ def load_contract(
                     not in {
                         "generated-ca",
                         "trusted-ca",
+                        "trusted-ca-aux",
                         "empty-ca",
                         "missing-ca",
                         "directory-ca",
@@ -3347,7 +3348,7 @@ def load_contract(
                     or not run_http.get("tls")
                 ):
                     raise ParityError(
-                        f"{case_id}.api.run_http.ssl_ca_certs must select generated-ca, trusted-ca, empty-ca, missing-ca, directory-ca, malformed-ca, invalid-der-ca, non-utf8-ca, or an empty path and requires tls=true"
+                        f"{case_id}.api.run_http.ssl_ca_certs must select generated-ca, trusted-ca, trusted-ca-aux, empty-ca, missing-ca, directory-ca, malformed-ca, invalid-der-ca, non-utf8-ca, or an empty path and requires tls=true"
                     )
                 if "ssl_cert_reqs" in run_http and (
                     type(run_http["ssl_cert_reqs"]) is not int
@@ -14441,6 +14442,7 @@ def run_python_api_probe(
     if run_http.get("ssl_ca_certs") in {
         "generated-ca",
         "trusted-ca",
+        "trusted-ca-aux",
         "empty-ca",
         "missing-ca",
         "directory-ca",
@@ -14473,6 +14475,33 @@ def run_python_api_probe(
                 )
             )
             tls_assets["trusted_ca_certificate"] = str(trusted_ca_certificate)
+        if run_http.get("ssl_ca_certs") == "trusted-ca-aux":
+            trusted_ca_aux_certificate = tls_directory / "trusted-ca-aux.pem"
+            ca_lines = Path(ca_certificate).read_bytes().splitlines()
+            ca_der = base64.b64decode(
+                b"".join(
+                    line for line in ca_lines if not line.startswith(b"-----")
+                )
+            )
+            # OpenSSL accepts this X509_AUX trust data. The Rust parser accepts
+            # the TRUSTED CERTIFICATE label after normalization but rejects
+            # the appended auxiliary DER, exercising Uvicorn's fallback.
+            trusted_der = ca_der + bytes.fromhex(
+                "30 0c a0 0a 06 08 2b 06 01 05 05 07 03 01"
+            )
+            encoded = base64.b64encode(trusted_der)
+            wrapped = b"\n".join(
+                encoded[offset : offset + 64]
+                for offset in range(0, len(encoded), 64)
+            )
+            trusted_ca_aux_certificate.write_bytes(
+                b"-----BEGIN TRUSTED CERTIFICATE-----\n"
+                + wrapped
+                + b"\n-----END TRUSTED CERTIFICATE-----\n"
+            )
+            tls_assets["trusted_ca_aux_certificate"] = str(
+                trusted_ca_aux_certificate
+            )
         if run_http.get("ssl_ca_certs") == "empty-ca":
             empty_ca_certificate = tls_directory / "empty-ca.pem"
             empty_ca_certificate.write_bytes(b"")

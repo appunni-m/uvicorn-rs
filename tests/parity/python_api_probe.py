@@ -883,6 +883,8 @@ except KeyboardInterrupt:
         if request.get("ssl_ca_certs") == "generated-ca"
         else tls_assets.get("trusted_ca_certificate")
         if request.get("ssl_ca_certs") == "trusted-ca"
+        else tls_assets.get("trusted_ca_aux_certificate")
+        if request.get("ssl_ca_certs") == "trusted-ca-aux"
         else tls_assets.get("empty_ca_certificate")
         if request.get("ssl_ca_certs") == "empty-ca"
         else tls_assets["missing_ca_certificate"]

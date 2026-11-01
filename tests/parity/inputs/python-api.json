@@ -6438,7 +6438,7 @@
           "invocation": "config-server",
           "root_path": "",
           "tls": true,
-          "ssl_ca_certs": "malformed-ca",
+          "ssl_ca_certs": "trusted-ca-aux",
           "ssl_cert_reqs": 2,
           "required_observations": {
             "response_received": false,
@@ -6472,7 +6472,7 @@
           "invocation": "config-server",
           "root_path": "",
           "tls": true,
-          "ssl_ca_certs": "malformed-ca",
+          "ssl_ca_certs": "trusted-ca-aux",
           "ssl_cert_reqs": 2,
           "required_observations": {
             "response_received": false,
@@ -6506,7 +6506,7 @@
           "invocation": "config-server",
           "root_path": "",
           "tls": true,
-          "ssl_ca_certs": "malformed-ca",
+          "ssl_ca_certs": "trusted-ca-aux",
           "ssl_cert_reqs": 2,
           "required_observations": {
             "response_received": false,
@@ -6540,7 +6540,7 @@
           "invocation": "config-server",
           "root_path": "",
           "tls": true,
-          "ssl_ca_certs": "malformed-ca",
+          "ssl_ca_certs": "trusted-ca-aux",
           "ssl_cert_reqs": 2,
           "required_observations": {
             "response_received": false,
@@ -6574,7 +6574,7 @@
           "invocation": "config-server",
           "root_path": "",
           "tls": true,
-          "ssl_ca_certs": "malformed-ca",
+          "ssl_ca_certs": "trusted-ca-aux",
           "ssl_cert_reqs": 2,
           "required_observations": {
             "response_received": false,
@@ -6608,7 +6608,7 @@
           "invocation": "config-server",
           "root_path": "",
           "tls": true,
-          "ssl_ca_certs": "malformed-ca",
+          "ssl_ca_certs": "trusted-ca-aux",
           "ssl_cert_reqs": 2,
           "required_observations": {
             "response_received": false,
@@ -6642,7 +6642,7 @@
           "invocation": "config-server",
           "root_path": "",
           "tls": true,
-          "ssl_ca_certs": "malformed-ca",
+          "ssl_ca_certs": "trusted-ca-aux",
           "ssl_cert_reqs": 2,
           "required_observations": {
             "response_received": false,
