@@ -996,7 +996,7 @@
       ],
       "request_stream": {
         "method": "POST",
-        "path": "/read-first-upload",
+        "path": "/read-first-upload-delayed-response",
         "headers": [],
         "chunks_base64": [
           "Zmlyc3QtY2h1bms=",
@@ -1065,7 +1065,9 @@
           "eA==",
           "eA=="
         ],
-        "send_all_before_read": true
+        "send_all_before_read": true,
+        "send_first_chunk_before_wait_event": true,
+        "wait_event": "http1.upload.first-asgi-receive-more-body"
       }
     },
     {

@@ -1225,11 +1225,19 @@ async def _app_impl(scope, receive, send):
         # Consume exactly one ASGI request event, then stop reading. The body
         # returned by the server may combine wire chunks differently, so the
         # observation is deliberately independent of the chunk boundary.
-        await receive()
+        first_request = await receive()
         if path == "/read-first-upload-delayed-response":
-            # Keep the ASGI receiver alive while the HTTP/3 body pump fills its
-            # bounded request queue, then finish the response without reading
-            # the rest of the upload.
+            # Keep the ASGI task alive after its first receive. The HTTP/1.1
+            # parity input releases the rest of the upload after this event,
+            # while HTTP/3 uses the delay to fill its bounded request queue.
+            if scope["http_version"] == "1.1":
+                if (
+                    first_request.get("type") == "http.request"
+                    and first_request.get("more_body") is True
+                ):
+                    _record("http1.upload.first-asgi-receive-more-body")
+                else:
+                    _record("http1.upload.first-asgi-receive-ended")
             await asyncio.sleep(0.1)
         await _respond(
             send,

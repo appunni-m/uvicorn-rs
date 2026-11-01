@@ -4777,14 +4777,22 @@ def load_contract(
                     )
             if "send_first_chunk_before_wait_event" in stream:
                 stream_keys.add("send_first_chunk_before_wait_event")
+                fault = case.get("fault") or {}
+                is_terminal_frame_fault = (
+                    fault.get("contract") == "http-body-pump-drain-terminal-frame"
+                )
+                is_synchronized_normal_upload = (
+                    not fault
+                    and "wait_event" in stream
+                    and stream.get("send_all_before_read") is True
+                )
                 if (
                     stream["send_first_chunk_before_wait_event"] is not True
                     or kind != "http1"
-                    or case.get("fault", {}).get("contract")
-                    != "http-body-pump-drain-terminal-frame"
+                    or not (is_terminal_frame_fault or is_synchronized_normal_upload)
                 ):
                     raise ParityError(
-                        f"{case_id}: first-chunk-before-event sequencing is limited to the terminal-frame fault contract"
+                        f"{case_id}: first-chunk-before-event sequencing requires a synchronized HTTP/1.1 upload or the terminal-frame fault contract"
                     )
             if "expected_response_body_base64" in stream:
                 stream_keys.add("expected_response_body_base64")
