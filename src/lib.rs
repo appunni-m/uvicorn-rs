@@ -5252,6 +5252,43 @@ struct ServerControl {
     startup: watch::Sender<ServerStartupState>,
     startup_gate: Arc<AtomicU8>,
     startup_acknowledgement: Option<watch::Sender<bool>>,
+    #[cfg(all(windows, uvicorn_rs_native_transport))]
+    shutdown_wake_addresses: Arc<StdMutex<Vec<SocketAddr>>>,
+}
+
+#[cfg(all(windows, uvicorn_rs_native_transport))]
+fn wake_tcp_acceptors(shutdown_wake_addresses: &StdMutex<Vec<SocketAddr>>) {
+    let addresses = shutdown_wake_addresses
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone();
+    let mut connected = 0;
+    for address in addresses.iter().copied() {
+        let address = match address {
+            SocketAddr::V4(address) if address.ip().is_unspecified() => {
+                SocketAddr::new(std::net::Ipv4Addr::LOCALHOST.into(), address.port())
+            }
+            SocketAddr::V6(address) if address.ip().is_unspecified() => {
+                SocketAddr::new(std::net::Ipv6Addr::LOCALHOST.into(), address.port())
+            }
+            address => address,
+        };
+        match std::net::TcpStream::connect_timeout(&address, std::time::Duration::from_millis(100))
+        {
+            Ok(stream) => {
+                connected += 1;
+                drop(stream);
+            }
+            Err(error) => {
+                shutdown_trace!("server-control.accept-wake.failed kind={:?}", error.kind())
+            }
+        }
+    }
+    shutdown_trace!(
+        "server-control.accept-wake.connected={} attempted={}",
+        connected,
+        addresses.len()
+    );
 }
 
 #[pymethods]
@@ -5267,11 +5304,15 @@ impl ServerControl {
             startup,
             startup_gate: Arc::new(AtomicU8::new(ServerStartupGate::Starting as u8)),
             startup_acknowledgement,
+            #[cfg(all(windows, uvicorn_rs_native_transport))]
+            shutdown_wake_addresses: Arc::new(StdMutex::new(Vec::new())),
         }
     }
 
     fn shutdown(&self) {
         self.cancellation.cancel();
+        #[cfg(all(windows, uvicorn_rs_native_transport))]
+        wake_tcp_acceptors(&self.shutdown_wake_addresses);
         shutdown_trace!(
             "server-control.shutdown.cancelled={}",
             self.cancellation.is_cancelled()
@@ -5293,7 +5334,7 @@ impl ServerControl {
                 self.startup.send_replace(ServerStartupState::Stopped);
             }
             Err(state) if state == ServerStartupGate::Started as u8 => {
-                self.cancellation.cancel();
+                self.shutdown();
             }
             Err(_) => {}
         }
@@ -6582,6 +6623,11 @@ fn serve<'py>(
                 .as_ref()
                 .map(watch::Sender::subscribe),
         )
+    };
+    #[cfg(all(windows, uvicorn_rs_native_transport))]
+    let shutdown_wake_addresses = {
+        let control = control.try_borrow(py)?;
+        Arc::clone(&control.shutdown_wake_addresses)
     };
     #[cfg(coverage)]
     drop(serve_control_borrow);
@@ -8277,6 +8323,23 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
             return Err(error);
         }
     };
+    #[cfg(all(windows, uvicorn_rs_native_transport))]
+    if let BoundListener::Tcp(listeners) = &listener {
+        let addresses: Vec<_> = listeners
+            .iter()
+            .filter_map(|listener| listener.local_addr().ok())
+            .collect();
+        *shutdown_wake_addresses
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = addresses;
+        shutdown_trace!(
+            "listener.shutdown-wake-addresses configured={}",
+            shutdown_wake_addresses
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .len()
+        );
+    }
     // A server that reaches request handling always has lifecycle state when
     // lifespan ran, or an empty state dictionary when lifespan was disabled.
     // Startup failures return above before constructing ServerContext.

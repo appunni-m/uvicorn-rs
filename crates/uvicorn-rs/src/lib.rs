@@ -3322,6 +3322,19 @@ async fn next_listener_event(
                         }
                     }
                 } => {
+                    #[cfg(windows)]
+                    if tokio::select! {
+                        biased;
+                        _ = shutdown.as_mut() => true,
+                        _ = std::future::ready(()) => false,
+                    } {
+                        // A Windows listener wake-up can finish the accept
+                        // poll in the same call that observes cancellation.
+                        // Recheck shutdown before admitting that synthetic
+                        // connection to the HTTP service.
+                        shutdown_trace!("listener.next-event.shutdown stage=post-accept");
+                        return Ok(ListenerEvent::Shutdown);
+                    }
                     let (stream, peer) = accepted.map_err(ServeError::Accept)?;
                     shutdown_trace!("listener.next-event.accepted peer={peer}");
                     return Ok(ListenerEvent::Accepted { stream, peer, slot });
