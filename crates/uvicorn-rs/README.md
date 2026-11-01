@@ -21,10 +21,11 @@ Python ASGI boundary.
 
 ## Install
 
-Version 0.2.0 is prepared for the next release. These dependency
-requirements are Cargo semver ranges, not exact patch pins. Cargo resolves the
-newest compatible versions; commit `Cargo.lock` in applications to keep a
-deployment's exact dependency selection reproducible.
+The current source is version 0.3.0 and has not yet been published. After the
+release appears on crates.io, these dependency requirements are Cargo semver
+ranges, not exact patch pins. Cargo resolves the newest compatible versions;
+commit `Cargo.lock` in applications to keep a deployment's exact dependency
+selection reproducible.
 
 HTTP/3 protocol and Quinn transport implementation are part of this crate and
 are compiled only when the `http3` feature is enabled. The optional feature
@@ -38,10 +39,10 @@ http-body-util = "0.1"
 hyper = { version = "1", features = ["server"] }
 tokio = { version = "1", features = ["macros", "net", "rt", "signal", "sync"] }
 tower-service = "0.3"
-uvicorn-rs = "0.2"
+uvicorn-rs = "0.3"
 ```
 
-To enable HTTP/3, use `uvicorn-rs = { version = "0.2", features = ["http3"] }`.
+To enable HTTP/3, use `uvicorn-rs = { version = "0.3", features = ["http3"] }`.
 
 The `workspace-hyper-buffer-limit` feature is reserved for the Python adapter
 in this repository. It requires the workspace's patched Hyper and should not

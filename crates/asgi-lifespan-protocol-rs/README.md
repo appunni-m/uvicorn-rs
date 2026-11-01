@@ -20,13 +20,14 @@ remaining independent of any particular server or runtime.
 
 ## Install
 
-Version 0.2.0 is prepared for the next release. The version below is a Cargo
-semver requirement, not an exact patch pin. A committed `Cargo.lock` selects
-the exact versions for an application build.
+The current source is version 0.3.0 and has not yet been published. After the
+release appears on crates.io, the version below is a Cargo semver requirement,
+not an exact patch pin. A committed `Cargo.lock` selects the exact versions for
+an application build.
 
 ```toml
 [dependencies]
-asgi-lifespan-protocol-rs = "0.2"
+asgi-lifespan-protocol-rs = "0.3"
 ```
 
 ## Implement lifecycle hooks

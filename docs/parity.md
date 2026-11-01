@@ -4,25 +4,15 @@
 
 ## Current source status (2026-11-01)
 
-### PR #19 CI #583 — current public parity
+### PR #19 CI #586 — exact-source results
 
-CI [run 41272503277](https://github.com/appunni-m/uvicorn-rs/actions/runs/41272503277)
-checks pushed head `e0eb4e4989509d0c8a0adac5de78c256f625b4b0` against `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. The installed normal wheel passed
-755/755 public cases on Linux x86-64 and macOS ARM64. Windows x86-64 executed
-728 cases: 727 passed and `http1.upload-remains-after-one-asgi-receive`
-failed, with zero infrastructure failures. Rust quality, MSRV, and the pinned
-17-input native FastAPI-RS composition passed. The macOS candidate artifact and
-consumer passed; the Linux candidate artifact job stopped before compilation
-because the Rust toolchain download timed out. The three-repeat unified coverage
-job is still active. A local fixture change now synchronizes the HTTP/1 upload
-sender with the app's first receive; its selected case passed 1/1 on macOS, but
-hosted Windows validation is pending. No benchmark matrix has started because
-full compatibility remains incomplete.
+CI [run 41281097988](https://github.com/appunni-m/uvicorn-rs/actions/runs/41281097988) tested pushed head `d5f983c43615df5990abfc73fcfc73a3460a86c7` against main at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/docs, MSRV, and the 17-input native FastAPI-RS composition passed. Linux x86-64 installed-wheel parity passed 755/755; its candidate artifact and consumer passed (artifact `13073349195`, SHA-256 `32c5f281febbe84bd7dda7b1017b2a6afa87667fee1e93a16e287a9eb6bd573b`).
 
-The prior Windows worker signal diagnostics and earlier source runs below are
-retained as historical evidence, not current-head acceptance.
+macOS ARM64 parity passed 754/755. The only mismatch was `python-api.module-cli-worker-restarts-after-two-crashes`: HTTP response and process outcomes matched, while the target emitted an extra `client disconnected before response start` log. A focused native macOS run with the pending 15-second client-probe timeout passed 1/1; the updated input awaits hosted full-matrix validation.
 
+Windows x86-64 executed 682 cases: 678 passed, zero behavioral mismatches, 46 were not run, and four infrastructure failures occurred. The candidate timed out waiting for workers in the two-worker environment and SIGTERM cases. The Uvicorn oracle timed out in the explicit-worker case and hit `WinError 10053` in `http1.upload-remains-after-one-asgi-receive`. Focused Windows run [#587](https://github.com/appunni-m/uvicorn-rs/actions/runs/41283740947) on the same source passed the two candidate worker cases; its oracle trace recorded no `Server.handle_exit` event for one worker after `CTRL_BREAK_EVENT`, and the parent timed out waiting for that worker.
+
+Three-repeat unified coverage is still running. macOS and Windows candidate artifact/consumer qualification is incomplete. The benchmark matrix has not started because full compatibility remains incomplete.
 ### Prior Windows worker signal follow-up (CI #559)
 
 PR #19 CI [#559](https://github.com/appunni-m/uvicorn-rs/actions/runs/41229020477)

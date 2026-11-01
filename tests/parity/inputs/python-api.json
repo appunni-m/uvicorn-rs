@@ -1272,6 +1272,7 @@
           "path": "/python-api-worker-restart",
           "shutdown_signal": "SIGINT",
           "timeout_seconds": 20,
+          "client_timeout_seconds": 15,
           "lifespan": "off",
           "invocation": "module-cli",
           "root_path": "",

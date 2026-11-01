@@ -2,17 +2,10 @@
 
 ## Latest hosted pinned composition pass (2026-11-01)
 
-The native FastAPI-RS composition job in CI
-[#583](https://github.com/appunni-m/uvicorn-rs/actions/runs/41272503277)
-passed for PR head `e0eb4e4989509d0c8a0adac5de78c256f625b4b0`.
-It used FastAPI-RS `0afccce9f35447f38ebb5e94d0e67fd338ea7ea4` and its pinned
-Starlette-RS revision `4139a72449bf5751e8902fb1c7175ee7f191d338`, confirmed the
-locked normal/build graph excluded PyO3, and passed all 17 declared H1/H2
-real-socket inputs. This is source-bound hosted composition evidence for that
-commit; it does not establish H3, TLS, WebSockets, full framework semantics,
-cross-platform behavior, or performance. The composition result is current for
-the pushed PR head, but the remaining release gates and later local upload-test
-and documentation commits still require validation on their final source.
+The native FastAPI-RS composition job in exact-source CI
+[#586](https://github.com/appunni-m/uvicorn-rs/actions/runs/41281097988)
+passed for PR head `d5f983c43615df5990abfc73fcfc73a3460a86c7`.
+It used FastAPI-RS `0afccce9f35447f38ebb5e94d0e67fd338ea7ea4` and its pinned Starlette-RS revision `4139a72449bf5751e8902fb1c7175ee7f191d338`, confirmed the locked normal/build graph excluded PyO3, and passed all 17 declared H1/H2 real-socket inputs. This is source-bound hosted composition evidence for that commit; it does not establish H3, TLS, WebSockets, full framework semantics, cross-platform behavior, or performance. Linux x86-64 parity and package/consumer verification passed. macOS parity completed 754/755 and Windows completed with 678 passes plus four infrastructure failures; only the Linux package/consumer is qualified. The three-repeat coverage job remains in progress.
 
 ## Current mainline source check (2026-10-25)
 

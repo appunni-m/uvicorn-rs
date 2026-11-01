@@ -77,7 +77,53 @@ runtime code was unchanged between the runs. The prior oracle-only timeout may
 still reflect nondeterministic delivery; the final Windows matrix must pass on
 the release candidate before compatibility is accepted.
 
-### Current PR validation — 2026-11-01 (CI #583)
+### Exact-source PR validation — 2026-11-01 (CI #586)
+
+PR #19 is open and draft against `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`, with pushed head
+`d5f983c43615df5990abfc73fcfc73a3460a86c7`. Exact-source CI
+[run 41281097988](https://github.com/appunni-m/uvicorn-rs/actions/runs/41281097988)
+passed Rust formatting/lints, feature builds and strict docs, the minimum Rust
+version, the artifact/Coverage-MCP handoff contract, and the 17-input native
+FastAPI-RS composition. Linux x86-64 parity passed 755/755 and its candidate
+artifact/consumer passed (artifact `13073349195`, SHA-256
+`32c5f281febbe84bd7dda7b1017b2a6afa87667fee1e93a16e287a9eb6bd573b`).
+
+macOS ARM64 parity passed 754/755. The single mismatch was
+`python-api.module-cli-worker-restarts-after-two-crashes`: response and process
+outcomes matched, but the target logged an extra `client disconnected before
+response start` event. The focused native macOS follow-up with the pending
+15-second client-probe timeout passed 1/1; hosted full-matrix validation remains
+pending.
+
+Windows x86-64 executed 682 cases: 678 passed, none had behavioral mismatches,
+46 were not run, and four infrastructure failures occurred. The candidate had
+shutdown timeouts in two worker cases. The Uvicorn oracle timed out waiting for
+a worker in the explicit-worker case and hit `WinError 10053` in the HTTP/1
+upload case. Focused Windows run #587 on the same head passed both selected
+candidate worker cases; the oracle trace recorded no handler-entry event for one
+worker after `CTRL_BREAK_EVENT`, and the supervisor timed out waiting for it.
+
+Only Linux candidate package/consumer qualification passed. The three-repeat
+unified coverage job remains active; no independent current-source
+Coverage-MCP receipt or complete platform candidate qualification is available.
+Keep the PR head unchanged until all active parity, coverage, and package
+verification jobs reach terminal results. Then record their measured totals and
+artifact identities, run an independent Coverage-MCP review on the exact clean
+source, and carry the verified package artifacts and consumer receipts into
+candidate assembly. Start the
+matched three-system ordinary-FastAPI benchmark only after full parity passes.
+Benchmarks use one Tokio thread and report system/workload details alongside
+throughput, latency percentiles, CPU, and memory. The maintainer will perform
+their real-application trial after repository acceptance.
+
+The 0.3.0 changelog entry is included with maintainer authorization. No 0.3.0
+package or tag has been published. The publication sequence remains clean local
+Cargo publication of the lifecycle crate, then the server crate, followed by
+the `release.yml` PyPI-only action. The latest registry audit found 0.2.1 as the
+latest Cargo version and no PyPI `uvicorn-rs` release.
+
+### Earlier PR validation — 2026-11-01 (CI #583)
 
 PR #19 is open and draft against `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`, with pushed head

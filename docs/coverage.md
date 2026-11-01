@@ -19,14 +19,14 @@ indexed cases and three verification repeats passed. Coverage remains below
 `977b37d6f24af9045d5949acca38d28b153f652e3397c8969fe0192f88126a6a`. This
 report is diagnostic for that earlier source, not acceptance for later fixes.
 
-The next complete coverage matrix is active in PR #19 CI
-[run 41272503277](https://github.com/appunni-m/uvicorn-rs/actions/runs/41272503277),
-head `e0eb4e4989509d0c8a0adac5de78c256f625b4b0`, job `124748194519`. It is
+The current exact-source coverage matrix is active in PR #19 CI
+[run 41281097988](https://github.com/appunni-m/uvicorn-rs/actions/runs/41281097988),
+head `d5f983c43615df5990abfc73fcfc73a3460a86c7`, job `124773363205`. It is
 attributing every indexed case and repeating the complete matrix three times;
-no final total is available yet. Four local commits, including the deterministic
-Windows upload-fixture correction, remain unpushed until this run terminates.
-No current-source independent Coverage-MCP receipt is accepted; `7t4g` remains
-open. The normal build excludes fault controls.
+no final total is available yet. The previous run #584 was superseded before a
+coverage report and its matrix was canceled. No current-source independent
+Coverage-MCP receipt is accepted; `7t4g` remains open. The normal build excludes
+fault controls.
 
 ### Earlier focused coverage batches
 
