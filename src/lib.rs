@@ -3913,7 +3913,7 @@ impl AsgiIo {
                             value,
                             &mut unique_header_names,
                             &slf.default_response_header_names,
-                        )?;
+                        );
                     } else {
                         append_response_header(
                             &mut headers,
@@ -4234,7 +4234,7 @@ impl AsgiIo {
                             value,
                             unique_header_names,
                             &[],
-                        )?;
+                        );
                         trailer_header_order.push(ordered_name);
                     }
                     if more_trailers {
@@ -5367,20 +5367,20 @@ fn append_response_header_with_overflow(
     value: HeaderValue,
     unique_header_names: &mut usize,
     reserved_names: &[HeaderName],
-) -> PyResult<()> {
+) {
     if overflow_headers
         .iter()
         .any(|(overflow_name, _)| overflow_name == name)
     {
         overflow_headers.push((name, value));
-        return Ok(());
+        return;
     }
 
     let is_new_name = !headers.contains_key(&name) && !reserved_names.contains(&name);
     if is_new_name && *unique_header_names >= MAX_RESPONSE_HEADER_NAMES {
         overflow_headers.push((name, value));
         *unique_header_names += 1;
-        return Ok(());
+        return;
     }
 
     match headers.try_append(name.clone(), value.clone()) {
@@ -5396,7 +5396,6 @@ fn append_response_header_with_overflow(
             }
         }
     }
-    Ok(())
 }
 
 /// Maximum number of distinct names retained in one HTTP response header map.

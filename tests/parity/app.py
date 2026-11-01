@@ -57,6 +57,29 @@ def _header_capacity_headers(query_string, *, include_content_length=True):
     return headers
 
 
+def _repeated_header_capacity_headers(query_string):
+    """Build one bounded response header name with many ordered values."""
+    parameter, separator, value = query_string.partition(b"=")
+    if parameter != b"count" or not separator or not value.isdigit():
+        raise ValueError("repeated header-capacity fixture requires a decimal count")
+    count = int(value)
+    if not 1 <= count <= 32770:
+        raise ValueError("repeated header-capacity fixture count is outside its bounded range")
+    headers = [(b"x-capacity-repeat", b"x") for _ in range(count)]
+    headers.append((b"content-length", b"16"))
+    return headers
+
+
+def _header_capacity_overflow_repeat_headers(query_string):
+    """Repeat one field name after distinct names have entered overflow."""
+    headers = _header_capacity_headers(query_string, include_content_length=False)
+    if len(headers) <= 24576:
+        raise ValueError("overflow-repeat fixture requires at least one overflow field")
+    headers[-1] = (headers[24576][0], b"overflow-repeat")
+    headers.append((b"content-length", b"16"))
+    return headers
+
+
 def _scope_address(scope, key):
     address = scope.get(key)
     if address is None:
@@ -943,6 +966,38 @@ async def _app_impl(scope, receive, send):
                 "type": "http.response.start",
                 "status": 200,
                 "headers": _header_capacity_headers(scope["query_string"]),
+            })
+        except RuntimeError as error:
+            _record(f"http.header-capacity.error:{type(error).__name__}:{error}")
+            await _respond(send, b"header capacity rejected", status=500)
+            _record("http.header-capacity.recovered")
+            return
+        await send({"type": "http.response.body", "body": b"headers accepted"})
+        return
+
+    if path == "/response-header-repeated-capacity":
+        try:
+            await send({
+                "type": "http.response.start",
+                "status": 200,
+                "headers": _repeated_header_capacity_headers(scope["query_string"]),
+            })
+        except RuntimeError as error:
+            _record(f"http.header-capacity.error:{type(error).__name__}:{error}")
+            await _respond(send, b"header capacity rejected", status=500)
+            _record("http.header-capacity.recovered")
+            return
+        await send({"type": "http.response.body", "body": b"headers accepted"})
+        return
+
+    if path == "/response-header-overflow-repeat":
+        try:
+            await send({
+                "type": "http.response.start",
+                "status": 200,
+                "headers": _header_capacity_overflow_repeat_headers(
+                    scope["query_string"]
+                ),
             })
         except RuntimeError as error:
             _record(f"http.header-capacity.error:{type(error).__name__}:{error}")

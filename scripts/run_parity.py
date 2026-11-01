@@ -4911,25 +4911,55 @@ def load_contract(
             }:
                 raise ParityError(f"{case_id}: HTTP/3 sequences require a declared sequence operation")
             sequence_keys = {"case_id", "profile", "operation", "covers", "request_sequence"}
+            if case_id == "http1.response-header-capacity-reserved-default-name":
+                sequence_keys.add("server_options")
+                if case.get("server_options") != {
+                    "headers": ["x-capacity-0: default"]
+                }:
+                    raise ParityError(
+                        f"{case_id}: reserved-name boundary requires its one declared default header"
+                    )
             if case["operation"] in {
                 "http.response-header-capacity-delivery",
                 "http.response-header-capacity-one-above-map-limit",
                 "http.response-header-capacity-many-above-map-limit",
             }:
                 requests = case["request_sequence"]
-                expected_count, expected_case_ids = {
+                expected_case_paths, expected_case_ids = {
                     "http.response-header-capacity-delivery": (
-                        24575,
+                        {
+                            "http1.response-header-capacity-at-map-limit":
+                                "/response-header-capacity?count=24575",
+                        },
                         {"http1.response-header-capacity-at-map-limit"},
                     ),
                     "http.response-header-capacity-one-above-map-limit": (
-                        24576,
-                        {"http1.response-header-capacity-one-above-map-limit"},
+                        {
+                            "http1.response-header-capacity-one-above-map-limit":
+                                "/response-header-capacity?count=24576",
+                            "http1.response-header-capacity-reserved-default-name":
+                                "/response-header-capacity?count=24576",
+                        },
+                        {
+                            "http1.response-header-capacity-one-above-map-limit",
+                            "http1.response-header-capacity-reserved-default-name",
+                        },
                     ),
                     "http.response-header-capacity-many-above-map-limit": (
-                        32769,
+                        {
+                            "http1.response-header-capacity-many-above-map-limit":
+                                "/response-header-capacity?count=32769",
+                            "http1.response-header-repeated-values-above-map-limit":
+                                "/response-header-repeated-capacity?count=32770",
+                            "http1.response-header-overflow-repeated-name":
+                                "/response-header-overflow-repeat?count=32769",
+                            "support.http1.response-header-overflow-delivers":
+                                "/response-header-capacity?count=32769",
+                        },
                         {
                             "http1.response-header-capacity-many-above-map-limit",
+                            "http1.response-header-repeated-values-above-map-limit",
+                            "http1.response-header-overflow-repeated-name",
                             "support.http1.response-header-overflow-delivers",
                         },
                     ),
@@ -4940,15 +4970,14 @@ def load_contract(
                     or not isinstance(requests, list)
                     or len(requests) != 2
                     or any(not isinstance(request, dict) for request in requests)
-                    or requests[0].get("path")
-                    != f"/response-header-capacity?count={expected_count}"
+                    or requests[0].get("path") != expected_case_paths.get(case_id)
                     or requests[1].get("path") != "/scope"
                     or any(request.get("method") != "GET" for request in requests)
                     or any(request.get("headers") != [] for request in requests)
                     or any(request.get("body_base64") != "" for request in requests)
                 ):
                     raise ParityError(
-                        f"{case_id}: HTTP/1 response-header boundary requires {expected_count:,} application names and a same-connection follow-up"
+                        f"{case_id}: HTTP/1 response-header boundary requires its declared capacity request and a same-connection follow-up"
                     )
             if "load" in case:
                 sequence_keys.add("load")
@@ -6742,6 +6771,30 @@ def start_server(
         "startup-traditional-encrypted-private-key-invalid-body-base64",
         "startup-traditional-encrypted-private-key-missing-end-marker",
         "startup-traditional-unencrypted-private-key-invalid-base64",
+        "startup-encrypted-private-key-pkcs12-invalid-encrypted-data-type",
+        "startup-encrypted-private-key-pkcs12-trailing-encrypted-info-field",
+        "startup-encrypted-private-key-pkcs12-invalid-algorithm-oid-type",
+        "startup-encrypted-private-key-pkcs12-missing-parameters",
+        "startup-encrypted-private-key-pkcs12-trailing-algorithm-field",
+        "startup-encrypted-private-key-pkcs12-invalid-salt-type",
+        "startup-encrypted-private-key-pkcs12-missing-iterations",
+        "startup-encrypted-private-key-pkcs12-trailing-parameters-field",
+        "startup-encrypted-private-key-pkcs12-zero-iterations",
+        "startup-encrypted-private-key-pkcs12-short-ciphertext",
+        "startup-encrypted-private-key-pkcs12-wrong-password",
+        "startup-encrypted-private-key-pkcs12-invalid-decrypted-key",
+        "startup-traditional-encrypted-private-key-empty-document",
+        "startup-traditional-encrypted-private-key-unknown-header",
+        "startup-traditional-encrypted-private-key-high-nonhex-iv",
+        "startup-traditional-encrypted-private-key-low-nonhex-iv",
+        "startup-traditional-encrypted-private-key-odd-iv",
+        "startup-traditional-encrypted-private-key-short-iv",
+        "startup-traditional-encrypted-private-key-short-ciphertext",
+        "startup-traditional-encrypted-private-key-wrong-password",
+        "startup-client-ca-invalid-verify-mode",
+        "startup-client-ca-missing-file",
+        "startup-client-ca-no-certificates",
+        "startup-client-ca-invalid-utf8-prefix-valid-pem",
     }
     if profile_id in startup_api_profiles:
         server_python = str(ORACLE_PYTHON) if server_id == "uvicorn" else sys.executable
@@ -6752,6 +6805,7 @@ def start_server(
             profile_id,
             str(certificate or ""),
             str(key or ""),
+            str(trust_anchor or ""),
         ]
     elif profile_id in {
         "lifecycle-owned-loop",
@@ -15619,6 +15673,30 @@ def start_profile_servers(
         "startup-traditional-encrypted-private-key-invalid-body-base64",
         "startup-traditional-encrypted-private-key-missing-end-marker",
         "startup-traditional-unencrypted-private-key-invalid-base64",
+        "startup-encrypted-private-key-pkcs12-invalid-encrypted-data-type",
+        "startup-encrypted-private-key-pkcs12-trailing-encrypted-info-field",
+        "startup-encrypted-private-key-pkcs12-invalid-algorithm-oid-type",
+        "startup-encrypted-private-key-pkcs12-missing-parameters",
+        "startup-encrypted-private-key-pkcs12-trailing-algorithm-field",
+        "startup-encrypted-private-key-pkcs12-invalid-salt-type",
+        "startup-encrypted-private-key-pkcs12-missing-iterations",
+        "startup-encrypted-private-key-pkcs12-trailing-parameters-field",
+        "startup-encrypted-private-key-pkcs12-zero-iterations",
+        "startup-encrypted-private-key-pkcs12-short-ciphertext",
+        "startup-encrypted-private-key-pkcs12-wrong-password",
+        "startup-encrypted-private-key-pkcs12-invalid-decrypted-key",
+        "startup-traditional-encrypted-private-key-empty-document",
+        "startup-traditional-encrypted-private-key-unknown-header",
+        "startup-traditional-encrypted-private-key-high-nonhex-iv",
+        "startup-traditional-encrypted-private-key-low-nonhex-iv",
+        "startup-traditional-encrypted-private-key-odd-iv",
+        "startup-traditional-encrypted-private-key-short-iv",
+        "startup-traditional-encrypted-private-key-short-ciphertext",
+        "startup-traditional-encrypted-private-key-wrong-password",
+        "startup-client-ca-invalid-verify-mode",
+        "startup-client-ca-missing-file",
+        "startup-client-ca-no-certificates",
+        "startup-client-ca-invalid-utf8-prefix-valid-pem",
     }
     if tls:
         certificate, key, trust_anchor = make_certificate(tempdir)

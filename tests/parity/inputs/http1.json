@@ -5096,6 +5096,29 @@
       ]
     },
     {
+      "case_id": "http1.response-header-capacity-reserved-default-name",
+      "profile": "http1",
+      "operation": "http.response-header-capacity-one-above-map-limit",
+      "covers": ["http.response-header-capacity-one-above-map-limit"],
+      "server_options": {
+        "headers": ["x-capacity-0: default"]
+      },
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/response-header-capacity?count=24576",
+          "headers": [],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/scope",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
       "case_id": "http1.response-header-capacity-many-above-map-limit",
       "profile": "http1",
       "operation": "http.response-header-capacity-many-above-map-limit",
@@ -5104,6 +5127,46 @@
         {
           "method": "GET",
           "path": "/response-header-capacity?count=32769",
+          "headers": [],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/scope",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
+      "case_id": "http1.response-header-repeated-values-above-map-limit",
+      "profile": "http1",
+      "operation": "http.response-header-capacity-many-above-map-limit",
+      "covers": ["http.response-header-capacity-many-above-map-limit"],
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/response-header-repeated-capacity?count=32770",
+          "headers": [],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/scope",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
+      "case_id": "http1.response-header-overflow-repeated-name",
+      "profile": "http1",
+      "operation": "http.response-header-capacity-many-above-map-limit",
+      "covers": ["http.response-header-capacity-many-above-map-limit"],
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/response-header-overflow-repeat?count=32769",
           "headers": [],
           "body_base64": ""
         },

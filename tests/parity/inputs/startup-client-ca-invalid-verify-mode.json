@@ -1,0 +1,16 @@
+{
+  "schema": "uvicorn-rs-parity/input@47",
+  "cases": [
+    {
+      "case_id": "startup-client-ca-invalid-verify-mode.rejects-key",
+      "profile": "startup-client-ca-invalid-verify-mode",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "startup_failure": {
+        "expect_failed": true
+      }
+    }
+  ]
+}

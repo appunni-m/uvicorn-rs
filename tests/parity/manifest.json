@@ -446,6 +446,150 @@
       ]
     },
     {
+      "id": "startup-encrypted-private-key-pkcs12-invalid-encrypted-data-type",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "PKCS#12 PBE encrypted data with an invalid DER type"]
+    },
+    {
+      "id": "startup-encrypted-private-key-pkcs12-trailing-encrypted-info-field",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "PKCS#12 PBE encrypted info with a trailing DER field"]
+    },
+    {
+      "id": "startup-encrypted-private-key-pkcs12-invalid-algorithm-oid-type",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "PKCS#12 PBE algorithm with an invalid OID DER type"]
+    },
+    {
+      "id": "startup-encrypted-private-key-pkcs12-missing-parameters",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "PKCS#12 PBE algorithm without parameters"]
+    },
+    {
+      "id": "startup-encrypted-private-key-pkcs12-trailing-algorithm-field",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "PKCS#12 PBE algorithm with a trailing DER field"]
+    },
+    {
+      "id": "startup-encrypted-private-key-pkcs12-invalid-salt-type",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "PKCS#12 PBE parameters with a non-octet-string salt"]
+    },
+    {
+      "id": "startup-encrypted-private-key-pkcs12-missing-iterations",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "PKCS#12 PBE parameters without an iteration count"]
+    },
+    {
+      "id": "startup-encrypted-private-key-pkcs12-trailing-parameters-field",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "PKCS#12 PBE parameters with a trailing DER field"]
+    },
+    {
+      "id": "startup-encrypted-private-key-pkcs12-zero-iterations",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "PKCS#12 PBE iteration count of zero"]
+    },
+    {
+      "id": "startup-encrypted-private-key-pkcs12-short-ciphertext",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "PKCS#12 PBE ciphertext shorter than one block"]
+    },
+    {
+      "id": "startup-encrypted-private-key-pkcs12-wrong-password",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "valid PKCS#12 PBE key with an incorrect password"]
+    },
+    {
+      "id": "startup-encrypted-private-key-pkcs12-invalid-decrypted-key",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "PKCS#12 PBE decryption yielding malformed PKCS#8 data"]
+    },
+    {
+      "id": "startup-traditional-encrypted-private-key-empty-document",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "empty private-key document with a password"]
+    },
+    {
+      "id": "startup-traditional-encrypted-private-key-unknown-header",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "traditional encrypted RSA key with an unrecognized PEM header"]
+    },
+    {
+      "id": "startup-traditional-encrypted-private-key-high-nonhex-iv",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "traditional encrypted RSA key with a non-hex high IV nibble"]
+    },
+    {
+      "id": "startup-traditional-encrypted-private-key-low-nonhex-iv",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "traditional encrypted RSA key with a non-hex low IV nibble"]
+    },
+    {
+      "id": "startup-traditional-encrypted-private-key-odd-iv",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "traditional encrypted RSA key with an odd-length IV"]
+    },
+    {
+      "id": "startup-traditional-encrypted-private-key-short-iv",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "traditional encrypted RSA key with a valid but short IV"]
+    },
+    {
+      "id": "startup-traditional-encrypted-private-key-short-ciphertext",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "traditional encrypted RSA key with a non-block-aligned ciphertext"]
+    },
+    {
+      "id": "startup-traditional-encrypted-private-key-wrong-password",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "valid traditional encrypted RSA key with an incorrect password"]
+    },
+    {
+      "id": "startup-client-ca-invalid-verify-mode",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "invalid client-certificate VerifyMode value"]
+    },
+    {
+      "id": "startup-client-ca-missing-file",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "client CA path does not exist"]
+    },
+    {
+      "id": "startup-client-ca-no-certificates",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "client CA bundle contains no certificates"]
+    },
+    {
+      "id": "startup-client-ca-invalid-utf8-prefix-valid-pem",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "non-UTF-8 bytes before a valid PEM CA and a later bind failure"]
+    },
+    {
       "id": "lifecycle",
       "oracle": "uvicorn",
       "protocol": "http/1.1 + lifespan",
@@ -4154,6 +4298,30 @@
     "inputs/startup-traditional-encrypted-private-key-invalid-body-base64.json",
     "inputs/startup-traditional-encrypted-private-key-missing-end-marker.json",
     "inputs/startup-traditional-unencrypted-private-key-invalid-base64.json",
+    "inputs/startup-encrypted-private-key-pkcs12-invalid-encrypted-data-type.json",
+    "inputs/startup-encrypted-private-key-pkcs12-trailing-encrypted-info-field.json",
+    "inputs/startup-encrypted-private-key-pkcs12-invalid-algorithm-oid-type.json",
+    "inputs/startup-encrypted-private-key-pkcs12-missing-parameters.json",
+    "inputs/startup-encrypted-private-key-pkcs12-trailing-algorithm-field.json",
+    "inputs/startup-encrypted-private-key-pkcs12-invalid-salt-type.json",
+    "inputs/startup-encrypted-private-key-pkcs12-missing-iterations.json",
+    "inputs/startup-encrypted-private-key-pkcs12-trailing-parameters-field.json",
+    "inputs/startup-encrypted-private-key-pkcs12-zero-iterations.json",
+    "inputs/startup-encrypted-private-key-pkcs12-short-ciphertext.json",
+    "inputs/startup-encrypted-private-key-pkcs12-wrong-password.json",
+    "inputs/startup-encrypted-private-key-pkcs12-invalid-decrypted-key.json",
+    "inputs/startup-traditional-encrypted-private-key-empty-document.json",
+    "inputs/startup-traditional-encrypted-private-key-unknown-header.json",
+    "inputs/startup-traditional-encrypted-private-key-high-nonhex-iv.json",
+    "inputs/startup-traditional-encrypted-private-key-low-nonhex-iv.json",
+    "inputs/startup-traditional-encrypted-private-key-odd-iv.json",
+    "inputs/startup-traditional-encrypted-private-key-short-iv.json",
+    "inputs/startup-traditional-encrypted-private-key-short-ciphertext.json",
+    "inputs/startup-traditional-encrypted-private-key-wrong-password.json",
+    "inputs/startup-client-ca-invalid-verify-mode.json",
+    "inputs/startup-client-ca-missing-file.json",
+    "inputs/startup-client-ca-no-certificates.json",
+    "inputs/startup-client-ca-invalid-utf8-prefix-valid-pem.json",
     "inputs/lifecycle.json",
     "inputs/lifespan-fault-shutdown-cancel.json",
     "inputs/lifecycle-server-api.json",
