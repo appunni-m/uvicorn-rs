@@ -8106,12 +8106,27 @@ def http1_streaming_request(
         send_first_chunk_before_wait_event = specification.get(
             "send_first_chunk_before_wait_event", False
         )
+        synchronized_unread_upload = (
+            wait_event == "http1.upload.first-asgi-receive-more-body"
+            and send_first_chunk_before_wait_event
+            and specification.get("send_all_before_read", False)
+        )
+        stream_release_path = events_path.with_suffix(".stream-release")
+        if synchronized_unread_upload:
+            stream_release_path.unlink(missing_ok=True)
+            events_before = len(read_events(events_path))
+        else:
+            events_before = 0
+        body_chunks_sent = 0
+        terminal_chunk_sent = False
+        upload_send_error = None
         if send_first_chunk_before_wait_event:
             client.sendall(
                 f"{len(first_request_chunk):x}\r\n".encode()
                 + first_request_chunk
                 + b"\r\n"
             )
+            body_chunks_sent += 1
         if wait_event is not None:
             deadline = time.monotonic() + 5
             while time.monotonic() < deadline and wait_event not in read_events(events_path):
@@ -8125,6 +8140,7 @@ def http1_streaming_request(
                 + first_request_chunk
                 + b"\r\n"
             )
+            body_chunks_sent += 1
 
         if specification.get("send_body_concurrently_with_response_read", False):
             upload_errors: list[OSError] = []
@@ -8155,12 +8171,17 @@ def http1_streaming_request(
             for chunk in chunks[1:]:
                 try:
                     client.sendall(f"{len(chunk):x}\r\n".encode() + chunk + b"\r\n")
+                    body_chunks_sent += 1
                 except (
                     BrokenPipeError,
                     ConnectionResetError,
                     ConnectionAbortedError,
-                ):
+                ) as error:
                     connection_closed = True
+                    upload_send_error = {
+                        "type": type(error).__name__,
+                        "errno": error.errno,
+                    }
                     break
             if not connection_closed:
                 try:
@@ -8172,26 +8193,43 @@ def http1_streaming_request(
                             for name, value in specification.get("trailers", [])
                         )
                         client.sendall(("0\r\n" + trailer_lines + "\r\n").encode("ascii"))
+                        terminal_chunk_sent = True
                 except (
                     BrokenPipeError,
                     ConnectionResetError,
                     ConnectionAbortedError,
-                ):
+                ) as error:
                     connection_closed = True
-            if (
-                send_first_chunk_before_wait_event
-                and wait_event is not None
-                and specification.get("send_all_before_read", False)
-                and not connection_closed
-            ):
-                # Release an app-side checkpoint only after the complete
-                # request body and terminal chunk have been written.
-                events_path.with_suffix(".stream-release").touch()
+                    upload_send_error = {
+                        "type": type(error).__name__,
+                        "errno": error.errno,
+                    }
+            if synchronized_unread_upload and not connection_closed:
+                # Preserve the app-side checkpoint contract: release it only
+                # after the complete request body and terminal chunk are sent.
+                stream_release_path.touch()
 
         try:
             status_line = reader.readline()
         except (ConnectionResetError, ConnectionAbortedError):
             status_line = b""
+        if synchronized_unread_upload and (connection_closed or not status_line):
+            diagnostic = {
+                "case": "http1.upload-remains-after-one-asgi-receive",
+                "events": read_events(events_path)[events_before:],
+                "body_chunks_sent": body_chunks_sent,
+                "body_chunks_expected": len(chunks),
+                "terminal_chunk_sent": terminal_chunk_sent,
+                "upload_send_error": upload_send_error,
+                "connection_closed_during_upload": connection_closed,
+                "stream_release_seen": stream_release_path.exists(),
+                "response_status_line": status_line.decode("latin-1", errors="replace") or None,
+            }
+            print(
+                "PARITY_HTTP1_UPLOAD_DIAGNOSTIC "
+                + json.dumps(diagnostic, sort_keys=True),
+                flush=True,
+            )
         if not status_line:
             if concurrent_upload_sender is not None:
                 concurrent_upload_sender.join(timeout=10)
@@ -9643,14 +9681,36 @@ def http3_request(
             ) from error
         returncode = process.returncode
     else:
-        result = subprocess.run(
-            command,
-            cwd=ROOT,
-            input=input_data,
-            capture_output=True,
-            text=True,
-            timeout=20,
-        )
+        try:
+            result = subprocess.run(
+                command,
+                cwd=ROOT,
+                input=input_data,
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+        except subprocess.TimeoutExpired as error:
+            def output_tail(value: str | bytes | None) -> str:
+                if isinstance(value, bytes):
+                    value = value.decode("utf-8", errors="replace")
+                return (value or "")[-800:]
+
+            diagnostic = {
+                "method": request.get("method"),
+                "path": request.get("path"),
+                "stdout_tail": output_tail(error.stdout),
+                "stderr_tail": output_tail(error.stderr),
+                "application_events": (
+                    read_events(events_path)[events_before:]
+                    if events_path is not None
+                    else []
+                ),
+            }
+            raise ParityError(
+                "HTTP/3 probe client timed out: "
+                + json.dumps(diagnostic, sort_keys=True)
+            ) from error
         returncode, stdout, stderr = result.returncode, result.stdout, result.stderr
     if returncode != 0:
         diagnostic = (stderr or stdout).strip() or "no client diagnostic"

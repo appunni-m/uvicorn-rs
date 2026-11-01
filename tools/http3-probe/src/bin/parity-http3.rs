@@ -955,6 +955,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         writeln!(std::io::stdout().lock(), "{observation}")?;
         return Ok(());
     }
+    let _ = writeln!(
+        std::io::stderr().lock(),
+        "HTTP/3 probe: awaiting response headers"
+    );
     let response_result =
         tokio::time::timeout(std::time::Duration::from_secs(2), stream.recv_response()).await;
     let response = match response_result {
@@ -975,6 +979,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Err(error) => return Err(error.into()),
     };
     let status = response.status().as_u16();
+    let _ = writeln!(
+        std::io::stderr().lock(),
+        "HTTP/3 probe: response headers received status={status}"
+    );
     if abort_response_after_headers {
         stream.stop_sending(h3::error::Code::H3_REQUEST_CANCELLED);
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
@@ -1221,6 +1229,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         }
     }
+    let _ = writeln!(
+        std::io::stderr().lock(),
+        "HTTP/3 probe: response body finished bytes={}",
+        body.len()
+    );
     let body_hex = body
         .iter()
         .map(|byte| format!("{byte:02x}"))
@@ -1320,10 +1333,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
     writeln!(std::io::stdout().lock(), "{}", observation)?;
+    let _ = writeln!(
+        std::io::stderr().lock(),
+        "HTTP/3 probe: closing endpoint after response"
+    );
     endpoint.close(close_error_code, b"parity request complete");
     drop(stream);
     drop(sender);
+    let _ = writeln!(
+        std::io::stderr().lock(),
+        "HTTP/3 probe: waiting for endpoint idle"
+    );
     endpoint.wait_idle().await;
+    let _ = writeln!(std::io::stderr().lock(), "HTTP/3 probe: endpoint idle");
     Ok(())
 }
 
