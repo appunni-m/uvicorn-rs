@@ -7771,21 +7771,29 @@ async fn receive_prebound_tcp_listeners(
                 let mut payload = [0_u8; 1];
                 let mut control_space = [MaybeUninit::uninit(); rustix::cmsg_space!(ScmRights(1))];
                 let mut ancillary = RecvAncillaryBuffer::new(&mut control_space);
-                #[cfg(coverage)]
-                if coverage_fault_take(CoverageFaultPoint::ServerPreboundRecvError) {
-                    return Err(Error::new(
-                        ErrorKind::ConnectionReset,
-                        "coverage-injected prebound listener recvmsg error",
-                    ));
-                }
                 let message = {
                     let mut payload_slices = [IoSliceMut::new(&mut payload)];
-                    recvmsg(
+                    #[cfg(coverage)]
+                    // Inject at the syscall result to exercise its real error conversion.
+                    let message =
+                        if coverage_fault_take(CoverageFaultPoint::ServerPreboundRecvError) {
+                            Err(rustix::io::Errno::CONNRESET)
+                        } else {
+                            recvmsg(
+                                control_stream.as_fd(),
+                                &mut payload_slices,
+                                &mut ancillary,
+                                RecvFlags::empty(),
+                            )
+                        };
+                    #[cfg(not(coverage))]
+                    let message = recvmsg(
                         control_stream.as_fd(),
                         &mut payload_slices,
                         &mut ancillary,
                         RecvFlags::empty(),
-                    )?
+                    );
+                    message?
                 };
                 #[cfg(coverage)]
                 let force_missing_marker =
