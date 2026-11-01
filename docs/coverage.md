@@ -513,20 +513,20 @@ The selected subset measured 3,146/13,098 regions and 2,362/9,701 lines;
 its coverage gate is incomplete. This local diagnostic is not a full-matrix
 refresh or an independent Coverage-MCP receipt.
 
-A second case, `fault.http1.generated-date-header-error-recovers`, is a
-target-only fault contract. It injects an invalid Date value in the coverage
-build, confirms the first request connection closes without a response, and
-confirms a follow-up request receives 200. It passed 1/1 with complete case
-attribution and no infrastructure failures. The report is
-`target/asgi-coverage/selected-date-header-fault-recovery-report.json` (run
-`a9d1063ab56b427087a532360e3663e7`, report SHA-256
-`df81e45f630262769f4dba6776ceb21240b60a080da548ef332c00ff10e59934`), bound
-to dirty revision `5b1ec29201c963d8590c989b07318bb7366d7922`, source digest
-`4b81409879899acfb442072a6f11f06c242dd339b2db0fae6f3f5a2a4ada93ae`, and
-instrumented extension SHA-256
-`936e9aff985ff0eb9f1899f20f573173de185d8ff307138dfc2cb51390155bff`. The
-selected subset measured 3,424/13,104 regions and 2,569/9,706 lines, so it
-does not refresh the full-matrix gate or independently review the report.
+Correction (2026-11-01): the earlier `fault.http1.generated-date-header-error-recovers`
+case did not reach the intended Rust response-header error path. HTTP/1 inserts
+its automatic Date header outside that path, so the old selected pass is not
+coverage evidence and the case has been removed. The replacement,
+`fault.http2.generated-date-header-error-resets-stream-followup-200`, injects
+the invalid generated Date value while building an HTTP/2 response, verifies
+the fault was consumed and the affected stream returned no response, then
+checks that a follow-up request on the same server receives 200. It passed
+1/1 with no infrastructure failures in the selected macOS ARM64 run. The
+report is `/tmp/uvicorn-rs-pr19-date-header-fault-final.json` (SHA-256
+`73018f47bdfaa8aeff7bc8c6b3d7f66d48aa16fd0fa4edfb501b08cb9b97e1cc`), using
+the dirty local harness and input changes. This selected case is diagnostic
+evidence only; it does not refresh the full-matrix coverage gate or provide an
+independent review.
 
 ### Traditional encrypted-key failure attribution (2026-10-26)
 

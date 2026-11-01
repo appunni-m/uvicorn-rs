@@ -7227,7 +7227,7 @@
           "tls": true,
           "ssl_cert_reqs": 2,
           "ssl_keyfile_password": "uvicorn-rs-parity-key",
-          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des-invalid-decrypted-key",
+          "ssl_keyfile_format": "traditional-dsa-encrypted-valid",
           "required_observations": {
             "response_received": false,
             "response_status": null,
@@ -7262,7 +7262,7 @@
           "tls": true,
           "ssl_cert_reqs": 2,
           "ssl_keyfile_password": "uvicorn-rs-parity-key",
-          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des-invalid-decrypted-key",
+          "ssl_keyfile_format": "traditional-dsa-encrypted-valid",
           "required_observations": {
             "response_received": false,
             "response_status": null,
@@ -7297,7 +7297,7 @@
           "tls": true,
           "ssl_cert_reqs": 2,
           "ssl_keyfile_password": "uvicorn-rs-parity-key",
-          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des-invalid-decrypted-key",
+          "ssl_keyfile_format": "traditional-dsa-encrypted-valid",
           "required_observations": {
             "response_received": false,
             "response_status": null,
@@ -7332,7 +7332,7 @@
           "tls": true,
           "ssl_cert_reqs": 2,
           "ssl_keyfile_password": "uvicorn-rs-parity-key",
-          "ssl_keyfile_format": "pkcs12-pbe-sha1-3des-invalid-decrypted-key",
+          "ssl_keyfile_format": "traditional-dsa-encrypted-valid",
           "required_observations": {
             "response_received": false,
             "response_status": null,

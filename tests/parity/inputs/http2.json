@@ -288,6 +288,25 @@
       }
     },
     {
+      "case_id": "fault.http2.generated-date-header-error-resets-stream-followup-200",
+      "profile": "http2",
+      "operation": "http.application-status",
+      "covers": [
+        "http.application-status"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.response.date-header.invalid-value",
+        "contract": "http2-response-header-build-error-resets-stream-followup-200"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/state",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
       "case_id": "fault.http2.scope-extension-early-hint-set-item",
       "profile": "http2",
       "operation": "http.application-status",

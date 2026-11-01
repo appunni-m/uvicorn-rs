@@ -39,7 +39,9 @@ from urllib.parse import parse_qs, urlsplit
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import dsa, rsa
+from cryptography.hazmat.primitives import padding as crypto_padding
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 import psutil
 from h2.config import H2Configuration
@@ -534,6 +536,7 @@ FAULT_CONTRACTS = {
     "server-default-header-finalization-error-closes-connection",
     "server-concurrency-callback-error-preserves-503",
     "http2-response-event-fault-consumed-and-status-observed",
+    "http2-response-header-build-error-resets-stream-followup-200",
     "python-ssl-ca-verifier-error-propagates",
     "python-ssl-ca-verifier-success-fallback-propagates",
     "python-ssl-keyfile-error-propagates",
@@ -1687,6 +1690,16 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: endpoint accept closure requires startup plus an HTTP/1 follow-up"
                     )
+            elif fault["contract"] == "http2-response-header-build-error-resets-stream-followup-200":
+                if (
+                    case.get("profile") != "http2"
+                    or case.get("operation") != "http.application-status"
+                    or fault["point"] != "http.response.date-header.invalid-value"
+                    or case.get("request", {}).get("path") != "/state"
+                ):
+                    raise ParityError(
+                        f"{case_id}: HTTP/2 response-header faults require the Date-header build error on /state"
+                    )
             elif fault["contract"] == "http2-500-generic-error-body":
                 is_application_panic = (
                     fault["point"] == "http.app-task.panic-before-response-start"
@@ -1698,7 +1711,10 @@ def load_contract(
                 )
                 if (
                     case.get("profile") != "http2"
-                    or not (is_application_panic or is_scope_construction_error)
+                    or not (
+                        is_application_panic
+                        or is_scope_construction_error
+                    )
                     or case.get("request", {}).get("path") != "/state"
                 ):
                     raise ParityError(
@@ -2498,12 +2514,12 @@ def load_contract(
                     or run_http.get("invocation") != "config-server"
                     or run_http.get("tls") is not True
                     or run_http.get("ssl_keyfile_format")
-                    != "pkcs12-pbe-sha1-3des-invalid-decrypted-key"
+                    != "traditional-dsa-encrypted-valid"
                     or not run_http.get("ssl_keyfile_password")
                     or run_http.get("ssl_cert_reqs") != 2
                 ):
                     raise ParityError(
-                        f"{case_id}: Python SSL keyfile helper faults require the invalid-decrypted-key Config/Server case"
+                        f"{case_id}: Python SSL keyfile helper faults require an OpenSSL-valid, Rust-unhandled DSA Config/Server case"
                     )
             elif fault["contract"] == "python-ssl-keyfile-rust-decrypt-error-propagates":
                 run_http = case.get("api", {}).get("run_http", {})
@@ -2853,7 +2869,7 @@ def load_contract(
                     fault["contract"] == "python-ssl-keyfile-error-propagates"
                     and fault["point"] in PYTHON_SSL_KEYFILE_ERROR_FAULT_POINTS
                     and run_http.get("ssl_keyfile_format")
-                    == "pkcs12-pbe-sha1-3des-invalid-decrypted-key"
+                    == "traditional-dsa-encrypted-valid"
                 )
                 keyfile_rust_decrypt_error_case = (
                     fault["contract"] == "python-ssl-keyfile-rust-decrypt-error-propagates"
@@ -3288,6 +3304,7 @@ def load_contract(
                         "pkcs12-pbe-sha1-3des-zero-iterations",
                         "pkcs12-pbe-sha1-3des-short-ciphertext",
                         "pkcs12-pbe-sha1-3des-invalid-decrypted-key",
+                        "traditional-dsa-encrypted-valid",
                         "pkcs12-pbe-sha1-3des-malformed-outer-sequence",
                         "pkcs12-pbe-sha1-3des-trailing-outer-data",
                         "pkcs12-pbe-sha1-3des-missing-algorithm",
@@ -6337,6 +6354,87 @@ def make_certificate(directory: Path) -> tuple[Path, Path, Path]:
     leaf_certificate.write_bytes(leaf_pem)
     certificate.write_bytes(leaf_pem + ca_pem)
     return certificate, key, ca_certificate
+
+
+def make_dsa_server_identity(directory: Path, password: str) -> tuple[Path, Path]:
+    """Create an OpenSSL-loadable DSA identity the Rust key parser rejects."""
+    certificate_path = directory / "dsa-server-cert.pem"
+    key_path = directory / "dsa-server-key.pem"
+    key = dsa.generate_private_key(key_size=2048)
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")])
+    not_before = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1)
+    not_after = not_before + timedelta(days=2)
+    certificate = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(not_before)
+        .not_valid_after(not_after)
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=False,
+                crl_sign=False,
+                encipher_only=None,
+                decipher_only=None,
+            ),
+            critical=True,
+        )
+        .add_extension(
+            x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False
+        )
+        .add_extension(
+            x509.SubjectAlternativeName(
+                [
+                    x509.DNSName("localhost"),
+                    x509.IPAddress(ipaddress.ip_address("127.0.0.1")),
+                ]
+            ),
+            critical=False,
+        )
+        .sign(key, hashes.SHA256())
+    )
+    certificate_path.write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
+    iv = os.urandom(16)
+    derived_key = bytearray()
+    previous_digest = b""
+    password_bytes = password.encode("utf-8")
+    while len(derived_key) < 32:
+        previous_digest = hashlib.md5(
+            previous_digest + password_bytes + iv[:8], usedforsecurity=False
+        ).digest()
+        derived_key.extend(previous_digest)
+    der = key.private_bytes(
+        serialization.Encoding.DER,
+        serialization.PrivateFormat.TraditionalOpenSSL,
+        serialization.NoEncryption(),
+    )
+    padder = crypto_padding.PKCS7(algorithms.AES.block_size).padder()
+    padded_der = padder.update(der) + padder.finalize()
+    encryptor = Cipher(algorithms.AES(bytes(derived_key[:32])), modes.CBC(iv)).encryptor()
+    encrypted_der = encryptor.update(padded_der) + encryptor.finalize()
+    encoded_key = base64.b64encode(encrypted_der)
+    wrapped_key = b"\n".join(
+        encoded_key[offset : offset + 64]
+        for offset in range(0, len(encoded_key), 64)
+    )
+    key_path.write_bytes(
+        b"-----BEGIN DSA PRIVATE KEY-----\n"
+        + b"Proc-Type: 4,ENCRYPTED\n"
+        + b"DEK-Info: AES-256-CBC,"
+        + iv.hex().upper().encode("ascii")
+        + b"\n\n"
+        + wrapped_key
+        + b"\n-----END DSA PRIVATE KEY-----\n"
+    )
+    return certificate_path, key_path
 
 
 def make_client_certificate(directory: Path) -> tuple[Path, Path]:
@@ -11711,7 +11809,14 @@ def execute_case(
                 server["port"],
                 case["request"],
                 observe_response_extensions=response_extension_operation,
-                reject_timeout=case["operation"] == "http2.incomplete-response-trailers",
+                reject_timeout=(
+                    case["operation"] == "http2.incomplete-response-trailers"
+                    or (
+                        fault is not None
+                        and fault["contract"]
+                        == "http2-response-header-build-error-resets-stream-followup-200"
+                    )
+                ),
                 events_path=server["events"]
                 if case["operation"] in {
                     "http2.response-early-hints",
@@ -11734,6 +11839,27 @@ def execute_case(
                 ):
                     raise ParityError("HTTP/2 response-event fault was not consumed")
                 observation["fault_consumed"] = True
+            if (
+                fault is not None
+                and fault["contract"]
+                == "http2-response-header-build-error-resets-stream-followup-200"
+            ):
+                if (
+                    fault_control_path is None
+                    or fault_control_path.read_text(encoding="utf-8").strip()
+                    == fault["point"]
+                ):
+                    raise ParityError("HTTP/2 response-header fault was not consumed")
+                observation["fault_consumed"] = True
+                observation["followup_response"] = http2_request(
+                    server["port"],
+                    {
+                        "method": "GET",
+                        "path": "/state?coverage-fault=followup",
+                        "headers": [],
+                        "body_base64": "",
+                    },
+                )
             return observation
         if profile_id == "http3":
             if trust_anchor is None or h3_client is None:
@@ -12761,6 +12887,16 @@ def fault_contract_matches(
         return (
             observation.get("fault_consumed") is True
             and observation.get("status") == expected_status
+        )
+    if fault["contract"] == "http2-response-header-build-error-resets-stream-followup-200":
+        followup = observation.get("followup_response")
+        return (
+            fault["point"] == "http.response.date-header.invalid-value"
+            and observation.get("fault_consumed") is True
+            and observation.get("status") == 0
+            and observation.get("body_bytes") == ""
+            and isinstance(followup, dict)
+            and followup.get("status") == 200
         )
     if fault["contract"] == "python-ssl-ca-verifier-error-propagates":
         expected_message = (
@@ -14449,7 +14585,7 @@ def run_python_api_probe(
         "malformed-ca",
         "invalid-der-ca",
         "non-utf8-ca",
-    } or run_http.get("client_tls"):
+    } or run_http.get("client_tls") or run_http.get("ssl_keyfile_format") == "traditional-dsa-encrypted-valid":
         temporary_tls_assets = tempfile.TemporaryDirectory(
             prefix="uvicorn-rs-python-api-tls-"
         )
@@ -14460,6 +14596,12 @@ def run_python_api_probe(
             "server_key": str(key),
             "ca_certificate": str(ca_certificate),
         }
+        if run_http.get("ssl_keyfile_format") == "traditional-dsa-encrypted-valid":
+            dsa_certificate, dsa_key = make_dsa_server_identity(
+                tls_directory, run_http["ssl_keyfile_password"]
+            )
+            tls_assets["server_certificate"] = str(dsa_certificate)
+            tls_assets["server_key"] = str(dsa_key)
         if run_http.get("ssl_ca_certs") == "trusted-ca":
             trusted_ca_certificate = tls_directory / "trusted-ca.pem"
             trusted_ca_certificate.write_bytes(
@@ -15697,6 +15839,12 @@ def execute_profile(
                             fault_observation = {
                                 **target_result,
                                 "fault_consumed": target_raw.get("fault_consumed"),
+                            }
+                        elif case["fault"]["contract"] == "http2-response-header-build-error-resets-stream-followup-200":
+                            fault_observation = {
+                                **target_result,
+                                "fault_consumed": target_raw.get("fault_consumed"),
+                                "followup_response": target_raw.get("followup_response"),
                             }
                         elif case["fault"]["contract"] in {
                             "server-lifespan-startup-auto-fallback",
