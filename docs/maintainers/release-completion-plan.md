@@ -35,95 +35,61 @@ No original release gate is waived by this plan. Historical measurements remain
 historical. A task closes on its own deliverable; downstream publication gates
 belong to the release tasks rather than being copied into every prerequisite.
 
-### Current release candidate — 2026-11-01 (PR #21 / CI #596 and #598)
+### Current release candidate — 2026-11-02 (PR #21 / CI #604)
 
-Draft [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21) promotes
-`develop` to `main`, from base `86e72e181d00feca1b4db7f30377d5d9d4345b83` to
-head `1375b0feef6468c6946efda4cd560afce465534e`. The PR replaces closed,
-unmerged PR #19. Current `develop` contains executable source
-`1341cd94fc7780281c1bce5cdb0b6f3d4683af76`, the coverage-only fault
-injection correction `1375b0feef6468c6946efda4cd560afce465534e`, and
-documentation-only status refreshes. Active edits stay on `develop`; `main`
-remains the promotion target.
+Open [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21) promotes
+`develop` head `04d5a46888b44cfa9b57b3387fa89c59580f4e73` to `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its CI merge ref is
+`20f27b3a4f13afb110fa17e41c227f3d56a86d3d`. Active implementation work
+remains on `develop`; `main` changes through PR #21 only.
 
-After fetching `origin`, the listed `windows-worker-groups`,
-`uvicorn-rs-compat-hooks`, and `uvicorn-rs-coverage-events` refs have no
-branch-only commits relative to `develop`. `windows-oracle-signal-trace` has
-one additional test-diagnostic commit; `windows-shutdown-diagnostic` has five
-older diagnostic commits. Their unique changes add tracing and diagnostic
-runtime controls, not release fixes. `develop` already contains newer
-shutdown and listener-poll tracing. No source change from these refs is being
-merged wholesale; release work remains on `develop` and promotes through PR
-#21.
+The side-branch audit is complete. Current remote tips for
+`codex/windows-worker-groups`, `codex/uvicorn-rs-compat-hooks`, and
+`codex/uvicorn-rs-coverage-events` are ancestors of `develop`. The
+`windows-oracle-signal-trace` tip contains a test-only diagnostic refinement
+superseded by the fuller trace already in `develop`. The five unique
+`windows-shutdown-diagnostic` commits add temporary environment-gated tracing
+and are not required product fixes. No listed branch needs to be checked out
+or merged separately.
 
-Focused Windows CI
-[#598](https://github.com/appunni-m/uvicorn-rs/actions/runs/41311364502) on
-executable source `1341cd9` passed the six selected multi-worker CLI parity
-cases (6/6, zero infrastructure failures). Artifact
-[13086090330](https://github.com/appunni-m/uvicorn-rs/actions/runs/41311364502/artifacts/13086090330)
-contains the result. This selected run is not full compatibility or unified
-coverage evidence. The current documentation source passes the strict local
-MkDocs build; no hosted docs run was started for the documentation-only commit.
+CI [#604](https://github.com/appunni-m/uvicorn-rs/actions/runs/41343738493)
+passed the maintained Uvicorn 0.54.0 installed-wheel matrix with no failures,
+infrastructure failures, or not-run cases: Linux x86-64 783/783, macOS ARM64
+783/783, and Windows x86-64 756/756. Windows explicitly excludes 27
+platform-inapplicable inputs requiring UDS, inherited POSIX descriptors, a
+Unix-only transfer race, or POSIX-only worker controls. The exact cases are
+listed in `.github/workflows/ci.yml`. The matrix exercises custom HTTP and
+WebSocket protocol classes, `ssl_context_factory`, HTTP/2 ALPN, and response
+header/trailer capacity behavior.
 
-The three public installed-candidate parity artifacts from CI #596 were also
-inspected directly. Linux x86-64 artifact `13083890925` and macOS ARM64
-artifact `13084595078` each completed 782/782 cases with no failures,
-infrastructure errors, or not-run cases. Windows x86-64 artifact `13084281950`
-completed 749/755 with zero behavioral mismatches and six infrastructure
-timeouts. Those six cases are `python-api.module-cli-two-workers-serve-request`,
-`python-api.module-cli-two-workers-from-uvicorn-workers-environment`,
-`python-api.module-cli-two-workers-stop-on-sigterm`,
-`python-api.module-cli-web-concurrency-two-workers-serve-request`,
-`python-api.module-cli-explicit-workers-overrides-web-concurrency`, and
-`python-api.module-cli-worker-restarts-after-two-crashes`. Focused Windows
-artifact `13086090330` passes those exact six cases 6/6.
+The candidate artifacts from this exact run were inspected directly. The
+Linux bundle contains clean 0.3.0 Cargo archives for `asgi-lifespan-protocol-rs`
+and `uvicorn-rs`, a Linux abi3 wheel, and an sdist. Every bundle file matches
+its build-manifest SHA-256. The two Cargo consumers, installed wheel
+consumer, and rebuilt sdist consumer passed. The macOS and Windows wheel
+hashes match their build manifests; macOS CLI/TLS and ASGI consumers passed,
+and Windows ASGI passed. The Windows-specific CLI/TLS smoke was marked
+`not_run`; the full Windows-applicable parity run passed. The Python 3.9
+wheel-floor installation passed. See the current [release evidence](../releases.md).
 
-Each inspected report is a clean installed-candidate run. Its 114 indexed
-parity-input hashes and manifest hash match current `develop`. Of the 212
-recorded target source-file hashes, 211 match; the only difference is
-`src/lib.rs`. The report's `src/lib.rs` matches commit `16cc3e974`, and the
-Windows focused report's matches `1341cd94f`. The only change from those source
-revisions to current `develop` is the `#[cfg(coverage)]` fault-injection point
-for the prebound-listener `recvmsg` error; the ordinary release build excludes
-that branch. Thus the inspected cases cover the current ordinary runtime,
-including custom HTTP/WebSocket protocols, `ssl_context_factory`, and the
-header/trailer capacity cases, without rerunning them. The focused Windows
-receipt supplements the six infrastructure timeouts but does not turn the
-full Windows matrix into one green exact-source run. Keep the complete
-installed-wheel and final-source release gates open until the reviewed final
-source has its qualifying matrix.
+Rust quality/MSRV/features/docs, native contracts, native FastAPI-RS
+composition, and the release artifact/handoff contract checks passed. The
+three-repeat unified coverage job completed but missed 100% at 14,771/14,835
+regions and 10,856/10,893 lines (64 regions and 37 lines missing in
+`src/lib.rs`); artifact `13101272404` has archive SHA-256
+`3d13995a20c404a2f86c89e6b59f688b518a1e7c7e54b0ccd564fdca76251d5d`. The
+selected H3 and TLS follow-up reports are not full-gate evidence. No accepted
+independent Coverage-MCP review receipt is available yet. Matched
+three-system ordinary-FastAPI benchmarks remain unfinished; prior Linux
+ARM64 upload and HTTP/3 failures remain unresolved. The support, compatibility,
+installation, and rollback docs are refreshed in the current working tree; the
+strict docs build still needs verification. The maintainer will run their own
+FastAPI apps after repository acceptance.
 
-Full CI
-[#596](https://github.com/appunni-m/uvicorn-rs/actions/runs/41305880925)
-completed its three-repeat matrix on older source
-`16cc3e974f4ad0b9d046f081fe67ba1c872ee0c7`. Parity passed 1,425/1,425 cases,
-but the unified coverage gate failed at **14,743/14,823 regions** and
-**10,841/10,888 lines** (80 regions and 47 lines missing). The coverage
-archive is artifact `13085817127`, SHA-256
-`596ed1dae91fc4a4ba2c0452a1c977248253b7153a75782b917da2f3075f2622`. Linux
-x86-64 and macOS ARM64 candidate package and consumer checks passed on that
-older source. Windows candidate parity completed 749/755 with zero behavioral
-mismatches and six shutdown infrastructure timeouts (four candidate and two
-stock-Uvicorn oracle cases); Windows consumer checks were skipped. This run
-cannot qualify current `develop`.
-
-The selected local coverage run
-`5b1006578e9747a58694cb5c8d534af7` passed the existing
-`fault.http1.prebound-transfer.recv-error` case (1/1, 1,036 regions
-attributed). The working tree was dirty at base `f4f6e0882`; commit
-`1375b0fee` moves the injected `recvmsg` error to the syscall result so the
-case exercises the real error conversion at `?`. This selected report is
-diagnostic only. `cargo check --locked --lib -p uvicorn-rs-py` and
-`cargo fmt --all -- --check` passed on the committed change; no full matrix was
-run.
-
-CI #596 is now the latest completed full coverage report, but its source is
-older than current `develop`. No 100% unified report or accepted independent
-Coverage-MCP receipt is bound to the current source; `b8k7` and `7t4g` remain
-open. Current-source full parity, compatibility, benchmark, and candidate
-release gates also remain open. Keep PR #21 in draft; do not merge or publish
-until those gates have qualifying evidence on the final source and exact
-Cargo/PyPI artifacts and clean consumers are verified.
+The candidate artifact hashes in CI #604 are tied to merge ref `20f27b3a`;
+rebuild them from the final qualified source before publication. Do not merge
+PR #21 or publish Cargo/PyPI until coverage, independent review, benchmarks,
+docs, and final-source candidate verification pass.
 
 ### Earlier release-candidate snapshot — 2026-11-01 (PR #21 / CI #594)
 

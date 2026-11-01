@@ -1,12 +1,12 @@
 # Run a Python ASGI app
 
-This guide runs the current development prototype from a repository checkout.
-There is no PyPI release yet, and the prototype is not a drop-in Uvicorn
-replacement.
+This guide starts the example from a repository checkout. The `uvicorn-rs`
+0.3.0 PyPI release is still being qualified; the tested candidate is not
+published yet.
 
-## Before you start
+## Start the checked-out example
 
-You need `uv`, CPython 3.12, and Rust 1.85 or newer. From the repository root,
+Install `uv`, CPython 3.12, and Rust 1.85 or newer. From the repository root,
 install the locked development environment and start the example:
 
 ```sh
@@ -14,40 +14,47 @@ uv sync --python 3.12
 uv run uvicorn examples.hello_asgi:app --host 127.0.0.1 --port 8000
 ```
 
-The server binds to loopback so it is reachable only from this machine. In a
-second terminal, send a request:
+The server binds to loopback, so only this machine can connect. In another
+terminal, send a request:
 
 ```sh
 curl -i http://127.0.0.1:8000/
 ```
 
-The response should have status `200` and a text body beginning with
-`GET / 1.1`. Press Ctrl-C in the server terminal to request shutdown.
+Expect status `200` and a text body beginning with `GET / 1.1`. Press Ctrl-C
+in the server terminal to request shutdown.
 
-## Run your own app
+## Run your own FastAPI app after release
 
-Use an import string in `module:attribute` form. Start the command from a
-directory where the module can be imported, or set `PYTHONPATH` to include your
-application directory:
+Create an environment that contains your application dependencies and the
+candidate server, but not upstream Uvicorn. Both distributions provide files
+under the `uvicorn` import name, so keep them in separate environments.
 
-```sh
-uv run uvicorn myapp.asgi:app --host 127.0.0.1 --port 8000
-```
-
-For a no-argument application factory, use `--factory`:
+After `uvicorn-rs` 0.3.0 is available on PyPI:
 
 ```sh
-uv run uvicorn myapp.asgi:create_app --factory --host 127.0.0.1 --port 8000
+python -m venv .venv-uvicorn-rs
+. .venv-uvicorn-rs/bin/activate
+python -m pip install "fastapi" "uvicorn-rs[standard]==0.3.0"
+python -m uvicorn myapp.main:app --host 127.0.0.1 --port 8000
 ```
 
-The module CLI and `uvicorn.run(..., factory=True)` each have a focused
-comparison with Uvicorn 0.54.0. This does not establish full CLI or Python API
-compatibility; check the [configuration guide](configuration.md) and
-[support matrix](support-matrix.md) for tested behavior and gaps.
+Replace `myapp.main:app` with your application's `module:attribute`. If the
+application uses a factory, add `--factory`:
 
-## Before using it instead of Uvicorn
+```sh
+python -m uvicorn myapp.main:create_app --factory --host 127.0.0.1 --port 8000
+```
 
-The `uvicorn` name in this checkout does not yet provide Uvicorn's full CLI,
-Python API, worker, reload, or deployment behavior. Do not remove Uvicorn from
-an application environment expecting a compatible replacement. Check the
-[replacement status](uvicorn-compatibility.md) before planning a migration.
+The [FastAPI evaluation guide](fastapi-evaluation.md) describes how to compare
+the same application and dependencies with stock Uvicorn, collect operational
+measurements, and restore upstream Uvicorn.
+
+## Compatibility evidence
+
+The exact-source candidate passed the maintained Uvicorn 0.54.0 installed-wheel
+parity matrix on Linux x86-64, macOS ARM64, and Windows x86-64. See the
+[compatibility status](uvicorn-compatibility.md) and
+[support matrix](support-matrix.md) for the tested platforms and remaining
+release gates. The maintainer will perform the real-application trial after
+the repository release gates are complete.

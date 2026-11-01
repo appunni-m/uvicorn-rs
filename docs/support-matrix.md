@@ -1,58 +1,59 @@
 # ASGI and protocol support
 
-This page summarizes behavior verified against the checked-out source. It does
-not claim complete ASGI conformance or full Uvicorn compatibility.
+This page summarizes the maintained compatibility contract and platform
+evidence. It does not claim the official ASGI conformance suite has been run
+or extend Uvicorn 0.54.0 evidence to other Uvicorn versions.
 
-The Python distribution target is `uvicorn-rs`, exposing the `uvicorn` import
-namespace and command. `uvicorn-rs-py` remains the optional Cargo/PyO3 adapter.
-The Cargo release targets are `asgi-lifespan-protocol-rs` and one server crate,
-`uvicorn-rs`; HTTP/3 is behind its optional `http3` feature. The publisher is
-`.github/workflows/release.yml`. The old `native-app-contract`,
-`uvicorn-rs-h3`, and `uvicorn-rs-h3-quinn` names are not release targets. Clean
-candidate artifacts and downstream consumer checks remain open; see
-[release status](releases.md).
+The Python distribution is `uvicorn-rs`, with the `uvicorn` import namespace
+and command. `uvicorn-rs-py` remains the internal optional Cargo/PyO3 adapter.
+The Cargo release targets are the Python-free `uvicorn-rs` server crate and
+`asgi-lifespan-protocol-rs`; HTTP/3 is behind the optional `http3` feature.
+The publisher is `.github/workflows/release.yml`. The old
+`native-app-contract`, `uvicorn-rs-h3`, and `uvicorn-rs-h3-quinn` names are
+not release targets.
 
-## Current verification status (2026-11-01)
+## Current verification status (2026-11-02)
 
-Draft [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21) promotes `develop` to `main`, whose base is `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its exact source is `f487bb5e40e3f3d6fdf07900a0ec859f1cb83968`. Exact-source CI [run 41301339884](https://github.com/appunni-m/uvicorn-rs/actions/runs/41301339884) passed Linux x86-64 and macOS ARM64 installed-wheel public parity 782/782 on each platform against Uvicorn 0.54.0, with zero failures, infrastructure failures, or not-run cases. Linux parity artifact `13082121608` has SHA-256 `bb84397472d5ef533eeb47a456ddd9d4159fb91748e24ce33a977eeddbd4b82b`; macOS parity artifact `13082370703` has SHA-256 `a34c8c8502c46d4d48bb8d6182ad6b0ed637d04f5d9593af8a646c333781d9d1`. The Linux candidate bundle and clean wheel, sdist, and Cargo consumers passed (artifact `13081613812`, SHA-256 `050677288013ec15b0549065e816462244947aa9ec83aaaf7b56aacf31c0f041`). The macOS candidate wheel consumer also passed (artifact `13082505341`, SHA-256 `96c664511c67cb147263682c1b2dfe9e9f13b53db7b93ab6e8bdb31919b7b375`). Windows candidate parity completed with 750/755 cases passing and five two-worker CLI shutdown infrastructure failures; package and consumer verification was skipped (artifact 13082273455). The three-repeat coverage job for head f487 was active when recorded; follow-up develop commit 79549a84d requires a fresh exact-source coverage result and independent review receipt. Rust quality, MSRV, native FastAPI-RS composition, native HTTP contracts, and documentation validation passed.
+PR #21 tests `develop` head `04d5a46888b44cfa9b57b3387fa89c59580f4e73` at
+merge ref `20f27b3a4f13afb110fa17e41c227f3d56a86d3d` in CI #604. The full
+maintained installed-wheel public matrix against Uvicorn 0.54.0 passed:
 
-These candidate results do not establish full Uvicorn compatibility, 100% coverage, or a performance gain. The release guide records the complete release gates. The support rows below describe observed behavior and do not claim that the unreleased candidate is an accepted drop-in replacement.
+| Platform | Result | Failed | Infrastructure failed | Not run |
+| --- | ---: | ---: | ---: | ---: |
+| Linux x86-64 | 783/783 | 0 | 0 | 0 |
+| macOS ARM64 | 783/783 | 0 | 0 | 0 |
+| Windows x86-64 | 756/756 | 0 | 0 | 0 |
+
+Windows excludes 27 explicitly listed inputs for Unix-domain sockets,
+inherited POSIX descriptors, a Unix-only listener-transfer race, and
+POSIX-only worker signals or health checks. The candidate inputs include the
+custom HTTP/WebSocket protocol hooks, `ssl_context_factory`, and response
+header/trailer capacity cases. See the [versioned compatibility contract]
+(maintainers/uvicorn-0.54.0-contract.md) for the exact case inventory.
+
+Candidate artifacts were built for all three platforms. The Linux bundle
+contains both Cargo archives, a wheel, and an sdist; their hashes match its
+build manifest, and Cargo, wheel, and sdist consumers passed. The macOS wheel
+consumer passed. On Windows, the live-ASGI consumer passed and its separate
+CLI/TLS shutdown smoke was `not_run`; Windows-applicable parity passed. The
+declared Python 3.9 wheel-floor check passed.
+
+Unified coverage completed but missed its 100% gate at 14,771/14,835 regions
+and 10,856/10,893 lines (64 regions and 37 lines missing in `src/lib.rs`). The
+current selected follow-up cases are diagnostic only. An independent
+Coverage-MCP review remains unaccepted; matched three-system FastAPI benchmarks
+are still pending after coverage qualification. The package is not yet
+published; see the [release guide](releases.md).
 
 ## Can I replace Uvicorn?
 
-Not yet. The `uvicorn-rs` PyPI distribution is unpublished and the full
-compatibility matrix and coverage gate have not passed. A clean candidate is
-not accepted across all required platforms. The latest follow-up still needs full hosted platform acceptance. The real FastAPI application trial is for
-the maintainer to run after repository acceptance. See the
-[maintainer evidence map](maintainers/uvicorn-0.54.0-contract.md).
-One selected POSIX
-case verifies replacement after a worker stops answering health checks. A
-separate two-worker SIGTERM input passed 1/1 on the local dirty draft on macOS
-15.7.7 ARM64 / CPython 3.12.13: both servers returned HTTP 200, logged receipt
-of SIGTERM, and exited 0 without timing out. A newer focused parity case sent
-two actual SIGINT signals while a request task remained active; both module-CLI
-processes returned HTTP 200 and exited 0 without timing out. It is one macOS
-case, and its forced-cancellation traceback logs are retained but not compared.
-A separate `SIGTTIN`/`SIGTTOU`
-input also passed 1/1 on the local dirty draft on macOS ARM64 / CPython 3.12.13:
-the normalized logs match Uvicorn as worker count scales from two to three and
-back, followed by clean SIGINT shutdown. Another focused case verifies
-replacement after two consecutive worker crashes. A SIGHUP input restarts both
-workers with matching Uvicorn logs. A separate failure-path input forces a
-replacement worker's lifespan startup to fail; both servers keep the old
-workers serving HTTP 200 and log the failure. These selected POSIX paths do
-not qualify other process-control signals, Windows or other platforms, or
-broader restart/failure policy. Reload filters and other platform combinations
-remain open. See the [focused SIGTERM evidence](maintainers/uvicorn-0.54.0-contract.md#two-worker-sigterm-shutdown),
-[second-SIGINT evidence](maintainers/uvicorn-0.54.0-contract.md#actual-repeated-sigint-shutdown-with-an-active-request),
-[two-crash evidence](maintainers/uvicorn-0.54.0-contract.md#two-consecutive-worker-crashes-and-replacement),
-[worker-count signal evidence](maintainers/uvicorn-0.54.0-contract.md#live-worker-count-signals),
-and [SIGHUP restart evidence](maintainers/uvicorn-0.54.0-contract.md#sighup-worker-restart),
-plus the [SIGHUP replacement-startup failure evidence](maintainers/uvicorn-0.54.0-contract.md#sighup-replacement-startup-failure).
-If your app depends on unverified
-behavior, continue to use upstream Uvicorn. See
-[replacement status](uvicorn-compatibility.md) for the current package status
-and migration guidance.
+The maintained Uvicorn 0.54.0 public matrix passes on the three tested
+platform profiles. The PyPI package is still unpublished, so use the current
+candidate for an isolated application trial only after the remaining release
+gates pass. Keep upstream Uvicorn in a separate environment for comparison and
+rollback. The [FastAPI evaluation guide](fastapi-evaluation.md) describes the
+trial; the maintainer will run their own applications after repository
+acceptance.
 
 ## Supported behaviors
 
@@ -83,8 +84,8 @@ and migration guidance.
 | Use pre-bound TCP listeners | Five live HTTP/1.1 GET comparisons pass against Uvicorn 0.54.0 for IPv4: module CLI `--fd`, `uvicorn.run(fd=...)`, `Config(fd=...)` with `Server.run()`, and `Server.run(sockets=[...])` with one and two listeners. Two focused module-CLI comparisons also pass for inherited IPv6 listeners with one and two workers. The two-listener case requires a successful response from each socket and graceful SIGINT exit. A current-source refresh also verifies the startup socket log for inherited IPv4 and IPv6 module-CLI sockets (2/2); see the [focused evidence](maintainers/uvicorn-0.54.0-contract.md#inherited-fd-startup-log-parity-2026-10-28). The IPv6 cases passed on macOS ARM64 / CPython 3.12.13 (run `bc282b37f69a46a38e8353a94197e2a7`, report SHA-256 `f55d9d1f8227452b0513446e2b96241fc63277c1f359ca761fb570a0ea94ca0f`). | The direct Config/Server.run IPv6 loopback bind has one focused local comparison; other IPv6 API paths, Windows, TLS, and HTTP/2 or HTTP/3 over inherited sockets remain unverified. |
 | Run multiple Python workers or reload code | Two focused module-CLI comparisons verify two workers serve an HTTP/1.1 request and stop on SIGINT: one sets `--workers 2`, the other sets `WEB_CONCURRENCY=2`. A separate input kills one worker process and verifies replacement. A new POSIX input suspends a worker, uses `--timeout-worker-healthcheck 2`, and passes 1/1 against Uvicorn 0.54.0 on macOS ARM64 / CPython 3.12.13 (run `ae4e43b0e69245a8b22cd67668cdaeba`; report SHA-256 `eae083b94d0d0637b0005fa9278066b48b52f787f93b06c3e58113270a602e1e`). Both implementations log an additional server process, serve the request, and shut down cleanly. A reload input passes locally on macOS ARM64 / CPython 3.12.13 with `--workers 2` in both dependency modes: without `watchfiles`, the candidate's `StatReload` fallback matches the Uvicorn watchfiles oracle; with `watchfiles==1.3.0`, both use watchfiles. Each reload run edits a watched Python module, verifies the replacement response, compares the warning that reload ignores the worker count, and shuts down on SIGINT. | See the [two-crash evidence](maintainers/uvicorn-0.54.0-contract.md#two-consecutive-worker-crashes-and-replacement), [SIGHUP restart evidence](maintainers/uvicorn-0.54.0-contract.md#sighup-worker-restart), and [SIGHUP replacement-startup failure evidence](maintainers/uvicorn-0.54.0-contract.md#sighup-replacement-startup-failure); the restart cases cover one forced exit, two consecutive forced worker exits, one POSIX health-check expiry, a successful SIGHUP restart, and one failed replacement startup that preserves the old workers. Restart/failure policy beyond these paths, worker-count signals beyond the tested SIGTTIN/SIGTTOU pair, Windows and other socket/platform combinations remain unverified. One WatchFilesReload include/exclude case also passes: an excluded-file change did not reload, an included-file change did, and SIGINT exited cleanly. That case ran on macOS ARM64 / CPython 3.12.13; other glob combinations, fallback-watcher filtering, platforms, and reload startup/failure modes remain unverified. See the current-source receipts in the [maintainer evidence map](maintainers/uvicorn-0.54.0-contract.md). Use upstream Uvicorn for those paths. |
 | Lifespan and graceful shutdown | Startup, shutdown, application failures, and selected cancellation paths have live cases. Two focused module-CLI comparisons set the timeout through the CLI option and environment; both confirm that a held ASGI request is cancelled after 1 second, matching Uvicorn 0.54.0 on macOS ARM64. `lifespan="off"` passes focused public API and module CLI comparisons against Uvicorn 0.54.0. Focused `Config`/`Server.serve()` and module CLI cases verify that an app exception before startup under `lifespan="on"` leaves the server unstarted and exits with code 3. | Other strict-mode failure classes remain unverified. The worker cases cover successful startup/request/SIGINT, one worker crash/replacement, one two-crash replacement case, and one POSIX health-check expiry/replacement path; worker-control signals and broader process control remain unqualified. |
-| Use the native Rust library | The source contains a Python-free `uvicorn-rs` server crate and a separate `asgi-lifespan-protocol-rs` lifecycle crate; HTTP/3 is gated by `uvicorn-rs`'s optional `http3` feature. | Clean release artifacts and downstream consumer checks for the current source remain unverified. See [release status](releases.md) and [native Rust integration](native-fastapi-composition.md). |
-| Match Uvicorn's CLI and Python API | Exact-source Linux x86-64 parity passed 755/755. macOS had one worker-restart log mismatch; its focused follow-up with the 15-second probe timeout passed locally 1/1. Windows had two candidate shutdown timeouts plus two Uvicorn-oracle infrastructure failures. Full Uvicorn 0.54.0 acceptance remains open. See the [compatibility status](uvicorn-compatibility.md). |
+| Use the native Rust library | The candidate archive contains the Python-free `uvicorn-rs` crate and the separate `asgi-lifespan-protocol-rs` crate; the Linux archive consumer passed with the optional `http3` feature. | The current release remains unpublished; see [release status](releases.md). |
+| Match Uvicorn's CLI and Python API | The maintained Uvicorn 0.54.0 installed-wheel matrix passed 783/783 on Linux x86-64 and macOS ARM64, and 756/756 Windows-applicable cases, with zero failures, infrastructure errors, or not-run cases. | Windows excludes 27 explicitly listed POSIX-only inputs; other Uvicorn versions and the official ASGI conformance suite are outside this receipt. |
 
 ## Known behavior limits
 

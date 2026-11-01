@@ -1,74 +1,85 @@
 # uvicorn-rs
 
-A Rust-first server for ASGI applications and Rust services.
+A Rust-first server for Python ASGI applications and Rust services.
 
-## Project status (2026-11-01)
+## Release status — 2026-11-02
 
-The target release is a Python-free `uvicorn-rs` server crate with HTTP/3
-behind `http3`, the separate `asgi-lifespan-protocol-rs` crate, and the PyPI
-distribution `uvicorn-rs`. The optional internal Cargo/PyO3 adapter remains
-`uvicorn-rs-py`; the PyPI package provides the `uvicorn` imports and command.
-`.github/workflows/release.yml` publishes, while `candidate.yml` verifies
-artifacts. Both crates.io Trusted Publisher entries and the PyPI publisher are
-already configured. A read-only registry check on 2026-11-01 confirmed both
-Cargo crates at 0.2.1 and no PyPI `uvicorn-rs` release. The 0.3.0 candidate is
-not release-qualified.
-See [release status](https://appunni-m.github.io/uvicorn-rs/releases/).
+The planned Python distribution is **`uvicorn-rs`**. It provides the `uvicorn`
+import namespace, `uvicorn` command, and `python -m uvicorn` entry point. The
+optional internal Cargo/PyO3 adapter remains `uvicorn-rs-py`. The Rust release
+contains one Python-free `uvicorn-rs` server crate with HTTP/3 behind the
+optional `http3` feature, plus `asgi-lifespan-protocol-rs`.
 
-Exact-source CI #586 tested pushed PR head d5f983c43615df5990abfc73fcfc73a3460a86c7 against main at 86e72e181d00feca1b4db7f30377d5d9d4345b83. Rust quality/docs, MSRV, the artifact/Coverage-MCP handoff contract, and pinned native FastAPI-RS composition passed. Linux x86-64 installed-wheel parity passed 755/755; its candidate artifact and consumer passed (artifact 13073349195, SHA-256 32c5f281febbe84bd7dda7b1017b2a6afa87667fee1e93a16e287a9eb6bd573b). macOS ARM64 parity passed 754/755; the sole failure was python-api.module-cli-worker-restarts-after-two-crashes, whose HTTP response and process results matched but whose target log included an extra 'client disconnected before response start' event. A focused native macOS run with the pending 15-second client-probe timeout passed this case 1/1; the updated input still needs hosted full-matrix validation. Windows x86-64 executed 682 cases: 678 passed, zero behavioral mismatches, 46 were not run, and four infrastructure failures occurred. They were candidate shutdown timeouts in the two-worker environment and SIGTERM cases, a Uvicorn oracle shutdown timeout in the explicit-worker case, and a Uvicorn oracle HTTP/1 upload abort (WinError 10053). Focused Windows run #587 on the same source passed both candidate worker cases; its oracle timeout trace showed no handler-entry event for one worker after CTRL_BREAK_EVENT while the parent waited for it. Only Linux artifact/consumer qualification passed. macOS and Windows candidate artifact/consumer checks remain open. Three-repeat unified coverage is still running.
-The [completion plan](https://appunni-m.github.io/uvicorn-rs/maintainers/release-completion-plan/) records source identities, remaining gates, and focused receipts.
+The 0.3.0 candidate is not published yet. Exact-source CI #604 passed the
+maintained Uvicorn 0.54.0 installed-wheel parity matrix: 783/783 on Linux
+x86-64, 783/783 on macOS ARM64, and 756/756 platform-applicable cases on
+Windows x86-64. Cargo, Linux/macOS wheel, sdist, and Windows live-ASGI
+candidate consumers passed; the Windows CLI/TLS smoke was marked `not_run`.
+The three-repeat unified coverage run completed but missed its 100% gate:
+14,771/14,835 regions and 10,856/10,893 lines (64 regions and 37 lines
+missing). Selected follow-up cases pass locally, but they are not a replacement
+for a new full-source report. Independent Coverage-MCP review and matched
+three-system FastAPI benchmarks remain release gates. Existing partial
+measurements do not establish a general performance advantage. See
+[release status](docs/releases.md) and the [compatibility matrix](docs/support-matrix.md).
 
-The Python package is **not yet a drop-in Uvicorn replacement**. Keep using
-upstream Uvicorn if your application relies on the full Uvicorn command-line,
-Python API, worker, reload, or process-control contract. Benchmarks remain
-behind complete parity; the existing Linux ARM64 HTTP/3 benchmark is incomplete
-and does not establish a general speed gain. See [coverage evidence](https://appunni-m.github.io/uvicorn-rs/coverage/),
-[parity evidence](https://appunni-m.github.io/uvicorn-rs/parity/), [replacement status](https://appunni-m.github.io/uvicorn-rs/uvicorn-compatibility/),
-and [benchmark evidence](https://appunni-m.github.io/uvicorn-rs/benchmark-results/).
+## Try the source checkout
 
-## Try the current prototype
-
-From a development checkout with `uv`, CPython 3.12, and a Rust toolchain
-installed:
+For a source preview, install `uv`, CPython 3.12, and Rust 1.85 or newer, then
+run from the repository root:
 
 ```sh
 uv sync --python 3.12
 uv run uvicorn examples.hello_asgi:app --host 127.0.0.1 --port 8000
 ```
 
-In another terminal:
+In another terminal, request the example:
 
 ```sh
 curl -i http://127.0.0.1:8000/
 ```
 
-You should receive HTTP 200 and a text body beginning with `GET / 1.1`. This
-checkout command is for evaluating the prototype; it does not mean the package
-is published or Uvicorn-compatible. See [the quickstart](https://appunni-m.github.io/uvicorn-rs/quickstart/)
-and [current options](https://appunni-m.github.io/uvicorn-rs/configuration/).
+The response should have status `200` and a text body beginning with
+`GET / 1.1`. Press Ctrl-C in the server terminal to request shutdown.
+
+## Install for a FastAPI trial
+
+After version 0.3.0 is published, create a clean environment for the candidate
+and install its standard dependencies:
+
+```sh
+python -m venv .venv-uvicorn-rs
+. .venv-uvicorn-rs/bin/activate
+python -m pip install "uvicorn-rs[standard]==0.3.0"
+python -m uvicorn myapp.main:app --host 127.0.0.1 --port 8000
+```
+
+Use a separate environment for upstream Uvicorn. Both distributions install
+the `uvicorn` import namespace. The [FastAPI evaluation guide](docs/fastapi-evaluation.md)
+describes a matched trial setup and rollback steps.
 
 ## What to expect
 
-Python applications still execute on their Python event loop, and Python
-application code remains subject to the GIL. Current measurements do not show
-a general performance advantage over Uvicorn for Python ASGI applications;
-see the [benchmark results](https://appunni-m.github.io/uvicorn-rs/benchmark-results/).
-
-Rust applications can use the Python-free `uvicorn-rs` library. The server is
-independent of Starlette-RS and FastAPI-RS; those frameworks do not need it as
-a runtime dependency. See [native Rust integration](https://appunni-m.github.io/uvicorn-rs/native-fastapi-composition/).
+Python applications still run on their Python event loop and remain subject
+to the GIL. The completed benchmark evidence does not yet establish a general
+FastAPI performance advantage over Uvicorn. Rust applications can use the
+Python-free `uvicorn-rs` library without depending on Starlette-RS or
+FastAPI-RS at runtime; see [native Rust integration](docs/native-fastapi-composition.md).
 
 ## Documentation
 
-- [Run a Python ASGI app](https://appunni-m.github.io/uvicorn-rs/quickstart/)
-- [Install, replace, or roll back Uvicorn](https://appunni-m.github.io/uvicorn-rs/uvicorn-compatibility/)
-- [ASGI and protocol support](https://appunni-m.github.io/uvicorn-rs/support-matrix/)
-- [Deployment guidance](https://appunni-m.github.io/uvicorn-rs/deployment/)
-- [Benchmark results and evidence limits](https://appunni-m.github.io/uvicorn-rs/benchmark-results/)
+- [Quickstart](docs/quickstart.md)
+- [Install, replace, or roll back Uvicorn](docs/uvicorn-compatibility.md)
+- [ASGI and protocol support](docs/support-matrix.md)
+- [Configuration](docs/configuration.md)
+- [Deployment guidance](docs/deployment.md)
+- [FastAPI trial guide](docs/fastapi-evaluation.md)
+- [Benchmark results and evidence limits](docs/benchmark-results.md)
+- [Release gates](docs/releases.md)
 
-For contributing, security reporting, support expectations, architecture, and
-release information, see [CONTRIBUTING.md](https://github.com/appunni-m/uvicorn-rs/blob/main/CONTRIBUTING.md), [SECURITY.md](https://github.com/appunni-m/uvicorn-rs/blob/main/SECURITY.md),
-[SUPPORT.md](https://github.com/appunni-m/uvicorn-rs/blob/main/SUPPORT.md), and the [documentation site](https://appunni-m.github.io/uvicorn-rs/).
+For contribution, security, and support information, see
+[CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and
+[SUPPORT.md](SUPPORT.md).
 
 The project is not affiliated with the Uvicorn project. It is available under
-[BSD-3-Clause or MIT](https://github.com/appunni-m/uvicorn-rs/blob/main/LICENSE), at your option.
+[BSD-3-Clause or MIT](LICENSE), at your option.

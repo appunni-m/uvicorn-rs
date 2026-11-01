@@ -15,33 +15,69 @@ Use these state labels precisely:
 - **Released:** the authorized distribution decision and required verification
   are complete.
 
-## Current release gates (2026-11-01)
+## Current release gates (2026-11-02)
 
 The release set is one Python-free **uvicorn-rs** server crate with HTTP/3
 behind its optional **http3** feature, the separate
 **asgi-lifespan-protocol-rs** crate, and the PyPI distribution **uvicorn-rs**
 implemented by the optional internal **uvicorn-rs-py** adapter. The publisher
 is **.github/workflows/release.yml**; **candidate.yml** only builds and verifies
-candidates. The PyPI Trusted Publisher
-`uvicorn-rs / GitHub / appunni-m/uvicorn-rs / release.yml / pypi` is configured.
-Both crates.io Trusted Publisher entries for `asgi-lifespan-protocol-rs` and
-`uvicorn-rs` already use `appunni-m/uvicorn-rs / release.yml / crates-io`.
-The maintainer confirms these entries are already present; do not add duplicates.
+candidates. The configured PyPI Trusted Publisher is
+`uvicorn-rs / GitHub / appunni-m/uvicorn-rs / release.yml / pypi`. The two
+crates.io Trusted Publisher entries use
+`appunni-m/uvicorn-rs / release.yml / crates-io`.
 
-A read-only registry check on 2026-11-01 found `uvicorn-rs` and
-`asgi-lifespan-protocol-rs` at 0.2.1, both unyanked. PyPI returned 404 for
-`uvicorn-rs`. The synchronized candidate source declares 0.3.0.
+The registry check on 2026-11-02 found both Cargo crates at 0.2.1 and
+unyanked; PyPI returned 404 for `uvicorn-rs`. Version 0.3.0 is not published.
+The current candidate is built from clean PR merge ref
+`20f27b3a4f13afb110fa17e41c227f3d56a86d3d` in CI
+[#604](https://github.com/appunni-m/uvicorn-rs/actions/runs/41343738493),
+for `develop` head `04d5a46888b44cfa9b57b3387fa89c59580f4e73`.
 
-The release uses a new minor version because `ServerConfig` gains the public
-`http1_allow_authority_form` field. The published 0.2.1 struct is exhaustive,
-so callers that initialize every field must update their literals (or use
-`..ServerConfig::default()`). HTTP/1 authority-form targets remain enabled by
-default for native Rust callers. Historical 0.2.2 receipts below retain their
-original versions and do not qualify the 0.3.0 candidate.
+The installed-wheel Uvicorn 0.54.0 matrix passed 783/783 on Linux x86-64,
+783/783 on macOS ARM64, and 756/756 Windows-applicable cases. All reports
+show zero failed, infrastructure-failed, or not-run cases. Windows excludes
+27 explicitly listed POSIX-only cases; see the exclusion list in
+[`ci.yml`](https://github.com/appunni-m/uvicorn-rs/blob/develop/.github/workflows/ci.yml).
+The declared Python 3.9 wheel-floor check passed.
 
-Draft [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21) promotes `develop` to `main` at base `86e72e181d00feca1b4db7f30377d5d9d4345b83`; its exact source head is `f487bb5e40e3f3d6fdf07900a0ec859f1cb83968`. Exact-source CI [run 41301339884](https://github.com/appunni-m/uvicorn-rs/actions/runs/41301339884) passed Linux x86-64 and macOS ARM64 installed-wheel public parity 782/782 on each platform, with zero failures, infrastructure failures, or not-run cases. Linux artifact `13082121608` has SHA-256 `bb84397472d5ef533eeb47a456ddd9d4159fb91748e24ce33a977eeddbd4b82b`; macOS artifact `13082370703` has SHA-256 `a34c8c8502c46d4d48bb8d6182ad6b0ed637d04f5d9593af8a646c333781d9d1`. Its clean-source Linux 0.3.0 bundle passed wheel and sdist consumers and native Cargo consumers for both `asgi-lifespan-protocol-rs` and `uvicorn-rs`, including `uvicorn-rs` with `http3` (artifact `13081613812`, SHA-256 `050677288013ec15b0549065e816462244947aa9ec83aaaf7b56aacf31c0f041`). The macOS candidate wheel consumer passed (artifact `13082505341`, SHA-256 `96c664511c67cb147263682c1b2dfe9e9f13b53db7b93ab6e8bdb31919b7b375`). Windows candidate parity completed with 750/755 cases passing and five two-worker CLI shutdown infrastructure failures; package and consumer steps were skipped (artifact 13082273455). The three-repeat coverage job for head f487 was active when recorded; follow-up develop commit 79549a84d needs a fresh exact-source coverage report. Rust quality, MSRV, native HTTP contracts, and native FastAPI-RS composition passed; documentation run [41301339893](https://github.com/appunni-m/uvicorn-rs/actions/runs/41301339893) passed. Independent Coverage-MCP review remains open.
+CI #604 built and verified these exact candidate files:
 
-The current run does not qualify the final release source. Coverage, an accepted independent Coverage-MCP receipt, complete compatibility, matched three-system FastAPI benchmarks, exact final artifacts, and clean consumers remain required. The maintainer will run their own FastAPI applications after handoff. No `0.3.0` tag or package has been published. Release controls and trusted publishers are configured; see the [completion plan](maintainers/release-completion-plan.md) for exact sequencing.
+| Artifact | SHA-256 | Verification |
+| --- | --- | --- |
+| `asgi-lifespan-protocol-rs-0.3.0.crate` | `0f84d5f832c44a48f7532c79235d80660221e0ef5fe391d98d1e01ed6396cfd1` | Cargo clean consumer passed |
+| `uvicorn-rs-0.3.0.crate` | `3332efabb8abd14305d5714bfe4da9024f08681c6555659eb45e69233be865d6` | Cargo consumer passed with default and `http3` features |
+| Linux wheel `uvicorn_rs-0.3.0-cp39-abi3-manylinux_2_34_x86_64.whl` | `89bd706e7f684324fee51a06a99f1b8d8b5b39b658cef03ef7200148690db931` | Clean installed-wheel consumer passed |
+| Source distribution `uvicorn_rs-0.3.0.tar.gz` | `7dce1c67e9aead41c428c4a7a8f701a8eec53671b139a9c300b08050d597634f` | Rebuilt and consumed cleanly |
+| macOS ARM64 wheel | `f8f58761f95a11c892bf61ad8f3d9e489f5dd3fb201ee2276fce88afc07280e8` | Installed-wheel consumer passed |
+| Windows x86-64 wheel | `593ad923f0d73ad0a506865bef394191bf32275c7ec0544d033b252057893600` | Live-ASGI consumer passed; separate CLI/TLS smoke was `not_run` |
+
+The build-manifest hashes matched the actual candidate files. The wheels declare
+distribution `uvicorn-rs` version `0.3.0`, require Python `>=3.9`, and contain
+the `uvicorn` import package and native extension. These are candidate
+receipts for CI #604's source; rebuild and re-verify artifacts from the final
+accepted source before publication.
+
+The remaining qualification gates are:
+
+- The three-repeat unified coverage job completed at 14,771/14,835 regions and
+  10,856/10,893 lines, below the required 100% threshold. All 64 missing
+  regions and 37 missing lines are in `src/lib.rs`; the [run artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/41343738493/artifacts/13101272404)
+  is bound to `04d5a46888b44cfa9b57b3387fa89c59580f4e73`.
+- An accepted independent Coverage-MCP review receipt must bind to the final
+  covered source.
+- Matched ordinary-FastAPI benchmarks on Linux x86-64, Linux ARM64, and
+  macOS ARM64 have not been completed for the final candidate. Earlier Linux
+  ARM64 upload and HTTP/3 failures remain unresolved benchmark evidence.
+- Refresh user-facing docs and verify the final documentation build for the
+  qualified source.
+
+Do not publish a Cargo or PyPI package or create the 0.3.0 tag until these
+gates pass. After qualification, publish Cargo locally first as requested,
+then publish PyPI `uvicorn-rs` through `release.yml`. No 0.3.0 package or tag
+has been published. The release controls and Trusted Publisher entries are
+configured; see the [completion plan](maintainers/release-completion-plan.md)
+for the evidence sequence.
 
 ## Registry and packaging audit (2026-10-27; earlier source snapshot)
 

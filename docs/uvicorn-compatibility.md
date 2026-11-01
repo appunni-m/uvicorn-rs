@@ -1,34 +1,57 @@
 # Can I replace Uvicorn?
 
-**Not yet.** The PyPI distribution `uvicorn-rs` has not been published, and the
-current candidate has not passed the full Uvicorn 0.54.0 replacement contract.
-Use upstream Uvicorn for production workloads that depend on unverified
-behavior. You can [try the prototype from a checkout](quickstart.md) without
-changing an existing application environment.
+The maintained Uvicorn 0.54.0 public input matrix passed on Linux x86-64,
+macOS ARM64, and Windows x86-64. The 0.3.0 PyPI release is not published
+yet; coverage review and matched FastAPI benchmarks remain release gates.
+Plan an isolated application trial after publication and keep an upstream
+environment available for rollback.
 
 Both distributions install files under the `uvicorn` import namespace. Do not
-install `uvicorn-rs` and upstream `uvicorn` in the same environment. The
-replacement and rollback steps below apply only after a compatible version is
-published.
+install `uvicorn-rs` and upstream `uvicorn` in the same environment.
 
-## Current status (2026-11-01)
+## Current status (2026-11-02)
 
-The `uvicorn-rs` PyPI distribution and version 0.3.0 are not published. Draft [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21) promotes `develop` to `main` at base `86e72e181d00feca1b4db7f30377d5d9d4345b83`; its head is `f487bb5e40e3f3d6fdf07900a0ec859f1cb83968`. Exact-source CI [run 41301339884](https://github.com/appunni-m/uvicorn-rs/actions/runs/41301339884) passed the full Linux x86-64 and macOS ARM64 installed-wheel public input matrices 782/782 on each platform against Uvicorn 0.54.0, with zero case failures, infrastructure failures, or not-run cases. The Linux parity artifact `13082121608` has SHA-256 `bb84397472d5ef533eeb47a456ddd9d4159fb91748e24ce33a977eeddbd4b82b`; the macOS artifact `13082370703` has SHA-256 `a34c8c8502c46d4d48bb8d6182ad6b0ed637d04f5d9593af8a646c333781d9d1`. The clean-source Linux 0.3.0 candidate bundle passed wheel, sdist rebuild, and native Cargo consumers, including the `http3` feature (artifact `13081613812`, SHA-256 `050677288013ec15b0549065e816462244947aa9ec83aaaf7b56aacf31c0f041`). The macOS candidate wheel consumer passed (artifact `13082505341`, SHA-256 `96c664511c67cb147263682c1b2dfe9e9f13b53db7b93ab6e8bdb31919b7b375`). Windows candidate parity completed with 750/755 cases passing and five two-worker CLI shutdown infrastructure failures; package and consumer steps were skipped (artifact 13082273455). The three-repeat coverage job for head f487 was active when recorded. Follow-up develop commit 79549a84d requires fresh exact-source validation; no accepted Coverage-MCP receipt exists for that head. Rust quality, MSRV, native HTTP contracts, and native FastAPI-RS composition passed. Documentation run [41301339893](https://github.com/appunni-m/uvicorn-rs/actions/runs/41301339893) passed. Matched three-system ordinary-FastAPI benchmarks remain gated on complete compatibility; no broad performance gain is claimed.
+Open [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21) promotes
+`develop` head `04d5a46888b44cfa9b57b3387fa89c59580f4e73` to `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI #604 exercised merge ref
+`20f27b3a4f13afb110fa17e41c227f3d56a86d3d`.
 
-| What you need | Current state |
-| --- | --- |
-| Install from PyPI | `uvicorn-rs` has no published release. |
-| Use the `uvicorn` CLI or Python API | Implemented public inventory; complete platform acceptance remains open. |
-| Serve an ASGI app | Exact-source installed-wheel parity passed 782/782 on Linux x86-64 and macOS ARM64. Windows candidate parity had five two-worker CLI shutdown infrastructure failures. Complete cross-platform acceptance remains open. |
-| Use workers, reload, sockets or process controls | The maintained input matrix is still undergoing cross-platform acceptance; consult the support matrix for specific verified behavior. |
-| Install the Windows candidate | Windows parity had five two-worker shutdown infrastructure failures; candidate artifact and consumer verification were skipped. |
-| Claim a performance advantage | No broad Python FastAPI gain is established. Benchmark work follows parity. |
+The installed-wheel public matrix against Uvicorn 0.54.0 passed with no failed,
+infrastructure-failed, or not-run cases:
 
-The Python 3.9 wheel-consumer check is a separate package claim. The pinned
-Uvicorn 0.54.0 oracle requires Python 3.10 or later; its versioned metadata is
-retained by the [public contract](maintainers/uvicorn-0.54.0-contract.md).
-See the [support matrix](support-matrix.md) and [release gates](releases.md).
+| Platform | Result | Report SHA-256 | Artifact |
+| --- | ---: | --- | --- |
+| Linux x86-64 | 783/783 | `af85d0993f7b582bec373e7e241b05ffa2cb2a7c623e205ba2623a2b8a9c14cd` | [13098961155](https://github.com/appunni-m/uvicorn-rs/actions/runs/41343738493/artifacts/13098961155) |
+| macOS ARM64 | 783/783 | `cd764aea9d589d5a2064493d750f3829dd3d9ee02bc16e84a99313f596196bcd` | [13098834022](https://github.com/appunni-m/uvicorn-rs/actions/runs/41343738493/artifacts/13098834022) |
+| Windows x86-64 | 756/756 | `38f104f1e05b5b42b3de819cf5c621d6beb99d15136c0759d988574a5fad2d9b` | [13099342184](https://github.com/appunni-m/uvicorn-rs/actions/runs/41343738493/artifacts/13099342184) |
 
+Windows excludes 27 explicitly declared inputs that require Unix-domain
+sockets, inherited POSIX descriptors, a Unix-only listener-transfer race, or
+POSIX-only signals and worker health checks. The maintained matrix includes
+custom HTTP and WebSocket protocol classes, `ssl_context_factory`, HTTP/2
+ALPN configuration, and header/trailer capacity cases. The exact case
+inventory is in the [maintainer contract](maintainers/uvicorn-0.54.0-contract.md)
+and the platform exclusions are listed in
+[`ci.yml`](https://github.com/appunni-m/uvicorn-rs/blob/develop/.github/workflows/ci.yml).
+
+CI #604 also built clean candidate packages for Linux, macOS, and Windows.
+The Linux bundle contains both Cargo archives, the wheel, and the sdist; its
+manifest hashes match the package bytes, and the wheel, sdist, and Cargo
+consumers passed. The macOS wheel consumer passed. The Windows live-ASGI
+consumer passed; its separate CLI/TLS shutdown smoke was recorded as
+`not_run`, while the Windows-applicable public matrix passed. The Python 3.9
+wheel-floor check passed.
+
+The unified three-repeat coverage job completed on this source and missed its
+100% gate: 14,771/14,835 regions and 10,856/10,893 lines (64 regions and 37
+lines missing), all in `src/lib.rs`. Its [coverage artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/41343738493/artifacts/13101272404)
+has archive SHA-256 `3d13995a20c404a2f86c89e6b59f688b518a1e7c7e54b0ccd564fdca76251d5d`.
+The focused changes now in the local worktree do not have a new full-source
+coverage receipt. No independent Coverage-MCP review receipt has been accepted,
+and the matched three-system FastAPI benchmark remains incomplete. The
+candidate is not published.
+
+## Historical diagnostic records
 ## Historical diagnostic records
 
 ### Input@40 CLI and Python API baseline profiles — 2026-10-27
@@ -168,7 +191,7 @@ To replace upstream Uvicorn:
 
 ```sh
 python -m pip uninstall uvicorn
-python -m pip install "uvicorn-rs[standard]"
+python -m pip install "uvicorn-rs[standard]==0.3.0"
 uvicorn --help
 python -m uvicorn --help
 ```

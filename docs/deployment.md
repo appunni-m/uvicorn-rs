@@ -1,10 +1,11 @@
 # Deployment guidance
 
-The current Python ASGI client is an unpublished `uvicorn-rs` PyPI distribution
-prototype, not a supported Uvicorn replacement. Keep upstream Uvicorn for
-deployments that need its full CLI, worker, reload, proxy, or process-management
-behavior. This guide is for evaluating the current checkout in a controlled
-environment.
+The `uvicorn-rs` 0.3.0 PyPI release is still being qualified and is not
+published. Exact-source CI #604 passed the maintained Uvicorn 0.54.0
+installed-wheel parity matrix on Linux x86-64, macOS ARM64, and Windows
+x86-64. Coverage review and matched FastAPI benchmarks remain release gates.
+Use the [support matrix](support-matrix.md) to check the tested surface, then
+evaluate the released candidate with your application before deploying it.
 
 ## Bind and run
 
@@ -26,18 +27,15 @@ For experiments, run the server under a process manager so it can capture
 logs, restart the process, and request shutdown. Run it as a dedicated
 unprivileged user and set the working directory and `PYTHONPATH` explicitly.
 
-The Python CLI has a multi-process supervisor when `--workers` is greater than
-one. Selected parity cases on macOS ARM64 verify two-worker startup, request
-serving, SIGINT shutdown, replacement after one worker exits, and replacement
-after a POSIX worker stops answering health checks. The health-check case uses
-a 2-second timeout and confirms both Uvicorn and this checkout log a worker
-replacement, serve a request, and shut down cleanly. The server does not
-provide a health endpoint. Repeated restart policy, worker-count signals,
-reload filters, startup-failure handling, and broader platform and socket
-combinations remain unverified. See the
-[support matrix](support-matrix.md) before relying on multi-process behavior.
-Use upstream Uvicorn when your deployment depends on unverified worker or
-reload behavior.
+The Python CLI includes Uvicorn-style worker and reload controls. The
+maintained parity matrix checks process startup, request serving, shutdown,
+worker replacement, reload, signal handling, and socket cases against Uvicorn
+0.54.0 on every platform-applicable input. Windows excludes 27 inputs that
+require Unix-domain sockets, inherited POSIX descriptors, a Unix-only listener
+transfer, or POSIX-only worker signals and health checks. See the
+[compatibility evidence](uvicorn-compatibility.md) for the exact run and the
+[support matrix](support-matrix.md) for remaining untested combinations. Keep
+an upstream rollback environment available during your application trial.
 
 The current prototype handles Ctrl-C and SIGTERM and has a configurable
 `--timeout-graceful-shutdown`. Allow additional process-manager shutdown time for
@@ -55,7 +53,8 @@ for protocol limits.
 
 ## Frameworks
 
-Frameworks that expose a standard ASGI 3 application can be tried through the
-prototype. Selected integration cases have been exercised, but this is not a
-claim of full compatibility with every Starlette, FastAPI, or ASGI feature.
-See [ASGI support](support-matrix.md) and [Uvicorn replacement status](uvicorn-compatibility.md).
+Frameworks that expose a standard ASGI 3 application can be tried with the
+candidate. The maintained parity matrix uses Uvicorn 0.54.0 as its reference;
+it does not replace an application-specific trial or the official ASGI
+conformance suite. Follow the [FastAPI evaluation guide](fastapi-evaluation.md)
+and consult [ASGI support](support-matrix.md) before deployment.

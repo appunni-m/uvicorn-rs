@@ -2694,7 +2694,7 @@ impl tower_service::Service<Request<uvicorn_rs::Http3RequestBody>> for NativeHtt
         };
         let server = Arc::clone(&context.server);
         Box::pin(async move {
-            let response = handle_http3_asgi_request(request, context).await?;
+            let response = handle_http3_asgi_request(request, context).await;
             let response = apply_request_limit(&server, response);
             apply_default_response_headers(&server, response)
         })
@@ -3741,7 +3741,6 @@ struct AsgiIo {
     response_trailer_order: Option<ResponseTrailerOrder>,
     default_response_header_names: Vec<HeaderName>,
     response_header_overflow_supported: bool,
-    request_allows_response_trailers: bool,
     http2_informational: Option<hyper::ext::Http2InformationalSender>,
     default_header_error: Option<InvalidDefaultHeader>,
     start: mpsc::Sender<ResponseStart>,
@@ -4235,7 +4234,7 @@ impl AsgiIo {
                         {
                             continue;
                         }
-                        if !slf.request_allows_response_trailers {
+                        if slf.response_trailer_order.is_none() {
                             continue;
                         }
                         let name = HeaderName::from_bytes(&name)
@@ -4256,15 +4255,12 @@ impl AsgiIo {
                     if more_trailers {
                         return Ok(py.None().into_bound(py));
                     }
-                    if slf.request_allows_response_trailers {
-                        let mut header_order =
-                            HeaderOrder::new(std::mem::take(trailer_header_order));
-                        for (name, value) in std::mem::take(overflow_headers) {
-                            header_order.append_overflow_field(name, value);
-                        }
-                        if let Some(shared_order) = &slf.response_trailer_order {
-                            shared_order.set(header_order);
-                        }
+                    let mut header_order = HeaderOrder::new(std::mem::take(trailer_header_order));
+                    for (name, value) in std::mem::take(overflow_headers) {
+                        header_order.append_overflow_field(name, value);
+                    }
+                    if let Some(shared_order) = &slf.response_trailer_order {
+                        shared_order.set(header_order);
                         ResponseChunk::Trailers(std::mem::take(trailer_headers))
                     } else {
                         ResponseChunk::End
@@ -7521,17 +7517,15 @@ fn load_tls_configs(
     };
 
     // QUIC requires a TLS 1.3 cipher suite regardless of the selected TCP SSL
-    // protocol. The coverage fault supplies a provider with only TLS 1.2
-    // suites so Quinn's real conversion rejects it below.
+    // protocol. The coverage fault supplies an empty provider so Rustls rejects
+    // the configuration at the protocol-version builder below.
     #[cfg(coverage)]
     let quic_tls_builder = if coverage_fault_take(CoverageFaultPoint::ServerQuicTlsConfigError) {
         let mut provider = rustls::crypto::ring::default_provider();
-        provider
-            .cipher_suites
-            .retain(|suite| suite.tls13().is_none());
+        provider.cipher_suites.clear();
         server_config_with_protocols(
             Arc::new(provider),
-            &[&rustls::version::TLS12],
+            &[&rustls::version::TLS13],
             "invalid HTTP/3 TLS identity",
         )?
     } else {
@@ -9410,7 +9404,7 @@ fn observe_http3_request_task(result: Result<(), tokio::task::JoinError>) {
 async fn handle_http3_asgi_request(
     request: Request<uvicorn_rs::Http3RequestBody>,
     context: ConnectionContext,
-) -> Result<Response<ResponseBody>, std::io::Error> {
+) -> Response<ResponseBody> {
     let (parts, body) = request.into_parts();
     let request_cancellation = CancellationToken::new();
     #[cfg(coverage)]
@@ -9447,7 +9441,7 @@ async fn handle_http3_asgi_request(
     .await;
 
     match handle_request_parts(parts, request_rx, None, request_cancellation, context).await {
-        Ok(response) => Ok(response),
+        Ok(response) => response,
         Err(error) => {
             log_error(format_args!(
                 "uvicorn-rs: HTTP/3 ASGI request failed: {error}"
@@ -9457,11 +9451,11 @@ async fn handle_http3_asgi_request(
             } else {
                 Bytes::from_static(b"Internal Server Error")
             };
-            Ok(response(
+            response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 full_body(body),
                 HeaderMap::new(),
-            ))
+            )
         }
     }
 }
@@ -10029,13 +10023,13 @@ async fn handle_request_parts(
     context: ConnectionContext,
 ) -> Result<Response<ResponseBody>, BoxError> {
     let http_version = parts.version;
-    let request_allows_response_trailers = http_version == Version::HTTP_2
+    let response_trailer_order = (http_version == Version::HTTP_2
         && parts
             .headers
             .get_all(http::header::TE)
             .iter()
-            .any(|value| trim_ascii(value.as_bytes()).eq_ignore_ascii_case(b"trailers"));
-    let response_trailer_order = request_allows_response_trailers.then(ResponseTrailerOrder::new);
+            .any(|value| trim_ascii(value.as_bytes()).eq_ignore_ascii_case(b"trailers")))
+    .then(ResponseTrailerOrder::new);
     let http2_informational = parts
         .extensions
         .get::<hyper::ext::Http2InformationalSender>()
@@ -10107,7 +10101,6 @@ async fn handle_request_parts(
                         response_trailer_order: app_response_trailer_order,
                         default_response_header_names,
                         response_header_overflow_supported,
-                        request_allows_response_trailers,
                         http2_informational,
                         default_header_error,
                         start: start_tx,
