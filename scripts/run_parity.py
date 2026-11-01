@@ -6235,7 +6235,7 @@ def runtime_identity(manifest: dict[str, Any]) -> tuple[dict[str, Any], dict[str
             importlib.import_module("uvicorn_rs._native").__file__
         ).resolve()
     try:
-        native_extension_path = str(native_extension.relative_to(ROOT))
+        native_extension_path = native_extension.relative_to(ROOT).as_posix()
     except ValueError:
         native_extension_path = str(native_extension)
     source_files = runtime_source_hashes(ROOT)
@@ -16338,7 +16338,7 @@ def validate_result_shape(
     exact_keys(run["manifest"], {"path", "schema", "sha256"}, "result.run.manifest")
     if run["manifest"]["schema"] != manifest["schema"]:
         raise ParityError("result manifest schema differs from the active contract")
-    expected_inputs = [str((FIXTURES / path).relative_to(ROOT)) for path in manifest["inputs"]]
+    expected_inputs = [(FIXTURES / path).relative_to(ROOT).as_posix() for path in manifest["inputs"]]
     if not isinstance(run["inputs"], list) or [item.get("path") for item in run["inputs"]] != expected_inputs:
         raise ParityError("result input identities do not match the manifest index")
     for item in run["inputs"]:
@@ -16667,13 +16667,13 @@ def main() -> int:
             "started_at": started,
             "finished_at": utc_now(),
             "manifest": {
-                "path": str(MANIFEST_PATH.relative_to(ROOT)),
+                "path": MANIFEST_PATH.relative_to(ROOT).as_posix(),
                 "schema": manifest["schema"],
                 "sha256": sha256(MANIFEST_PATH),
             },
             "inputs": [
                 {
-                    "path": str(path.relative_to(ROOT)),
+                    "path": path.relative_to(ROOT).as_posix(),
                     "schema": INPUT_SCHEMA,
                     "sha256": sha256(path),
                 }
@@ -16682,21 +16682,21 @@ def main() -> int:
             "environment": environment,
             "target": target_identity,
             "harness": {
-                "runner": str(Path(__file__).resolve().relative_to(ROOT)),
+                "runner": Path(__file__).resolve().relative_to(ROOT).as_posix(),
                 "runner_sha256": sha256(Path(__file__).resolve()),
                 "identity_helper": {
                     "path": "scripts/parity_identity.py",
                     "sha256": sha256(ROOT / "scripts/parity_identity.py"),
                 },
-                "fixture_app": str((FIXTURES / "app.py").relative_to(ROOT)),
+                "fixture_app": (FIXTURES / "app.py").relative_to(ROOT).as_posix(),
                 "fixture_app_sha256": sha256(FIXTURES / "app.py"),
                 "python_api_probe": {
-                    "path": str((FIXTURES / "python_api_probe.py").relative_to(ROOT)),
+                    "path": (FIXTURES / "python_api_probe.py").relative_to(ROOT).as_posix(),
                     "sha256": sha256(FIXTURES / "python_api_probe.py"),
                 },
                 "http3_client": (
                     {
-                        "path": str(h3_client.relative_to(ROOT)),
+                        "path": h3_client.relative_to(ROOT).as_posix(),
                         "sha256": h3_client_sha256,
                     }
                     if h3_client is not None

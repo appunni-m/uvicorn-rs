@@ -655,7 +655,7 @@ def validate_parity(
     require(run["manifest"] == {"path": "tests/parity/manifest.json", "schema": manifest["schema"],
                                 "sha256": sha256(MANIFEST_PATH)}, "parity manifest identity differs from checkout")
     input_schema = source_constant(ROOT / "scripts/run_parity.py", "INPUT_SCHEMA")
-    require(run["inputs"] == [{"path": str(path.relative_to(ROOT)), "schema": input_schema, "sha256": sha256(path)}
+    require(run["inputs"] == [{"path": path.relative_to(ROOT).as_posix(), "schema": input_schema, "sha256": sha256(path)}
                                for path in input_paths], "parity input identities differ from checkout")
     target = run["target"]
     exact_keys(target, {"source_sha256", "source_files", "cargo_lock_sha256", "revision", "dirty", "native_extension"}, "parity target")
@@ -997,12 +997,12 @@ def expected_source_hashes(coverage_runner: Path, input_paths: list[Path]) -> di
     for relative in source_constant(coverage_runner, "SOURCE_PATHS"):
         path = repo_path(relative)
         if path.is_dir():
-            selected.update({str(item.relative_to(ROOT)): sha256(item) for item in sorted(path.rglob("*.rs"))})
+            selected.update({item.relative_to(ROOT).as_posix(): sha256(item) for item in sorted(path.rglob("*.rs"))})
         else:
             require(path.is_file(), f"missing declared source input: {relative}")
             selected[relative] = sha256(path)
     discovered = {
-        str(item.relative_to(ROOT))
+        item.relative_to(ROOT).as_posix()
         for directory in (ROOT / "src", ROOT / "crates/uvicorn-rs/src", ROOT / "crates/asgi-lifespan-protocol-rs/src")
         for item in directory.rglob("*.rs")
     }
@@ -1010,13 +1010,13 @@ def expected_source_hashes(coverage_runner: Path, input_paths: list[Path]) -> di
                            | set(THIRD_PARTY_SOURCE_SET)),
             "Rust source inventory is incomplete or unclassified")
     python_sources = {
-        str(item.relative_to(ROOT)) for item in (ROOT / "python/uvicorn_rs").rglob("*.py")
+        item.relative_to(ROOT).as_posix() for item in (ROOT / "python/uvicorn_rs").rglob("*.py")
     }
     require(python_sources == set(PYTHON_SOURCE_SET), "Python adapter source inventory is incomplete or unclassified")
     selected.update({relative: sha256(repo_path(relative)) for relative in PYTHON_SOURCE_SET})
     for relative in source_constant(coverage_runner, "REPORT_INPUT_PATHS"):
         selected[relative] = sha256(repo_path(relative))
-    selected.update({str(path.relative_to(ROOT)): sha256(path) for path in input_paths})
+    selected.update({path.relative_to(ROOT).as_posix(): sha256(path) for path in input_paths})
     require(set(PRODUCTION_SOURCE_SET) <= set(selected), "source hash receipt omits production files")
     return selected
 
@@ -1103,7 +1103,7 @@ def validate_coverage(
     # This validator runs after measurement and is not an input to the ASGI or
     # native cases. Keep its recorded hash in the immutable receipt, but do not
     # invalidate captured test evidence when the validator itself is repaired.
-    validator_path = str(Path(__file__).resolve().relative_to(ROOT))
+    validator_path = Path(__file__).resolve().relative_to(ROOT).as_posix()
     recorded_measurement_files = {
         path: digest for path, digest in recorded_files.items() if path != validator_path
     }
@@ -1114,7 +1114,7 @@ def validate_coverage(
             "coverage revision/source-state differs")
     require(source.get("manifest_sha256") == sha256(MANIFEST_PATH)
             and source.get("manifest_schema") == manifest["schema"]
-            and source.get("input_manifest_order") == [str(path.relative_to(ROOT)) for path in input_paths]
+            and source.get("input_manifest_order") == [path.relative_to(ROOT).as_posix() for path in input_paths]
             and source.get("native_manifest_sha256") == sha256(native_manifest_path)
             and source.get("native_manifest_schema") == native_manifest["schema_version"]
             and source.get("native_manifest_case_order") == native_ids,
@@ -1282,7 +1282,7 @@ def validate_coverage(
 
     producer_report = Path(coverage["coverage_mcp"].get("measurement_path", ""))
     require(not producer_report.is_absolute() and ".." not in producer_report.parts
-            and str(report_path.relative_to(ROOT)) == str(producer_report), "invalid Coverage-MCP report path")
+            and report_path.relative_to(ROOT).as_posix() == producer_report.as_posix(), "invalid Coverage-MCP report path")
     root = Path(run["artifacts_root"])
     require(not root.is_absolute() and ".." not in root.parts and root.is_relative_to(producer_report.parent),
             "invalid run artifact root")
@@ -1764,11 +1764,11 @@ def validate_coverage(
     if allow_pending_mcp and mcp_pending:
         exact_keys(mcp_receipt, {"status", "measurement_path", "metric", "required_follow_up"},
                    "pending Coverage-MCP request")
-        require(mcp_receipt == pending_coverage_mcp_request(str(report_path.relative_to(ROOT))),
+        require(mcp_receipt == pending_coverage_mcp_request(report_path.relative_to(ROOT).as_posix()),
                 "pending Coverage-MCP request differs from the producer contract")
     else:
         validate_coverage_mcp(
-            mcp_receipt, report_path=report_path, report_relative=str(report_path.relative_to(ROOT)),
+            mcp_receipt, report_path=report_path, report_relative=report_path.relative_to(ROOT).as_posix(),
             build=build, source=source, summary=expected_summary, artifact=artifact,
         )
     return {
