@@ -16,7 +16,7 @@ from socket import socket
 
 from uvicorn._ansi import style
 from uvicorn._shutdown_trace import write_shutdown_trace
-from uvicorn._subprocess import get_subprocess
+from uvicorn._subprocess import get_subprocess, spawn
 from uvicorn.config import STARTUP_FAILURE, Config
 from uvicorn.server import Server
 
@@ -28,6 +28,9 @@ SIGNALS = {
 
 logger = logging.getLogger("uvicorn.error")
 
+WINDOWS_SHUTDOWN_SIGNAL_ACK_TIMEOUT_SECONDS = 1.0
+WINDOWS_SHUTDOWN_SIGNAL_MAX_ATTEMPTS = 2
+
 
 class Process:
     def __init__(
@@ -37,6 +40,9 @@ class Process:
     ) -> None:
         self.config = config
         self._server: Server | None = None
+        self._windows_shutdown_signal_ack = (
+            spawn.Event() if os.name == "nt" else None
+        )
 
         self.parent_conn, self.child_conn = Pipe()
         self.process = get_subprocess(
@@ -81,6 +87,8 @@ class Process:
             # https://learn.microsoft.com/zh-cn/cpp/c-runtime-library/reference/signal?view=msvc-170
             def handle_sigbreak(sig: int, _frame) -> None:
                 write_shutdown_trace(f"worker-sigbreak.received signal={sig}")
+                if self._windows_shutdown_signal_ack is not None:
+                    self._windows_shutdown_signal_ack.set()
                 signal.raise_signal(signal.SIGTERM)
 
             signal.signal(  # type: ignore[attr-defined]
@@ -122,17 +130,45 @@ class Process:
         if self.process.exitcode is None:  # Process is still running
             assert self.process.pid is not None
             if os.name == "nt":  # pragma: py-not-win32
-                # Windows doesn't support SIGTERM.
-                # So send SIGBREAK, and then in process raise SIGTERM.
-                write_shutdown_trace(
-                    f"worker-shutdown.signal-send pid={self.process.pid}"
+                # Windows uses CTRL_BREAK, which the worker maps to SIGTERM.
+                # Delivery is asynchronous; wait for its handler before
+                # signaling the next process group.
+                signal_ack = self._windows_shutdown_signal_ack
+                attempts = (
+                    WINDOWS_SHUTDOWN_SIGNAL_MAX_ATTEMPTS
+                    if signal_ack is not None
+                    else 1
                 )
-                os.kill(  # type: ignore[attr-defined]
-                    self.process.pid, signal.CTRL_BREAK_EVENT
-                )
-                write_shutdown_trace(
-                    f"worker-shutdown.signal-sent pid={self.process.pid}"
-                )
+                if signal_ack is not None:
+                    signal_ack.clear()
+                for attempt in range(1, attempts + 1):
+                    write_shutdown_trace(
+                        f"worker-shutdown.signal-send pid={self.process.pid} "
+                        f"attempt={attempt}"
+                    )
+                    os.kill(  # type: ignore[attr-defined]
+                        self.process.pid, signal.CTRL_BREAK_EVENT
+                    )
+                    if signal_ack is None or signal_ack.wait(
+                        WINDOWS_SHUTDOWN_SIGNAL_ACK_TIMEOUT_SECONDS
+                    ):
+                        write_shutdown_trace(
+                            f"worker-shutdown.signal-acknowledged "
+                            f"pid={self.process.pid} attempt={attempt}"
+                        )
+                        break
+                    if not self.process.is_alive():
+                        break
+                    if signal_ack is not None and signal_ack.is_set():
+                        write_shutdown_trace(
+                            f"worker-shutdown.signal-acknowledged "
+                            f"pid={self.process.pid} attempt={attempt}"
+                        )
+                        break
+                    write_shutdown_trace(
+                        f"worker-shutdown.signal-ack-timeout "
+                        f"pid={self.process.pid} attempt={attempt}"
+                    )
             else:
                 os.kill(self.process.pid, signal.SIGTERM)
             logger.info(f"Terminated child process [{self.process.pid}]")
