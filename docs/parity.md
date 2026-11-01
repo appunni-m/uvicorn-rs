@@ -4,15 +4,9 @@
 
 ## Current source status (2026-11-01)
 
-### PR #19 CI #586 — exact-source results
+### PR #21 CI #594 — exact-source results for head f487
 
-CI [run 41281097988](https://github.com/appunni-m/uvicorn-rs/actions/runs/41281097988) tested pushed head `d5f983c43615df5990abfc73fcfc73a3460a86c7` against main at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. Rust quality/docs, MSRV, and the 17-input native FastAPI-RS composition passed. Linux x86-64 installed-wheel parity passed 755/755; its candidate artifact and consumer passed (artifact `13073349195`, SHA-256 `32c5f281febbe84bd7dda7b1017b2a6afa87667fee1e93a16e287a9eb6bd573b`).
-
-macOS ARM64 parity passed 754/755. The only mismatch was `python-api.module-cli-worker-restarts-after-two-crashes`: HTTP response and process outcomes matched, while the target emitted an extra `client disconnected before response start` log. A focused native macOS run with the pending 15-second client-probe timeout passed 1/1; the updated input awaits hosted full-matrix validation.
-
-Windows x86-64 executed 682 cases: 678 passed, zero behavioral mismatches, 46 were not run, and four infrastructure failures occurred. The candidate timed out waiting for workers in the two-worker environment and SIGTERM cases. The Uvicorn oracle timed out in the explicit-worker case and hit `WinError 10053` in `http1.upload-remains-after-one-asgi-receive`. Focused Windows run [#587](https://github.com/appunni-m/uvicorn-rs/actions/runs/41283740947) on the same source passed the two candidate worker cases; its oracle trace recorded no `Server.handle_exit` event for one worker after `CTRL_BREAK_EVENT`, and the parent timed out waiting for that worker.
-
-Three-repeat unified coverage is still running. macOS and Windows candidate artifact/consumer qualification is incomplete. The benchmark matrix has not started because full compatibility remains incomplete.
+CI [run 41301339884](https://github.com/appunni-m/uvicorn-rs/actions/runs/41301339884) tested `develop` head `f487bb5e40e3f3d6fdf07900a0ec859f1cb83968` against `main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. The installed-wheel Linux x86-64 and macOS ARM64 public matrices each passed 782/782 against Uvicorn 0.54.0, with zero failures, infrastructure failures, or not-run cases. Linux artifact `13082121608` has SHA-256 `bb84397472d5ef533eeb47a456ddd9d4159fb91748e24ce33a977eeddbd4b82b`; macOS artifact `13082370703` has SHA-256 `a34c8c8502c46d4d48bb8d6182ad6b0ed637d04f5d9593af8a646c333781d9d1`. The clean-source Linux candidate bundle and wheel, sdist, and Cargo consumers passed (artifact `13081613812`, SHA-256 `050677288013ec15b0549065e816462244947aa9ec83aaaf7b56aacf31c0f041`). The macOS candidate wheel consumer also passed (artifact `13082505341`, SHA-256 `96c664511c67cb147263682c1b2dfe9e9f13b53db7b93ab6e8bdb31919b7b375`). Rust quality, MSRV, native HTTP contracts, and native FastAPI-RS composition passed. Windows candidate parity completed 755 cases with 750 passing, zero behavioral mismatches, and five two-worker CLI shutdown infrastructure failures; the package and consumer steps were skipped (artifact 13082273455). Focused run #595 timed out in the stock Uvicorn oracle before candidate execution (artifact 13083216067). The three-repeat coverage job for head f487 was still active when recorded. Follow-up develop commit 79549a84d changes worker shutdown and requires new exact-source parity and coverage. Documentation run [41301339893](https://github.com/appunni-m/uvicorn-rs/actions/runs/41301339893) passed. No current-source independent Coverage-MCP receipt is available. The matched three-system benchmark remains gated on full compatibility.
 ### Prior Windows worker signal follow-up (CI #559)
 
 PR #19 CI [#559](https://github.com/appunni-m/uvicorn-rs/actions/runs/41229020477)
@@ -49,7 +43,7 @@ the successful trace does not explain why the earlier attempt missed a worker.
 The focused cases now have pass evidence, but the final Windows parity matrix
 must still pass on the release candidate before compatibility is accepted.
 
-PR #19 is draft and targets `main` at
+At the time of this earlier CI result, PR #19 was draft and targeted `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI
 [#528](https://github.com/appunni-m/uvicorn-rs/actions/runs/41127272457) ran on
 head `8a17d982a7b98a0074ab7e56acad4c508d9d2c73` with merge ref

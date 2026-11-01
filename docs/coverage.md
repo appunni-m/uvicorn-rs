@@ -19,14 +19,18 @@ indexed cases and three verification repeats passed. Coverage remains below
 `977b37d6f24af9045d5949acca38d28b153f652e3397c8969fe0192f88126a6a`. This
 report is diagnostic for that earlier source, not acceptance for later fixes.
 
-The current exact-source coverage matrix is active in PR #19 CI
-[run 41281097988](https://github.com/appunni-m/uvicorn-rs/actions/runs/41281097988),
-head `d5f983c43615df5990abfc73fcfc73a3460a86c7`, job `124773363205`. It is
-attributing every indexed case and repeating the complete matrix three times;
-no final total is available yet. The previous run #584 was superseded before a
-coverage report and its matrix was canceled. No current-source independent
-Coverage-MCP receipt is accepted; `7t4g` remains open. The normal build excludes
-fault controls.
+The exact-source coverage job for draft PR #21, head
+`f487bb5e40e3f3d6fdf07900a0ec859f1cb83968`, was still repeating the complete
+three-pass matrix when this report was updated (CI [run 41301339884](https://github.com/appunni-m/uvicorn-rs/actions/runs/41301339884),
+job `124832757195`). No final total is available. Follow-up develop commit
+`79549a84d` changes Windows worker shutdown; it requires a fresh exact-source
+coverage report and an accepted independent review receipt. In the same run, installed-wheel Linux x86-64
+public parity passed 782/782 (artifact `13082121608`, SHA-256
+`bb84397472d5ef533eeb47a456ddd9d4159fb91748e24ce33a977eeddbd4b82b`), and
+macOS ARM64 parity passed 782/782 (artifact `13082370703`, SHA-256
+`a34c8c8502c46d4d48bb8d6182ad6b0ed637d04f5d9593af8a646c333781d9d1`). These
+are not coverage evidence. No current-source independent Coverage-MCP receipt
+is accepted; `7t4g` remains open. The normal build excludes fault controls.
 
 ### Earlier focused coverage batches
 

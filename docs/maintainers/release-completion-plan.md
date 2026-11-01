@@ -35,6 +35,49 @@ No original release gate is waived by this plan. Historical measurements remain
 historical. A task closes on its own deliverable; downstream publication gates
 belong to the release tasks rather than being copied into every prerequisite.
 
+### Current release candidate — 2026-11-01 (PR #21 / CI #594)
+
+Draft [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21) promotes
+`develop` to `main`, from base `86e72e181d00feca1b4db7f30377d5d9d4345b83`
+to source head `f487bb5e40e3f3d6fdf07900a0ec859f1cb83968`. It replaces PR #19,
+which used `codex/uvicorn-rs-consolidation` and was closed unmerged to keep the
+promotion path on `develop`.
+
+Exact-source CI [run 41301339884](https://github.com/appunni-m/uvicorn-rs/actions/runs/41301339884)
+passed the Linux x86-64 installed-wheel public matrix 782/782 against Uvicorn
+0.54.0, with zero failures, infrastructure failures, or not-run cases. Public
+parity artifact `13082121608` has archive SHA-256
+`bb84397472d5ef533eeb47a456ddd9d4159fb91748e24ce33a977eeddbd4b82b`; its wheel
+SHA-256 is `61935e8b31c7cdd33f4bc8973934470e873f40e696d72843a5e4844d3078a1f8`.
+The report includes the custom protocol, `ssl_context_factory`, HTTP/1 upload,
+HTTP/3 early-app-return, and response-header overflow rows, all passing on
+Linux. The clean-source Linux candidate bundle (artifact `13081613812`, archive
+SHA-256 `050677288013ec15b0549065e816462244947aa9ec83aaaf7b56aacf31c0f041`)
+passed the Linux wheel and rebuilt-sdist consumers plus native Cargo consumer
+checks for both release crates, including the optional `http3` feature. All
+seven manifest-listed payload hashes match; the manifest records clean source
+at merge ref `9250f89800a3404a0789be0d2c39a56844cb063b`. Rust formatting/lints,
+MSRV, feature builds, rustdoc, native HTTP contracts, and pinned native
+FastAPI-RS composition also passed. Windows x86-64 candidate parity completed 755 cases: 750 passed, zero
+behavioral mismatches, and five infrastructure failures in two-worker CLI
+shutdown. The Windows candidate job failed before package and consumer steps
+(artifact 13082273455). Focused run #595 timed out in the stock Uvicorn oracle
+before candidate execution (artifact 13083216067). The three-repeat unified parity/coverage step for head f487 was active when
+this report was updated; no final total is recorded here. Follow-up develop
+commit 79549a84d broadcasts worker shutdown signals before waiting for
+acknowledgements. CI #594 predates this commit, so focused Windows parity, a
+new exact-source coverage result, and an accepted independent review receipt
+are still required on the follow-up head.
+macOS ARM64 installed-wheel parity passed 782/782 (artifact `13082370703`,
+SHA-256 `a34c8c8502c46d4d48bb8d6182ad6b0ed637d04f5d9593af8a646c333781d9d1`).
+Its clean candidate wheel consumer passed (artifact `13082505341`, archive
+SHA-256 `96c664511c67cb147263682c1b2dfe9e9f13b53db7b93ab6e8bdb31919b7b375`,
+wheel SHA-256 `dc8f51b4345686328e5c5afa7ee9af974e12eb9a20ca432938a2fa9f37795897`).
+Documentation run
+[41301339893](https://github.com/appunni-m/uvicorn-rs/actions/runs/41301339893)
+passed. The follow-up head 79549a84d must pass focused Windows parity and a fresh
+full CI run before PR #21 can leave draft or merge.
+
 ## Execution order and stopping rules
 
 ### Windows worker shutdown diagnosis — 2026-11-01
@@ -79,7 +122,7 @@ the release candidate before compatibility is accepted.
 
 ### Exact-source PR validation — 2026-11-01 (CI #586)
 
-PR #19 is open and draft against `main` at
+At the time of this CI run, PR #19 was open and draft against `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`, with pushed head
 `d5f983c43615df5990abfc73fcfc73a3460a86c7`. Exact-source CI
 [run 41281097988](https://github.com/appunni-m/uvicorn-rs/actions/runs/41281097988)
@@ -125,7 +168,7 @@ latest Cargo version and no PyPI `uvicorn-rs` release.
 
 ### Earlier PR validation — 2026-11-01 (CI #583)
 
-PR #19 is open and draft against `main` at
+At the time of this CI run, PR #19 was open and draft against `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`, with pushed head
 `e0eb4e4989509d0c8a0adac5de78c256f625b4b0`. CI run
 [41272503277](https://github.com/appunni-m/uvicorn-rs/actions/runs/41272503277)
@@ -318,7 +361,7 @@ These are selected normal-build receipts at `0a8c86ff5`; they do not turn
 
 ### Earlier receipts — 2026-10-31 (full run #536 and focused follow-up)
 
-PR #19 remains draft/open against `main` at
+At the time of this earlier report, PR #19 was draft/open against `main` at
 `86e72e181d00feca1b4db7f30377d5d9d4345b83`. The h11 adapter/parser fix is committed at
 `6342b20402bf0cceabd8eafde3f067e1620bafba`; its runtime-source SHA-256 is
 `c00038a3885178b4bb1146fc315a51eb70c5e149a1742a16d3bdada8c7bee50f`. The
