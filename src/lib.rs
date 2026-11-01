@@ -1109,8 +1109,8 @@ macro_rules! coverage_value {
     }};
 }
 
-// Response-event failures must be one-shot: later lifespan events use the
-// same classifier and must still be able to complete server shutdown.
+// Event-classification failures must be one-shot so later lifecycle events
+// can use the same classifier and complete server shutdown.
 macro_rules! coverage_once_value {
     ($fault_point:ident, $operation:expr_2021) => {{
         #[cfg(coverage)]
@@ -2307,13 +2307,13 @@ fn classify_asgi_event_type(py: Python<'_>, value: Bound<'_, PyAny>) -> PyResult
         )? {
             return Ok(AsgiEventType::LifespanStartupFailed);
         }
-        if coverage_value!(
+        if coverage_once_value!(
             AsgiEventTypeLifespanShutdownCompleteEq,
             value.eq(pyo3::intern!(py, "lifespan.shutdown.complete"))
         )? {
             return Ok(AsgiEventType::LifespanShutdownComplete);
         }
-        if coverage_value!(
+        if coverage_once_value!(
             AsgiEventTypeLifespanShutdownFailedEq,
             value.eq(pyo3::intern!(py, "lifespan.shutdown.failed"))
         )? {
@@ -3115,7 +3115,6 @@ struct PythonTaskStarter {
     task_sender: Option<oneshot::Sender<Py<PyAny>>>,
     result_sender: Option<oneshot::Sender<PyResult<Py<PyAny>>>>,
     completion_signal: watch::Sender<bool>,
-    locals: TaskLocals,
     cancellation_tracker: TaskTracker,
     #[cfg(feature = "runtime-diagnostics")]
     diagnostics: RuntimeDiagnostics,
@@ -3257,45 +3256,29 @@ impl PythonTaskStarter {
                 if let Err(error) = registration_result {
                     // Run cancellation on this owning Python loop before yielding.
                     let _ = task.call_method0("cancel");
-                    {
-                        let tracker = &self.cancellation_tracker;
-                        // Cancellation can run an asynchronous finally block,
-                        // including with Python's eager task factory. Await the
-                        // actual task on its captured loop and context rather than
-                        // treating delivery of the registration error as cleanup.
-                        #[cfg(coverage)]
-                        let cleanup = if failure_cleanup_error {
-                            Err(PyRuntimeError::new_err(
-                                "coverage-injected cancellation cleanup scheduling failure",
-                            ))
-                        } else {
-                            pyo3_async_runtimes::into_future_with_locals(&self.locals, task.clone())
-                        };
-                        #[cfg(not(coverage))]
-                        let cleanup = pyo3_async_runtimes::into_future_with_locals(
-                            &self.locals,
-                            task.clone(),
-                        );
-                        match cleanup {
-                            Ok(cleanup) => {
-                                tracker.spawn_on(
-                                    async move {
-                                        if let Err(error) = cleanup.await {
-                                            Python::attach(|py| error.print(py));
-                                        }
-                                    },
-                                    pyo3_async_runtimes::tokio::get_runtime().handle(),
-                                );
-                            }
-                            Err(cleanup_error) => {
-                                cleanup_error.print(py);
-                                // An admitted callback can still observe completion
-                                // if scheduling the additional awaiter failed.
-                                // Keep that real signal in the shutdown accounting.
-                                track_python_task_completion(tracker, &self.completion_signal);
-                            }
-                        }
+                    #[cfg(coverage)]
+                    if failure_cleanup_error {
+                        PyRuntimeError::new_err(
+                            "coverage-injected cancellation cleanup scheduling failure",
+                        )
+                        .print(py);
                     }
+                    if let Err(cleanup_error) =
+                        task.call_method1("add_done_callback", (completion.bind(py),))
+                    {
+                        // asyncio Tasks support done callbacks. A fallback
+                        // registration covers failures in the first attempt
+                        // without moving a Python awaitable onto a Tokio task
+                        // that could outlive its owning event loop.
+                        cleanup_error.print(py);
+                    }
+                    // The completion callback signals a Rust-only watcher.
+                    // It keeps cleanup observable without retaining a Python
+                    // task/future on the Tokio runtime past interpreter shutdown.
+                    track_python_task_completion(
+                        &self.cancellation_tracker,
+                        &self.completion_signal,
+                    );
                     send_python_task_result(&mut self.result_sender, Err(error));
                 }
                 #[cfg(coverage)]
@@ -3606,7 +3589,6 @@ fn python_task_future(
                 task_sender: Some(task_sender),
                 result_sender: Some(result_sender),
                 completion_signal,
-                locals: locals.clone(),
                 cancellation_tracker: cancellation_tracker.clone(),
                 #[cfg(feature = "runtime-diagnostics")]
                 diagnostics: diagnostics.clone(),
@@ -4780,10 +4762,10 @@ impl LifespanIo {
                         );
                     }
                     LifespanMessage::Shutdown => {
-                        coverage_try!(
+                        coverage_once_value!(
                             LifespanReceiveShutdownTypeSetItem,
                             message.set_item("type", "lifespan.shutdown")
-                        );
+                        )?;
                     }
                 }
                 Ok(message.into_any().unbind())
@@ -4798,7 +4780,7 @@ impl LifespanIo {
     ) -> PyResult<Bound<'py, PyAny>> {
         let event_type = classify_asgi_event_type(
             py,
-            coverage_value!(LifespanAsgiSendTypeGetItem, message.get_item("type"))?
+            coverage_once_value!(LifespanAsgiSendTypeGetItem, message.get_item("type"))?
                 .ok_or_else(|| PyValueError::new_err("ASGI message is missing 'type'"))?,
         )?;
         let event = match event_type {
@@ -4819,12 +4801,12 @@ impl LifespanIo {
             }
             AsgiEventType::LifespanShutdownComplete => LifespanEvent::ShutdownComplete,
             AsgiEventType::LifespanShutdownFailed => {
-                let message_value = coverage_value!(
+                let message_value = coverage_once_value!(
                     LifespanShutdownFailedMessageGetItem,
                     message.get_item("message")
                 )?;
                 let message = match message_value {
-                    Some(value) => coverage_value!(
+                    Some(value) => coverage_once_value!(
                         LifespanShutdownFailedMessageExtract,
                         value.extract::<String>()
                     )?,
@@ -4938,6 +4920,14 @@ impl LifespanRuntime {
             // path as a task that finishes before the startup acknowledgement.
             let result = app_task.as_mut().await;
             app_task.into_handle();
+            let reported_startup_exception = matches!(
+                event_rx.try_recv(),
+                Ok(LifespanEvent::ApplicationException(LifespanPhase::Startup))
+            );
+            if mode == LifespanMode::On && reported_startup_exception {
+                log_error(format_args!("Application startup failed. Exiting."));
+                return Ok(None);
+            }
             return Self::without_lifespan(result, state, mode);
         }
 
@@ -4966,7 +4956,7 @@ impl LifespanRuntime {
                     log_lifespan_error("Application startup failed. Exiting.");
                     Ok(None)
                 }
-                Some(LifespanEvent::ApplicationException(_phase)) => {
+                Some(LifespanEvent::ApplicationException(phase)) => {
                     // The Python wrapper has caught and recorded the original
                     // exception on its owning loop. Wait for that wrapper task
                     // to finish normally before deciding whether auto mode
@@ -4978,13 +4968,22 @@ impl LifespanRuntime {
                             log_error(format_args!("Application startup failed. Exiting."));
                             Ok(None)
                         }
-                        Ok(Ok(_)) => Ok(Some(Self {
-                            state: Arc::new(state),
-                            requests: None,
-                            events: None,
-                            app_task: None,
-                            mode,
-                        })),
+                        Ok(Ok(_)) => {
+                            if mode == LifespanMode::Auto
+                                && matches!(phase, LifespanPhase::Startup)
+                            {
+                                log_lifespan_info(
+                                    "ASGI 'lifespan' protocol appears unsupported.",
+                                );
+                            }
+                            Ok(Some(Self {
+                                state: Arc::new(state),
+                                requests: None,
+                                events: None,
+                                app_task: None,
+                                mode,
+                            }))
+                        }
                         result => Self::without_lifespan(result, state, mode),
                     }
                 }
@@ -5109,11 +5108,15 @@ impl LifespanRuntime {
                         message
                     }));
                 }
-                Some(LifespanEvent::ApplicationException(phase)) => {
-                    if self.mode == LifespanMode::On
-                        && matches!(phase, LifespanPhase::Shutdown)
-                    {
-                        log_error(format_args!("Application shutdown failed. Exiting."));
+                Some(LifespanEvent::ApplicationException(_phase)) => {
+                    match self.mode {
+                        LifespanMode::On => {
+                            log_error(format_args!("Application shutdown failed. Exiting."));
+                        }
+                        LifespanMode::Auto => log_lifespan_info(
+                            "ASGI 'lifespan' protocol appears unsupported.",
+                        ),
+                        LifespanMode::Off => {}
                     }
                     let result = app_task.await;
                     self.app_task.take();

@@ -629,6 +629,7 @@ FAULT_CONTRACTS = {
     "server-lifespan-startup-auto-fallback",
     "server-lifespan-startup-auto-fallback-logger-failure-ignored",
     "server-shutdown-failure",
+    "server-shutdown-application-exception-clean-exit",
     "server-lifespan-task-cancel",
     "server-native-connection-error-during-shutdown",
     "websocket-server-shutdown-force-abort",
@@ -2351,14 +2352,29 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: logger failures require the startup auto-fallback follow-up workflow"
                     )
-            elif fault["contract"] == "server-shutdown-failure":
+            elif fault["contract"] in {
+                "server-shutdown-failure",
+                "server-shutdown-application-exception-clean-exit",
+            }:
+                expected_points = (
+                    {
+                        "lifespan.receive.shutdown.type.set-item",
+                        "asgi.event-type.lifespan-shutdown-complete.eq",
+                        "asgi.event-type.lifespan-shutdown-failed.eq",
+                        "lifespan.asgi.send.type.get-item",
+                        "lifespan.shutdown.failed.message.get-item",
+                        "lifespan.shutdown.failed.message.extract",
+                    }
+                    if fault["contract"] == "server-shutdown-application-exception-clean-exit"
+                    else LIFESPAN_SHUTDOWN_FAILURE_FAULT_POINTS
+                )
                 if (
                     not (
                         case.get("profile") == "lifespan-fault-shutdown-receive"
                         or case.get("profile", "").startswith("lifespan-fault-asgi-shutdown-")
                     )
                     or case.get("operation") != "server.shutdown-failure"
-                    or fault["point"] not in LIFESPAN_SHUTDOWN_FAILURE_FAULT_POINTS
+                    or fault["point"] not in expected_points
                     or "lifecycle" not in case
                 ):
                     raise ParityError(
@@ -12765,6 +12781,12 @@ def execute_case(
                 pending_tls.close()
         if "hold_path" not in lifecycle:
             exit_code, server_log = stop_server(server, graceful=True)
+            fault_consumed = None
+            if fault_control_path is not None:
+                fault_consumed = (
+                    fault_control_path.read_text(encoding="utf-8").strip()
+                    != fault["point"]
+                )
             connection_closed = None
             if keep_alive_connection is not None:
                 try:
@@ -12784,6 +12806,8 @@ def execute_case(
                 "application_events": read_events(server["events"]),
                 "server_log": server_log,
             }
+            if fault is not None:
+                observation["fault_consumed"] = fault_consumed
             if lifecycle.get("keep_alive_state_connection") is True:
                 observation["connection_closed"] = connection_closed
             return observation
@@ -13835,6 +13859,16 @@ def fault_contract_matches(
             observation.get("process_terminated") is True
             and isinstance(observation.get("process_exit_code"), int)
             and observation["process_exit_code"] != 0
+        )
+    if fault["contract"] == "server-shutdown-application-exception-clean-exit":
+        state = observation.get("state_response")
+        return (
+            observation.get("fault_consumed") is True
+            and observation.get("process_terminated") is True
+            and observation.get("process_exit_code") == 0
+            and isinstance(state, dict)
+            and state.get("status") == 200
+            and "ASGI 'lifespan' protocol appears unsupported." in observation.get("server_log", "")
         )
     if fault["contract"] == "server-startup-acknowledgement-drop-cleans-listener":
         return (

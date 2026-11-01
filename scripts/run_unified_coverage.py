@@ -744,20 +744,20 @@ def source_region_map(
     allowed_sources: set[str],
     *,
     canonical_functions: dict[tuple[str, int, int], str] | None = None,
+    canonical_spans: dict[tuple[str, int, int], set[tuple[int, int, int, int, int]]] | None = None,
 ) -> tuple[
     dict[str, dict[str, Any]],
     dict[str, dict[str, int]],
     dict[tuple[str, int, int], str],
+    dict[tuple[str, int, int], set[tuple[int, int, int, int, int]]],
 ]:
-    """Map LLVM function-instantiation groups to source-span regions.
+    """Map LLVM function-instantiation groups to canonical source-span regions.
 
-    LLVM's file summary counts regions per instantiation group and merges each
-    group's instantiations by taking the maximum covered and total counts. Use
-    that same deterministic representative to preserve LLVM's denominator and
-    raw summary, but attribute a source region as hit when any monomorphization
-    executes the exact source span. Generic instantiations share the source
-    region even when their branch outcomes differ. Reuse the aggregate-selected
-    representative's source spans when attributing isolated case profiles.
+    Keep LLVM's maximum-instantiation file counters as raw evidence. Define the
+    unified region denominator as the exact source-span union across all
+    instantiations, and mark a span covered when any instantiation executes it.
+    A deterministic LLVM representative remains part of each region identity;
+    isolated case profiles reuse both the aggregate representative and span set.
     """
     data = llvm_report["data"][0]
     root = ROOT.resolve()
@@ -837,8 +837,14 @@ def source_region_map(
         raise CoverageError("LLVM export has no executable production function regions")
     if canonical_functions is not None and set(function_groups) != set(canonical_functions):
         raise CoverageError("case LLVM function groups differ from aggregate function groups")
+    if (canonical_functions is None) != (canonical_spans is None):
+        raise CoverageError("canonical LLVM representatives and spans must be supplied together")
+    if canonical_spans is not None and set(function_groups) != set(canonical_spans):
+        raise CoverageError("case LLVM source-span groups differ from aggregate function groups")
 
     selected_functions: dict[tuple[str, int, int], str] = {}
+    selected_spans: dict[tuple[str, int, int], set[tuple[int, int, int, int, int]]] = {}
+    normalized_region_totals = {path: 0 for path in file_summaries}
     summary_reconstructed: dict[str, dict[str, int]] = {
         path: {"regions": 0, "regions_total": 0}
         for path in file_summaries
@@ -872,22 +878,19 @@ def source_region_map(
             if symbol not in totals:
                 raise CoverageError(f"aggregate LLVM representative is missing for {group_key}")
         selected_functions[group_key] = symbol
-        selected_regions = next(
-            code_regions for candidate, code_regions in instantiations if candidate == symbol
-        )
-        representative_spans = {
+        observed_spans = {
             (region[0], region[1], region[2], region[3], region[7])
-            for region in selected_regions
+            for _, code_regions in instantiations
+            for region in code_regions
         }
         covered_source_spans: set[tuple[int, int, int, int, int]] = set()
-        for candidate, code_regions in instantiations:
+        for _, code_regions in instantiations:
             candidate_spans = {
-                (region[0], region[1], region[2], region[3], region[7])
-                for region in code_regions
+                (region[0], region[1], region[2], region[3], region[7]) for region in code_regions
             }
-            if not candidate_spans <= representative_spans:
+            if canonical_spans is not None and not candidate_spans <= canonical_spans[group_key]:
                 raise CoverageError(
-                    f"LLVM instantiation has source regions outside its representative: {group_key}"
+                    f"case LLVM instantiation has source regions outside aggregate union: {group_key}"
                 )
             covered_source_spans.update(
                 (region[0], region[1], region[2], region[3], region[7])
@@ -895,8 +898,10 @@ def source_region_map(
                 if region[4] > 0
             )
 
-        for raw_region in selected_regions:
-            start_line, start_column, end_line, end_column, _, _, _, kind = raw_region
+        group_spans = canonical_spans[group_key] if canonical_spans is not None else observed_spans
+        selected_spans[group_key] = group_spans
+        normalized_region_totals[relative_path] += len(group_spans)
+        for start_line, start_column, end_line, end_column, kind in sorted(group_spans):
             source_span = (start_line, start_column, end_line, end_column, kind)
             identity = [
                 source_digest,
@@ -937,7 +942,7 @@ def source_region_map(
                 )
 
     for relative_path, summary in file_summaries.items():
-        expected_regions = summary["regions_total"]
+        expected_regions = normalized_region_totals[relative_path]
         actual_regions = sum(region["file"] == relative_path for region in regions.values())
         if actual_regions != expected_regions:
             raise CoverageError(
@@ -957,7 +962,7 @@ def source_region_map(
             relative_path,
             {"regions": 0, "lines": 0, "regions_total": 0, "lines_total": 0},
         )
-    return regions, file_summaries, selected_functions
+    return regions, file_summaries, selected_functions, selected_spans
 
 
 def filter_llvm_export_sources(
@@ -1991,7 +1996,7 @@ def main() -> int:
     aggregate_llvm = llvm_export(
         llvm_cov, [extension, native_runner_snapshot], combined_profdata, timeout=180
     )
-    aggregate_regions, aggregate_summaries, canonical_functions = source_region_map(
+    aggregate_regions, aggregate_summaries, canonical_functions, canonical_spans = source_region_map(
         aggregate_llvm, source["sha256"], set(PRODUCTION_SOURCE_SET)
     )
     aggregate_lcov_lines = llvm_export_lcov(
@@ -2034,11 +2039,12 @@ def main() -> int:
 
     for attribution_index, (namespace, receipt, profile_data) in enumerate(attribution_cases, 1):
         case_llvm = llvm_export(llvm_cov, [extension, native_runner_snapshot], profile_data)
-        case_regions, _, _ = source_region_map(
+        case_regions, _, _, _ = source_region_map(
             case_llvm,
             source["sha256"],
             set(PRODUCTION_SOURCE_SET),
             canonical_functions=canonical_functions,
+            canonical_spans=canonical_spans,
         )
         if set(case_regions) != set(aggregate_regions):
             raise CoverageError(f"case LLVM region identities differ: {receipt['case_key']}")
@@ -2328,8 +2334,9 @@ def main() -> int:
             "uncovered_regions": uncovered,
             "attribution": {
                 "algorithm": (
-                    "LLVM instantiation groups use a deterministic maximum-summary representative for the denominator; "
-                    "hits are unioned by exact source span across monomorphizations; region IDs include source hash, "
+                    "LLVM instantiation groups use the union of exact source spans for the denominator and a "
+                    "deterministic maximum-summary representative for region identity; hits are unioned across "
+                    "monomorphizations; region IDs include source hash, "
                     "file, group start, representative function symbol, source span, and kind"
                 ),
                 "aggregate_profile_data_sha256": digest_file(combined_profdata),

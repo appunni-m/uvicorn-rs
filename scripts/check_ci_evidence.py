@@ -746,11 +746,14 @@ def llvm_source_name(path: Path) -> str | None:
 def llvm_production_regions(
     report: dict[str, Any], source_digest: str,
     *, canonical_functions: dict[tuple[str, int, int], str] | None = None,
+    canonical_spans: dict[tuple[str, int, int], set[tuple[int, int, int, int, int]]] | None = None,
     require_normalized_summaries: bool = True,
 ) -> tuple[
     dict[str, dict[str, Any]],
     dict[str, dict[str, int]],
     dict[tuple[str, int, int], str],
+    dict[tuple[str, int, int], set[tuple[int, int, int, int, int]]],
+    dict[str, dict[str, int]],
 ]:
     """Reconstruct source-span regions and validate normalized file summaries."""
     data = report.get("data")
@@ -795,6 +798,7 @@ def llvm_production_regions(
         summaries[relative] = values
     for relative in NO_COUNTER_SOURCE_SET:
         require(not any(summaries[relative].values()), f"no-counter file has LLVM counters: {relative}")
+    raw_file_summaries = {relative: values.copy() for relative, values in summaries.items()}
 
     groups: dict[tuple[str, int, int], list[tuple[str, list[list[int]]]]] = {}
     for function in functions:
@@ -824,9 +828,15 @@ def llvm_production_regions(
     require(bool(groups), "LLVM export has no executable production function regions")
     if canonical_functions is not None:
         require(set(groups) == set(canonical_functions), "case LLVM function groups differ from aggregate")
+    if (canonical_functions is None) != (canonical_spans is None):
+        raise EvidenceError("canonical LLVM representatives and spans must be supplied together")
+    if canonical_spans is not None:
+        require(set(groups) == set(canonical_spans), "case LLVM source-span groups differ from aggregate")
     regions: dict[str, dict[str, Any]] = {}
     reconstructed = {relative: {"regions": 0, "regions_total": 0} for relative in selected}
     selected_functions: dict[tuple[str, int, int], str] = {}
+    selected_spans: dict[tuple[str, int, int], set[tuple[int, int, int, int, int]]] = {}
+    normalized_region_totals = {relative: 0 for relative in selected}
     for group_key, instantiations in groups.items():
         relative, group_line, group_column = group_key
         symbols = [symbol for symbol, _ in instantiations]
@@ -856,23 +866,27 @@ def llvm_production_regions(
             require(symbol in totals,
                     f"case profile is missing aggregate-selected function representative: {group_key}")
         selected_functions[group_key] = symbol
-        selected_regions = next(raws for candidate, raws in instantiations if candidate == symbol)
-        representative_spans = {
-            (raw[0], raw[1], raw[2], raw[3], raw[7]) for raw in selected_regions
+        observed_spans = {
+            (raw[0], raw[1], raw[2], raw[3], raw[7])
+            for _, candidate_regions in instantiations
+            for raw in candidate_regions
         }
         covered_source_spans: set[tuple[int, int, int, int, int]] = set()
         for _, candidate_regions in instantiations:
             candidate_spans = {
                 (raw[0], raw[1], raw[2], raw[3], raw[7]) for raw in candidate_regions
             }
-            require(candidate_spans <= representative_spans,
-                    f"LLVM instantiation has source regions outside its representative: {group_key}")
+            if canonical_spans is not None:
+                require(candidate_spans <= canonical_spans[group_key],
+                        f"case LLVM instantiation has source regions outside aggregate union: {group_key}")
             covered_source_spans.update(
                 (raw[0], raw[1], raw[2], raw[3], raw[7])
                 for raw in candidate_regions if raw[4] > 0
             )
-        for raw in selected_regions:
-            start_line, start_col, end_line, end_col, _, _, _, kind = raw
+        group_spans = canonical_spans[group_key] if canonical_spans is not None else observed_spans
+        selected_spans[group_key] = group_spans
+        normalized_region_totals[relative] += len(group_spans)
+        for start_line, start_col, end_line, end_col, kind in sorted(group_spans):
             source_span = (start_line, start_col, end_line, end_col, kind)
             identity = [source_digest, relative, group_line, group_column, symbol,
                         start_line, start_col, end_line, end_col, kind]
@@ -898,18 +912,20 @@ def llvm_production_regions(
                         and summaries[relative]["regions_total"] == source_summary["regions_total"],
                         f"normalized source-span region summary differs for {relative}")
             else:
-                # A fresh llvm-cov export carries LLVM's maximum-instantiation
-                # file summary. Normalize its region totals to the same
-                # source-span union used by the embedded report before the
-                # replay comparison. Physical lines are validated from the
-                # aggregate LCOV export in the unified runner.
+                # A fresh llvm-cov export retains maximum-instantiation file
+                # counters. Validate those raw counters, then return the
+                # source-span union used by the embedded report.
+                require(raw_file_summaries[relative]["regions"] == reconstructed[relative]["regions"]
+                        and raw_file_summaries[relative]["regions_total"]
+                        == reconstructed[relative]["regions_total"],
+                        f"raw LLVM instantiation counters differ for {relative}")
                 summaries[relative]["regions"] = source_summary["regions"]
                 summaries[relative]["regions_total"] = source_summary["regions_total"]
-            require(reconstructed[relative]["regions_total"] == source_summary["regions_total"]
+            require(source_summary["regions_total"] == normalized_region_totals[relative]
                     and reconstructed[relative]["regions"] <= source_summary["regions"],
-                    f"raw LLVM instantiation counters disagree with normalized source spans for {relative}")
+                    f"raw LLVM counters disagree with source-span union for {relative}")
     require(bool(regions), "LLVM export has no executable production regions")
-    return regions, summaries, selected_functions
+    return regions, summaries, selected_functions, selected_spans, raw_file_summaries
 
 
 def resolve_llvm_tools(expected: dict[str, Any]) -> tuple[Path, Path]:
@@ -945,6 +961,7 @@ def case_profile_regions(
     profile_paths: list[Path], *, label: str, llvm_cov: Path, llvm_profdata: Path,
     binaries: tuple[Path, Path], source_digest: str,
     canonical_functions: dict[tuple[str, int, int], str],
+    canonical_spans: dict[tuple[str, int, int], set[tuple[int, int, int, int, int]]],
     aggregate_region_ids: set[str],
 ) -> set[str]:
     """Re-export one retained case profile and independently derive its hit set."""
@@ -958,8 +975,9 @@ def case_profile_regions(
         require(merge.returncode == 0 and merged.is_file() and merged.stat().st_size > 0,
                 f"cannot merge retained LLVM profiles for {label}: {(merge.stderr or merge.stdout)[-3000:]}")
         llvm_report = export_llvm_profile(merged, label=label, llvm_cov=llvm_cov, binaries=binaries)
-        regions, _, _ = llvm_production_regions(
+        regions, _, _, _, _ = llvm_production_regions(
             llvm_report, source_digest, canonical_functions=canonical_functions,
+            canonical_spans=canonical_spans,
             require_normalized_summaries=False,
         )
         require(set(regions) == aggregate_region_ids,
@@ -1184,7 +1202,9 @@ def validate_coverage(
             and line_validation.get("physical_line_sets_match") is True
             and line_validation.get("covered_line_sets_match") is True,
             "physical-line validation method or result differs")
-    raw_regions, raw_summaries, canonical_functions = llvm_production_regions(report, source["sha256"])
+    raw_regions, raw_summaries, canonical_functions, canonical_spans, _ = llvm_production_regions(
+        report, source["sha256"]
+    )
     expected_line_evidence: dict[str, dict[str, int]] = {}
     for path, row in zip(PRODUCTION_SOURCE_SET, source_rows, strict=True):
         exact_keys(row, {"path", "classification", "summary", "llvm_summary"}, f"source summary {path}")
@@ -1195,6 +1215,9 @@ def validate_coverage(
         require(row["summary"] == raw_summaries[path], f"per-file normalized summary differs: {path}")
         exact_keys(row.get("llvm_summary"), {"regions", "lines", "regions_total", "lines_total"},
                    f"raw LLVM summary {path}")
+        require(row["llvm_summary"]["lines"] == row["summary"]["lines"]
+                and row["llvm_summary"]["lines_total"] == row["summary"]["lines_total"],
+                f"raw and normalized LLVM physical-line summaries differ: {path}")
         if path in NO_COUNTER_SOURCE_SET:
             require(not any(row["llvm_summary"].values()), f"no-counter file has raw LLVM counters: {path}")
             continue
@@ -1312,9 +1335,12 @@ def validate_coverage(
     replayed_llvm = export_llvm_profile(
         aggregate_profile, label="aggregate", llvm_cov=llvm_cov, binaries=coverage_binaries,
     )
-    replayed_regions, replayed_summaries, replayed_functions = llvm_production_regions(
+    replayed_regions, replayed_summaries, replayed_functions, replayed_spans, replayed_raw_summaries = llvm_production_regions(
         replayed_llvm, source["sha256"], require_normalized_summaries=False,
     )
+    declared_llvm_summaries = {row["path"]: row["llvm_summary"] for row in source_rows}
+    require(replayed_raw_summaries == declared_llvm_summaries,
+            "retained raw LLVM summaries differ from the unified report")
     replayed_region_summaries = {
         path: {key: summary[key] for key in ("regions", "regions_total")}
         for path, summary in replayed_summaries.items()
@@ -1325,7 +1351,8 @@ def validate_coverage(
     }
     require(replayed_regions == raw_regions
             and replayed_region_summaries == embedded_region_summaries
-            and replayed_functions == canonical_functions,
+            and replayed_functions == canonical_functions
+            and replayed_spans == canonical_spans,
             "embedded aggregate LLVM export differs from retained aggregate profile")
 
     asgi_by_id = {case["case_id"]: case for case in asgi_cases}
@@ -1360,8 +1387,9 @@ def validate_coverage(
             and case_index == sorted(all_keys)
             and len(case_index) == len(set(case_index))
             and attribution.get("algorithm") == (
-                "LLVM instantiation groups use a deterministic maximum-summary representative for the denominator; "
-                "hits are unioned by exact source span across monomorphizations; region IDs include source hash, "
+                "LLVM instantiation groups use the union of exact source spans for the denominator and a "
+                "deterministic maximum-summary representative for region identity; hits are unioned across "
+                "monomorphizations; region IDs include source hash, "
                 "file, group start, representative function symbol, source span, and kind"
             )
             and attribution.get("case_region_lookup") == (
@@ -1560,7 +1588,8 @@ def validate_coverage(
             verified_hits = case_profile_regions(
                 profiles, label=f"asgi:{cid}", llvm_cov=llvm_cov, llvm_profdata=llvm_profdata,
                 binaries=coverage_binaries, source_digest=source["sha256"],
-                canonical_functions=canonical_functions, aggregate_region_ids=region_ids,
+                canonical_functions=canonical_functions, canonical_spans=canonical_spans,
+                aggregate_region_ids=region_ids,
             )
             require(verified_hits == case_regions[f"asgi:{cid}"],
                     f"ASGI case-to-region attribution differs from retained profile: {cid}")
@@ -1630,7 +1659,8 @@ def validate_coverage(
         verified_hits = case_profile_regions(
             profiles, label=key, llvm_cov=llvm_cov, llvm_profdata=llvm_profdata,
             binaries=coverage_binaries, source_digest=source["sha256"],
-            canonical_functions=canonical_functions, aggregate_region_ids=region_ids,
+            canonical_functions=canonical_functions, canonical_spans=canonical_spans,
+            aggregate_region_ids=region_ids,
         )
         require(verified_hits == case_regions[key],
                 f"native case-to-region attribution differs from retained profile: {cid}")

@@ -152,9 +152,7 @@ async def invoke(app, scope, io):
             # state transition through the native bridge after logging them.
             if lifespan_failure_signaled:
                 return
-            if io.is_auto:
-                error_logger.info("ASGI 'lifespan' protocol appears unsupported.")
-            else:
+            if not io.is_auto:
                 error_logger.error(
                     "Exception in 'lifespan' protocol\n",
                     exc_info=(type(error), error, error.__traceback__),

@@ -11,7 +11,7 @@
       "verification": "fault-contract",
       "fault": {
         "point": "lifespan.receive.shutdown.type.set-item",
-        "contract": "server-shutdown-failure"
+        "contract": "server-shutdown-application-exception-clean-exit"
       },
       "lifecycle": {
         "state_path": "/state",

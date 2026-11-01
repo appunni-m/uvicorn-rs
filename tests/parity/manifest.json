@@ -2308,7 +2308,9 @@
       "observe": [
         "state_response",
         "process_terminated",
-        "process_exit_code"
+        "process_exit_code",
+        "fault_consumed",
+        "server_log"
       ],
       "required_observations": {
         "process_terminated": true
