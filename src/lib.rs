@@ -6701,6 +6701,8 @@ fn serve<'py>(
             force_application_shutdown,
             startup_signal,
             startup_acknowledgement,
+            #[cfg(all(windows, uvicorn_rs_native_transport))]
+            shutdown_wake_addresses,
             options,
             diagnostics: diagnostics.clone(),
         })
@@ -8063,6 +8065,8 @@ struct ServeContext {
     force_application_shutdown: CancellationToken,
     startup_signal: ServerStartupSignal,
     startup_acknowledgement: Option<watch::Receiver<bool>>,
+    #[cfg(all(windows, uvicorn_rs_native_transport))]
+    shutdown_wake_addresses: Arc<StdMutex<Vec<SocketAddr>>>,
     options: ServeOptions,
     diagnostics: RuntimeDiagnostics,
 }
@@ -8076,6 +8080,8 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
         force_application_shutdown,
         mut startup_signal,
         mut startup_acknowledgement,
+        #[cfg(all(windows, uvicorn_rs_native_transport))]
+        shutdown_wake_addresses,
         mut options,
         diagnostics,
     } = context;
