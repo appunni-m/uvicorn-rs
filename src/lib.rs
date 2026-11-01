@@ -3180,6 +3180,11 @@ impl PythonTaskStarter {
                     PythonTaskStarterEnsureFuture,
                     asyncio.call_method1("ensure_future", (self.awaitable.bind(py),))
                 )?;
+                // This injected failure models a task whose registration
+                // method rejects both the first callback and its cleanup retry.
+                #[cfg(coverage)]
+                let callback_registration_rejected =
+                    coverage_fault_is_armed(CoverageFaultPoint::PythonTaskStarterAddDoneCallback);
                 // Retain the result sender until registration commits. A callback
                 // or completion-state borrow can fail after ensure_future starts
                 // the task; this owner can still cancel it and send that exact error.
@@ -3265,9 +3270,18 @@ impl PythonTaskStarter {
                         )
                         .print(py);
                     }
-                    if let Err(cleanup_error) =
+                    #[cfg(coverage)]
+                    let cleanup_registration = if callback_registration_rejected {
+                        Err(PyRuntimeError::new_err(
+                            "coverage-injected task callback rejection during cleanup",
+                        ))
+                    } else {
                         task.call_method1("add_done_callback", (completion.bind(py),))
-                    {
+                    };
+                    #[cfg(not(coverage))]
+                    let cleanup_registration =
+                        task.call_method1("add_done_callback", (completion.bind(py),));
+                    if let Err(cleanup_error) = cleanup_registration {
                         // asyncio Tasks support done callbacks. A fallback
                         // registration covers failures in the first attempt
                         // without moving a Python awaitable onto a Tokio task
