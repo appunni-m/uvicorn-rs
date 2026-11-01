@@ -2825,10 +2825,22 @@ async fn accept_tcp_listener(
         // a stale readiness notification returns WouldBlock instead of
         // blocking Tokio's runtime thread.
         std::future::poll_fn(|context| {
+            shutdown_trace!("tcp-listener.accept.nonblocking-enter");
             if let Err(error) = socket2::SockRef::from(listener).set_nonblocking(true) {
+                shutdown_trace!(
+                    "tcp-listener.accept.nonblocking-error kind={:?}",
+                    error.kind()
+                );
                 return Poll::Ready(Err(error));
             }
-            listener.poll_accept(context)
+            shutdown_trace!("tcp-listener.accept.nonblocking-return");
+            shutdown_trace!("tcp-listener.accept.tokio-poll-enter");
+            let result = listener.poll_accept(context);
+            shutdown_trace!(
+                "tcp-listener.accept.tokio-poll-return ready={}",
+                result.is_ready()
+            );
+            result
         })
         .await
     }
