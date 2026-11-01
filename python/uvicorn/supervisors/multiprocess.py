@@ -126,55 +126,59 @@ class Process:
     def start(self) -> None:
         self.process.start()
 
-    def terminate(self) -> None:
+    def _begin_termination(self) -> bool:
         if self.process.exitcode is None:  # Process is still running
             assert self.process.pid is not None
             if os.name == "nt":  # pragma: py-not-win32
-                # Windows uses CTRL_BREAK, which the worker maps to SIGTERM.
-                # Delivery is asynchronous; wait for its handler before
-                # signaling the next process group.
                 signal_ack = self._windows_shutdown_signal_ack
-                attempts = (
-                    WINDOWS_SHUTDOWN_SIGNAL_MAX_ATTEMPTS
-                    if signal_ack is not None
-                    else 1
-                )
                 if signal_ack is not None:
                     signal_ack.clear()
-                for attempt in range(1, attempts + 1):
-                    write_shutdown_trace(
-                        f"worker-shutdown.signal-send pid={self.process.pid} "
-                        f"attempt={attempt}"
-                    )
-                    os.kill(  # type: ignore[attr-defined]
-                        self.process.pid, signal.CTRL_BREAK_EVENT
-                    )
-                    if signal_ack is None or signal_ack.wait(
-                        WINDOWS_SHUTDOWN_SIGNAL_ACK_TIMEOUT_SECONDS
-                    ):
-                        write_shutdown_trace(
-                            f"worker-shutdown.signal-acknowledged "
-                            f"pid={self.process.pid} attempt={attempt}"
-                        )
-                        break
-                    if not self.process.is_alive():
-                        break
-                    if signal_ack is not None and signal_ack.is_set():
-                        write_shutdown_trace(
-                            f"worker-shutdown.signal-acknowledged "
-                            f"pid={self.process.pid} attempt={attempt}"
-                        )
-                        break
-                    write_shutdown_trace(
-                        f"worker-shutdown.signal-ack-timeout "
-                        f"pid={self.process.pid} attempt={attempt}"
-                    )
+                self._send_windows_shutdown_signal(attempt=1)
             else:
                 os.kill(self.process.pid, signal.SIGTERM)
-            logger.info(f"Terminated child process [{self.process.pid}]")
+            return True
+        return False
 
-            self.parent_conn.close()
-            self.child_conn.close()
+    def _send_windows_shutdown_signal(self, *, attempt: int) -> None:
+        assert self.process.pid is not None
+        write_shutdown_trace(
+            f"worker-shutdown.signal-send pid={self.process.pid} attempt={attempt}"
+        )
+        os.kill(  # type: ignore[attr-defined]
+            self.process.pid, signal.CTRL_BREAK_EVENT
+        )
+
+    def _wait_for_windows_shutdown_signal(self) -> None:
+        signal_ack = self._windows_shutdown_signal_ack
+        if os.name != "nt" or signal_ack is None:  # pragma: py-not-win32
+            return
+
+        for attempt in range(1, WINDOWS_SHUTDOWN_SIGNAL_MAX_ATTEMPTS + 1):
+            if signal_ack.wait(WINDOWS_SHUTDOWN_SIGNAL_ACK_TIMEOUT_SECONDS):
+                write_shutdown_trace(
+                    f"worker-shutdown.signal-acknowledged "
+                    f"pid={self.process.pid} attempt={attempt}"
+                )
+                return
+            if not self.process.is_alive() or signal_ack.is_set():
+                return
+            write_shutdown_trace(
+                f"worker-shutdown.signal-ack-timeout "
+                f"pid={self.process.pid} attempt={attempt}"
+            )
+            if attempt < WINDOWS_SHUTDOWN_SIGNAL_MAX_ATTEMPTS:
+                self._send_windows_shutdown_signal(attempt=attempt + 1)
+
+    def _finish_termination(self) -> None:
+        logger.info(f"Terminated child process [{self.process.pid}]")
+        self.parent_conn.close()
+        self.child_conn.close()
+
+    def terminate(self) -> None:
+        if self._begin_termination():
+            self._wait_for_windows_shutdown_signal()
+            self._finish_termination()
+
 
     def kill(self) -> None:
         # In Windows, the method will call `TerminateProcess` to kill the process.
@@ -232,6 +236,23 @@ class Multiprocess:
 
     def terminate_all(self) -> None:
         write_shutdown_trace("supervisor-terminate-all.start")
+        if os.name == "nt":  # pragma: py-not-win32
+            pending: list[Process] = []
+            # CTRL_BREAK delivery is asynchronous. Signal every process group
+            # before waiting for any one worker so a delayed acknowledgement
+            # cannot postpone delivery to the remaining workers.
+            for process in self.processes:
+                write_shutdown_trace(
+                    f"supervisor-terminate-all.worker pid={process.pid} "
+                    f"exitcode={process.exitcode}"
+                )
+                if process._begin_termination():
+                    pending.append(process)
+            for process in pending:
+                process._wait_for_windows_shutdown_signal()
+                process._finish_termination()
+            return
+
         for process in self.processes:
             write_shutdown_trace(
                 f"supervisor-terminate-all.worker pid={process.pid} exitcode={process.exitcode}"
