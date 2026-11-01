@@ -821,7 +821,8 @@ jobs:
           set -euo pipefail
           wheels=(target/python-floor/*.whl)
           test "${#wheels[@]}" -eq 1
-          python -m pip install --disable-pip-version-check --no-input --no-deps "${wheels[0]}"
+          # Exercise the declared runtime dependencies as a clean consumer would.
+          python -m pip install --disable-pip-version-check --no-input "${wheels[0]}"
           python scripts/check_installed_wheel.py --wheel "${wheels[0]}" --output target/python-floor/consumer-python39.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
