@@ -696,7 +696,6 @@ jobs:
               --exclude-case-id python-api.server-serves-request-on-multiple-prebound-sockets
               --exclude-case-id python-api.server-serves-request-on-multiple-prebound-tls-sockets
               --exclude-case-id python-api.server-sockets-serves-request-on-multiple-inherited-fds
-              --exclude-case-id fault.http1.prebound-transfer.recv-would-block-retries-and-serves
               --exclude-case-id python-api.config-server-serves-request-on-inherited-fd
               --exclude-case-id python-api.run-serves-request-on-inherited-fd
               --exclude-case-id python-api.server-startup-honors-preexisting-exit-request
