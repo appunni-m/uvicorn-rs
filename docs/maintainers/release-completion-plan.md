@@ -39,11 +39,12 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 Draft [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21) promotes
 `develop` to `main`, from base `86e72e181d00feca1b4db7f30377d5d9d4345b83` to
-head `6ab1c3da370c61819ca14c351aaba58962da9ff9`. The PR replaces closed,
+head `1375b0feef6468c6946efda4cd560afce465534e`. The PR replaces closed,
 unmerged PR #19. Current `develop` contains executable source
-`1341cd94fc7780281c1bce5cdb0b6f3d4683af76` plus documentation-only status
-refreshes. Active edits stay on `develop`; `main` remains the promotion
-target.
+`1341cd94fc7780281c1bce5cdb0b6f3d4683af76`, the coverage-only fault
+injection correction `1375b0feef6468c6946efda4cd560afce465534e`, and
+documentation-only status refreshes. Active edits stay on `develop`; `main`
+remains the promotion target.
 
 After fetching `origin`, the listed `windows-worker-groups`,
 `uvicorn-rs-compat-hooks`, and `uvicorn-rs-coverage-events` refs have no
@@ -77,6 +78,16 @@ older source. Windows candidate parity completed 749/755 with zero behavioral
 mismatches and six shutdown infrastructure timeouts (four candidate and two
 stock-Uvicorn oracle cases); Windows consumer checks were skipped. This run
 cannot qualify current `develop`.
+
+The selected local coverage run
+`5b1006578e9747a58694cb5c8d534af7` passed the existing
+`fault.http1.prebound-transfer.recv-error` case (1/1, 1,036 regions
+attributed). The working tree was dirty at base `f4f6e0882`; commit
+`1375b0fee` moves the injected `recvmsg` error to the syscall result so the
+case exercises the real error conversion at `?`. This selected report is
+diagnostic only. `cargo check --locked --lib -p uvicorn-rs-py` and
+`cargo fmt --all -- --check` passed on the committed change; no full matrix was
+run.
 
 CI #596 is now the latest completed full coverage report, but its source is
 older than current `develop`. No 100% unified report or accepted independent
