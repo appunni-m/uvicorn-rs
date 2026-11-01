@@ -1072,6 +1072,7 @@ def load_contract(
         "raw_connection_open_after_timeout",
         "graceful_shutdown_cancellation_observed",
         "server_log_events", "worker_replacement_observed", "worker_start_count",
+        "worker_clean_shutdown_count",
         "request_limit_response_count",
         "request_limit_range_satisfied",
         "server_started_before_shutdown", "serve_task_finished_before_shutdown",
@@ -15013,12 +15014,18 @@ def run_python_api_probe(
             and event.get("message", "").startswith("Started server process [")
             for event in stderr_events
         )
+        worker_clean_shutdown_count = sum(
+            event.get("kind") == "message"
+            and event.get("message", "").startswith("Finished server process [")
+            for event in stderr_events
+        )
         observation["worker_replacement_observed"] = (
             child_exit_count > 0
             and worker_start_count
             > case["api"]["run_http"].get("workers", 1)
         )
         observation["worker_start_count"] = worker_start_count
+        observation["worker_clean_shutdown_count"] = worker_clean_shutdown_count
         observation["bind_error_logged"] = any(
             "bind" in event.get("message", "").lower()
             and (

@@ -1014,6 +1014,24 @@
       "covers": [
         "python.api.run-http"
       ],
+      "compare": [
+        "exit_code",
+        "response_received",
+        "response_status",
+        "response_content_type",
+        "response_body_base64",
+        "listener_responses",
+        "idle_connection_closed",
+        "shutdown_signal_sent",
+        "shutdown_signals_sent",
+        "process_exit_code",
+        "process_timed_out"
+      ],
+      "target_requirements": {
+        "worker_replacement_observed": false,
+        "worker_start_count": 2,
+        "worker_clean_shutdown_count": 2
+      },
       "api": {
         "run_http": {
           "method": "GET",

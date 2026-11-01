@@ -2760,7 +2760,8 @@
         "process_timed_out",
         "server_log_events",
         "worker_replacement_observed",
-        "worker_start_count"
+        "worker_start_count",
+        "worker_clean_shutdown_count"
       ],
       "compare": [
         "exit_code",
