@@ -2321,13 +2321,13 @@ fn classify_asgi_event_type(py: Python<'_>, value: Bound<'_, PyAny>) -> PyResult
         )? {
             return Ok(AsgiEventType::WebSocketSend);
         }
-        if coverage_value!(
+        if coverage_once_value!(
             AsgiEventTypeLifespanStartupCompleteEq,
             value.eq(pyo3::intern!(py, "lifespan.startup.complete"))
         )? {
             return Ok(AsgiEventType::LifespanStartupComplete);
         }
-        if coverage_value!(
+        if coverage_once_value!(
             AsgiEventTypeLifespanStartupFailedEq,
             value.eq(pyo3::intern!(py, "lifespan.startup.failed"))
         )? {
@@ -4741,12 +4741,12 @@ struct LifespanIo {
 impl LifespanIo {
     fn send_event(&self, event: LifespanEvent) -> PyResult<()> {
         #[cfg(coverage)]
-        let send_result =
-            if coverage_fault_is_armed(CoverageFaultPoint::LifespanSendEventChannelClosed) {
-                Err(TrySendError::Closed(event))
-            } else {
-                self.events.try_send(event)
-            };
+        let send_result = if coverage_fault_take(CoverageFaultPoint::LifespanSendEventChannelClosed)
+        {
+            Err(TrySendError::Closed(event))
+        } else {
+            self.events.try_send(event)
+        };
         #[cfg(not(coverage))]
         let send_result = self.events.try_send(event);
         send_result
@@ -4799,10 +4799,10 @@ impl LifespanIo {
                 let message = PyDict::new(py);
                 match request {
                     LifespanMessage::Startup => {
-                        coverage_try!(
+                        coverage_once_value!(
                             LifespanReceiveStartupTypeSetItem,
                             message.set_item("type", "lifespan.startup")
-                        );
+                        )?;
                     }
                     LifespanMessage::Shutdown => {
                         coverage_once_value!(
@@ -4829,12 +4829,12 @@ impl LifespanIo {
         let event = match event_type {
             AsgiEventType::LifespanStartupComplete => LifespanEvent::StartupComplete,
             AsgiEventType::LifespanStartupFailed => {
-                let message_value = coverage_value!(
+                let message_value = coverage_once_value!(
                     LifespanStartupFailedMessageGetItem,
                     message.get_item("message")
                 )?;
                 let message = match message_value {
-                    Some(value) => coverage_value!(
+                    Some(value) => coverage_once_value!(
                         LifespanStartupFailedMessageExtract,
                         value.extract::<String>()
                     )?,

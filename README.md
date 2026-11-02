@@ -10,17 +10,20 @@ optional internal Cargo/PyO3 adapter remains `uvicorn-rs-py`. The Rust release
 contains one Python-free `uvicorn-rs` server crate with HTTP/3 behind the
 optional `http3` feature, plus `asgi-lifespan-protocol-rs`.
 
-The 0.3.0 candidate is not published yet. Exact-source CI #604 passed the
-maintained Uvicorn 0.54.0 installed-wheel parity matrix: 783/783 on Linux
-x86-64, 783/783 on macOS ARM64, and 756/756 platform-applicable cases on
-Windows x86-64. Cargo, Linux/macOS wheel, sdist, and Windows live-ASGI
-candidate consumers passed; the Windows CLI/TLS smoke was marked `not_run`.
-The three-repeat unified coverage run completed but missed its 100% gate:
-14,771/14,835 regions and 10,856/10,893 lines (64 regions and 37 lines
-missing). Selected follow-up cases pass locally, but they are not a replacement
-for a new full-source report. Independent Coverage-MCP review and matched
-three-system FastAPI benchmarks remain release gates. Existing partial
-measurements do not establish a general performance advantage. See
+The 0.3.0 candidate is not published yet. PR #21's exact-source CI #615 on
+`develop` commit `c28474a164cce437cf41ec12d7ebd789027f8637` passed the
+maintained Uvicorn 0.54.0 installed-wheel parity matrix: 784/784 on Linux
+x86-64, 784/784 on macOS ARM64, and 757/757 applicable cases on Windows
+x86-64. The Linux, macOS, and Windows candidate artifact consumers and the
+Python 3.9 wheel-floor check also passed. The docs deployment passed before
+the current page refresh; the refreshed pages still need a docs build and
+deployment. The latest hosted coverage run (#615) completed below its gate at
+14,860/14,894 regions and 10,915/10,933 lines, with six startup-lifespan fault
+contracts failing. A focused local fix makes those faults one-shot, and the six
+selected cases now pass; a full exact-source coverage run is still required.
+Independent Coverage-MCP review and matched three-system FastAPI benchmarks
+also remain release gates. Existing partial measurements do not establish a
+general performance advantage. See
 [release status](docs/releases.md) and the [compatibility matrix](docs/support-matrix.md).
 
 ## Try the source checkout

@@ -35,61 +35,60 @@ No original release gate is waived by this plan. Historical measurements remain
 historical. A task closes on its own deliverable; downstream publication gates
 belong to the release tasks rather than being copied into every prerequisite.
 
-### Current release candidate — 2026-11-02 (PR #21 / CI #604)
+### Current release candidate — 2026-11-02 (PR #21 / CI #615)
 
 Open [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21) promotes
-`develop` head `04d5a46888b44cfa9b57b3387fa89c59580f4e73` to `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. Its CI merge ref is
-`20f27b3a4f13afb110fa17e41c227f3d56a86d3d`. Active implementation work
-remains on `develop`; `main` changes through PR #21 only.
+`develop` head `c28474a164cce437cf41ec12d7ebd789027f8637` to `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI #615 candidate manifests
+record merge commit `a276c2efa2ac66f5532910d4c56e3128dc078ceb` and
+source-tree digest `7ca7f5953a9056a368a9310f615d530d29151e5a6c18c0a95b2b051a9f85db22`.
+Active implementation work remains on `develop`; `main` changes through PR #21 only.
 
 The side-branch audit is complete. Current remote tips for
 `codex/windows-worker-groups`, `codex/uvicorn-rs-compat-hooks`, and
-`codex/uvicorn-rs-coverage-events` are ancestors of `develop`. The
-`windows-oracle-signal-trace` tip contains a test-only diagnostic refinement
-superseded by the fuller trace already in `develop`. The five unique
-`windows-shutdown-diagnostic` commits add temporary environment-gated tracing
-and are not required product fixes. No listed branch needs to be checked out
-or merged separately.
+`codex/uvicorn-rs-coverage-events` are ancestors of `develop`; the Python
+license-manifest fix on the latter has an equivalent patch already in
+`develop`. `codex/windows-oracle-signal-trace` has one unique test-only signal
+trace refinement. `codex/windows-shutdown-diagnostic` has five unique commits
+adding environment-gated diagnostics and a test worker-count override. These
+are diagnostic changes, not missing product fixes; no PRs exist for the listed
+branches, and no branch needs to be checked out or merged separately.
 
-CI [#604](https://github.com/appunni-m/uvicorn-rs/actions/runs/41343738493)
+CI [#615](https://github.com/appunni-m/uvicorn-rs/actions/runs/41402063098)
 passed the maintained Uvicorn 0.54.0 installed-wheel matrix with no failures,
-infrastructure failures, or not-run cases: Linux x86-64 783/783, macOS ARM64
-783/783, and Windows x86-64 756/756. Windows explicitly excludes 27
+infrastructure failures, or not-run applicable cases: Linux x86-64 784/784,
+macOS ARM64 784/784, and Windows x86-64 757/757. Windows explicitly excludes 27
 platform-inapplicable inputs requiring UDS, inherited POSIX descriptors, a
 Unix-only transfer race, or POSIX-only worker controls. The exact cases are
 listed in `.github/workflows/ci.yml`. The matrix exercises custom HTTP and
 WebSocket protocol classes, `ssl_context_factory`, HTTP/2 ALPN, and response
 header/trailer capacity behavior.
 
-The candidate artifacts from this exact run were inspected directly. The
-Linux bundle contains clean 0.3.0 Cargo archives for `asgi-lifespan-protocol-rs`
-and `uvicorn-rs`, a Linux abi3 wheel, and an sdist. Every bundle file matches
-its build-manifest SHA-256. The two Cargo consumers, installed wheel
-consumer, and rebuilt sdist consumer passed. The macOS and Windows wheel
-hashes match their build manifests; macOS CLI/TLS and ASGI consumers passed,
-and Windows ASGI passed. The Windows-specific CLI/TLS smoke was marked
-`not_run`; the full Windows-applicable parity run passed. The Python 3.9
-wheel-floor installation passed. See the current [release evidence](../releases.md).
+The CI #615 candidate artifacts and consumers passed on this source: Linux
+wheel, sdist rebuild, default/`http3` Cargo consumers; macOS and Windows wheel
+consumers; and the Python 3.9 wheel-floor installation. Artifact IDs and
+GitHub archive digests are in the current [release evidence](../releases.md).
+The exact individual registry files must still be inspected and verified from
+the final accepted source before publication.
 
 Rust quality/MSRV/features/docs, native contracts, native FastAPI-RS
-composition, and the release artifact/handoff contract checks passed. The
-three-repeat unified coverage job completed but missed 100% at 14,771/14,835
-regions and 10,856/10,893 lines (64 regions and 37 lines missing in
-`src/lib.rs`); artifact `13101272404` has archive SHA-256
-`3d13995a20c404a2f86c89e6b59f688b518a1e7c7e54b0ccd564fdca76251d5d`. The
-selected H3 and TLS follow-up reports are not full-gate evidence. No accepted
-independent Coverage-MCP review receipt is available yet. Matched
-three-system ordinary-FastAPI benchmarks remain unfinished; prior Linux
-ARM64 upload and HTTP/3 failures remain unresolved. The support, compatibility,
-installation, and rollback docs are refreshed in the current working tree; the
-strict docs build still needs verification. The maintainer will run their own
-FastAPI apps after repository acceptance.
+composition, and the release artifact/handoff contract checks passed. CI #615's
+three-repeat unified coverage matrix completed below its gate: 1,437/1,443
+cases passed, with six repeated startup-lifespan fault failures; coverage was
+14,860/14,894 regions and 10,915/10,933 lines. A local one-shot fault-hook fix
+now passes those six selected cases, but no full exact-source report follows it
+yet. An accepted independent Coverage-MCP review receipt is not available in
+this session. Matched three-system ordinary-FastAPI benchmarks remain
+unfinished; prior Linux ARM64 upload and HTTP/3 failures remain unresolved.
+Current-source compatibility and support docs were refreshed; run the strict
+docs build and update the docs deployment after content is finalized. The
+maintainer will run their own FastAPI apps after repository acceptance.
 
-The candidate artifact hashes in CI #604 are tied to merge ref `20f27b3a`;
-rebuild them from the final qualified source before publication. Do not merge
-PR #21 or publish Cargo/PyPI until coverage, independent review, benchmarks,
-docs, and final-source candidate verification pass.
+The current artifacts are tied to CI #615's `develop` head. Rebuild or recheck
+the exact Cargo archives, wheels, and sdist from the final qualified source
+before publication. Do not merge PR #21 or publish Cargo/PyPI until coverage,
+independent review, benchmarks, docs, and final-source candidate verification
+pass.
 
 ### Earlier release-candidate snapshot — 2026-11-01 (PR #21 / CI #594)
 

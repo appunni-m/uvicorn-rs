@@ -12,44 +12,42 @@ install `uvicorn-rs` and upstream `uvicorn` in the same environment.
 ## Current status (2026-11-02)
 
 Open [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21) promotes
-`develop` head `04d5a46888b44cfa9b57b3387fa89c59580f4e73` to `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI #604 exercised merge ref
-`20f27b3a4f13afb110fa17e41c227f3d56a86d3d`.
+`develop` head `c28474a164cce437cf41ec12d7ebd789027f8637` to `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI [#615](https://github.com/appunni-m/uvicorn-rs/actions/runs/41402063098)
+passed the maintained installed-wheel public matrix against Uvicorn 0.54.0.
+The candidate manifests identify the clean PR merge commit as
+`a276c2efa2ac66f5532910d4c56e3128dc078ceb`, with source-tree digest
+`7ca7f5953a9056a368a9310f615d530d29151e5a6c18c0a95b2b051a9f85db22`.
 
-The installed-wheel public matrix against Uvicorn 0.54.0 passed with no failed,
-infrastructure-failed, or not-run cases:
-
-| Platform | Result | Report SHA-256 | Artifact |
-| --- | ---: | --- | --- |
-| Linux x86-64 | 783/783 | `af85d0993f7b582bec373e7e241b05ffa2cb2a7c623e205ba2623a2b8a9c14cd` | [13098961155](https://github.com/appunni-m/uvicorn-rs/actions/runs/41343738493/artifacts/13098961155) |
-| macOS ARM64 | 783/783 | `cd764aea9d589d5a2064493d750f3829dd3d9ee02bc16e84a99313f596196bcd` | [13098834022](https://github.com/appunni-m/uvicorn-rs/actions/runs/41343738493/artifacts/13098834022) |
-| Windows x86-64 | 756/756 | `38f104f1e05b5b42b3de819cf5c621d6beb99d15136c0759d988574a5fad2d9b` | [13099342184](https://github.com/appunni-m/uvicorn-rs/actions/runs/41343738493/artifacts/13099342184) |
+| Platform | Result | Failed | Infrastructure failed | Not run | Artifact (archive SHA-256) |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Linux x86-64 | 784/784 | 0 | 0 | 0 | [13122780312](https://github.com/appunni-m/uvicorn-rs/actions/runs/41402063098/artifacts/13122780312) (`bbf73c004f1f22f6286b56c954808a73ac8065b30bfa87459f600252863c3092`) |
+| macOS ARM64 | 784/784 | 0 | 0 | 0 | [13123400293](https://github.com/appunni-m/uvicorn-rs/actions/runs/41402063098/artifacts/13123400293) (`e8c756fec191c1f05fda1c53e5bb91214d842a9ae4c3a6387b5543ecb20c7705`) |
+| Windows x86-64 | 757/757 | 0 | 0 | 0 | [13123616750](https://github.com/appunni-m/uvicorn-rs/actions/runs/41402063098/artifacts/13123616750) (`96aacf92b71dba388c7cfaa9a59c13d233914c0b3feeae506dca45143b85f531`) |
 
 Windows excludes 27 explicitly declared inputs that require Unix-domain
 sockets, inherited POSIX descriptors, a Unix-only listener-transfer race, or
 POSIX-only signals and worker health checks. The maintained matrix includes
 custom HTTP and WebSocket protocol classes, `ssl_context_factory`, HTTP/2
-ALPN configuration, and header/trailer capacity cases. The exact case
-inventory is in the [maintainer contract](maintainers/uvicorn-0.54.0-contract.md)
-and the platform exclusions are listed in
+ALPN configuration, and HTTP/1, HTTP/2, and WebSocket response header/trailer
+capacity cases. The exact case inventory is in the
+[maintainer contract](maintainers/uvicorn-0.54.0-contract.md), and the platform
+exclusions are listed in
 [`ci.yml`](https://github.com/appunni-m/uvicorn-rs/blob/develop/.github/workflows/ci.yml).
 
-CI #604 also built clean candidate packages for Linux, macOS, and Windows.
-The Linux bundle contains both Cargo archives, the wheel, and the sdist; its
-manifest hashes match the package bytes, and the wheel, sdist, and Cargo
-consumers passed. The macOS wheel consumer passed. The Windows live-ASGI
-consumer passed; its separate CLI/TLS shutdown smoke was recorded as
-`not_run`, while the Windows-applicable public matrix passed. The Python 3.9
-wheel-floor check passed.
+CI #615 also built Linux, macOS, and Windows candidate bundles; their clean
+consumers passed. The Linux bundle contains both Cargo archives, a wheel, and
+an sdist; the sdist rebuild and default/`http3` Cargo consumers passed. The
+macOS and Windows wheel consumers passed. The Python 3.9 wheel-floor check
+passed. Documentation deployment [#254](https://github.com/appunni-m/uvicorn-rs/actions/runs/41402063093)
+passed before this page refresh; the refreshed docs still need a strict build
+and deployment.
 
-The unified three-repeat coverage job completed on this source and missed its
-100% gate: 14,771/14,835 regions and 10,856/10,893 lines (64 regions and 37
-lines missing), all in `src/lib.rs`. Its [coverage artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/41343738493/artifacts/13101272404)
-has archive SHA-256 `3d13995a20c404a2f86c89e6b59f688b518a1e7c7e54b0ccd564fdca76251d5d`.
-The focused changes now in the local worktree do not have a new full-source
-coverage receipt. No independent Coverage-MCP review receipt has been accepted,
-and the matched three-system FastAPI benchmark remains incomplete. The
-candidate is not published.
+The latest three-repeat unified coverage run completed below its gate at
+14,860/14,894 regions and 10,915/10,933 lines. A focused local fix passes the
+six affected startup-lifespan fault cases, but a full exact-source run and
+independent Coverage-MCP review remain open. Matched three-system
+ordinary-FastAPI benchmarks are incomplete. The candidate is not published.
 
 ## Historical diagnostic records
 ## Historical diagnostic records

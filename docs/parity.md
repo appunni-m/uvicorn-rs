@@ -4,36 +4,36 @@
 
 ## Current source status (2026-11-02)
 
-### PR #21 CI #604 — exact-source results
+### PR #21 CI #615 — exact-source results
 
-CI [run 41343738493](https://github.com/appunni-m/uvicorn-rs/actions/runs/41343738493)
-tested `develop` head `04d5a46888b44cfa9b57b3387fa89c59580f4e73` at PR merge
-ref `20f27b3a4f13afb110fa17e41c227f3d56a86d3d`. The installed-wheel public
-matrix against Uvicorn 0.54.0 passed with zero failures, infrastructure
-failures, or not-run cases:
+CI [run 41402063098](https://github.com/appunni-m/uvicorn-rs/actions/runs/41402063098)
+tested `develop` head `c28474a164cce437cf41ec12d7ebd789027f8637` against
+`main` at `86e72e181d00feca1b4db7f30377d5d9d4345b83`. The installed-wheel
+public matrix against Uvicorn 0.54.0 passed with zero failures, infrastructure
+failures, or not-run applicable cases:
 
-| Platform | Result | Report SHA-256 | Artifact |
-| --- | ---: | --- | --- |
-| Linux x86-64 | 783/783 | `af85d0993f7b582bec373e7e241b05ffa2cb2a7c623e205ba2623a2b8a9c14cd` | [13098961155](https://github.com/appunni-m/uvicorn-rs/actions/runs/41343738493/artifacts/13098961155) |
-| macOS ARM64 | 783/783 | `cd764aea9d589d5a2064493d750f3829dd3d9ee02bc16e84a99313f596196bcd` | [13098834022](https://github.com/appunni-m/uvicorn-rs/actions/runs/41343738493/artifacts/13098834022) |
-| Windows x86-64 | 756/756 | `38f104f1e05b5b42b3de819cf5c621d6beb99d15136c0759d988574a5fad2d9b` | [13099342184](https://github.com/appunni-m/uvicorn-rs/actions/runs/41343738493/artifacts/13099342184) |
+| Platform | Result | Artifact archive SHA-256 |
+| --- | ---: | --- |
+| Linux x86-64 | 784/784 | [13122780312](https://github.com/appunni-m/uvicorn-rs/actions/runs/41402063098/artifacts/13122780312): `bbf73c004f1f22f6286b56c954808a73ac8065b30bfa87459f600252863c3092` |
+| macOS ARM64 | 784/784 | [13123400293](https://github.com/appunni-m/uvicorn-rs/actions/runs/41402063098/artifacts/13123400293): `e8c756fec191c1f05fda1c53e5bb91214d842a9ae4c3a6387b5543ecb20c7705` |
+| Windows x86-64 | 757/757 | [13123616750](https://github.com/appunni-m/uvicorn-rs/actions/runs/41402063098/artifacts/13123616750): `96aacf92b71dba388c7cfaa9a59c13d233914c0b3feeae506dca45143b85f531` |
 
 Windows excludes 27 explicitly listed inputs requiring Unix-domain sockets,
 inherited POSIX descriptors, a Unix-only listener-transfer race, or
-POSIX-only worker signals and health checks. See the Windows exclusions in
-[`ci.yml`](https://github.com/appunni-m/uvicorn-rs/blob/develop/.github/workflows/ci.yml).
-The public inputs include custom HTTP and WebSocket protocol classes,
-`ssl_context_factory`, HTTP/2 ALPN, and HTTP/1, HTTP/2, and WebSocket
-header/trailer capacity cases.
+POSIX-only worker signals and health checks. The public inputs include custom
+HTTP and WebSocket protocol classes, `ssl_context_factory`, HTTP/2 ALPN, and
+HTTP/1, HTTP/2, and WebSocket header/trailer capacity cases. See the Windows
+exclusions in [`ci.yml`](https://github.com/appunni-m/uvicorn-rs/blob/develop/.github/workflows/ci.yml).
 
-Candidate artifact verification is recorded in [release status](releases.md).
-The unified three-repeat coverage job completed but missed the 100% threshold:
-14,771/14,835 regions and 10,856/10,893 lines, leaving 64 regions and 37 lines
-uncovered in `src/lib.rs`. The [coverage artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/41343738493/artifacts/13101272404)
-is bound to this run and source. Follow-up selected-case reports are diagnostic;
-they do not replace a passing full-source run. No independent Coverage-MCP
-receipt is accepted yet. Benchmarks remain in the release sequence after
-compatibility and coverage qualification.
+Candidate bundles and clean consumers passed on Linux, macOS, and Windows;
+release artifact identities are recorded in [release status](releases.md).
+The three-repeat unified coverage matrix completed below its gate: 1,437/1,443
+cases passed, with six repeated startup-lifespan fault failures; coverage was
+14,860/14,894 regions and 10,915/10,933 lines. The six local fault-hook fixes
+pass their selected cases, but this is not full exact-source coverage evidence.
+No independent Coverage-MCP receipt is accepted. Matched ordinary-FastAPI
+benchmarks remain incomplete and follow the compatibility and coverage
+sequence.
 
 ### Prior Windows worker signal follow-up (CI #559)
 

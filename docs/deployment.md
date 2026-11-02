@@ -1,11 +1,16 @@
 # Deployment guidance
 
 The `uvicorn-rs` 0.3.0 PyPI release is still being qualified and is not
-published. Exact-source CI #604 passed the maintained Uvicorn 0.54.0
-installed-wheel parity matrix on Linux x86-64, macOS ARM64, and Windows
-x86-64. Coverage review and matched FastAPI benchmarks remain release gates.
-Use the [support matrix](support-matrix.md) to check the tested surface, then
-evaluate the released candidate with your application before deploying it.
+published. Exact-source CI [#615](https://github.com/appunni-m/uvicorn-rs/actions/runs/41402063098)
+passed the maintained Uvicorn 0.54.0 installed-wheel parity matrix on Linux
+x86-64 (784/784), macOS ARM64 (784/784), and Windows x86-64 (757/757
+applicable cases). The latest hosted coverage run (#615) completed below its
+gate at 14,860/14,894 regions and 10,915/10,933 lines. A focused local fix
+makes its six failed startup-lifespan fault cases pass, but the full
+exact-source coverage gate and independent coverage review remain open.
+Matched FastAPI benchmarks also remain a release gate. Use the
+[support matrix](support-matrix.md) to check the tested surface, then evaluate
+the released candidate with your application before deploying it.
 
 ## Bind and run
 
