@@ -3335,6 +3335,25 @@
         "body_base64": "",
         "expect_response_error": true
       }
+    },
+    {
+      "case_id": "fault.http3.response-header-append-error-caught-as-500",
+      "profile": "http3",
+      "operation": "http3.response-header-append-error",
+      "covers": [
+        "http3.response-header-append-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.response.header-map.append-error",
+        "contract": "http3-response-header-append-error-caught-500"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/response-header-capacity?count=1",
+        "headers": [],
+        "body_base64": ""
+      }
     }
   ]
 }

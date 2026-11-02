@@ -1755,6 +1755,14 @@
       ]
     },
     {
+      "id": "http.response-header-overflow-fallback",
+      "kind": "protocol_operation",
+      "observe": [
+        "responses",
+        "fault_consumed"
+      ]
+    },
+    {
       "id": "http.application-task-cleanup-observer",
       "kind": "protocol_operation",
       "observe": [
@@ -2490,6 +2498,17 @@
         "connection_closed",
         "stream_reset",
         "status",
+        "fault_consumed"
+      ]
+    },
+    {
+      "id": "http3.response-header-append-error",
+      "kind": "protocol_operation",
+      "observe": [
+        "connection_closed",
+        "stream_reset",
+        "status",
+        "body_bytes",
         "fault_consumed"
       ]
     },
@@ -4198,6 +4217,28 @@
           "response.content-length.empty-send-returned",
           "response.content-length.final-send-returned"
         ]
+      }
+    },
+    {
+      "id": "http.response-content-length-reset-drain",
+      "kind": "protocol_operation",
+      "observe": [
+        "status",
+        "content_type",
+        "body_bytes",
+        "application_events",
+        "followup_response",
+        "connection_closed"
+      ],
+      "required_observations": {
+        "status": 200,
+        "body_bytes": "Y29tcGxldGU=",
+        "application_events": [
+          "response.content-length.first-send-returned",
+          "response.content-length.empty-send-returned",
+          "response.content-length.final-send-returned"
+        ],
+        "connection_closed": true
       }
     },
     {

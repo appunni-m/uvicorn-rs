@@ -290,6 +290,8 @@ enum CoverageFaultPoint {
     HttpResponseStartTrailersExtract,
     HttpResponseStartHeadersGetItem,
     HttpResponseStartHeadersExtract,
+    HttpResponseHeaderAppendError,
+    HttpResponseHeaderOverflowAppendError,
     HttpResponseDateHeaderInvalidValue,
     HttpResponseBodyBodyGetItem,
     HttpResponseBodyBodyExtract,
@@ -327,7 +329,9 @@ enum CoverageFaultPoint {
     LifespanSendEventChannelClosed,
     LifespanReportExceptionInvalidPhase,
     LifespanWithoutLifespanApplicationError,
+    LifespanWithoutLifespanPreserveTaskError,
     LifespanShutdownResultApplicationError,
+    LifespanShutdownResultPreserveTaskError,
     NativeModuleAddAsgiIo,
     NativeModuleAddWebSocketIo,
     NativeModuleAddLifespanIo,
@@ -692,6 +696,10 @@ impl CoverageFaultPoint {
             Self::HttpResponseStartTrailersExtract => "http.response.start.trailers.extract",
             Self::HttpResponseStartHeadersGetItem => "http.response.start.headers.get-item",
             Self::HttpResponseStartHeadersExtract => "http.response.start.headers.extract",
+            Self::HttpResponseHeaderAppendError => "http.response.header-map.append-error",
+            Self::HttpResponseHeaderOverflowAppendError => {
+                "http.response.header-map.overflow-append-error"
+            }
             Self::HttpResponseDateHeaderInvalidValue => "http.response.date-header.invalid-value",
             Self::HttpResponseBodyBodyGetItem => "http.response.body.body.get-item",
             Self::HttpResponseBodyBodyExtract => "http.response.body.body.extract",
@@ -743,8 +751,14 @@ impl CoverageFaultPoint {
             Self::LifespanWithoutLifespanApplicationError => {
                 "lifespan.without-lifespan.application-error"
             }
+            Self::LifespanWithoutLifespanPreserveTaskError => {
+                "lifespan.without-lifespan.preserve-task-error"
+            }
             Self::LifespanShutdownResultApplicationError => {
                 "lifespan.shutdown-result.application-error"
+            }
+            Self::LifespanShutdownResultPreserveTaskError => {
+                "lifespan.shutdown-result.preserve-task-error"
             }
             Self::NativeModuleAddAsgiIo => "native.module.add-class.asgi-io",
             Self::NativeModuleAddWebSocketIo => "native.module.add-class.websocket-io",
@@ -4934,6 +4948,10 @@ impl LifespanRuntime {
         })?;
         let mut app_task = AbortOnDrop::new(tokio::spawn(app_future));
         #[cfg(coverage)]
+        if coverage_fault_is_armed(CoverageFaultPoint::LifespanWithoutLifespanPreserveTaskError) {
+            app_task.as_mut().abort();
+        }
+        #[cfg(coverage)]
         if coverage_fault_take(CoverageFaultPoint::LifespanStartupTaskJoinError) {
             app_task.as_mut().abort();
         }
@@ -5055,17 +5073,18 @@ impl LifespanRuntime {
         mode: LifespanMode,
     ) -> PyResult<Option<Self>> {
         #[cfg(coverage)]
-        let result =
-            if coverage_fault_take(CoverageFaultPoint::LifespanWithoutLifespanApplicationError) {
-                match result {
-                    Ok(Ok(_)) => Ok(Err(PyRuntimeError::new_err(
-                        "coverage-injected lifespan application error",
-                    ))),
-                    result => result,
-                }
-            } else {
-                result
-            };
+        let result = {
+            let preserve_task_error =
+                coverage_fault_take(CoverageFaultPoint::LifespanWithoutLifespanPreserveTaskError);
+            let inject_application_error =
+                coverage_fault_take(CoverageFaultPoint::LifespanWithoutLifespanApplicationError);
+            match result {
+                Ok(Ok(_)) if inject_application_error && !preserve_task_error => Ok(Err(
+                    PyRuntimeError::new_err("coverage-injected lifespan application error"),
+                )),
+                result => result,
+            }
+        };
         let mut unsupported = false;
         match result {
             Ok(Ok(_)) => {}
@@ -5118,6 +5137,10 @@ impl LifespanRuntime {
             return Ok(());
         };
         let app_task = app_task.as_mut();
+        #[cfg(coverage)]
+        if coverage_fault_is_armed(CoverageFaultPoint::LifespanShutdownResultPreserveTaskError) {
+            app_task.abort();
+        }
         #[cfg(coverage)]
         if coverage_fault_take(CoverageFaultPoint::LifespanShutdownTaskJoinError) {
             // Abort before sending shutdown so the app cannot finish normally
@@ -5182,16 +5205,17 @@ fn lifespan_shutdown_result(
     shutdown_complete: bool,
 ) -> PyResult<()> {
     #[cfg(coverage)]
-    let result = if coverage_fault_take(CoverageFaultPoint::LifespanShutdownResultApplicationError)
-    {
+    let result = {
+        let preserve_task_error =
+            coverage_fault_take(CoverageFaultPoint::LifespanShutdownResultPreserveTaskError);
+        let inject_application_error =
+            coverage_fault_take(CoverageFaultPoint::LifespanShutdownResultApplicationError);
         match result {
-            Ok(Ok(_)) => Ok(Err(PyRuntimeError::new_err(
-                "coverage-injected lifespan shutdown application error",
-            ))),
+            Ok(Ok(_)) if inject_application_error && !preserve_task_error => Ok(Err(
+                PyRuntimeError::new_err("coverage-injected lifespan shutdown application error"),
+            )),
             result => result,
         }
-    } else {
-        result
     };
     match result {
         Ok(Ok(_)) if shutdown_complete => Ok(()),
@@ -5438,9 +5462,19 @@ fn append_response_header(
             "HTTP response {kind}: maximum of {MAX_RESPONSE_HEADER_NAMES} distinct header names exceeded"
         )));
     }
-    headers
-        .try_append(name, value)
-        .map_err(|_| {
+    let append_result = {
+        #[cfg(coverage)]
+        if coverage_fault_take(CoverageFaultPoint::HttpResponseHeaderAppendError) {
+            Err(())
+        } else {
+            headers.try_append(name, value).map_err(|_| ())
+        }
+        #[cfg(not(coverage))]
+        {
+            headers.try_append(name, value).map_err(|_| ())
+        }
+    };
+    append_result.map_err(|_| {
             PyRuntimeError::new_err(format!(
                 "HTTP response {kind}: maximum of {MAX_RESPONSE_HEADER_NAMES} distinct header names exceeded"
             ))
@@ -5474,7 +5508,23 @@ fn append_response_header_with_overflow(
         return;
     }
 
-    match headers.try_append(name.clone(), value.clone()) {
+    let append_result = {
+        #[cfg(coverage)]
+        if coverage_fault_take(CoverageFaultPoint::HttpResponseHeaderOverflowAppendError) {
+            Err(())
+        } else {
+            headers
+                .try_append(name.clone(), value.clone())
+                .map_err(|_| ())
+        }
+        #[cfg(not(coverage))]
+        {
+            headers
+                .try_append(name.clone(), value.clone())
+                .map_err(|_| ())
+        }
+    };
+    match append_result {
         Ok(_) => {
             if is_new_name {
                 *unique_header_names += 1;
@@ -7602,15 +7652,13 @@ fn load_tls_configs(
         vec![b"http/1.1".to_vec()]
     };
 
-    // Quinn requires TLS13_AES_128_GCM_SHA256 for QUIC initial keys. Keep the
-    // rest of Rustls's provider intact so the certificate config is valid, but
-    // let Quinn reject this HTTP/3-incompatible configuration during conversion.
+    // Quinn requires TLS13_AES_128_GCM_SHA256 for QUIC initial keys. The
+    // coverage fault removes every cipher suite so Rustls rejects the TLS
+    // configuration here, before Quinn conversion.
     #[cfg(coverage)]
     let quic_tls_builder = if coverage_fault_take(CoverageFaultPoint::ServerQuicTlsConfigError) {
         let mut provider = rustls::crypto::ring::default_provider();
-        provider
-            .cipher_suites
-            .retain(|suite| suite.suite() != rustls::CipherSuite::TLS13_AES_128_GCM_SHA256);
+        provider.cipher_suites.clear();
         server_config_with_protocols(
             Arc::new(provider),
             &[&rustls::version::TLS13],

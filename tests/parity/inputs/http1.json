@@ -5291,6 +5291,33 @@
       ]
     },
     {
+      "case_id": "fault.http1.response-header-overflow-append-error-fallback",
+      "profile": "http1",
+      "operation": "http.response-header-overflow-fallback",
+      "covers": [
+        "http.response-header-overflow-fallback"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.response.header-map.overflow-append-error",
+        "contract": "http-response-header-overflow-fallback-followup-200"
+      },
+      "request_sequence": [
+        {
+          "method": "GET",
+          "path": "/response-header-capacity?count=1",
+          "headers": [],
+          "body_base64": ""
+        },
+        {
+          "method": "GET",
+          "path": "/scope",
+          "headers": [],
+          "body_base64": ""
+        }
+      ]
+    },
+    {
       "case_id": "http1.early-response-drain-stops-on-malformed-final-chunk",
       "profile": "http1",
       "operation": "http.request-streaming",
@@ -5941,6 +5968,19 @@
         "path": "/content-length-empty-body-drain",
         "headers": [],
         "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http1.content-length-peer-reset-drains-app",
+      "profile": "http1",
+      "operation": "http.response-content-length-reset-drain",
+      "covers": [
+        "http.response-content-length-reset-drain"
+      ],
+      "response_reset": {
+        "path": "/content-length-empty-body-drain",
+        "followup_path": "/scope",
+        "after_content_length_bytes": 8
       }
     },
     {

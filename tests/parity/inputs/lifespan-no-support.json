@@ -39,6 +39,19 @@
       },
       "server_options": {"lifespan": "on"},
       "startup_failure": {"expect_failed": true}
+    },
+    {
+      "case_id": "fault.lifespan.without-lifespan-preserves-task-error",
+      "profile": "lifespan-no-support",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.without-lifespan.preserve-task-error",
+        "contract": "server-startup-failure"
+      },
+      "server_options": {"lifespan": "on"},
+      "startup_failure": {"expect_failed": true}
     }
   ]
 }

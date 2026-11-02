@@ -214,6 +214,8 @@ FAULT_POINTS = {
     "http.response.start.trailers.extract",
     "http.response.start.headers.get-item",
     "http.response.start.headers.extract",
+    "http.response.header-map.append-error",
+    "http.response.header-map.overflow-append-error",
     "http.response.date-header.invalid-value",
     "http.response.body.body.get-item",
     "http.response.body.body.extract",
@@ -261,7 +263,9 @@ FAULT_POINTS = {
     "lifespan.send.event-channel-closed",
     "lifespan.report-exception.invalid-phase",
     "lifespan.without-lifespan.application-error",
+    "lifespan.without-lifespan.preserve-task-error",
     "lifespan.shutdown-result.application-error",
+    "lifespan.shutdown-result.preserve-task-error",
     "native.module.add-class.asgi-io",
     "native.module.add-class.websocket-io",
     "native.module.add-class.lifespan-io",
@@ -578,6 +582,7 @@ FAULT_CONTRACTS = {
     "http-request-body-conversion-error-caught",
     "server-startup-acknowledgement-drop-cleans-listener",
     "http-response-header-overflow-delivery-followup-200",
+    "http-response-header-overflow-fallback-followup-200",
     "http-start-error-close-followup-200",
     "http-response-body-error-followup-200",
     "http-response-backpressure-body-preserved-followup-200",
@@ -592,6 +597,7 @@ FAULT_CONTRACTS = {
     "http3-legacy-peer-close-unknown-code-ignored",
     "http3-legacy-peer-close-classification-error",
     "http3-stream-reset-on-runtime-error",
+    "http3-response-header-append-error-caught-500",
     "http3-legacy-default-header-error-resets-stream",
     "http3-request-task-error-before-peer-close-followup-200",
     "http3-body-pump-early-exit-500",
@@ -748,6 +754,7 @@ LIFESPAN_STARTUP_AUTO_FALLBACK_FAULT_POINTS = {
     "lifespan.startup.send-closed",
     "lifespan.report-exception.invalid-phase",
     "lifespan.without-lifespan.application-error",
+    "lifespan.without-lifespan.preserve-task-error",
 }
 LIFESPAN_INFO_LOG_FAILURE_FAULT_POINTS = {
     "lifespan.log-info.import-logging",
@@ -766,6 +773,7 @@ LIFESPAN_SHUTDOWN_FAILURE_FAULT_POINTS = {
     "lifespan.shutdown.failed.message.extract",
     "lifespan.send.event-channel-closed",
     "lifespan.shutdown-result.application-error",
+    "lifespan.shutdown-result.preserve-task-error",
 }
 LIFESPAN_TASK_CANCEL_FAULT_POINTS = {
     "lifespan.shutdown.force-timeout",
@@ -1252,6 +1260,25 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: public HTTP header overflow requires 32,769 fields and a same-connection follow-up"
                     )
+            elif fault["contract"] == "http-response-header-overflow-fallback-followup-200":
+                requests = case.get("request_sequence", [])
+                if (
+                    case_id != "fault.http1.response-header-overflow-append-error-fallback"
+                    or case.get("profile") != "http1"
+                    or case.get("operation") != "http.response-header-overflow-fallback"
+                    or fault["point"] != "http.response.header-map.overflow-append-error"
+                    or not isinstance(requests, list)
+                    or len(requests) != 2
+                    or any(not isinstance(request, dict) for request in requests)
+                    or requests[0].get("path") != "/response-header-capacity?count=1"
+                    or requests[1].get("path") != "/scope"
+                    or any(request.get("method") != "GET" for request in requests)
+                    or any(request.get("headers") != [] for request in requests)
+                    or any(request.get("body_base64") != "" for request in requests)
+                ):
+                    raise ParityError(
+                        f"{case_id}: the HTTP/1 map-append fallback requires one injected field and a same-connection follow-up"
+                    )
             elif fault["contract"] == "asgi-spec-version-2.5":
                 http_path = case.get("request", {}).get("path")
                 websocket_path = case.get("websocket", {}).get("path")
@@ -1462,6 +1489,23 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: HTTP/3 stream-error faults require the reset-observation workflow"
+                    )
+            elif fault["contract"] == "http3-response-header-append-error-caught-500":
+                request = case.get("request", {})
+                if (
+                    case_id != "fault.http3.response-header-append-error-caught-as-500"
+                    or case.get("profile") != "http3"
+                    or case.get("operation") != "http3.response-header-append-error"
+                    or fault["point"] != "http.response.header-map.append-error"
+                    or not isinstance(request, dict)
+                    or request.get("method") != "GET"
+                    or request.get("path") != "/response-header-capacity?count=1"
+                    or request.get("headers") != []
+                    or request.get("body_base64") != ""
+                    or request.get("expect_response_error") is not None
+                ):
+                    raise ParityError(
+                        f"{case_id}: HTTP/3 response-header append failure requires a normal request whose app catches the send error"
                     )
             elif fault["contract"] == "http3-legacy-default-header-error-resets-stream":
                 if (
@@ -2343,6 +2387,7 @@ def load_contract(
                             "lifespan.startup.send-closed",
                             "lifespan.report-exception.invalid-phase",
                             "lifespan.without-lifespan.application-error",
+                            "lifespan.without-lifespan.preserve-task-error",
                         }
                         or fault["point"].startswith("native.module.")
                         or fault["point"] == "native.runtime.build.error"
@@ -2396,6 +2441,11 @@ def load_contract(
                 "server-shutdown-failure",
                 "server-shutdown-application-exception-clean-exit",
             }:
+                shutdown_result_preserves_error = (
+                    fault["contract"] == "server-shutdown-failure"
+                    and fault["point"] == "lifespan.shutdown-result.preserve-task-error"
+                    and case.get("profile") == "lifespan-shutdown-raises"
+                )
                 expected_points = (
                     {
                         "lifespan.receive.shutdown.type.set-item",
@@ -2412,6 +2462,7 @@ def load_contract(
                     not (
                         case.get("profile") == "lifespan-fault-shutdown-receive"
                         or case.get("profile", "").startswith("lifespan-fault-asgi-shutdown-")
+                        or shutdown_result_preserves_error
                     )
                     or case.get("operation") != "server.shutdown-failure"
                     or fault["point"] not in expected_points
@@ -4620,6 +4671,11 @@ def load_contract(
         elif kind in http_profile_ids and "response_reset" in case:
             exact_case_keys(case, {"case_id", "profile", "operation", "covers", "response_reset"}, case_id)
             reset_keys = {"path", "followup_path"}
+            content_length_reset = case.get("operation") == "http.response-content-length-reset-drain"
+            if content_length_reset:
+                if kind != "http1":
+                    raise ParityError(f"{case_id}: content-length peer reset is scoped to HTTP/1.1")
+                reset_keys.add("after_content_length_bytes")
             if kind == "http3":
                 if case.get("fault", {}).get("contract") != "http3-connection-error-cancels-held-response-followup-200":
                     raise ParityError(f"{case_id}: HTTP/3 response reset requires the connection-error cleanup contract")
@@ -4627,12 +4683,22 @@ def load_contract(
             elif kind not in {"http1", "http2"}:
                 raise ParityError(f"{case_id}: response reset workflow supports HTTP/1.1, HTTP/2 and HTTP/3")
             exact_keys(case["response_reset"], reset_keys, f"{case_id}.response_reset")
+            path_keys = reset_keys - {"after_content_length_bytes"}
             if not all(
                 isinstance(case["response_reset"][key], str)
                 and case["response_reset"][key].startswith("/")
-                for key in reset_keys
+                for key in path_keys
             ):
                 raise ParityError(f"{case_id}: response reset paths must be origin-form")
+            if content_length_reset and (
+                case["response_reset"]["path"] != "/content-length-empty-body-drain"
+                or case["response_reset"]["followup_path"] != "/scope"
+                or type(case["response_reset"]["after_content_length_bytes"]) is not int
+                or case["response_reset"]["after_content_length_bytes"] != 8
+            ):
+                raise ParityError(
+                    f"{case_id}: content-length peer reset requires the synchronized 8-byte drain fixture"
+                )
         elif kind in http_profile_ids and "disconnect" in case:
             exact_case_keys(case, {"case_id", "profile", "operation", "covers", "disconnect"}, case_id)
             if kind not in {"http1", "http2"}:
@@ -7955,6 +8021,9 @@ def http1_request_sequence(
 def http1_response_header_capacity_sequence(
     port: int,
     requests: list[dict[str, Any]],
+    *,
+    fault_control_path: Path | None = None,
+    fault_point: str | None = None,
 ) -> dict[str, Any]:
     """Observe a very large HTTP/1 response without http.client's header cap."""
     if len(requests) != 2:
@@ -7962,6 +8031,13 @@ def http1_response_header_capacity_sequence(
     connection = socket.create_connection(("127.0.0.1", port), timeout=10)
     connection.settimeout(10)
     stream = connection.makefile("rb")
+    fault_consumed = False
+    if fault_control_path is not None:
+        if not fault_point:
+            stream.close()
+            connection.close()
+            raise ParityError("HTTP/1 header-capacity fault requires an allow-listed point")
+        fault_control_path.write_text(fault_point, encoding="utf-8")
 
     def read_response() -> dict[str, Any]:
         status_line = stream.readline(65_537)
@@ -8055,7 +8131,7 @@ def http1_response_header_capacity_sequence(
 
     responses = []
     try:
-        for request in requests:
+        for index, request in enumerate(requests):
             connection.sendall(
                 (
                     f"GET {request['path']} HTTP/1.1\r\n"
@@ -8064,8 +8140,18 @@ def http1_response_header_capacity_sequence(
                 ).encode("ascii")
             )
             responses.append(read_response())
-        return {"responses": responses}
+            if index == 0 and fault_control_path is not None:
+                fault_consumed = (
+                    fault_control_path.read_text(encoding="utf-8").strip()
+                    != fault_point
+                )
+        observation = {"responses": responses}
+        if fault_control_path is not None:
+            observation["fault_consumed"] = fault_consumed
+        return observation
     finally:
+        if fault_control_path is not None:
+            fault_control_path.write_text("", encoding="utf-8")
         stream.close()
         connection.close()
 
@@ -8621,6 +8707,80 @@ def http1_response_reset_request(
         "content_type": next((value for name, value in response_headers if name == "content-type"), None),
         "early_body_base64": base64.b64encode(first_chunk).decode("ascii"),
         "streamed_before_completion": streamed_before_completion,
+        "connection_closed": True,
+        "followup": followup,
+    }
+
+
+def http1_content_length_peer_reset_request(
+    port: int, specification: dict[str, Any], events_path: Path
+) -> dict[str, Any]:
+    events_before = len(read_events(events_path))
+    expected_body_length = specification["after_content_length_bytes"]
+    client = socket.create_connection(("127.0.0.1", port), timeout=10)
+    client.settimeout(10)
+    reader = client.makefile("rb")
+    try:
+        client.sendall(
+            f"GET {specification['path']} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".encode()
+        )
+        status_line = reader.readline()
+        if not status_line:
+            raise ParityError("HTTP/1.1 server closed before starting its content-length response")
+        status = int(status_line.split()[1])
+        response_headers = []
+        while True:
+            line = reader.readline()
+            if line == b"\r\n":
+                break
+            if not line:
+                raise ParityError("HTTP/1.1 response ended before its headers were complete")
+            name, value = line.decode("latin-1").split(":", maxsplit=1)
+            response_headers.append((name.strip().lower(), value.strip()))
+        content_lengths = [
+            int(value) for name, value in response_headers if name == "content-length"
+        ]
+        if content_lengths != [expected_body_length]:
+            raise ParityError(
+                "HTTP/1.1 content-length peer reset received an unexpected Content-Length"
+            )
+
+        body = bytearray()
+        while len(body) < expected_body_length:
+            chunk = reader.read(expected_body_length - len(body))
+            if not chunk:
+                raise ParityError("HTTP/1.1 response ended before the declared body was read")
+            body.extend(chunk)
+
+        # Reset immediately after the declared bytes reach the client, while
+        # the ASGI app is still paused before its empty terminal body events.
+        client.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+    finally:
+        reader.close()
+        client.close()
+
+    deadline = time.monotonic() + 2
+    application_events = read_events(events_path)[events_before:]
+    while (
+        "response.content-length.final-send-returned" not in application_events
+        and time.monotonic() < deadline
+    ):
+        time.sleep(0.005)
+        application_events = read_events(events_path)[events_before:]
+    if "response.content-length.final-send-returned" not in application_events:
+        raise ParityError("ASGI app did not finish draining after the content-length peer reset")
+
+    followup = http1_request(port, {
+        "method": "GET",
+        "path": specification["followup_path"],
+        "headers": [],
+        "body_base64": "",
+    })
+    return {
+        "status": status,
+        "content_type": next((value for name, value in response_headers if name == "content-type"), None),
+        "body_base64": base64.b64encode(bytes(body)).decode("ascii"),
+        "application_events": application_events,
         "connection_closed": True,
         "followup": followup,
     }
@@ -11834,7 +11994,14 @@ def execute_case(
             if fault_control_path is not None:
                 fault_control_path.write_text(fault["point"], encoding="utf-8")
             try:
-                observation = http1_response_reset_request(server["port"], case["response_reset"], server["events"])
+                if case["operation"] == "http.response-content-length-reset-drain":
+                    observation = http1_content_length_peer_reset_request(
+                        server["port"], case["response_reset"], server["events"]
+                    )
+                else:
+                    observation = http1_response_reset_request(
+                        server["port"], case["response_reset"], server["events"]
+                    )
                 if fault is not None:
                     deadline = time.monotonic() + 3
                     while (
@@ -11996,10 +12163,17 @@ def execute_case(
             "http.response-header-capacity-delivery",
             "http.response-header-capacity-one-above-map-limit",
             "http.response-header-capacity-many-above-map-limit",
+            "http.response-header-overflow-fallback",
         }:
+            fault = case.get("fault")
             observation = http1_response_header_capacity_sequence(
                 server["port"],
                 case["request_sequence"],
+                fault_control_path=(
+                    server.get("coverage_fault_control_path")
+                    if fault and fault["point"] in FAULT_POINTS else None
+                ),
+                fault_point=fault["point"] if fault else None,
             )
         else:
             observation = http1_request_sequence(
@@ -12075,7 +12249,9 @@ def execute_case(
             observation = http1_request(
                 server["port"], case["request"], ssl_context=ssl_context
             )
-            if case["operation"] == "http.response-content-length-drain":
+            if case["operation"] in {
+                "http.response-content-length-drain",
+            }:
                 deadline = time.monotonic() + 2
                 events = read_events(server["events"])[event_offset:]
                 while (
@@ -12268,6 +12444,17 @@ def execute_case(
                 events_path=server["events"],
                 events_before=events_before,
             )
+            if (
+                fault is not None
+                and fault["contract"] == "http3-response-header-append-error-caught-500"
+            ):
+                if (
+                    fault_control_path is None
+                    or fault_control_path.read_text(encoding="utf-8").strip()
+                    == fault["point"]
+                ):
+                    raise ParityError("HTTP/3 response-header append-error fault was not consumed")
+                observation["fault_consumed"] = True
             if (
                 fault is not None
                 and fault["contract"] == "http3-stream-reset-on-runtime-error"
@@ -13429,6 +13616,25 @@ def fault_contract_matches(
             and responses[1].get("connection_closed") is False
             and not any(event.startswith("http.header-capacity.error:") for event in events)
         )
+    if fault["contract"] == "http-response-header-overflow-fallback-followup-200":
+        responses = observation.get("responses", [])
+        return (
+            observation.get("fault_consumed") is True
+            and isinstance(responses, list)
+            and len(responses) == 2
+            and all(isinstance(response, dict) for response in responses)
+            and responses[0].get("status") == 200
+            and responses[0].get("body_base64")
+            == base64.b64encode(b"headers accepted").decode("ascii")
+            and responses[0].get("capacity_header_count") == 1
+            and responses[0].get("capacity_header_sha256")
+            == hashlib.sha256(b"x-capacity-0:x\n").hexdigest()
+            and responses[0].get("server_header_count") == 1
+            and responses[0].get("date_header_count") == 1
+            and responses[0].get("connection_closed") is False
+            and responses[1].get("status") == 200
+            and responses[1].get("connection_closed") is False
+        )
     if fault["contract"] in EAGER_REGISTRATION_CLEANUP_CONTRACTS:
         startup = fault["contract"] in EAGER_LIFESPAN_CLEANUP_CONTRACTS
         events = observation.get("application_events", [])
@@ -13647,6 +13853,15 @@ def fault_contract_matches(
         return (
             observation.get("stream_reset") is True
             or observation.get("connection_closed") is True
+        )
+    if fault["contract"] == "http3-response-header-append-error-caught-500":
+        return (
+            observation.get("status") == 500
+            and observation.get("body_bytes")
+            == base64.b64encode(b"header capacity rejected").decode("ascii")
+            and observation.get("fault_consumed") is True
+            and observation.get("stream_reset") is False
+            and observation.get("connection_closed") is False
         )
     if fault["contract"] == "http3-legacy-default-header-error-resets-stream":
         return (
@@ -14152,7 +14367,10 @@ def fault_contract_matches(
         return (
             observation.get("startup_failed") is True
             and (
-                fault["point"] != "lifespan.without-lifespan.application-error"
+                fault["point"] not in {
+                    "server.quic-tls.config-error",
+                    "lifespan.without-lifespan.preserve-task-error",
+                }
                 or observation.get("fault_consumed") is True
             )
         )
@@ -14184,6 +14402,10 @@ def fault_contract_matches(
             observation.get("process_terminated") is True
             and isinstance(observation.get("process_exit_code"), int)
             and observation["process_exit_code"] != 0
+            and (
+                fault["point"] != "lifespan.shutdown-result.preserve-task-error"
+                or observation.get("fault_consumed") is True
+            )
         )
     if fault["contract"] == "server-shutdown-application-exception-clean-exit":
         state = observation.get("state_response")
@@ -16272,7 +16494,11 @@ def execute_profile(
                         elif case["fault"]["contract"] == "server-forced-task-completion-error-bounded-shutdown":
                             fault_observation = {**target_result, "server_log": target_raw["server_log"]}
                         elif case["fault"]["contract"] == "server-startup-failure":
-                            fault_observation = {**target_result, "server_log": read_server_log(target)}
+                            fault_observation = {
+                                **target_result,
+                                "server_log": read_server_log(target),
+                                "fault_consumed": target_raw.get("fault_consumed"),
+                            }
                         elif case["fault"]["contract"] == "server-prebound-transfer-would-block-retries-and-serves":
                             fault_observation = {
                                 **target_result,
