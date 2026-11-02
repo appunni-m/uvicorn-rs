@@ -39,9 +39,8 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 Open [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21) promotes
 `develop` head `87ab887b07c7d2f54b868dec16b115f93026ca69` to `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI #618 is still running its
-three-repeat unified coverage job. Its candidate manifests bind the Linux and
-macOS artifacts to clean merge source
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI #618 has completed. Its
+candidate manifests bind the Linux and macOS artifacts to clean merge source
 `a1e1f47b46be6e2c9419639baed02e71f2c41b75`. Active implementation remains on
 `develop`; `main` changes through PR #21 only.
 
@@ -73,10 +72,11 @@ finished worker 4724, then remained waiting for worker 7812 until the harness
 timeout. The candidate returned HTTP 200, exited cleanly, and reported clean
 shutdown for both workers. The captured trace does not identify why the oracle
 worker did not exit; it supports an oracle-side infrastructure timeout, not a
-candidate behavior mismatch. The focused #619 signal trace passed, so the next
-useful hosted action is one retry of the failed Windows candidate job after the
-currently active coverage job completes. That single retry also has to finish
-Windows packaging and consumer steps to produce the missing candidate bundle.
+candidate behavior mismatch. The focused #619 signal trace passed, but CI #618
+is terminal and its Windows candidate job stopped before packaging and consumer
+verification. After the final compatibility/source batch is pushed, the
+exact-source PR run must finish the Windows matrix and candidate
+packaging/consumer steps; the old #618 result cannot qualify changed source.
 
 Exact-source Linux candidate bundle [13146517275](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13146517275)
 and macOS bundle [13146676910](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13146676910)
@@ -85,18 +85,29 @@ intended Cargo crates, the `uvicorn-rs` wheel, and sdist. No Windows candidate
 bundle is available. See [release evidence](../releases.md) for archive and
 payload checksums.
 
-Unified coverage is still running; its final region and line totals are not yet
-available. The independent Coverage-MCP review needs the final successful,
-source-bound coverage report. Matched three-system ordinary-FastAPI benchmarks
-remain incomplete and follow the user's parity-first order. The earlier Linux
-ARM64 upload timeout and incomplete HTTP/3 comparison still need resolution;
-current partial results do not establish a broad performance gain.
+The unified report completed three ASGI repeats of 1,184/1,184 cases and three
+native repeats of 259/259 cases, with no failures, infrastructure failures,
+retries, or unrun cases. Its 100% gate failed at 14,861/14,895 executable
+regions and 10,915/10,933 lines (34 regions and 18 lines missing). The report
+is artifact 13149969193, bound to clean merge revision
+`a1e1f47b46be6e2c9419639baed02e71f2c41b75`; its archive SHA-256 is
+`5524656c4c47090361551e83540090e6fb078f5ab534560efa85b86546ab2f56` and
+report SHA-256 is
+`8d7cbfd7abbb2fd8322bb12725a5a48386c4459ae5a1de4c2bcce5b7c565e636`.
+Independent Coverage-MCP review requires a later successful, source-bound
+report. Matched three-system ordinary-FastAPI benchmarks remain incomplete and
+follow the user's parity-first order. The Linux ARM64 upload timeout and
+incomplete HTTP/3 comparison still need resolution; current partial results do
+not establish a broad performance gain.
 
-Docs CI #256 passed for the committed PR source. Local edits to README and four
-release/support/compatibility pages remain uncommitted; the strict MkDocs build
-passed locally, but those edits need a commit, hosted check, and deployment
-after they are promoted. The maintainer will run their own FastAPI apps after
-repository acceptance.
+Docs CI #256 passed for PR head `87ab887`, before the current local refresh.
+At this snapshot, PR #21 still points to `87ab887`; local status commit
+`844cbd3`, focused coverage commit `9525807`, and this documentation refresh
+are not covered by CI #618 or Docs #256. The local strict MkDocs build passed with
+`uv run --with-requirements requirements-docs.txt python -m mkdocs build --strict`;
+the documentation inventory found no errors. CI must revalidate these commits
+on PR #21 after `develop` advances.
+The maintainer will run their own FastAPI apps after repository acceptance.
 
 The Linux and macOS bundles are tied to CI #618 and are not final release
 artifacts until every gate passes on the accepted source. Rebuild or recheck

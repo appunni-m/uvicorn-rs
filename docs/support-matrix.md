@@ -17,9 +17,8 @@ not release targets.
 PR #21 tests develop head 87ab887b07c7d2f54b868dec16b115f93026ca69 against
 main at 86e72e181d00feca1b4db7f30377d5d9d4345b83. Candidate manifests bind to
 clean merge source a1e1f47b46be6e2c9419639baed02e71f2c41b75. CI
-[#618](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747) is
-still running unified coverage. Current installed-wheel parity against Uvicorn
-0.54.0 is:
+[#618](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747) has
+completed. Current installed-wheel parity against Uvicorn 0.54.0 is:
 
 | Platform | Result | Failed | Infrastructure failed | Not run |
 | --- | ---: | ---: | ---: | ---: |
@@ -33,6 +32,10 @@ POSIX-only worker signals or health checks. The candidate inputs include the
 custom HTTP/WebSocket protocol hooks, `ssl_context_factory`, and response
 header/trailer capacity cases. See the [versioned compatibility contract](maintainers/uvicorn-0.54.0-contract.md)
 for the exact case inventory.
+The CI #618 parity artifacts show all 16 custom-protocol, TLS-context-factory,
+and response-capacity cases passing on all three tested operating systems.
+These indexed cases do not establish behavior for arbitrary hooks or every
+possible Uvicorn input.
 
 The Windows infrastructure failure is the stock-Uvicorn oracle timeout in
 python-api.module-cli-web-concurrency-two-workers-serve-request. The candidate
@@ -44,10 +47,14 @@ consumer pass. See the [compatibility evidence](uvicorn-compatibility.md) for
 artifact identities and hashes. Documentation build #256 passed for the PR;
 deployment is pending merge.
 
-The exact-source unified coverage totals are pending because CI #618 is still
-running. Independent Coverage-MCP review, matched three-system FastAPI
-benchmarks, and Windows artifact/consumer verification remain open. The
-package is not published; see the [release guide](releases.md).
+The CI #618 unified report completed three repeats of 1,184 ASGI and 259 native
+cases with no case or infrastructure failures. The 100% coverage gate failed:
+14,861/14,895 executable regions and 10,915/10,933 lines were covered (34
+regions and 18 lines missing). The report is [artifact 13149969193](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13149969193)
+and is bound to clean merge source `a1e1f47b46be6e2c9419639baed02e71f2c41b75`.
+Independent Coverage-MCP review, matched three-system FastAPI benchmarks, and
+Windows artifact/consumer verification remain open. The package is not
+published; see the [release guide](releases.md).
 
 ## Can I replace Uvicorn?
 

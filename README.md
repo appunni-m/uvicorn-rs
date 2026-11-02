@@ -13,17 +13,22 @@ optional `http3` feature, plus `asgi-lifespan-protocol-rs`.
 The 0.3.0 candidate is not published. PR #21 tests develop head
 87ab887b07c7d2f54b868dec16b115f93026ca69; its candidate artifacts identify
 the clean merge source as a1e1f47b46be6e2c9419639baed02e71f2c41b75. CI #618
-is still running its three-repeat unified coverage matrix. Its Linux x86-64
-and macOS ARM64 Uvicorn 0.54.0 parity results pass 784/784 each. Windows has
+has completed. Its three-repeat unified matrix passed all 1,184 ASGI and 259
+native cases per repeat, but failed the 100% coverage gate at 14,861/14,895
+regions and 10,915/10,933 lines (34 regions and 18 lines missing). Linux
+x86-64 and macOS ARM64 Uvicorn 0.54.0 parity each pass 784/784. Windows has
 756/757 applicable cases pass, zero behavioral failures, and one stock-Uvicorn
 two-worker shutdown-timeout infrastructure failure. Focused Windows run #619
 passed that case 1/1, but the full Windows candidate artifact and consumer
-checks remain incomplete. Linux and macOS candidate artifacts and clean
-consumers pass; the Linux bundle contains the intended Cargo archives, the
-uvicorn-rs wheel, and sdist. Documentation build #256 passed for this PR; its
-deployment is skipped until merge. Independent Coverage-MCP review and matched
-three-system FastAPI benchmarks remain release gates. Existing partial
-measurements do not establish a general performance advantage. See
+checks remain incomplete. The custom HTTP/WebSocket protocol, `ssl_context_factory`,
+and HTTP/1, HTTP/2, and WebSocket capacity cases passed on all three systems.
+Linux and macOS candidate artifacts and clean consumers pass; the Linux bundle
+contains the intended Cargo archives, the `uvicorn-rs` wheel, and sdist.
+Documentation build #256 passed for the earlier PR source; the local docs
+refresh still needs a hosted check, and deployment is skipped until merge.
+Independent Coverage-MCP review and matched three-system FastAPI benchmarks
+remain release gates. Existing partial measurements do not establish a general
+performance advantage. See
 [release status](docs/releases.md) and the [compatibility matrix](docs/support-matrix.md).
 
 ## Try the source checkout

@@ -4,7 +4,7 @@
 
 ## Current source status (2026-11-02)
 
-### PR #21 CI #618 — exact-source results in progress
+### PR #21 CI #618 — completed exact-source results
 
 CI [run 41451660747](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747)
 tests develop head 87ab887b07c7d2f54b868dec16b115f93026ca69 against main at
@@ -42,9 +42,18 @@ remaining candidate package and consumer steps were skipped after parity
 reported the oracle timeout. Documentation build #256 passed; deployment is
 skipped for the pull request.
 
-The three-repeat unified coverage job in CI #618 is still running. Final region
-and line totals are not available. Independent Coverage-MCP review and matched
-ordinary-FastAPI benchmarks remain open.
+The three-repeat unified coverage job completed all 1,184 ASGI and 259 native
+cases on clean merge revision `a1e1f47b46be6e2c9419639baed02e71f2c41b75`.
+Every repeat completed with zero failures, infrastructure failures, retries,
+or unrun cases. The 100% gate failed at 14,861/14,895 executable regions and
+10,915/10,933 lines (34 regions and 18 lines missing). Coverage report
+[artifact 13149969193](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13149969193)
+has SHA-256 `8d7cbfd7abbb2fd8322bb12725a5a48386c4459ae5a1de4c2bcce5b7c565e636`
+and source digest `6d2bb8d7e441b0d4541bee7e559220d76fb69eb59ff2746235801c20e7f44b6f`.
+Independent Coverage-MCP review and matched ordinary-FastAPI benchmarks remain
+open. The named custom HTTP/WebSocket protocol, `ssl_context_factory`, and
+HTTP/1, HTTP/2, and WebSocket response-capacity cases passed on all three
+platforms; see [current compatibility evidence](uvicorn-compatibility.md#current-status-2026-11-02).
 
 ### Previous exact-source run: PR #21 CI #615 on earlier source
 

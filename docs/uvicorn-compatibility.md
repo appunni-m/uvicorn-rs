@@ -19,8 +19,7 @@ develop head 87ab887b07c7d2f54b868dec16b115f93026ca69 to main at
 86e72e181d00feca1b4db7f30377d5d9d4345b83. Candidate manifests identify the
 clean merge source as a1e1f47b46be6e2c9419639baed02e71f2c41b75. CI
 [#618](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747) is
-still running its unified coverage job. Its installed-wheel parity results
-against Uvicorn 0.54.0 are:
+complete. Its installed-wheel parity results against Uvicorn 0.54.0 are:
 
 | Platform | Result | Failed | Infrastructure failed | Not run | Artifact (archive SHA-256) |
 | --- | ---: | ---: | ---: | ---: | --- |
@@ -37,6 +36,10 @@ capacity cases. The exact case inventory is in the
 [maintainer contract](maintainers/uvicorn-0.54.0-contract.md), and the platform
 exclusions are listed in
 [`ci.yml`](https://github.com/appunni-m/uvicorn-rs/blob/develop/.github/workflows/ci.yml).
+The CI #618 artifact rows confirm that all 16 cases in those named feature
+groups passed on Linux, macOS, and Windows. This is evidence for the indexed
+inputs against Uvicorn 0.54.0, not for arbitrary protocol classes or every
+possible Uvicorn behavior.
 
 Linux candidate bundle [13146517275](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13146517275)
 (archive SHA-256 a60ede29bfdb71495bed2addd0398b2f41fe829b3d6ca30cd40ff2bc61415e29)
@@ -47,12 +50,20 @@ package, Cargo, and clean-consumer steps were skipped after the oracle timeout.
 Focused trace run [#619](https://github.com/appunni-m/uvicorn-rs/actions/runs/41457927984)
 passed the affected case 1/1; this does not complete the Windows matrix or
 artifact gate. The documentation build [#256](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660320)
-passed for this PR; deployment is skipped until merge.
+passed for the PR source; deployment is skipped until merge. The local
+documentation refresh in this checkout has not yet received a hosted docs run.
 
-The exact-source three-repeat coverage matrix is still running; final coverage
-totals are not available. An independent Coverage-MCP review remains open.
-Matched three-system ordinary-FastAPI benchmarks are incomplete. The candidate
-is not published.
+The exact-source coverage job completed all 1,184 ASGI and 259 native cases in
+three repeats, with zero failures, infrastructure failures, retries, or unrun
+cases. Its 100% gate failed: 14,861/14,895 executable regions and
+10,915/10,933 lines were covered (34 regions and 18 lines missing). The report
+is artifact [13149969193](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13149969193),
+SHA-256 `8d7cbfd7abbb2fd8322bb12725a5a48386c4459ae5a1de4c2bcce5b7c565e636`,
+bound to clean merge revision `a1e1f47b46be6e2c9419639baed02e71f2c41b75`
+and source digest `6d2bb8d7e441b0d4541bee7e559220d76fb69eb59ff2746235801c20e7f44b6f`.
+Independent Coverage-MCP review remains open. Matched three-system
+ordinary-FastAPI benchmarks and complete Windows candidate artifact checks are
+also open; the candidate is not published.
 
 ## Historical diagnostic records
 

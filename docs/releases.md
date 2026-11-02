@@ -32,7 +32,7 @@ PyPI returned 404 for uvicorn-rs. Version 0.3.0 is not published. The current
 candidate is PR #21 develop head 87ab887b07c7d2f54b868dec16b115f93026ca69,
 with clean merge source a1e1f47b46be6e2c9419639baed02e71f2c41b75, in CI
 [#618](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747).
-The CI run is still active on unified coverage.
+The run completed and failed the unified 100% coverage gate.
 
 The installed-wheel Uvicorn 0.54.0 matrix passes 784/784 on Linux x86-64 and
 784/784 on macOS ARM64. Windows executed 757 applicable cases: 756 passed,
@@ -42,6 +42,11 @@ listed POSIX-only cases; see the exclusion list in
 [`ci.yml`](https://github.com/appunni-m/uvicorn-rs/blob/develop/.github/workflows/ci.yml).
 Focused Windows trace run #619 passed the affected case 1/1; the full Windows
 candidate artifact and consumer checks remain incomplete.
+
+The indexed custom HTTP/WebSocket protocol, `ssl_context_factory`, HTTP/2
+ALPN, and HTTP/1, HTTP/2, and WebSocket response-capacity cases passed on all
+three systems. This confirms those declared inputs; it does not prove arbitrary
+protocol-hook behavior or every possible Uvicorn configuration.
 
 CI #618 built and verified these exact-source candidate bundles. SHA-256 values
 are GitHub archive digests:
@@ -67,13 +72,19 @@ adapter command. The Cargo manifest contains one uvicorn-rs crate with optional
 http3; it does not publish separate H3 or Quinn crates. The Python 3.9 wheel
 floor job was skipped in CI #618 after the Windows job failed.
 
-The exact-source three-repeat coverage matrix is still running; final region
-and line totals are not available. The independent Coverage-MCP review must
-bind to the final covered source. Matched ordinary-FastAPI benchmarks on Linux
-x86-64, Linux ARM64, and macOS ARM64 remain incomplete. Documentation build
-#256 passed for the PR, while deployment is skipped until merge. Rebuild and
-re-verify every release artifact from the final accepted source before
-publication.
+The exact-source coverage matrix completed three repeats of 1,184 ASGI cases
+and 259 native cases, with no failures, infrastructure failures, retries, or
+unrun cases. The gate failed at 14,861/14,895 executable regions and
+10,915/10,933 lines (34 regions and 18 lines missing). The report is artifact
+[13149969193](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13149969193),
+SHA-256 `8d7cbfd7abbb2fd8322bb12725a5a48386c4459ae5a1de4c2bcce5b7c565e636`,
+bound to clean merge source `a1e1f47b46be6e2c9419639baed02e71f2c41b75`.
+The independent Coverage-MCP review must bind to a later successful coverage
+report. Matched ordinary-FastAPI benchmarks on Linux x86-64, Linux ARM64, and
+macOS ARM64 remain incomplete. Documentation build #256 passed for the prior
+PR source; the current local documentation refresh needs a fresh hosted check.
+Deployment is skipped until merge. Rebuild and re-verify every release artifact
+from the final accepted source before publication.
 
 Do not publish a Cargo or PyPI package or create the 0.3.0 tag until these
 gates pass. After qualification, publish Cargo locally first as requested,
