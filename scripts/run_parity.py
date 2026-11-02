@@ -262,6 +262,7 @@ FAULT_POINTS = {
     "lifespan.shutdown.failed.message.extract",
     "lifespan.send.event-channel-closed",
     "lifespan.report-exception.invalid-phase",
+    "lifespan.report-exception.task-error-after-event",
     "lifespan.without-lifespan.application-error",
     "lifespan.without-lifespan.preserve-task-error",
     "lifespan.shutdown-result.application-error",
@@ -753,6 +754,7 @@ LIFESPAN_STARTUP_AUTO_FALLBACK_FAULT_POINTS = {
     "lifespan.send.event-channel-closed",
     "lifespan.startup.send-closed",
     "lifespan.report-exception.invalid-phase",
+    "lifespan.report-exception.task-error-after-event",
     "lifespan.without-lifespan.application-error",
     "lifespan.without-lifespan.preserve-task-error",
 }

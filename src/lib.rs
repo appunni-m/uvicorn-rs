@@ -328,6 +328,7 @@ enum CoverageFaultPoint {
     LifespanShutdownFailedMessageExtract,
     LifespanSendEventChannelClosed,
     LifespanReportExceptionInvalidPhase,
+    LifespanReportExceptionTaskErrorAfterEvent,
     LifespanWithoutLifespanApplicationError,
     LifespanWithoutLifespanPreserveTaskError,
     LifespanShutdownResultApplicationError,
@@ -748,6 +749,9 @@ impl CoverageFaultPoint {
             }
             Self::LifespanSendEventChannelClosed => "lifespan.send.event-channel-closed",
             Self::LifespanReportExceptionInvalidPhase => "lifespan.report-exception.invalid-phase",
+            Self::LifespanReportExceptionTaskErrorAfterEvent => {
+                "lifespan.report-exception.task-error-after-event"
+            }
             Self::LifespanWithoutLifespanApplicationError => {
                 "lifespan.without-lifespan.application-error"
             }
@@ -4778,7 +4782,14 @@ impl LifespanIo {
                 ));
             }
         };
-        self.send_event(LifespanEvent::ApplicationException(phase))
+        self.send_event(LifespanEvent::ApplicationException(phase))?;
+        #[cfg(coverage)]
+        if coverage_fault_take(CoverageFaultPoint::LifespanReportExceptionTaskErrorAfterEvent) {
+            return Err(PyOSError::new_err(
+                "coverage-injected lifespan report_exception failure after event delivery",
+            ));
+        }
+        Ok(())
     }
 
     fn receive<'py>(slf: PyRef<'py, Self>, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
@@ -5510,7 +5521,9 @@ fn append_response_header_with_overflow(
 
     let append_result = {
         #[cfg(coverage)]
-        if coverage_fault_take(CoverageFaultPoint::HttpResponseHeaderOverflowAppendError) {
+        if is_new_name
+            && coverage_fault_take(CoverageFaultPoint::HttpResponseHeaderOverflowAppendError)
+        {
             Err(())
         } else {
             headers

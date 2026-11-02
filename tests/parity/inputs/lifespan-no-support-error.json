@@ -72,6 +72,18 @@
         "contract": "server-lifespan-startup-auto-fallback"
       },
       "startup_fallback": {"followup_path": "/state"}
+    },
+    {
+      "case_id": "fault.lifespan.report-exception-task-error-after-event-auto-fallback",
+      "profile": "lifespan-no-support-error",
+      "operation": "lifespan.startup-auto-fallback",
+      "covers": ["lifespan.startup-auto-fallback"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.report-exception.task-error-after-event",
+        "contract": "server-lifespan-startup-auto-fallback"
+      },
+      "startup_fallback": {"followup_path": "/state"}
     }
   ]
 }
