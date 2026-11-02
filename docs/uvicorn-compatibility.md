@@ -1,10 +1,13 @@
 # Can I replace Uvicorn?
 
-The maintained Uvicorn 0.54.0 public input matrix passed on Linux x86-64,
-macOS ARM64, and Windows x86-64. The 0.3.0 PyPI release is not published
-yet; coverage review and matched FastAPI benchmarks remain release gates.
-Plan an isolated application trial after publication and keep an upstream
-environment available for rollback.
+The current Uvicorn 0.54.0 parity evidence is complete on Linux x86-64 and
+macOS ARM64. On Windows x86-64, 756/757 applicable cases passed; the remaining
+case is an infrastructure timeout in the stock Uvicorn oracle. The focused
+case passes, but the complete Windows release gate remains open. The 0.3.0
+PyPI release is not published; coverage, independent review, benchmarks, and
+Windows artifact checks remain release gates. Plan an isolated application
+trial after publication and keep an upstream environment available for
+rollback.
 
 Both distributions install files under the `uvicorn` import namespace. Do not
 install `uvicorn-rs` and upstream `uvicorn` in the same environment.
@@ -12,18 +15,18 @@ install `uvicorn-rs` and upstream `uvicorn` in the same environment.
 ## Current status (2026-11-02)
 
 Open [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21) promotes
-`develop` head `c28474a164cce437cf41ec12d7ebd789027f8637` to `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI [#615](https://github.com/appunni-m/uvicorn-rs/actions/runs/41402063098)
-passed the maintained installed-wheel public matrix against Uvicorn 0.54.0.
-The candidate manifests identify the clean PR merge commit as
-`a276c2efa2ac66f5532910d4c56e3128dc078ceb`, with source-tree digest
-`7ca7f5953a9056a368a9310f615d530d29151e5a6c18c0a95b2b051a9f85db22`.
+develop head 87ab887b07c7d2f54b868dec16b115f93026ca69 to main at
+86e72e181d00feca1b4db7f30377d5d9d4345b83. Candidate manifests identify the
+clean merge source as a1e1f47b46be6e2c9419639baed02e71f2c41b75. CI
+[#618](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747) is
+still running its unified coverage job. Its installed-wheel parity results
+against Uvicorn 0.54.0 are:
 
 | Platform | Result | Failed | Infrastructure failed | Not run | Artifact (archive SHA-256) |
 | --- | ---: | ---: | ---: | ---: | --- |
-| Linux x86-64 | 784/784 | 0 | 0 | 0 | [13122780312](https://github.com/appunni-m/uvicorn-rs/actions/runs/41402063098/artifacts/13122780312) (`bbf73c004f1f22f6286b56c954808a73ac8065b30bfa87459f600252863c3092`) |
-| macOS ARM64 | 784/784 | 0 | 0 | 0 | [13123400293](https://github.com/appunni-m/uvicorn-rs/actions/runs/41402063098/artifacts/13123400293) (`e8c756fec191c1f05fda1c53e5bb91214d842a9ae4c3a6387b5543ecb20c7705`) |
-| Windows x86-64 | 757/757 | 0 | 0 | 0 | [13123616750](https://github.com/appunni-m/uvicorn-rs/actions/runs/41402063098/artifacts/13123616750) (`96aacf92b71dba388c7cfaa9a59c13d233914c0b3feeae506dca45143b85f531`) |
+| Linux x86-64 | 784/784 | 0 | 0 | 0 | [13144878506](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13144878506) (1f20398b08b4c1ee6932664ba9da5101f550ca14ab822360c9bf273099fc60ff) |
+| macOS ARM64 | 784/784 | 0 | 0 | 0 | [13146731810](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13146731810) (210e6a9c1adf009e17989e6a3ab75b353d7012520a726b4068dd8a7047ff4fde) |
+| Windows x86-64 | 756/757 | 0 | 1 | 0 | [13147445957](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13147445957) (8338a5d03f452514df1ab32af5f422fc5b5563ba7492a4903de6340bf4604fb0) |
 
 Windows excludes 27 explicitly declared inputs that require Unix-domain
 sockets, inherited POSIX descriptors, a Unix-only listener-transfer race, or
@@ -35,21 +38,22 @@ capacity cases. The exact case inventory is in the
 exclusions are listed in
 [`ci.yml`](https://github.com/appunni-m/uvicorn-rs/blob/develop/.github/workflows/ci.yml).
 
-CI #615 also built Linux, macOS, and Windows candidate bundles; their clean
-consumers passed. The Linux bundle contains both Cargo archives, a wheel, and
-an sdist; the sdist rebuild and default/`http3` Cargo consumers passed. The
-macOS and Windows wheel consumers passed. The Python 3.9 wheel-floor check
-passed. Documentation deployment [#254](https://github.com/appunni-m/uvicorn-rs/actions/runs/41402063093)
-passed before this page refresh; the refreshed docs still need a strict build
-and deployment.
+Linux candidate bundle [13146517275](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13146517275)
+(archive SHA-256 a60ede29bfdb71495bed2addd0398b2f41fe829b3d6ca30cd40ff2bc61415e29)
+and macOS bundle [13146676910](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13146676910)
+(38abe129358fb43f5a67bc48536ac990245a5641043842c773cc1eab4c34e967) have
+clean consumers. The Windows candidate wheel was built and installed, but the
+package, Cargo, and clean-consumer steps were skipped after the oracle timeout.
+Focused trace run [#619](https://github.com/appunni-m/uvicorn-rs/actions/runs/41457927984)
+passed the affected case 1/1; this does not complete the Windows matrix or
+artifact gate. The documentation build [#256](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660320)
+passed for this PR; deployment is skipped until merge.
 
-The latest three-repeat unified coverage run completed below its gate at
-14,860/14,894 regions and 10,915/10,933 lines. A focused local fix passes the
-six affected startup-lifespan fault cases, but a full exact-source run and
-independent Coverage-MCP review remain open. Matched three-system
-ordinary-FastAPI benchmarks are incomplete. The candidate is not published.
+The exact-source three-repeat coverage matrix is still running; final coverage
+totals are not available. An independent Coverage-MCP review remains open.
+Matched three-system ordinary-FastAPI benchmarks are incomplete. The candidate
+is not published.
 
-## Historical diagnostic records
 ## Historical diagnostic records
 
 ### Input@40 CLI and Python API baseline profiles — 2026-10-27

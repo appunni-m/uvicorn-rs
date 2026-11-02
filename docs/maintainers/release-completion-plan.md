@@ -35,14 +35,15 @@ No original release gate is waived by this plan. Historical measurements remain
 historical. A task closes on its own deliverable; downstream publication gates
 belong to the release tasks rather than being copied into every prerequisite.
 
-### Current release candidate — 2026-11-02 (PR #21 / CI #615)
+### Current release candidate — 2026-11-02 (PR #21 / CI #618)
 
 Open [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21) promotes
-`develop` head `c28474a164cce437cf41ec12d7ebd789027f8637` to `main` at
-`86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI #615 candidate manifests
-record merge commit `a276c2efa2ac66f5532910d4c56e3128dc078ceb` and
-source-tree digest `7ca7f5953a9056a368a9310f615d530d29151e5a6c18c0a95b2b051a9f85db22`.
-Active implementation work remains on `develop`; `main` changes through PR #21 only.
+`develop` head `87ab887b07c7d2f54b868dec16b115f93026ca69` to `main` at
+`86e72e181d00feca1b4db7f30377d5d9d4345b83`. CI #618 is still running its
+three-repeat unified coverage job. Its candidate manifests bind the Linux and
+macOS artifacts to clean merge source
+`a1e1f47b46be6e2c9419639baed02e71f2c41b75`. Active implementation remains on
+`develop`; `main` changes through PR #21 only.
 
 The side-branch audit is complete. Current remote tips for
 `codex/windows-worker-groups`, `codex/uvicorn-rs-compat-hooks`, and
@@ -54,41 +55,56 @@ adding environment-gated diagnostics and a test worker-count override. These
 are diagnostic changes, not missing product fixes; no PRs exist for the listed
 branches, and no branch needs to be checked out or merged separately.
 
-CI [#615](https://github.com/appunni-m/uvicorn-rs/actions/runs/41402063098)
-passed the maintained Uvicorn 0.54.0 installed-wheel matrix with no failures,
-infrastructure failures, or not-run applicable cases: Linux x86-64 784/784,
-macOS ARM64 784/784, and Windows x86-64 757/757. Windows explicitly excludes 27
-platform-inapplicable inputs requiring UDS, inherited POSIX descriptors, a
-Unix-only transfer race, or POSIX-only worker controls. The exact cases are
-listed in `.github/workflows/ci.yml`. The matrix exercises custom HTTP and
-WebSocket protocol classes, `ssl_context_factory`, HTTP/2 ALPN, and response
-header/trailer capacity behavior.
+CI [#618](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747)
+passes Rust quality/MSRV/features/docs, native contracts, native FastAPI-RS
+composition, release-evidence contracts, Linux and macOS public parity, and
+Linux/macOS candidate artifact consumers. Public Uvicorn 0.54.0 parity is
+784/784 on Linux x86-64 and 784/784 on macOS ARM64. Windows x86-64 is 756/757,
+with zero behavior mismatches and one stock-Uvicorn two-worker shutdown-timeout
+infrastructure failure. Focused Windows run #619 passes that case 1/1; it does
+not replace the full Windows result. The Windows candidate job stopped after
+parity, so its package, consumer, and archive steps did not run. The Python 3.9
+wheel-floor job was skipped after that failure.
 
-The CI #615 candidate artifacts and consumers passed on this source: Linux
-wheel, sdist rebuild, default/`http3` Cargo consumers; macOS and Windows wheel
-consumers; and the Python 3.9 wheel-floor installation. Artifact IDs and
-GitHub archive digests are in the current [release evidence](../releases.md).
-The exact individual registry files must still be inspected and verified from
-the final accepted source before publication.
+The failed input is
+`python-api.module-cli-web-concurrency-two-workers-serve-request`. In this
+attempt the stock Uvicorn oracle received SIGINT, terminated both workers,
+finished worker 4724, then remained waiting for worker 7812 until the harness
+timeout. The candidate returned HTTP 200, exited cleanly, and reported clean
+shutdown for both workers. The captured trace does not identify why the oracle
+worker did not exit; it supports an oracle-side infrastructure timeout, not a
+candidate behavior mismatch. The focused #619 signal trace passed, so the next
+useful hosted action is one retry of the failed Windows candidate job after the
+currently active coverage job completes. That single retry also has to finish
+Windows packaging and consumer steps to produce the missing candidate bundle.
 
-Rust quality/MSRV/features/docs, native contracts, native FastAPI-RS
-composition, and the release artifact/handoff contract checks passed. CI #615's
-three-repeat unified coverage matrix completed below its gate: 1,437/1,443
-cases passed, with six repeated startup-lifespan fault failures; coverage was
-14,860/14,894 regions and 10,915/10,933 lines. A local one-shot fault-hook fix
-now passes those six selected cases, but no full exact-source report follows it
-yet. An accepted independent Coverage-MCP review receipt is not available in
-this session. Matched three-system ordinary-FastAPI benchmarks remain
-unfinished; prior Linux ARM64 upload and HTTP/3 failures remain unresolved.
-Current-source compatibility and support docs were refreshed; run the strict
-docs build and update the docs deployment after content is finalized. The
-maintainer will run their own FastAPI apps after repository acceptance.
+Exact-source Linux candidate bundle [13146517275](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13146517275)
+and macOS bundle [13146676910](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13146676910)
+have matching manifest hashes and passing clean consumers. Linux includes both
+intended Cargo crates, the `uvicorn-rs` wheel, and sdist. No Windows candidate
+bundle is available. See [release evidence](../releases.md) for archive and
+payload checksums.
 
-The current artifacts are tied to CI #615's `develop` head. Rebuild or recheck
-the exact Cargo archives, wheels, and sdist from the final qualified source
-before publication. Do not merge PR #21 or publish Cargo/PyPI until coverage,
-independent review, benchmarks, docs, and final-source candidate verification
-pass.
+Unified coverage is still running; its final region and line totals are not yet
+available. The independent Coverage-MCP review needs the final successful,
+source-bound coverage report. Matched three-system ordinary-FastAPI benchmarks
+remain incomplete and follow the user's parity-first order. The earlier Linux
+ARM64 upload timeout and incomplete HTTP/3 comparison still need resolution;
+current partial results do not establish a broad performance gain.
+
+Docs CI #256 passed for the committed PR source. Local edits to README and four
+release/support/compatibility pages remain uncommitted; the strict MkDocs build
+passed locally, but those edits need a commit, hosted check, and deployment
+after they are promoted. The maintainer will run their own FastAPI apps after
+repository acceptance.
+
+The Linux and macOS bundles are tied to CI #618 and are not final release
+artifacts until every gate passes on the accepted source. Rebuild or recheck
+all platform candidates from the final qualified source before publication.
+Do not merge PR #21 or publish Cargo/PyPI while coverage, independent review,
+full compatibility, benchmarks, docs, or Windows candidate verification remain
+open. After qualification, publish Cargo locally first as requested, then PyPI
+`uvicorn-rs` through `release.yml`.
 
 ### Earlier release-candidate snapshot — 2026-11-01 (PR #21 / CI #594)
 

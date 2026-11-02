@@ -10,20 +10,20 @@ optional internal Cargo/PyO3 adapter remains `uvicorn-rs-py`. The Rust release
 contains one Python-free `uvicorn-rs` server crate with HTTP/3 behind the
 optional `http3` feature, plus `asgi-lifespan-protocol-rs`.
 
-The 0.3.0 candidate is not published yet. PR #21's exact-source CI #615 on
-`develop` commit `c28474a164cce437cf41ec12d7ebd789027f8637` passed the
-maintained Uvicorn 0.54.0 installed-wheel parity matrix: 784/784 on Linux
-x86-64, 784/784 on macOS ARM64, and 757/757 applicable cases on Windows
-x86-64. The Linux, macOS, and Windows candidate artifact consumers and the
-Python 3.9 wheel-floor check also passed. The docs deployment passed before
-the current page refresh; the refreshed pages still need a docs build and
-deployment. The latest hosted coverage run (#615) completed below its gate at
-14,860/14,894 regions and 10,915/10,933 lines, with six startup-lifespan fault
-contracts failing. A focused local fix makes those faults one-shot, and the six
-selected cases now pass; a full exact-source coverage run is still required.
-Independent Coverage-MCP review and matched three-system FastAPI benchmarks
-also remain release gates. Existing partial measurements do not establish a
-general performance advantage. See
+The 0.3.0 candidate is not published. PR #21 tests develop head
+87ab887b07c7d2f54b868dec16b115f93026ca69; its candidate artifacts identify
+the clean merge source as a1e1f47b46be6e2c9419639baed02e71f2c41b75. CI #618
+is still running its three-repeat unified coverage matrix. Its Linux x86-64
+and macOS ARM64 Uvicorn 0.54.0 parity results pass 784/784 each. Windows has
+756/757 applicable cases pass, zero behavioral failures, and one stock-Uvicorn
+two-worker shutdown-timeout infrastructure failure. Focused Windows run #619
+passed that case 1/1, but the full Windows candidate artifact and consumer
+checks remain incomplete. Linux and macOS candidate artifacts and clean
+consumers pass; the Linux bundle contains the intended Cargo archives, the
+uvicorn-rs wheel, and sdist. Documentation build #256 passed for this PR; its
+deployment is skipped until merge. Independent Coverage-MCP review and matched
+three-system FastAPI benchmarks remain release gates. Existing partial
+measurements do not establish a general performance advantage. See
 [release status](docs/releases.md) and the [compatibility matrix](docs/support-matrix.md).
 
 ## Try the source checkout

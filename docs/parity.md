@@ -4,7 +4,49 @@
 
 ## Current source status (2026-11-02)
 
-### PR #21 CI #615 — exact-source results
+### PR #21 CI #618 — exact-source results in progress
+
+CI [run 41451660747](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747)
+tests develop head 87ab887b07c7d2f54b868dec16b115f93026ca69 against main at
+86e72e181d00feca1b4db7f30377d5d9d4345b83. Candidate manifests identify clean
+merge source a1e1f47b46be6e2c9419639baed02e71f2c41b75. Linux x86-64 and macOS
+ARM64 installed-wheel parity each passed 784/784. Windows executed 757
+applicable cases: 756 passed, zero behavioral failures, one infrastructure
+failure, and zero not run. The stock-Uvicorn oracle timed out during the
+two-worker shutdown case; the candidate returned HTTP 200 and exited cleanly.
+
+| Platform | Result | Artifact archive SHA-256 |
+| --- | ---: | --- |
+| Linux x86-64 | 784/784 | [13144878506](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13144878506): 1f20398b08b4c1ee6932664ba9da5101f550ca14ab822360c9bf273099fc60ff |
+| macOS ARM64 | 784/784 | [13146731810](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13146731810): 210e6a9c1adf009e17989e6a3ab75b353d7012520a726b4068dd8a7047ff4fde |
+| Windows x86-64 | 756/757 | [13147445957](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13147445957): 8338a5d03f452514df1ab32af5f422fc5b5563ba7492a4903de6340bf4604fb0 |
+
+The affected case, python-api.module-cli-web-concurrency-two-workers-serve-request,
+passed 1/1 in focused Windows trace run [#619](https://github.com/appunni-m/uvicorn-rs/actions/runs/41457927984).
+Its artifact [13147018652](https://github.com/appunni-m/uvicorn-rs/actions/runs/41457927984/artifacts/13147018652)
+(SHA-256 7a166f4e1a70c8122a1698c738974c99fba9f29a6423732ffdc0c1f8446e5c2d)
+records the supervisor sending CTRL_BREAK_EVENT to both worker process groups
+and both workers entering their Uvicorn signal handlers. The focused run does
+not explain why the full-matrix oracle timed out and does not replace the
+failed full Windows job.
+
+The Linux candidate bundle [13146517275](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13146517275)
+(SHA-256 a60ede29bfdb71495bed2addd0398b2f41fe829b3d6ca30cd40ff2bc61415e29)
+and macOS bundle [13146676910](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13146676910)
+(SHA-256 38abe129358fb43f5a67bc48536ac990245a5641043842c773cc1eab4c34e967)
+are bound to the clean merge source. Linux contains the two intended Cargo
+crates, the uvicorn-rs 0.3.0 wheel and sdist; manifest hashes and clean Cargo,
+wheel, and sdist consumers pass. The macOS wheel hash matches its manifest and
+its clean consumer passes. The Windows wheel was built and installed, but the
+remaining candidate package and consumer steps were skipped after parity
+reported the oracle timeout. Documentation build #256 passed; deployment is
+skipped for the pull request.
+
+The three-repeat unified coverage job in CI #618 is still running. Final region
+and line totals are not available. Independent Coverage-MCP review and matched
+ordinary-FastAPI benchmarks remain open.
+
+### Previous exact-source run: PR #21 CI #615 on earlier source
 
 CI [run 41402063098](https://github.com/appunni-m/uvicorn-rs/actions/runs/41402063098)
 tested `develop` head `c28474a164cce437cf41ec12d7ebd789027f8637` against
