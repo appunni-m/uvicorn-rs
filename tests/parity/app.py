@@ -1238,7 +1238,9 @@ async def _app_impl(scope, receive, send):
         })
         await send({"type": "http.response.body", "body": b"complete", "more_body": True})
         _record("response.content-length.first-send-returned")
-        await asyncio.sleep(0.05)
+        # Let the HTTP/1 peer finish reading Content-Length bytes while the
+        # ASGI app is still running, forcing the body-drop drain path.
+        await asyncio.sleep(1.0)
         await send({"type": "http.response.body", "body": b"", "more_body": True})
         _record("response.content-length.empty-send-returned")
         await send({"type": "http.response.body", "body": b"", "more_body": False})

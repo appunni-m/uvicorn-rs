@@ -259,6 +259,9 @@ FAULT_POINTS = {
     "lifespan.shutdown.failed.message.get-item",
     "lifespan.shutdown.failed.message.extract",
     "lifespan.send.event-channel-closed",
+    "lifespan.report-exception.invalid-phase",
+    "lifespan.without-lifespan.application-error",
+    "lifespan.shutdown-result.application-error",
     "native.module.add-class.asgi-io",
     "native.module.add-class.websocket-io",
     "native.module.add-class.lifespan-io",
@@ -742,6 +745,9 @@ LIFESPAN_STARTUP_AUTO_FALLBACK_FAULT_POINTS = {
     "lifespan.startup.failed.message.get-item",
     "lifespan.startup.failed.message.extract",
     "lifespan.send.event-channel-closed",
+    "lifespan.startup.send-closed",
+    "lifespan.report-exception.invalid-phase",
+    "lifespan.without-lifespan.application-error",
 }
 LIFESPAN_INFO_LOG_FAILURE_FAULT_POINTS = {
     "lifespan.log-info.import-logging",
@@ -758,6 +764,8 @@ LIFESPAN_SHUTDOWN_FAILURE_FAULT_POINTS = {
     "lifespan.asgi.send.type.get-item",
     "lifespan.shutdown.failed.message.get-item",
     "lifespan.shutdown.failed.message.extract",
+    "lifespan.send.event-channel-closed",
+    "lifespan.shutdown-result.application-error",
 }
 LIFESPAN_TASK_CANCEL_FAULT_POINTS = {
     "lifespan.shutdown.force-timeout",
@@ -2330,7 +2338,12 @@ def load_contract(
                             "server.graceful-timeout.overflow",
                             "server.python-locals.get-current",
                         }
-                        or fault["point"] in {"lifespan.startup.task-join-error", "lifespan.startup.send-closed"}
+                        or fault["point"] in {
+                            "lifespan.startup.task-join-error",
+                            "lifespan.startup.send-closed",
+                            "lifespan.report-exception.invalid-phase",
+                            "lifespan.without-lifespan.application-error",
+                        }
                         or fault["point"].startswith("native.module.")
                         or fault["point"] == "native.runtime.build.error"
                         or fault["point"].startswith("server.prebound-transfer.")
@@ -2356,6 +2369,8 @@ def load_contract(
                         case.get("profile") == "lifespan-fault-receive-startup"
                         or case.get("profile", "").startswith("lifespan-fault-asgi-startup-")
                         or case.get("profile") == "lifespan-fault-start-event-channel-closed"
+                        or case.get("profile") == "lifespan-no-support"
+                        or case.get("profile") == "lifespan-no-support-error"
                     )
                     or case.get("operation") != "lifespan.startup-auto-fallback"
                     or fault["point"] not in LIFESPAN_STARTUP_AUTO_FALLBACK_FAULT_POINTS
@@ -5182,6 +5197,7 @@ def load_contract(
                 }
                 if kind == "http1":
                     allowed_options.add("http")
+                    allowed_options.add("lifespan")
                     allowed_options.add("h11_max_incomplete_event_size")
                     allowed_options.add("ws")
                     allowed_options.add("inherited_fd")
@@ -5211,6 +5227,12 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: server_options.ws must select a built-in backend or a protocol import path"
+                    )
+                if "lifespan" in server_options and server_options["lifespan"] not in {
+                    "auto", "on", "off"
+                }:
+                    raise ParityError(
+                        f"{case_id}: server_options.lifespan must be auto, on, or off"
                     )
                 if "proxy_headers" in server_options and type(
                     server_options["proxy_headers"]
@@ -6144,10 +6166,14 @@ def load_contract(
                 server_options = case["server_options"]
                 if (
                     type(server_options) is not dict
-                    or not set(server_options) <= {"inherited_fd", "host"}
+                    or not set(server_options) <= {"inherited_fd", "host", "lifespan"}
                     or (
                         "inherited_fd" in server_options
                         and type(server_options["inherited_fd"]) is not bool
+                    )
+                    or (
+                        "lifespan" in server_options
+                        and server_options["lifespan"] not in {"auto", "on", "off"}
                     )
                     or (
                         "host" in server_options
@@ -6158,7 +6184,7 @@ def load_contract(
                     )
                 ):
                     raise ParityError(
-                        f"{case_id}: startup-failure server options only support a boolean inherited_fd and a loopback host"
+                        f"{case_id}: startup-failure server options require a boolean inherited_fd, a loopback host, or a valid lifespan mode"
                     )
             exact_case_keys(case, case_keys, case_id)
             exact_keys(case["startup_failure"], {"expect_failed"}, f"{case_id}.startup_failure")
@@ -6953,6 +6979,8 @@ def start_server(
             )
         if server_options.get("inherited_fd"):
             command.extend(["--fd", str(inherited_listener_fds[0])])
+        if "lifespan" in server_options:
+            command.extend(["--lifespan", server_options["lifespan"]])
         if "root_path" in server_options:
             command.extend(["--root-path", server_options["root_path"]])
         if "http" in server_options and server_id == "uvicorn-rs":
@@ -7062,6 +7090,12 @@ def start_server(
                 "port": port,
                 "events": events_path,
                 "log": log,
+                **(
+                    {"coverage_fault_control_path": coverage_fault_control_path}
+                    if server_id == "uvicorn-rs"
+                    and coverage_fault_control_path is not None
+                    else {}
+                ),
                 "startup_failed": (
                     process.returncode != 0
                     and (
@@ -7080,6 +7114,12 @@ def start_server(
             "port": port,
             "events": events_path,
             "log": log,
+            **(
+                {"coverage_fault_control_path": coverage_fault_control_path}
+                if server_id == "uvicorn-rs"
+                and coverage_fault_control_path is not None
+                else {}
+            ),
             "startup_failed": False,
             "startup_output": "server remained running after the startup-failure window",
             "captured_log": stopped_server["captured_log"],
@@ -12435,11 +12475,19 @@ def execute_case(
         observation["server_log"] = read_server_log(server)[log_offset:]
         return observation
     if "startup_failure" in case:
-        return {
+        observation = {
             "startup_failed": server["startup_failed"],
             "application_events": read_events(server["events"]),
             "server_log": server.get("startup_output", ""),
         }
+        fault = case.get("fault")
+        control_path = server.get("coverage_fault_control_path")
+        if fault is not None:
+            observation["fault_consumed"] = (
+                control_path is not None
+                and control_path.read_text(encoding="utf-8").strip() != fault["point"]
+            )
+        return observation
     if "startup_fallback" in case:
         deadline = time.monotonic() + 8
         followup = None
@@ -14101,7 +14149,13 @@ def fault_contract_matches(
                 and "lifespan.startup" in events
                 and "lifespan.shutdown" in events
             )
-        return observation.get("startup_failed") is True
+        return (
+            observation.get("startup_failed") is True
+            and (
+                fault["point"] != "lifespan.without-lifespan.application-error"
+                or observation.get("fault_consumed") is True
+            )
+        )
     if fault["contract"] == "server-prebound-transfer-would-block-retries-and-serves":
         return (
             observation.get("status") == 200
@@ -14111,6 +14165,10 @@ def fault_contract_matches(
         followup = observation.get("followup_response")
         return (
             observation.get("startup_error_observed") is True
+            and (
+                fault["point"] != "lifespan.without-lifespan.application-error"
+                or observation.get("fault_consumed") is True
+            )
             and isinstance(followup, dict)
             and followup.get("status") == 200
         )
@@ -16171,7 +16229,12 @@ def execute_profile(
                     if case.get("verification", "oracle-parity") == "fault-contract":
                         oracle_result = None
                         fault_observation = target_result
-                        if case["fault"]["point"] == "asgi.event-type.extract":
+                        if case["fault"]["point"] == "lifespan.without-lifespan.application-error":
+                            fault_observation = {
+                                **target_result,
+                                "fault_consumed": target_raw.get("fault_consumed"),
+                            }
+                        elif case["fault"]["point"] == "asgi.event-type.extract":
                             fault_observation = {
                                 **target_result,
                                 "server_log": target_raw.get("server_log", ""),

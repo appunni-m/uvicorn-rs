@@ -24,6 +24,18 @@
         "contract": "server-lifespan-startup-auto-fallback"
       },
       "startup_fallback": {"followup_path": "/state"}
+    },
+    {
+      "case_id": "fault.lifespan.startup-send-channel-closed-auto-fallback",
+      "profile": "lifespan-fault-receive-startup",
+      "operation": "lifespan.startup-auto-fallback",
+      "covers": ["lifespan.startup-auto-fallback"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.startup.send-closed",
+        "contract": "server-lifespan-startup-auto-fallback"
+      },
+      "startup_fallback": {"followup_path": "/state"}
     }
   ]
 }

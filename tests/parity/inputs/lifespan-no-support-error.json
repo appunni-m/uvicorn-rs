@@ -60,6 +60,18 @@
         "contract": "server-lifespan-startup-auto-fallback-logger-failure-ignored"
       },
       "startup_fallback": {"followup_path": "/state"}
+    },
+    {
+      "case_id": "fault.lifespan.report-exception-invalid-phase-auto-fallback",
+      "profile": "lifespan-no-support-error",
+      "operation": "lifespan.startup-auto-fallback",
+      "covers": ["lifespan.startup-auto-fallback"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.report-exception.invalid-phase",
+        "contract": "server-lifespan-startup-auto-fallback"
+      },
+      "startup_fallback": {"followup_path": "/state"}
     }
   ]
 }

@@ -325,6 +325,9 @@ enum CoverageFaultPoint {
     LifespanShutdownFailedMessageGetItem,
     LifespanShutdownFailedMessageExtract,
     LifespanSendEventChannelClosed,
+    LifespanReportExceptionInvalidPhase,
+    LifespanWithoutLifespanApplicationError,
+    LifespanShutdownResultApplicationError,
     NativeModuleAddAsgiIo,
     NativeModuleAddWebSocketIo,
     NativeModuleAddLifespanIo,
@@ -736,6 +739,13 @@ impl CoverageFaultPoint {
                 "lifespan.shutdown.failed.message.extract"
             }
             Self::LifespanSendEventChannelClosed => "lifespan.send.event-channel-closed",
+            Self::LifespanReportExceptionInvalidPhase => "lifespan.report-exception.invalid-phase",
+            Self::LifespanWithoutLifespanApplicationError => {
+                "lifespan.without-lifespan.application-error"
+            }
+            Self::LifespanShutdownResultApplicationError => {
+                "lifespan.shutdown-result.application-error"
+            }
             Self::NativeModuleAddAsgiIo => "native.module.add-class.asgi-io",
             Self::NativeModuleAddWebSocketIo => "native.module.add-class.websocket-io",
             Self::NativeModuleAddLifespanIo => "native.module.add-class.lifespan-io",
@@ -4738,6 +4748,13 @@ impl LifespanIo {
     }
 
     fn report_exception(&self, phase: &str) -> PyResult<()> {
+        #[cfg(coverage)]
+        let phase = if coverage_fault_take(CoverageFaultPoint::LifespanReportExceptionInvalidPhase)
+        {
+            "invalid"
+        } else {
+            phase
+        };
         let phase = match phase {
             "startup" => LifespanPhase::Startup,
             "shutdown" => LifespanPhase::Shutdown,
@@ -4932,13 +4949,16 @@ impl LifespanRuntime {
             // path as a task that finishes before the startup acknowledgement.
             let result = app_task.as_mut().await;
             app_task.into_handle();
-            let reported_startup_exception = matches!(
-                event_rx.try_recv(),
-                Ok(LifespanEvent::ApplicationException(LifespanPhase::Startup))
-            );
+            let reported_startup_exception = match event_rx.try_recv() {
+                Ok(LifespanEvent::ApplicationException(LifespanPhase::Startup)) => true,
+                Ok(_) | Err(_) => false,
+            };
             if mode == LifespanMode::On && reported_startup_exception {
                 log_error(format_args!("Application startup failed. Exiting."));
                 return Ok(None);
+            }
+            if mode == LifespanMode::Auto && reported_startup_exception {
+                log_lifespan_info("ASGI 'lifespan' protocol appears unsupported.");
             }
             return Self::without_lifespan(result, state, mode);
         }
@@ -4971,7 +4991,7 @@ impl LifespanRuntime {
                     log_lifespan_error("Application startup failed. Exiting.");
                     Ok(None)
                 }
-                Some(LifespanEvent::ApplicationException(phase)) => {
+                Some(LifespanEvent::ApplicationException(_phase)) => {
                     // The Python wrapper has caught and recorded the original
                     // exception on its owning loop. Wait for that wrapper task
                     // to finish normally before deciding whether auto mode
@@ -4984,13 +5004,9 @@ impl LifespanRuntime {
                             Ok(None)
                         }
                         Ok(Ok(_)) => {
-                            if mode == LifespanMode::Auto
-                                && matches!(phase, LifespanPhase::Startup)
-                            {
-                                log_lifespan_info(
-                                    "ASGI 'lifespan' protocol appears unsupported.",
-                                );
-                            }
+                            log_lifespan_info(
+                                "ASGI 'lifespan' protocol appears unsupported.",
+                            );
                             Ok(Some(Self {
                                 state: Arc::new(state),
                                 requests: None,
@@ -5038,6 +5054,18 @@ impl LifespanRuntime {
         state: Py<PyDict>,
         mode: LifespanMode,
     ) -> PyResult<Option<Self>> {
+        #[cfg(coverage)]
+        let result =
+            if coverage_fault_take(CoverageFaultPoint::LifespanWithoutLifespanApplicationError) {
+                match result {
+                    Ok(Ok(_)) => Ok(Err(PyRuntimeError::new_err(
+                        "coverage-injected lifespan application error",
+                    ))),
+                    result => result,
+                }
+            } else {
+                result
+            };
         let mut unsupported = false;
         match result {
             Ok(Ok(_)) => {}
@@ -5124,14 +5152,12 @@ impl LifespanRuntime {
                     }));
                 }
                 Some(LifespanEvent::ApplicationException(_phase)) => {
-                    match self.mode {
-                        LifespanMode::On => {
-                            log_error(format_args!("Application shutdown failed. Exiting."));
-                        }
-                        LifespanMode::Auto => log_lifespan_info(
+                    if self.mode == LifespanMode::On {
+                        log_error(format_args!("Application shutdown failed. Exiting."));
+                    } else {
+                        log_lifespan_info(
                             "ASGI 'lifespan' protocol appears unsupported.",
-                        ),
-                        LifespanMode::Off => {}
+                        );
                     }
                     let result = app_task.await;
                     self.app_task.take();
@@ -5155,6 +5181,18 @@ fn lifespan_shutdown_result(
     result: Result<PyResult<Py<PyAny>>, tokio::task::JoinError>,
     shutdown_complete: bool,
 ) -> PyResult<()> {
+    #[cfg(coverage)]
+    let result = if coverage_fault_take(CoverageFaultPoint::LifespanShutdownResultApplicationError)
+    {
+        match result {
+            Ok(Ok(_)) => Ok(Err(PyRuntimeError::new_err(
+                "coverage-injected lifespan shutdown application error",
+            ))),
+            result => result,
+        }
+    } else {
+        result
+    };
     match result {
         Ok(Ok(_)) if shutdown_complete => Ok(()),
         Ok(Ok(_)) => Err(PyRuntimeError::new_err(
@@ -7564,13 +7602,15 @@ fn load_tls_configs(
         vec![b"http/1.1".to_vec()]
     };
 
-    // QUIC requires a TLS 1.3 cipher suite regardless of the selected TCP SSL
-    // protocol. The coverage fault supplies an empty provider so Rustls rejects
-    // the configuration at the protocol-version builder below.
+    // Quinn requires TLS13_AES_128_GCM_SHA256 for QUIC initial keys. Keep the
+    // rest of Rustls's provider intact so the certificate config is valid, but
+    // let Quinn reject this HTTP/3-incompatible configuration during conversion.
     #[cfg(coverage)]
     let quic_tls_builder = if coverage_fault_take(CoverageFaultPoint::ServerQuicTlsConfigError) {
         let mut provider = rustls::crypto::ring::default_provider();
-        provider.cipher_suites.clear();
+        provider
+            .cipher_suites
+            .retain(|suite| suite.suite() != rustls::CipherSuite::TLS13_AES_128_GCM_SHA256);
         server_config_with_protocols(
             Arc::new(provider),
             &[&rustls::version::TLS13],
