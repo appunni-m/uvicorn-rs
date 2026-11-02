@@ -2208,7 +2208,8 @@
         "contract": "websocket-driver-send-error-followup-200"
       },
       "websocket": {
-        "path": "/ws-send-and-return",
+        "path": "/ws-final-frame-drain",
+        "wait_for_app_event": "websocket.final-frame-enqueued",
         "subprotocols": [],
         "messages": [],
         "expect_close": true,

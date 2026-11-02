@@ -3354,6 +3354,42 @@
         "headers": [],
         "body_base64": ""
       }
+    },
+    {
+      "case_id": "fault.http3.default-header-capacity-error-resets-stream",
+      "profile": "http3",
+      "operation": "http3.injected-stream-error",
+      "covers": [
+        "http3.injected-stream-error"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.default-header.append-error",
+        "contract": "http3-stream-reset-on-runtime-error"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/return-before-response-start",
+        "headers": [],
+        "body_base64": "",
+        "expect_response_error": true
+      }
+    },
+    {
+      "case_id": "fault.http3.quic-tls-protocol-error",
+      "profile": "http3",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "server.quic-tls.protocol-error",
+        "contract": "server-startup-failure"
+      },
+      "startup_failure": {
+        "expect_failed": true
+      }
     }
   ]
 }

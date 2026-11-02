@@ -162,6 +162,7 @@ FAULT_POINTS = {
     "websocket.app-task.panic-before-handshake",
     "websocket.native-upgrade.extension-removed-after-dispatch",
     "server.quic-tls.config-error",
+    "server.quic-tls.protocol-error",
     # Keep this set literal: the normal-wheel audit reads it with
     # ast.literal_eval so registry extraction never executes runner code.
     "tls.traditional-key.cipher-init-error",
@@ -216,6 +217,7 @@ FAULT_POINTS = {
     "http.response.start.headers.extract",
     "http.response.header-map.append-error",
     "http.response.header-map.overflow-append-error",
+    "http.default-header.append-error",
     "http.response.date-header.invalid-value",
     "http.response.body.body.get-item",
     "http.response.body.body.extract",
@@ -628,6 +630,7 @@ FAULT_CONTRACTS = {
     "http-final-body-preserved-after-app-task-panic",
     "http-task-panic-before-final-body-closes-stream",
     "http-start-and-final-body-preserved-after-task-wins-select",
+    "http-content-length-body-preserved-after-app-return",
     "http-native-service-error-close-followup-200",
     "http-native-connection-write-error-followup-200",
     "http-concurrent-receive-after-lock-contention",
@@ -1265,10 +1268,12 @@ def load_contract(
             elif fault["contract"] == "http-response-header-overflow-fallback-followup-200":
                 requests = case.get("request_sequence", [])
                 if (
-                    case_id != "fault.http1.response-header-overflow-append-error-fallback"
-                    or case.get("profile") != "http1"
+                    case.get("profile") != "http1"
                     or case.get("operation") != "http.response-header-overflow-fallback"
-                    or fault["point"] != "http.response.header-map.overflow-append-error"
+                    or fault["point"] not in {
+                        "http.response.header-map.overflow-append-error",
+                        "http.default-header.append-error",
+                    }
                     or not isinstance(requests, list)
                     or len(requests) != 2
                     or any(not isinstance(request, dict) for request in requests)
@@ -1486,6 +1491,7 @@ def load_contract(
                         "http3.response.body-send-error",
                         "http3.response.finish-error",
                         "server.default-header.response-finalization",
+                        "http.default-header.append-error",
                     }
                     or case.get("request", {}).get("expect_response_error") is not True
                 ):
@@ -1951,6 +1957,14 @@ def load_contract(
                     raise ParityError(
                         f"{case_id}: consumer-pause incomplete-body contract requires the HTTP/1.1 partial-body workflow"
                     )
+            elif fault["contract"] == "http-content-length-body-preserved-after-app-return":
+                if (
+                    case.get("profile") != "http1"
+                    or case.get("operation") != "http.scope-and-body"
+                    or fault["point"] != "http.response.task-wins-start-select"
+                    or case.get("request", {}).get("path") != "/content-length-return-without-final"
+                ):
+                    raise ParityError(f"{case_id}: completed content-length app requires its response workflow")
             elif fault["contract"] == "http-start-and-final-body-preserved-after-task-wins-select":
                 if (
                     case.get("profile") != "http1"
@@ -2396,6 +2410,7 @@ def load_contract(
                         or fault["point"].startswith("server.prebound-transfer.")
                         or fault["point"] in {
                             "server.quic-tls.config-error",
+                            "server.quic-tls.protocol-error",
                             "server.listener.accept-error",
                             "server.listener.local-addr-error",
                             "server.tcp-address-lookup.empty",
@@ -2779,7 +2794,11 @@ def load_contract(
                 "websocket-driver-send-error-cancels-app",
             }:
                 expected_path = (
-                    "/ws-send-and-return"
+                    (
+                        "/ws-final-frame-drain"
+                        if fault["point"] == "websocket.driver.drain-send-error"
+                        else "/ws-send-and-return"
+                    )
                     if fault["contract"] == "websocket-driver-send-error-followup-200"
                     else "/ws-send-and-hold"
                 )
@@ -6009,6 +6028,12 @@ def load_contract(
                             case.get("operation") == "websocket.final-frame-drain"
                             and websocket.get("expect_close") is True
                             and websocket.get("messages") == []
+                        )
+                        or (
+                            case.get("operation") == "websocket.fault-contract"
+                            and fault.get("point") == "websocket.driver.drain-send-error"
+                            and websocket.get("path") == "/ws-final-frame-drain"
+                            and websocket.get("wait_for_app_event") == "websocket.final-frame-enqueued"
                         )
                         or (
                             case.get("operation") == "websocket.registration-failure-cleanup"
@@ -14381,6 +14406,7 @@ def fault_contract_matches(
             and (
                 fault["point"] not in {
                     "server.quic-tls.config-error",
+                    "server.quic-tls.protocol-error",
                     "lifespan.without-lifespan.preserve-task-error",
                 }
                 or observation.get("fault_consumed") is True
@@ -14520,7 +14546,17 @@ def fault_contract_matches(
             and observation.get("fault_consumed") is True
             and isinstance(followup, dict) and followup.get("status") == 200
         )
+    if fault["contract"] == "http-content-length-body-preserved-after-app-return":
+        return (
+            observation.get("status") == 200
+            and observation.get("body_bytes") == base64.b64encode(b"complete").decode("ascii")
+        )
     if fault["contract"] == "websocket-driver-send-error-followup-200":
+        if (
+            fault["point"] == "websocket.driver.drain-send-error"
+            and observation.get("message_payload_bytes") != [11, 8 * 1024 * 1024]
+        ):
+            return False
         followup = observation.get("followup_response")
         return (
             observation.get("handshake_status") == 101
@@ -16660,6 +16696,7 @@ def execute_profile(
                         }:
                             fault_observation = {
                                 **target_result,
+                                "message_payload_bytes": target_raw.get("message_payload_bytes"),
                                 "fault_consumed": target_raw.get("fault_consumed"),
                             }
                         elif case["fault"]["contract"] == "http-concurrent-receive-after-lock-contention":

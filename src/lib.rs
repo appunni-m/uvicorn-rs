@@ -16,7 +16,6 @@
 //! still copies at the language boundary. Bounded channels cap queued message
 //! counts, but an application controls the size of each individual message.
 
-use std::collections::{HashMap, VecDeque};
 use std::error::Error as StdError;
 use std::fmt;
 use std::future::Future;
@@ -238,6 +237,7 @@ enum CoverageFaultPoint {
     HttpEmptyRequestChannelClosed,
     WebSocketAppTaskPanicBeforeHandshake,
     ServerQuicTlsConfigError,
+    ServerQuicTlsProtocolError,
     PythonSslCaVerifierImport,
     PythonSslCaVerifierProtocol,
     PythonSslCaVerifierContext,
@@ -292,6 +292,7 @@ enum CoverageFaultPoint {
     HttpResponseStartHeadersExtract,
     HttpResponseHeaderAppendError,
     HttpResponseHeaderOverflowAppendError,
+    HttpDefaultHeaderAppendError,
     HttpResponseDateHeaderInvalidValue,
     HttpResponseBodyBodyGetItem,
     HttpResponseBodyBodyExtract,
@@ -628,6 +629,7 @@ impl CoverageFaultPoint {
             Self::WebSocketAppTaskPanicBeforeHandshake => {
                 "websocket.app-task.panic-before-handshake"
             }
+            Self::ServerQuicTlsProtocolError => "server.quic-tls.protocol-error",
             Self::ServerQuicTlsConfigError => "server.quic-tls.config-error",
             Self::PythonSslCaVerifierImport => "python.ssl.ca-verifier.import",
             Self::PythonSslCaVerifierProtocol => "python.ssl.ca-verifier.protocol",
@@ -698,6 +700,7 @@ impl CoverageFaultPoint {
             Self::HttpResponseStartHeadersGetItem => "http.response.start.headers.get-item",
             Self::HttpResponseStartHeadersExtract => "http.response.start.headers.extract",
             Self::HttpResponseHeaderAppendError => "http.response.header-map.append-error",
+            Self::HttpDefaultHeaderAppendError => "http.default-header.append-error",
             Self::HttpResponseHeaderOverflowAppendError => {
                 "http.response.header-map.overflow-append-error"
             }
@@ -2183,7 +2186,7 @@ fn apply_request_limit(
 
 #[cfg(uvicorn_rs_native_transport)]
 enum BoundListener {
-    Tcp(Vec<TcpListener>),
+    Tcp(Vec<(TcpListener, SocketAddr)>),
     #[cfg(unix)]
     Unix(UnixListener),
 }
@@ -5537,18 +5540,11 @@ fn append_response_header_with_overflow(
                 .map_err(|_| ())
         }
     };
-    match append_result {
-        Ok(_) => {
-            if is_new_name {
-                *unique_header_names += 1;
-            }
-        }
-        Err(_) => {
-            overflow_headers.push((name, value));
-            if is_new_name {
-                *unique_header_names += 1;
-            }
-        }
+    if append_result.is_err() {
+        overflow_headers.push((name, value));
+    }
+    if is_new_name {
+        *unique_header_names += 1;
     }
 }
 
@@ -5603,43 +5599,42 @@ struct AsgiBody {
 
 impl Drop for AsgiBody {
     fn drop(&mut self) {
+        let Some(application) = self.application.take() else {
+            return;
+        };
         if self.response_body_completed.load(Ordering::Acquire) {
             // Some HTTP/1 encoders stop polling once Content-Length bytes have
             // been written, before consuming the app's final empty body event.
             // Uvicorn keeps the ASGI task alive after the response completes;
             // transfer it to the shutdown tracker instead of aborting it here.
-            if let Some(application) = self.application.take() {
-                self.finish_response(application);
-            }
+            self.finish_response(application);
         } else if self
             .expected_content_length
             .is_some_and(|expected| self.response_body_bytes >= expected)
         {
             self.response_content_length_satisfied
                 .store(true, Ordering::Release);
-            if let Some(application) = self.application.take() {
-                // Hyper may stop polling an HTTP/1 body once its declared
-                // Content-Length has reached the wire. Uvicorn keeps the ASGI
-                // task alive after that point, so retain and drain the response
-                // channel until the final body and any negotiated trailers
-                // have been accepted.
-                let (replacement_sender, replacement_receiver) =
-                    mpsc::channel(RESPONSE_BODY_QUEUE_CAPACITY);
-                drop(replacement_sender);
-                let mut receiver = std::mem::replace(&mut self.receiver, replacement_receiver);
-                let trailers_expected = self.trailers_expected;
-                self.app_task_tracker.spawn(async move {
-                    while let Some(chunk) = receiver.recv().await {
-                        if chunk.completes_response(trailers_expected) {
-                            break;
-                        }
+            // Hyper may stop polling an HTTP/1 body once its declared
+            // Content-Length has reached the wire. Uvicorn keeps the ASGI
+            // task alive after that point, so retain and drain the response
+            // channel until the final body and any negotiated trailers
+            // have been accepted.
+            let (replacement_sender, replacement_receiver) =
+                mpsc::channel(RESPONSE_BODY_QUEUE_CAPACITY);
+            drop(replacement_sender);
+            let mut receiver = std::mem::replace(&mut self.receiver, replacement_receiver);
+            let trailers_expected = self.trailers_expected;
+            self.app_task_tracker.spawn(async move {
+                while let Some(chunk) = receiver.recv().await {
+                    if chunk.completes_response(trailers_expected) {
+                        break;
                     }
-                    if let Some(task) = application.observe_completed() {
-                        observe_app_after_response(task.await);
-                    }
-                });
-            }
-        } else if let Some(ResponseApplication::Running(task)) = &self.application {
+                }
+                if let Some(task) = application.observe_completed() {
+                    observe_app_after_response(task.await);
+                }
+            });
+        } else if let ResponseApplication::Running(task) = application {
             task.abort();
         }
     }
@@ -7669,11 +7664,15 @@ fn load_tls_configs(
     // another TLS 1.3 suite so Rustls accepts the configuration and the
     // coverage fault reaches Quinn's conversion error.
     #[cfg(coverage)]
-    let quic_tls_builder = if coverage_fault_take(CoverageFaultPoint::ServerQuicTlsConfigError) {
+    let quic_config_error = coverage_fault_take(CoverageFaultPoint::ServerQuicTlsConfigError);
+    #[cfg(coverage)]
+    let quic_protocol_error = coverage_fault_take(CoverageFaultPoint::ServerQuicTlsProtocolError);
+    #[cfg(coverage)]
+    let quic_tls_builder = if quic_config_error || quic_protocol_error {
         let mut provider = rustls::crypto::ring::default_provider();
-        provider
-            .cipher_suites
-            .retain(|suite| suite.suite() != rustls::CipherSuite::TLS13_AES_128_GCM_SHA256);
+        provider.cipher_suites.retain(|suite| {
+            !quic_protocol_error && suite.suite() != rustls::CipherSuite::TLS13_AES_128_GCM_SHA256
+        });
         server_config_with_protocols(
             Arc::new(provider),
             &[&rustls::version::TLS13],
@@ -8237,14 +8236,15 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
                         "could not register inherited TCP listener: {error}"
                     ))
                 })?;
-                listeners.push(listener);
+                let address = tcp_listener_address(&listener, "inherited TCP listener")?;
+                listeners.push((listener, address));
             }
             let first = listeners
                 .first()
                 .ok_or_else(|| {
                     PyValueError::new_err("at least one pre-bound TCP listener is required")
                 })?;
-            let server_addr = tcp_listener_address(first, "inherited TCP listener")?;
+            let server_addr = first.1;
             let endpoint = if let Some(quic_config) = options.quic_config.take() {
                 Some(
                     uvicorn_rs::Http3Endpoint::bind(server_addr, quic_config).map_err(
@@ -8276,10 +8276,15 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
                 )?,
             };
             let ReceivedTcpListeners { first, remaining } = received;
-            let server_addr = tcp_listener_address(&first, "inherited TCP listener")?;
-            let mut listeners = Vec::with_capacity(remaining.len() + 1);
-            listeners.push(first);
-            listeners.extend(remaining);
+            let listeners = std::iter::once(first)
+                .chain(remaining)
+                .map(|listener| {
+                    tcp_listener_address(&listener, "inherited TCP listener")
+                        .map(|address| (listener, address))
+                })
+                .collect::<PyResult<Vec<_>>>()?;
+            // ReceivedTcpListeners always contains its first listener.
+            let server_addr = listeners[0].1;
             (BoundListener::Tcp(listeners), server_addr)
         } else if let Some(path) = options.uds.as_deref() {
             #[cfg(unix)]
@@ -8310,7 +8315,7 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
                 }
             };
             let server_addr = tcp_listener_address(&listener, "bound listener")?;
-            (BoundListener::Tcp(vec![listener]), server_addr)
+            (BoundListener::Tcp(vec![(listener, server_addr)]), server_addr)
         };
         #[cfg(not(uvicorn_rs_native_transport))]
         let listener = if options.fd_transfer_path.is_some() {
@@ -8434,10 +8439,7 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
     };
     #[cfg(all(windows, uvicorn_rs_native_transport))]
     if let BoundListener::Tcp(listeners) = &listener {
-        let addresses: Vec<_> = listeners
-            .iter()
-            .filter_map(|listener| listener.local_addr().ok())
-            .collect();
+        let addresses: Vec<_> = listeners.iter().map(|(_, address)| *address).collect();
         *shutdown_wake_addresses
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = addresses;
@@ -8649,8 +8651,7 @@ async fn serve_forever(context: ServeContext) -> PyResult<()> {
         let result = match listener {
             BoundListener::Tcp(listeners) => {
                 let mut listener_services = Vec::with_capacity(listeners.len());
-                for listener in listeners {
-                    let listener_addr = tcp_listener_address(&listener, "inherited TCP listener")?;
+                for (listener, listener_addr) in listeners {
                     listener_services.push((
                         listener,
                         NativeAsgiService {
@@ -9231,7 +9232,7 @@ fn spawn_native_http3(
     tokio::spawn(async move {
         #[cfg(coverage)]
         if coverage_legacy_http3_fault_is_armed() {
-            serve_legacy_http3(endpoint, server).await;
+            let _ = serve_legacy_http3(endpoint, server).await;
             return;
         }
 
@@ -11088,7 +11089,7 @@ where
             result = &mut app_task => {
                 app_task_completed = true;
                 match result {
-                    Ok(Ok(_)) => {}
+                    Ok(Ok(_)) => (),
                     Ok(Err(error)) => {
                         Python::attach(|py| error.print(py));
                     }
@@ -11101,7 +11102,7 @@ where
                     let message = into_websocket_message(message);
                     #[cfg(coverage)]
                     let send_result =
-                        if coverage_fault_take(CoverageFaultPoint::WebSocketDriverDrainSendError) {
+                        if outgoing.is_empty() && coverage_fault_take(CoverageFaultPoint::WebSocketDriverDrainSendError) {
                             Err(Box::new(std::io::Error::other(
                                 "coverage-injected WebSocket final-frame drain failure",
                             )) as BoxError)
@@ -11649,136 +11650,74 @@ fn apply_default_response_headers(
         .get::<Http1AutomaticDateHeader>()
         .is_some();
     let (mut parts, body) = response.into_parts();
-    let original_header_order = parts.extensions.remove::<HeaderOrder>();
-    if let Some(order) = original_header_order
-        .as_ref()
-        .filter(|order| !order.overflow_fields().is_empty())
-    {
-        let application_fields = ordered_response_header_fields(&parts.headers, order);
-        let mut headers = HeaderMap::new();
-        let mut names = Vec::new();
-        let mut overflow_fields = Vec::new();
-        append_default_response_header_fields(
-            server,
-            http1_automatic_date_header,
-            &mut headers,
-            &mut names,
-            &mut overflow_fields,
-            true,
-        )?;
-        for (name, value) in application_fields {
-            names.push(name.clone());
-            append_response_header_or_overflow(
-                &mut headers,
-                &mut overflow_fields,
-                name,
-                value,
-                true,
-            )?;
+    let original_order = parts.extensions.remove::<HeaderOrder>();
+    let defaults = default_response_header_fields(server, http1_automatic_date_header)?;
+    let names = original_order.as_ref().map(|order| {
+        let mut names: Vec<_> = defaults.iter().map(|(name, _)| name.clone()).collect();
+        names.extend_from_slice(order.names());
+        names
+    });
+    // HeaderOrder chooses the wire position by name. HeaderMap retains
+    // each name's value order, and the spill contains its later values.
+    // Iterate both stores directly instead of sorting or copying a second
+    // application-field vector on every response.
+    let fields = defaults
+        .into_iter()
+        .chain(
+            parts
+                .headers
+                .iter()
+                .map(|(name, value)| (name.clone(), value.clone())),
+        )
+        .chain(
+            original_order
+                .iter()
+                .flat_map(|order| order.overflow_fields().iter().cloned()),
+        );
+    let mut headers = HeaderMap::new();
+    let mut overflow_fields = Vec::new();
+    for (name, value) in fields {
+        #[cfg(coverage)]
+        let append_result = if coverage_fault_take(CoverageFaultPoint::HttpDefaultHeaderAppendError)
+        {
+            Err(std::io::Error::other(
+                "coverage-injected response header capacity error",
+            ))
+        } else {
+            headers
+                .try_append(name.clone(), value.clone())
+                .map_err(std::io::Error::other)
+        };
+        #[cfg(not(coverage))]
+        let append_result = headers
+            .try_append(name.clone(), value.clone())
+            .map_err(std::io::Error::other);
+        if let Err(error) = append_result {
+            if names.is_some() {
+                overflow_fields.push((name, value));
+            } else {
+                return Err(std::io::Error::other(format!(
+                    "HTTP response header capacity exceeded: {error}"
+                )));
+            }
         }
-        parts.headers = headers;
+    }
+    parts.headers = headers;
+    if let Some(names) = names {
         let mut order = HeaderOrder::new(names);
         for (name, value) in overflow_fields {
             order.append_overflow_field(name, value);
         }
         parts.extensions.insert(order);
-        return Ok(Response::from_parts(parts, body));
-    }
-
-    let mut header_order_prefix = original_header_order.as_ref().map(|_| Vec::new());
-    let mut headers = HeaderMap::new();
-    let mut overflow_fields = Vec::new();
-    let allow_overflow = original_header_order.is_some();
-    if server.date_header && !http1_automatic_date_header {
-        let date = httpdate::fmt_http_date(std::time::SystemTime::now());
-        #[cfg(coverage)]
-        let date_bytes =
-            if coverage_fault_take(CoverageFaultPoint::HttpResponseDateHeaderInvalidValue) {
-                &b"\r\n"[..]
-            } else {
-                date.as_bytes()
-            };
-        #[cfg(not(coverage))]
-        let date_bytes = date.as_bytes();
-        let value = HeaderValue::from_bytes(date_bytes).map_err(std::io::Error::other)?;
-        headers.try_append(DATE, value).map_err(|error| {
-            std::io::Error::other(format!("HTTP response header capacity exceeded: {error}"))
-        })?;
-        if let Some(prefix) = &mut header_order_prefix {
-            prefix.push(DATE);
-        }
-    }
-    for (name, value) in &server.default_headers {
-        let name = HeaderName::from_bytes(name)
-            .map_err(|_| invalid_default_header_error(InvalidDefaultHeader::Name))?;
-        let value = HeaderValue::from_bytes(value)
-            .map_err(|_| invalid_default_header_error(InvalidDefaultHeader::Value))?;
-        if let Some(prefix) = &mut header_order_prefix {
-            prefix.push(name.clone());
-        }
-        append_response_header_or_overflow(
-            &mut headers,
-            &mut overflow_fields,
-            name,
-            value,
-            allow_overflow,
-        )?;
-    }
-    for (name, value) in &parts.headers {
-        append_response_header_or_overflow(
-            &mut headers,
-            &mut overflow_fields,
-            name.clone(),
-            value.clone(),
-            allow_overflow,
-        )?;
-    }
-    parts.headers = headers;
-    if let (Some(mut order), Some(prefix)) = (original_header_order, header_order_prefix) {
-        for (name, value) in overflow_fields {
-            order.append_overflow_field(name, value);
-        }
-        order.prepend(prefix);
-        parts.extensions.insert(order);
     }
     Ok(Response::from_parts(parts, body))
 }
 
-fn ordered_response_header_fields(
-    headers: &HeaderMap,
-    order: &HeaderOrder,
-) -> Vec<(HeaderName, HeaderValue)> {
-    let mut fields: Vec<Option<(HeaderName, HeaderValue)>> = headers
-        .iter()
-        .map(|(name, value)| Some((name.clone(), value.clone())))
-        .collect();
-    fields.extend(order.overflow_fields().iter().cloned().map(Some));
-    let mut positions = HashMap::<HeaderName, VecDeque<usize>>::with_capacity(fields.len());
-    for (index, field) in fields.iter().enumerate() {
-        if let Some((name, _)) = field {
-            positions.entry(name.clone()).or_default().push_back(index);
-        }
-    }
-    let mut ordered = Vec::with_capacity(fields.len());
-    for name in order.names() {
-        if let Some(index) = positions.get_mut(name).and_then(VecDeque::pop_front) {
-            if let Some(field) = fields[index].take() {
-                ordered.push(field);
-            }
-        }
-    }
-    ordered.extend(fields.into_iter().flatten());
-    ordered
-}
-
-fn append_default_response_header_fields(
+fn default_response_header_fields(
     server: &ServerContext,
     http1_automatic_date_header: bool,
-    headers: &mut HeaderMap,
-    names: &mut Vec<HeaderName>,
-    overflow_fields: &mut Vec<(HeaderName, HeaderValue)>,
-    allow_overflow: bool,
-) -> Result<(), std::io::Error> {
+) -> Result<Vec<(HeaderName, HeaderValue)>, std::io::Error> {
+    let mut fields = Vec::new();
     if server.date_header && !http1_automatic_date_header {
         let date = httpdate::fmt_http_date(std::time::SystemTime::now());
         #[cfg(coverage)]
@@ -11791,37 +11730,16 @@ fn append_default_response_header_fields(
         #[cfg(not(coverage))]
         let date_bytes = date.as_bytes();
         let value = HeaderValue::from_bytes(date_bytes).map_err(std::io::Error::other)?;
-        names.push(DATE);
-        append_response_header_or_overflow(headers, overflow_fields, DATE, value, allow_overflow)?;
+        fields.push((DATE, value));
     }
     for (name, value) in &server.default_headers {
         let name = HeaderName::from_bytes(name)
             .map_err(|_| invalid_default_header_error(InvalidDefaultHeader::Name))?;
         let value = HeaderValue::from_bytes(value)
             .map_err(|_| invalid_default_header_error(InvalidDefaultHeader::Value))?;
-        names.push(name.clone());
-        append_response_header_or_overflow(headers, overflow_fields, name, value, allow_overflow)?;
+        fields.push((name, value));
     }
-    Ok(())
-}
-
-fn append_response_header_or_overflow(
-    headers: &mut HeaderMap,
-    overflow_fields: &mut Vec<(HeaderName, HeaderValue)>,
-    name: HeaderName,
-    value: HeaderValue,
-    allow_overflow: bool,
-) -> Result<(), std::io::Error> {
-    if let Err(error) = headers.try_append(name.clone(), value.clone()) {
-        if allow_overflow {
-            overflow_fields.push((name, value));
-        } else {
-            return Err(std::io::Error::other(format!(
-                "HTTP response header capacity exceeded: {error}"
-            )));
-        }
-    }
-    Ok(())
+    Ok(fields)
 }
 
 fn response(status: StatusCode, body: ResponseBody, headers: HeaderMap) -> Response<ResponseBody> {

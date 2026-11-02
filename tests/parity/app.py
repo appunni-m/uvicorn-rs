@@ -1234,7 +1234,7 @@ async def _app_impl(scope, receive, send):
         await send({"type": "http.response.body", "body": b"invalid"})
         return
 
-    if path == "/content-length-empty-body-drain":
+    if path in {"/content-length-empty-body-drain", "/content-length-return-without-final"}:
         await send({
             "type": "http.response.start", "status": 200,
             "headers": [(b"content-length", b"8"), (b"content-type", b"text/plain")],
@@ -1246,6 +1246,8 @@ async def _app_impl(scope, receive, send):
         await asyncio.sleep(1.0)
         await send({"type": "http.response.body", "body": b"", "more_body": True})
         _record("response.content-length.empty-send-returned")
+        if path == "/content-length-return-without-final":
+            return
         await send({"type": "http.response.body", "body": b"", "more_body": False})
         _record("response.content-length.final-send-returned")
         return
