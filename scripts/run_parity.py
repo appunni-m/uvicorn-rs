@@ -2412,6 +2412,7 @@ def load_contract(
                 if (
                     not (
                         case.get("profile") == "lifespan-fault-receive-startup"
+                        or case.get("profile") == "lifespan-fault-startup-clean-return"
                         or case.get("profile", "").startswith("lifespan-fault-asgi-startup-")
                         or case.get("profile") == "lifespan-fault-start-event-channel-closed"
                         or case.get("profile") == "lifespan-no-support"
@@ -6258,7 +6259,14 @@ def load_contract(
                 raise ParityError(f"{case_id}: startup-failure workflow must expect failure")
         elif "startup_fallback" in case:
             exact_case_keys(case, {"case_id", "profile", "operation", "covers", "startup_fallback"}, case_id)
-            exact_keys(case["startup_fallback"], {"followup_path"}, f"{case_id}.startup_fallback")
+            fallback_keys = {"followup_path"}
+            if "expect_startup_error_observed" in case["startup_fallback"]:
+                fallback_keys.add("expect_startup_error_observed")
+                if type(case["startup_fallback"]["expect_startup_error_observed"]) is not bool:
+                    raise ParityError(
+                        f"{case_id}: expect_startup_error_observed must be boolean"
+                    )
+            exact_keys(case["startup_fallback"], fallback_keys, f"{case_id}.startup_fallback")
             if (
                 not isinstance(case["startup_fallback"]["followup_path"], str)
                 or not case["startup_fallback"]["followup_path"].startswith("/")
@@ -6842,6 +6850,7 @@ def start_server(
         "lifespan-retained-send": "startup-return-retains-send",
         "lifespan-no-support-error": "unsupported-error",
         "lifespan-fault-start-event-channel-closed": "unsupported-error",
+        "lifespan-fault-startup-clean-return": "startup-clean-return",
         "lifespan-no-support-error-retained": "unsupported-error-retains-send",
         "lifespan-receive-wrong-signature": "receive-wrong-signature",
         "lifespan-invalid-startup-event": "invalid-startup-event",
@@ -14381,12 +14390,12 @@ def fault_contract_matches(
         )
     if fault["contract"] == "server-lifespan-startup-auto-fallback":
         followup = observation.get("followup_response")
+        expect_startup_error = case.get("startup_fallback", {}).get(
+            "expect_startup_error_observed", True
+        )
         return (
-            observation.get("startup_error_observed") is True
-            and (
-                fault["point"] != "lifespan.without-lifespan.application-error"
-                or observation.get("fault_consumed") is True
-            )
+            observation.get("startup_error_observed") is expect_startup_error
+            and observation.get("fault_consumed") is True
             and isinstance(followup, dict)
             and followup.get("status") == 200
         )

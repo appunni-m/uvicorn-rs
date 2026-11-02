@@ -260,6 +260,9 @@ async def _app_impl(scope, receive, send):
 
     if scope["type"] == "lifespan":
         lifespan_mode = os.environ.get("ASGI_PARITY_LIFESPAN_MODE", "complete")
+        if lifespan_mode == "startup-clean-return":
+            _record("lifespan.app-returned-before-startup-event")
+            return
         if lifespan_mode == "receive-wrong-signature":
             await receive(None)
         if lifespan_mode == "shutdown-cancel-pending":

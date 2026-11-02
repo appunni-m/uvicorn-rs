@@ -7652,13 +7652,15 @@ fn load_tls_configs(
         vec![b"http/1.1".to_vec()]
     };
 
-    // Quinn requires TLS13_AES_128_GCM_SHA256 for QUIC initial keys. The
-    // coverage fault removes every cipher suite so Rustls rejects the TLS
-    // configuration here, before Quinn conversion.
+    // Quinn requires TLS13_AES_128_GCM_SHA256 for QUIC initial keys. Keep
+    // another TLS 1.3 suite so Rustls accepts the configuration and the
+    // coverage fault reaches Quinn's conversion error.
     #[cfg(coverage)]
     let quic_tls_builder = if coverage_fault_take(CoverageFaultPoint::ServerQuicTlsConfigError) {
         let mut provider = rustls::crypto::ring::default_provider();
-        provider.cipher_suites.clear();
+        provider.cipher_suites.retain(|suite| {
+            suite.suite() != rustls::CipherSuite::TLS13_AES_128_GCM_SHA256
+        });
         server_config_with_protocols(
             Arc::new(provider),
             &[&rustls::version::TLS13],
@@ -10885,12 +10887,6 @@ async fn send_websocket_message<S>(socket: &mut S, message: Message) -> Result<(
 where
     S: WebSocketTransport,
 {
-    #[cfg(coverage)]
-    if coverage_fault_take(CoverageFaultPoint::WebSocketDriverDrainSendError) {
-        return Err(Box::new(std::io::Error::other(
-            "coverage-injected WebSocket send failure",
-        )));
-    }
     socket.send_message(message).await
 }
 
@@ -11089,12 +11085,19 @@ where
                 // waiting for another receive. Preserve every accepted
                 // outbound event queued before its task completed.
                 while let Ok(message) = outgoing.try_recv() {
-                    if let Err(error) = send_websocket_message(
-                        &mut socket,
-                        into_websocket_message(message),
-                    )
-                    .await
-                    {
+                    let message = into_websocket_message(message);
+                    #[cfg(coverage)]
+                    let send_result =
+                        if coverage_fault_take(CoverageFaultPoint::WebSocketDriverDrainSendError) {
+                            Err(Box::new(std::io::Error::other(
+                                "coverage-injected WebSocket final-frame drain failure",
+                            )) as BoxError)
+                        } else {
+                            send_websocket_message(&mut socket, message).await
+                        };
+                    #[cfg(not(coverage))]
+                    let send_result = send_websocket_message(&mut socket, message).await;
+                    if let Err(error) = send_result {
                         driver_error = Some(error);
                         break 'driver;
                     }

@@ -651,6 +651,15 @@
       ]
     },
     {
+      "id": "lifespan-fault-startup-clean-return",
+      "oracle": "uvicorn",
+      "protocol": "http/1.1 + lifespan",
+      "oracle_config": [
+        "coverage-only target ASGI app returns before receiving startup",
+        "coverage fault closes the native startup request channel before send"
+      ]
+    },
+    {
       "id": "lifespan-retained-send",
       "oracle": "uvicorn",
       "protocol": "http/1.1 + lifespan",
@@ -4394,6 +4403,7 @@
     "inputs/lifespan-fault-scope-asgi.json",
     "inputs/lifespan-fault-scope-state.json",
     "inputs/lifespan-fault-receive-startup.json",
+    "inputs/lifespan-fault-startup-clean-return.json",
     "inputs/lifespan-fault-shutdown-receive.json",
     "inputs/lifespan-fault-asgi-startup-complete.json",
     "inputs/lifespan-fault-asgi-startup-failed.json",
