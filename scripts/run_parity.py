@@ -2453,6 +2453,7 @@ def load_contract(
                         "asgi.event-type.lifespan-shutdown-complete.eq",
                         "asgi.event-type.lifespan-shutdown-failed.eq",
                         "lifespan.asgi.send.type.get-item",
+                        "lifespan.send.event-channel-closed",
                         "lifespan.shutdown.failed.message.get-item",
                         "lifespan.shutdown.failed.message.extract",
                     }

@@ -83,31 +83,18 @@ def project_versions(root: Path = ROOT, expected: str | None = None) -> dict[str
         raise ValueError("release.yml must expose the staged publication action selector") from error
     action_block = "\n".join(lines[action_start:action_end])
     action_options = re.findall(r"(?m)^          - ([^\s#]+)\s*$", action_block)
-    if action_options != ["prepare-only", "cargo", "pypi", "cargo-and-pypi"]:
-        raise ValueError("release.yml must expose prepare-only, Cargo, PyPI, and combined actions")
-
-    cargo_conditions = {
-        "publish-lifecycle": "needs.prepare.outputs.publish-lifecycle == 'true'",
-        "publish-uvicorn-rs": "needs.prepare.outputs.publish-uvicorn-rs == 'true'",
-    }
-    for cargo_job_name in ("publish-lifecycle", "publish-uvicorn-rs"):
-        try:
-            cargo_job_start = lines.index(f"  {cargo_job_name}:")
-        except ValueError as error:
-            raise ValueError(f"release.yml is missing {cargo_job_name}") from error
-        cargo_job_end = next(
-            (
-                index
-                for index in range(cargo_job_start + 1, len(lines))
-                if lines[index].startswith("  ") and not lines[index].startswith("    ")
-            ),
-            len(lines),
+    if action_options != ["prepare-only", "pypi"]:
+        raise ValueError("release.yml must expose only prepare-only and PyPI publication actions")
+    if any(
+        marker in release_workflow
+        for marker in (
+            "  publish-lifecycle:",
+            "  publish-uvicorn-rs:",
+            "cargo publish",
+            "crates-io-auth-action",
         )
-        cargo_job = "\n".join(lines[cargo_job_start:cargo_job_end])
-        if cargo_conditions[cargo_job_name] not in cargo_job:
-            raise ValueError(
-                f"release.yml {cargo_job_name} must be gated by its registry preflight output"
-            )
+    ):
+        raise ValueError("release.yml must leave Cargo publication to the authorized local release step")
 
     try:
         job_start = lines.index("  publish-pypi:")
@@ -123,56 +110,16 @@ def project_versions(root: Path = ROOT, expected: str | None = None) -> dict[str
     )
     pypi_job = "\n".join(lines[job_start:job_end])
     if (
-        "needs: [prepare, publish-lifecycle, publish-uvicorn-rs]" not in pypi_job
-        or "inputs.action != 'cargo-and-pypi'" not in pypi_job
-        or "needs.publish-lifecycle.result == 'success'" not in pypi_job
-        or "needs.publish-lifecycle.result == 'skipped'" not in pypi_job
-        or "needs.publish-uvicorn-rs.result == 'success'" not in pypi_job
-        or "needs.publish-uvicorn-rs.result == 'skipped'" not in pypi_job
+        "needs: prepare" not in pypi_job
+        or "needs.prepare.outputs.publish-pypi == 'true'" not in pypi_job
     ):
-        raise ValueError("release.yml combined mode must wait for both Cargo publisher jobs before PyPI")
+        raise ValueError("release.yml PyPI publication must be gated by its exact-candidate preflight")
     if not re.search(r"(?m)^    environment:\s*['\"]?pypi['\"]?\s*$", pypi_job):
         raise ValueError("release.yml must bind its PyPI publisher to the pypi environment")
     if not re.search(r"(?m)^      id-token:\s*write\s*$", pypi_job):
         raise ValueError("release.yml PyPI publisher must request OIDC only in its publish job")
     if "pypa/gh-action-pypi-publish" in candidate_workflow:
         raise ValueError("candidate.yml must remain candidate-only and must not publish to PyPI")
-
-    try:
-        server_start = lines.index("  publish-uvicorn-rs:")
-    except ValueError as error:
-        raise ValueError("release.yml is missing its uvicorn-rs crates.io publisher") from error
-    server_end = next(
-        (
-            index
-            for index in range(server_start + 1, len(lines))
-            if lines[index].startswith("  ") and not lines[index].startswith("    ")
-        ),
-        len(lines),
-    )
-    server_job = "\n".join(lines[server_start:server_end])
-    index_step = "      - name: Wait for the exact lifecycle crate in the crates.io index"
-    auth_step = "      - uses: rust-lang/crates-io-auth-action@"
-    required_index_checks = (
-        "needs: [prepare, publish-lifecycle]",
-        "always()",
-        "needs.publish-lifecycle.result == 'skipped'",
-        "https://index.crates.io/{name[:2]}/{name[2:4]}/{name}",
-        'row.get("vers") == version',
-        'entry.get("yanked") is True',
-        'actual_checksum != expected_checksum',
-        "time.monotonic() + 300",
-    )
-    if (
-        server_job.count(index_step) != 1
-        or auth_step not in server_job
-        or server_job.index(index_step) >= server_job.index(auth_step)
-        or any(check not in server_job for check in required_index_checks)
-    ):
-        raise ValueError(
-            "release.yml must wait for the exact lifecycle crate checksum in the crates.io index "
-            "before authenticating to publish uvicorn-rs"
-        )
 
     registry_step = "      - name: Check immutable registry versions without credentials"
     registry_start = next(
@@ -185,7 +132,7 @@ def project_versions(root: Path = ROOT, expected: str | None = None) -> dict[str
         (
             index
             for index in range(registry_start + 1, len(lines))
-            if lines[index] == "  publish-lifecycle:"
+            if lines[index] == "  publish-pypi:"
         ),
         len(lines),
     )
@@ -193,15 +140,15 @@ def project_versions(root: Path = ROOT, expected: str | None = None) -> dict[str
     required_bootstrap_checks = (
         "def check_crate_exists(name):",
         'f"https://crates.io/api/v1/crates/{name}"',
-        "first_crates = [name for name in crate_names if not crate_exists[name]]",
-        "if cargo_selected and first_crates:",
-        "a first crates.io publication",
-        "Trusted Publishing",
-        "publish-new",
+        "crate_exists = {name: check_crate_exists(name) for name in crate_names}",
+        "if pypi_selected and missing_crates:",
+        "publish the exact candidate Cargo archives locally before PyPI",
+        'version_info.get("yanked") is True',
+        "actual != digest",
     )
     if any(check not in registry_script for check in required_bootstrap_checks):
         raise ValueError(
-            "release.yml must stop before Cargo publication when any crate needs its first manual bootstrap"
+            "release.yml must require both exact Cargo candidate archives to be visible on crates.io before PyPI"
         )
 
     def locked_package(lock_name: str, package_name: str, *, editable: bool = False) -> dict:

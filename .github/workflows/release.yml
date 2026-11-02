@@ -9,15 +9,13 @@ on:
         required: true
         type: string
       action:
-        description: Prepare only, publish Cargo, publish PyPI, or publish both after all candidate gates pass
+        description: Prepare only or publish PyPI after the exact Cargo candidate archives are published locally
         required: true
         default: prepare-only
         type: choice
         options:
           - prepare-only
-          - cargo
           - pypi
-          - cargo-and-pypi
       confirmation:
         description: For publication, enter exactly PUBLISH vX.Y.Z
         required: false
@@ -46,8 +44,6 @@ jobs:
       run-id: ${{ steps.candidate.outputs.run-id }}
       artifact-id: ${{ steps.candidate.outputs.artifact-id }}
       artifact-digest: ${{ steps.candidate.outputs.artifact-digest }}
-      publish-lifecycle: ${{ steps.registry.outputs.publish-lifecycle }}
-      publish-uvicorn-rs: ${{ steps.registry.outputs.publish-uvicorn-rs }}
       publish-pypi: ${{ steps.registry.outputs.publish-pypi }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -215,40 +211,8 @@ jobs:
                                                   "branch": "main", "event": "push"}
                   or coverage != expected_coverage):
               raise SystemExit("candidate Coverage-MCP evidence is missing or differs from its selection receipt")
-          receipt_path = root / "standalone-h3-consumer.json"
-          cargo_requested = os.environ["RELEASE_ACTION"] in {"cargo", "cargo-and-pypi"}
-          if cargo_requested and receipt_path.is_file():
-              receipt = json.loads(receipt_path.read_text())
-              archive = Path("target/release-candidate/packages") / f"uvicorn-rs-{version}.crate"
-              import hashlib
-              archive_sha256 = hashlib.sha256(archive.read_bytes()).hexdigest()
-              required = {
-                  "schema": "uvicorn-rs-standalone-h3-consumer@1",
-                  "status": "passed",
-                  "source_commit": commit,
-                  "source_dirty": False,
-                  "crate_sha256": archive_sha256,
-                  "archive_sha256s": {
-                      f"{package}-{version}.crate": hashlib.sha256(
-                          (Path("target/release-candidate/packages") / f"{package}-{version}.crate").read_bytes()
-                      ).hexdigest()
-                      for package in ("asgi-lifespan-protocol-rs", "uvicorn-rs")
-                  },
-                  "input_case_id": "http3.truncated-data-frame-recovery-after-protocol-error",
-                  "registry_dependencies": ["asgi-lifespan-protocol-rs"],
-                  "dependency_source": "exact-candidate-crate-archives",
-                  "workspace_h3_patch": False,
-                  "expected_h3_error_code": 262,
-                  "observed_h3_error_code": 262,
-                  "follow_up_connection_reused": False,
-                  "follow_up_request_status": 200,
-              }
-              if any(receipt.get(key) != value for key, value in required.items()):
-                  raise SystemExit("standalone H3 consumer receipt is incomplete or mismatched")
-          elif cargo_requested and os.environ["RELEASE_ACTION"] != "prepare-only":
-              raise SystemExit("publication is blocked: exact-archive standalone H3 consumer evidence is missing")
-          elif not cargo_requested and os.environ["RELEASE_ACTION"] != "prepare-only":
-              print("Cargo was not selected; standalone H3 archive evidence is not a PyPI gate")
+          if os.environ["RELEASE_ACTION"] == "pypi":
+              print("The PyPI registry preflight below verifies both locally published Cargo archives.")
           PY
           rm -rf target/publication-recheck
           mkdir -p target/publication-recheck/packages target/publication-recheck/evidence
@@ -298,7 +262,10 @@ jobs:
               )
               if status == 404:
                   return True
-              actual = payload.get("version", {}).get("checksum") if payload else None
+              version_info = payload.get("version", {}) if payload else {}
+              if version_info.get("yanked") is True:
+                  raise SystemExit(f"crates.io has yanked {name} {version}; stop PyPI publication")
+              actual = version_info.get("checksum")
               if actual != digest:
                   raise SystemExit(f"crates.io already contains {name} {version} with different bytes")
               return False
@@ -334,31 +301,27 @@ jobs:
                   raise SystemExit("PyPI already contains this version with a partial or different distribution set")
               return False
 
-          cargo_selected = action in {"cargo", "cargo-and-pypi"}
-          pypi_selected = action in {"pypi", "cargo-and-pypi"}
+          pypi_selected = action == "pypi"
           inspect_all = action == "prepare-only"
-          crate_absent = {}
-          crate_exists = {}
+          crate_exists = {name: check_crate_exists(name) for name in crate_names}
+          crate_absent = {
+              name: check_crate(name) if crate_exists[name] else True
+              for name in crate_names
+          }
           pypi_absent = None
-          if cargo_selected or inspect_all:
-              crate_exists = {name: check_crate_exists(name) for name in crate_names}
-              crate_absent = {name: check_crate(name) for name in crate_names}
           if pypi_selected or inspect_all:
               pypi_absent = check_pypi()
 
-          first_crates = [name for name in crate_names if not crate_exists[name]]
-          if cargo_selected and first_crates:
-              names = ", ".join(first_crates)
+          missing_crates = [
+              name for name in crate_names
+              if not crate_exists[name] or crate_absent[name]
+          ]
+          if pypi_selected and missing_crates:
+              names = ", ".join(missing_crates)
               raise SystemExit(
-                  f"{names} require a first crates.io publication. Trusted Publishing "
-                  "cannot create a crate's initial version. Publish the exact CI-verified "
-                  "crate locally from a clean checkout with a short-lived publish-new "
-                  "token; after registry visibility, rerun this workflow and verify "
-                  "the exact crate checksum before any automated upload."
+                  f"publish the exact candidate Cargo archives locally before PyPI: {names}"
               )
 
-          publish_lifecycle = cargo_selected and crate_absent[crate_names[0]]
-          publish_server = cargo_selected and crate_absent[crate_names[1]]
           publish_pypi = pypi_selected and pypi_absent
           registry_state = {
               "version": version,
@@ -383,193 +346,17 @@ jobs:
               summary.write("\n```\n")
               if action == "prepare-only":
                   summary.write("\nPrepare-only checks registry identity and hashes; publisher jobs remain disabled.\n")
-          values = {
-              "publish-lifecycle": str(publish_lifecycle).lower(),
-              "publish-uvicorn-rs": str(publish_server).lower(),
-              "publish-pypi": str(publish_pypi).lower(),
-          }
+          values = {"publish-pypi": str(publish_pypi).lower()}
           with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
               for key, value in values.items():
                   output.write(f"{key}={value}\n")
           print(json.dumps(values, sort_keys=True))
           PY
 
-  publish-lifecycle:
-    name: Publish asgi-lifespan-protocol-rs to crates.io
-    needs: prepare
-    if: needs.prepare.outputs.publish-lifecycle == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    environment: crates-io
-    permissions:
-      actions: read
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.prepare.outputs.commit }}
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
-        with:
-          toolchain: "1.85.0"
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ needs.prepare.outputs.run-id }}
-          artifact-ids: ${{ needs.prepare.outputs.artifact-id }}
-          digest-mismatch: error
-          path: target/release-candidate
-      - name: Verify package identity and exact archive bytes
-        env:
-          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
-        run: |
-          set -euo pipefail
-          cd target/release-candidate
-          sha256sum --check --strict SHA256SUMS
-          cd ../..
-          cargo package -p asgi-lifespan-protocol-rs --no-verify --locked
-          cmp "target/package/asgi-lifespan-protocol-rs-$RELEASE_VERSION.crate" \
-            "target/release-candidate/packages/asgi-lifespan-protocol-rs-$RELEASE_VERSION.crate"
-      - uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
-        id: auth
-      - name: Publish the exact reviewed crate
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
-        # Candidate CI checked the packaged archive in a clean consumer. This
-        # job repacks it and compares exact bytes before requesting OIDC; skip
-        # repeating that build after the short-lived credential is available.
-        run: cargo publish -p asgi-lifespan-protocol-rs --no-verify --locked
-
-  publish-uvicorn-rs:
-    name: Publish uvicorn-rs to crates.io
-    needs: [prepare, publish-lifecycle]
-    if: >-
-      always() &&
-      needs.prepare.result == 'success' &&
-      needs.prepare.outputs.publish-uvicorn-rs == 'true' &&
-      (needs.publish-lifecycle.result == 'success' ||
-       needs.publish-lifecycle.result == 'skipped')
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    environment: crates-io
-    permissions:
-      actions: read
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.prepare.outputs.commit }}
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
-        with:
-          toolchain: "1.85.0"
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ needs.prepare.outputs.run-id }}
-          artifact-ids: ${{ needs.prepare.outputs.artifact-id }}
-          digest-mismatch: error
-          path: target/release-candidate
-      - name: Verify package identity and exact archive bytes
-        env:
-          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
-        run: |
-          set -euo pipefail
-          cd target/release-candidate
-          sha256sum --check --strict SHA256SUMS
-          cd ../..
-          cargo package -p uvicorn-rs --no-verify --locked
-          cmp "target/package/uvicorn-rs-$RELEASE_VERSION.crate" \
-            "target/release-candidate/packages/uvicorn-rs-$RELEASE_VERSION.crate"
-      - name: Wait for the exact lifecycle crate in the crates.io index
-        env:
-          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
-        run: |
-          python - <<'PY'
-          import hashlib
-          import json
-          import os
-          from pathlib import Path
-          import time
-          from urllib.error import HTTPError, URLError
-          from urllib.request import Request, urlopen
-
-          name = "asgi-lifespan-protocol-rs"
-          version = os.environ["RELEASE_VERSION"]
-          archive = Path("target/release-candidate/packages") / f"{name}-{version}.crate"
-          expected_checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
-          # Cargo's sparse-index path for names with at least four characters
-          # is {first-two}/{next-two}/{name}.
-          url = f"https://index.crates.io/{name[:2]}/{name[2:4]}/{name}"
-          deadline = time.monotonic() + 300
-          last_reason = "the exact version is not indexed yet"
-
-          while True:
-              request = Request(url, headers={"User-Agent": "uvicorn-rs-release-index-check"})
-              try:
-                  with urlopen(request, timeout=10) as response:
-                      entries = [json.loads(line) for line in response.read().splitlines() if line]
-              except HTTPError as error:
-                  if error.code not in {404, 429} and error.code < 500:
-                      raise SystemExit(f"crates.io sparse-index request failed: HTTP {error.code}")
-                  entries = []
-                  last_reason = f"sparse-index request returned HTTP {error.code}"
-              except (URLError, TimeoutError) as error:
-                  entries = []
-                  last_reason = f"sparse-index request failed: {error}"
-
-              entry = next((row for row in entries if row.get("vers") == version), None)
-              if entry is not None:
-                  if entry.get("yanked") is True:
-                      raise SystemExit(f"crates.io lifecycle dependency {name} {version} is yanked")
-                  actual_checksum = entry.get("cksum")
-                  if actual_checksum != expected_checksum:
-                      raise SystemExit(
-                          f"crates.io index checksum for {name} {version} differs from the verified candidate"
-                      )
-                  print(json.dumps({
-                      "package": name,
-                      "version": version,
-                      "checksum": actual_checksum,
-                      "index": "https://index.crates.io",
-                  }, sort_keys=True))
-                  break
-
-              remaining = deadline - time.monotonic()
-              if remaining <= 0:
-                  raise SystemExit(
-                      f"timed out waiting for {name} {version} in the crates.io index: {last_reason}"
-                  )
-              time.sleep(min(15, remaining))
-          PY
-      - uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
-        id: auth
-      - name: Publish the exact reviewed crate
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
-        # Candidate CI checked the packaged archive in a clean consumer. This
-        # job repacks it and compares exact bytes before requesting OIDC; skip
-        # repeating that build after the short-lived credential is available.
-        run: cargo publish -p uvicorn-rs --no-verify --locked
-
   publish-pypi:
     name: Publish uvicorn-rs to PyPI
-    needs: [prepare, publish-lifecycle, publish-uvicorn-rs]
-    if: >-
-      always() &&
-      needs.prepare.result == 'success' &&
-      needs.prepare.outputs.publish-pypi == 'true' &&
-      (inputs.action != 'cargo-and-pypi' ||
-       ((needs.publish-lifecycle.result == 'success' ||
-         needs.publish-lifecycle.result == 'skipped') &&
-        (needs.publish-uvicorn-rs.result == 'success' ||
-         needs.publish-uvicorn-rs.result == 'skipped')))
+    needs: prepare
+    if: needs.prepare.outputs.publish-pypi == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: pypi
@@ -606,14 +393,10 @@ jobs:
     name: Verify registry bytes against the candidate
     needs:
       - prepare
-      - publish-lifecycle
-      - publish-uvicorn-rs
       - publish-pypi
     if: >-
-      !cancelled() && inputs.action != 'prepare-only' &&
+      !cancelled() && inputs.action == 'pypi' &&
       needs.prepare.result == 'success' &&
-      (needs.publish-lifecycle.result == 'success' || needs.publish-lifecycle.result == 'skipped') &&
-      (needs.publish-uvicorn-rs.result == 'success' || needs.publish-uvicorn-rs.result == 'skipped') &&
       (needs.publish-pypi.result == 'success' || needs.publish-pypi.result == 'skipped')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -677,7 +460,10 @@ jobs:
               archive = packages / f"{name}-{version}.crate"
               expected = hashlib.sha256(archive.read_bytes()).hexdigest()
               payload = remote_json(f"https://crates.io/api/v1/crates/{name}/{version}")
-              actual = payload.get("version", {}).get("checksum") if payload else None
+              version_info = payload.get("version", {}) if payload else {}
+              if version_info.get("yanked") is True:
+                  raise SystemExit(f"published {name} {version} is yanked")
+              actual = version_info.get("checksum")
               if actual is None:
                   raise LookupError(f"{name} {version} not visible yet")
               if actual != expected:
@@ -699,11 +485,10 @@ jobs:
               if actual != expected:
                   raise SystemExit("published PyPI files differ from the candidate filenames or checksums")
 
-          if action in {"cargo", "cargo-and-pypi"}:
+          if action == "pypi":
               for crate in (
                   "asgi-lifespan-protocol-rs", "uvicorn-rs",
               ):
                   check_registry(lambda crate=crate: verify_crate(crate), f"{crate} {version}")
-          if action in {"pypi", "cargo-and-pypi"}:
               check_registry(verify_pypi, f"uvicorn-rs {version}")
           PY

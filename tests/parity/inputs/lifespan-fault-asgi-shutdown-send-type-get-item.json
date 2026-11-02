@@ -26,7 +26,7 @@
       "verification": "fault-contract",
       "fault": {
         "point": "lifespan.send.event-channel-closed",
-        "contract": "server-shutdown-failure"
+        "contract": "server-shutdown-application-exception-clean-exit"
       },
       "lifecycle": {
         "state_path": "/state",
