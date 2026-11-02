@@ -7658,9 +7658,9 @@ fn load_tls_configs(
     #[cfg(coverage)]
     let quic_tls_builder = if coverage_fault_take(CoverageFaultPoint::ServerQuicTlsConfigError) {
         let mut provider = rustls::crypto::ring::default_provider();
-        provider.cipher_suites.retain(|suite| {
-            suite.suite() != rustls::CipherSuite::TLS13_AES_128_GCM_SHA256
-        });
+        provider
+            .cipher_suites
+            .retain(|suite| suite.suite() != rustls::CipherSuite::TLS13_AES_128_GCM_SHA256);
         server_config_with_protocols(
             Arc::new(provider),
             &[&rustls::version::TLS13],
