@@ -37,6 +37,18 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 ### Release audit — 2026-11-03 (PR #21 / CI #637–639)
 
+The following completed-source receipts precede the recycling removal.
+[CI #640](https://github.com/appunni-m/uvicorn-rs/actions/runs/41641278412)
+qualifies the changed runtime: Linux/macOS each pass 786/786 and package
+consumers; the Python 3.9 floor, exact-archive standalone H3 rejection/recovery
+and macOS replacement/rollback checks pass. Windows packaging stops after a
+stock SIGBREAK shutdown timeout. Focused #641 captures its TCP recovery and
+the known startup failure together; raw parity stays failed and the composed
+gate requires both signatures plus a clean candidate. Its updated checker
+still needs hosted acceptance. The original coverage job remains running;
+do not restart it merely because Windows failed. Full final-main evidence and
+the normal three-system benchmark remain required.
+
 Changes are developed on `develop` and promoted through
 [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21).
 [CI #637](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084)

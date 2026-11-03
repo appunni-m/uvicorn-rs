@@ -18,6 +18,34 @@ upstream `uvicorn` and `uvicorn-rs` in separate environments. Use the
 
 ## Current status (2026-11-03)
 
+[CI #640](https://github.com/appunni-m/uvicorn-rs/actions/runs/41641278412)
+tests PR #21 head `8e0f792a7dc00597c580fb7ddc6d5222e0310ec2` at clean
+merge producer `f42a99b1555133be4ba5095a6f48fe4fb9ffa22f`, after removal of
+peer-read recycling. Runtime-source digest is
+`c3b34f3eec9888f42984aac28421183d947a80700e634312afac9579e0c5a88c`.
+Linux and macOS each pass all 786 public inputs and their package consumers.
+The exact Linux wheel also passes the CPython 3.9.25 consumer. Normal native
+contracts pass 215/215; the additional 44 fault contracts remain in coverage.
+
+Windows raw parity is 757/759, with one failed stock SIGINT/TCP-wakeup
+comparison and one stock SIGBREAK shutdown timeout recorded as infrastructure
+failure. The candidate serves and exits cleanly on both inputs. The SIGINT
+row passes the existing exception on offline review. SIGBREAK lacked recovery
+evidence, so the gate correctly rejected the full job and packaging did not run.
+The diagnostic-only follow-up
+[CI #641](https://github.com/appunni-m/uvicorn-rs/actions/runs/41647390647)
+captures the known startup replacement and TCP-wakeup hang together after
+SIGBREAK; its raw report remains failed. The composed acceptance requires both
+complete defect signatures and a clean candidate. See the
+[versioned acceptance contract](maintainers/uvicorn-0.54.0-contract.md#acceptance-of-known-differences).
+
+The coverage job is still completing its three full verification repeats.
+Final-source coverage/review, hosted Windows gate qualification, complete
+three-system measurements, final-main artifacts and publication remain open.
+The subsequent changes affect diagnostics and acceptance, not server behavior.
+
+### Earlier qualification: CI #637 and #638
+
 [CI #637](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084)
 tests [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21) head
 `b9ed5c693889a54c5ba1d3f8796702da735981cc` at clean merge source

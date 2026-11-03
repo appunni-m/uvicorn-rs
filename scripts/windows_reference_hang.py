@@ -1,7 +1,7 @@
 """Explicit acceptance for one recorded stock-Uvicorn defect, outside parity.
 
 The raw comparison stays failed. This policy accepts only the Windows
-two-worker SIGINT timeout that completes after one diagnostic TCP connection,
+two-worker console-signal timeout that completes after one diagnostic TCP connection,
 with an independently clean candidate lifecycle on the same input.
 """
 
@@ -14,10 +14,13 @@ from typing import Any
 
 
 POLICY = "uvicorn-0.54.0-windows-two-worker-sigint-tcp-wakeup@1"
+SIGBREAK_POLICY = "uvicorn-0.54.0-windows-two-worker-sigbreak-tcp-wakeup@1"
+SIGBREAK_CASE_ID = "python-api.module-cli-two-workers-stop-on-sigterm"
 CASE_IDS = {
     "python-api.module-cli-two-workers-serve-request",
     "python-api.module-cli-web-concurrency-two-workers-serve-request",
     "python-api.module-cli-explicit-workers-overrides-web-concurrency",
+    SIGBREAK_CASE_ID,
 }
 
 
@@ -50,20 +53,21 @@ def _eligible_worker_input(
 
 
 def eligible_input(case: dict[str, Any]) -> bool:
-    return _eligible_worker_input(case, CASE_IDS, "SIGINT")
+    if case.get("case_id") == SIGBREAK_CASE_ID:
+        return _eligible_worker_input(case, {SIGBREAK_CASE_ID}, "SIGTERM") and (
+            case["api"]["run_http"] == {
+                "method": "GET", "path": "/python-api-two-workers-sigterm",
+                "shutdown_signal": "SIGTERM", "timeout_seconds": 12,
+                "lifespan": "auto", "invocation": "module-cli", "root_path": "",
+                "post_response_settle_seconds": 1, "workers": 2,
+            }
+        )
+    return _eligible_worker_input(case, CASE_IDS - {SIGBREAK_CASE_ID}, "SIGINT")
 
 
 def diagnostic_input(case: dict[str, Any]) -> bool:
-    """Retain a SIGBREAK timeout for investigation without accepting it.
-
-    Windows maps the public SIGTERM input to CTRL_BREAK_EVENT. CI #640
-    captured a reference-only stall there, but no TCP recovery observation.
-    The existing SIGINT acceptance policy remains unchanged until that
-    evidence is collected and reviewed.
-    """
-    return eligible_input(case) or _eligible_worker_input(
-        case, {"python-api.module-cli-two-workers-stop-on-sigterm"}, "SIGTERM"
-    )
+    """Retain failed observations; acceptance separately checks every signature."""
+    return eligible_input(case)
 
 
 def _require(condition: bool, message: str) -> None:
@@ -75,7 +79,7 @@ def _decode(value: str) -> str:
     return base64.b64decode(value, validate=True).decode("utf-8")
 
 
-def _clean_lifecycle(log: str, *, completed: bool) -> None:
+def _clean_lifecycle(log: str, *, completed: bool, shutdown_signal: str = "SIGINT") -> None:
     """Count real worker identities, preserving startup and cleanup evidence."""
     starts = re.findall(r"Started server process \[(\d+)\]", log)
     finishes = re.findall(r"Finished server process \[(\d+)\]", log)
@@ -87,7 +91,9 @@ def _clean_lifecycle(log: str, *, completed: bool) -> None:
         r"Traceback|WinError|ERROR:|CRITICAL:|Child process \[\d+\] died|"
         r"timeout graceful shutdown exceeded", log
     ), "crash, replacement, or application error is outside this exception")
-    _require("Received SIGINT, exiting." in log, "supervisor did not acknowledge SIGINT")
+    console_signal = "SIGBREAK" if shutdown_signal == "SIGTERM" else "SIGINT"
+    _require(log.count(f"Received {console_signal}, exiting.") == 1,
+             f"supervisor did not acknowledge one {console_signal}")
     if completed:
         _require(len(finishes) == 2 and set(finishes) == set(starts), "workers did not finish cleanly")
         _require(log.count("Application shutdown complete.") == 2, "lifespan cleanup is incomplete")
@@ -108,7 +114,8 @@ def validate_candidate_lifecycle(row: dict[str, Any], case: dict[str, Any]) -> N
              "candidate did not serve the request")
     _require(target["process_timed_out"] is False and target["process_exit_code"] == 0,
              "candidate did not exit within the original deadline")
-    _require(target["shutdown_signal_sent"] is True and target["shutdown_signals_sent"] == ["SIGINT"],
+    shutdown_signal = case["api"]["run_http"]["shutdown_signal"]
+    _require(target["shutdown_signal_sent"] is True and target["shutdown_signals_sent"] == [shutdown_signal],
              "candidate required a different signal sequence")
     _require(target["worker_replacement_observed"] is False
              and target["worker_start_count"] == target["worker_clean_shutdown_count"] == 2,
@@ -119,35 +126,12 @@ def validate_candidate_lifecycle(row: dict[str, Any], case: dict[str, Any]) -> N
     for field in ("process_timed_out", "process_exit_code", "shutdown_signals_sent",
                   "response_received", "response_status", "response_body_base64", "listener_responses"):
         _require(raw[field] == target[field], f"candidate raw evidence disagrees with {field}")
-    _clean_lifecycle(_decode(raw["server_stderr_base64"]), completed=True)
+    _clean_lifecycle(_decode(raw["server_stderr_base64"]), completed=True,
+                     shutdown_signal=shutdown_signal)
 
 
-def validate_reference_hang(
-    row: dict[str, Any], case: dict[str, Any], environment: dict[str, Any]
-) -> dict[str, Any]:
-    """Reject generic timeouts, other platforms/versions, and candidate defects."""
-    _require(eligible_input(case), "input is outside the three reviewed Windows worker cases")
-    _require(environment["platform"].lower().startswith(("windows", "win32")), "not Windows")
-    _require(environment["dependencies"].get("uvicorn") == "0.54.0", "reference version changed")
-    _require(row.get("status") == "failed", "raw comparison must remain failed")
-    oracle = row["oracle_observation"]
-    target = row["target_observation"]
-    _require(set(oracle) == set(target), "reference observation envelope differs")
-    _require(row["server_exit_codes"] == {"oracle": 0, "target": 0}, "probe process failed")
-    for label, observation in (("reference", oracle), ("candidate", target)):
-        _require(observation["exit_code"] == 0, f"{label} probe failed")
-        _require(observation["response_received"] is True and observation["response_status"] == 200,
-                 f"{label} did not serve the request")
-        _require(observation["shutdown_signal_sent"] is True
-                 and observation["shutdown_signals_sent"] == ["SIGINT"], f"{label} signal sequence differs")
-        _require(observation["process_exit_code"] == 0, f"{label} did not exit cleanly")
-        _require(observation["worker_replacement_observed"] is False, f"{label} replaced a worker")
-        _require(observation["worker_start_count"] == observation["worker_clean_shutdown_count"] == 2,
-                 f"{label} worker lifecycle is incomplete")
-    _require(oracle["process_timed_out"] is True, "reference did not time out")
-    _require(target["process_timed_out"] is False, "candidate exceeded the original deadline")
-    raw_oracle = json.loads(_decode(oracle["stdout_base64"]))["run_http"]
-    raw_target = json.loads(_decode(target["stdout_base64"]))["run_http"]
+def _reference_recovery(raw_oracle: dict, raw_target: dict, case: dict) -> str:
+    """Require the unchanged deadline and exactly one bounded stock-only wakeup."""
     diagnostic = raw_oracle["reference_shutdown_diagnostic"]
     _require(isinstance(diagnostic, dict) and set(diagnostic) == {
         "stderr_before_connection_base64", "timeout_seconds", "recovery_timeout_seconds",
@@ -160,11 +144,50 @@ def validate_reference_hang(
              and diagnostic["error"] is None, "one TCP connection did not release shutdown")
     _require("reference_shutdown_diagnostic" in raw_target
              and raw_target["reference_shutdown_diagnostic"] is None, "candidate needed a wakeup or lacks evidence")
+    before = _decode(diagnostic["stderr_before_connection_base64"])
+    _require(_decode(raw_oracle["server_stderr_base64"]).startswith(before),
+             "pre-wakeup log is not a prefix of the retained complete log")
+    return before
+
+
+def validate_reference_hang(
+    row: dict[str, Any], case: dict[str, Any], environment: dict[str, Any]
+) -> dict[str, Any]:
+    """Reject generic timeouts, other platforms/versions, and candidate defects."""
+    _require(eligible_input(case), "input is outside the reviewed Windows worker cases")
+    _require(environment["platform"].lower().startswith(("windows", "win32")), "not Windows")
+    _require(environment["dependencies"].get("uvicorn") == "0.54.0", "reference version changed")
+    shutdown_signal = case["api"]["run_http"]["shutdown_signal"]
+    if shutdown_signal == "SIGTERM":
+        _require(environment["machine"].lower() in {"amd64", "x86_64"}
+                 and environment["python"] == "3.12.13", "captured SIGBREAK environment changed")
+    _require(row.get("status") == "failed", "raw comparison must remain failed")
+    oracle = row["oracle_observation"]
+    target = row["target_observation"]
+    _require(set(oracle) == set(target), "reference observation envelope differs")
+    _require(row["server_exit_codes"] == {"oracle": 0, "target": 0}, "probe process failed")
+    for label, observation in (("reference", oracle), ("candidate", target)):
+        _require(observation["exit_code"] == 0, f"{label} probe failed")
+        _require(observation["response_received"] is True and observation["response_status"] == 200,
+                 f"{label} did not serve the request")
+        _require(observation["shutdown_signal_sent"] is True
+                 and observation["shutdown_signals_sent"] == [shutdown_signal], f"{label} signal sequence differs")
+        _require(observation["process_exit_code"] == 0, f"{label} did not exit cleanly")
+        _require(observation["worker_replacement_observed"] is False, f"{label} replaced a worker")
+        _require(observation["worker_start_count"] == observation["worker_clean_shutdown_count"] == 2,
+                 f"{label} worker lifecycle is incomplete")
+    _require(oracle["process_timed_out"] is True, "reference did not time out")
+    _require(target["process_timed_out"] is False, "candidate exceeded the original deadline")
+    raw_oracle = json.loads(_decode(oracle["stdout_base64"]))["run_http"]
+    raw_target = json.loads(_decode(target["stdout_base64"]))["run_http"]
+    before = _reference_recovery(raw_oracle, raw_target, case)
     for side, raw in ((oracle, raw_oracle), (target, raw_target)):
         for field in ("process_timed_out", "process_exit_code", "shutdown_signals_sent",
                       "response_received", "response_status", "response_body_base64", "listener_responses"):
             _require(raw[field] == side[field], f"raw evidence disagrees with {field}")
-        _clean_lifecycle(_decode(raw["server_stderr_base64"]), completed=True)
-    _clean_lifecycle(_decode(diagnostic["stderr_before_connection_base64"]), completed=False)
-    return {"case_id": case["case_id"], "policy": POLICY,
+        _clean_lifecycle(_decode(raw["server_stderr_base64"]), completed=True,
+                         shutdown_signal=shutdown_signal)
+    _clean_lifecycle(before, completed=False, shutdown_signal=shutdown_signal)
+    return {"case_id": case["case_id"],
+            "policy": SIGBREAK_POLICY if shutdown_signal == "SIGTERM" else POLICY,
             "raw_comparison": "failed", "candidate_contract": "passed"}

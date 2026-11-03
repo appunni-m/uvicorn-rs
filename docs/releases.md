@@ -31,55 +31,61 @@ The registry audit on 2026-11-03 at 09:20 UTC found both Cargo crates at 0.2.1
 with no 0.3.0 version, and HTTP 404 for PyPI `uvicorn-rs`. Recheck the
 registries immediately before publication.
 
-The latest [CI #636](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747)
-uses PR head `2d3633d8b79e6f0b8ab0bf72466418d1d8b1662f` and clean merge
-source `86a89b51984ac6649faa1d30f7948df0c841fa90`. See the
-[compatibility receipts](uvicorn-compatibility.md#current-status-2026-11-03)
-for raw Linux/macOS 786/786 parity and Windows 758/759 with separate,
-narrow stock-reference-hang acceptance. All candidate lifecycle contracts
-required by that exception pass. The indexed custom protocol, TLS factory
-and response-capacity cases pass on every tested platform.
+[CI #640](https://github.com/appunni-m/uvicorn-rs/actions/runs/41641278412)
+uses PR #21 head `8e0f792a7dc00597c580fb7ddc6d5222e0310ec2` and clean
+merge source `f42a99b1555133be4ba5095a6f48fe4fb9ffa22f`, after peer-read
+recycling was rejected and removed. Linux and macOS pass 786/786 public inputs,
+package consumers and strict offline source/native checks. Rust quality,
+features, minimum version and native composition pass. Unified coverage is
+still completing its required repeats; a final report and independent review
+are not yet available.
 
-| Candidate bundle | Artifact | Verification |
+| Candidate evidence | Artifact | Verification |
 | --- | --- | --- |
-| Linux x86-64 | [13214953716](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747/artifacts/13214953716) | All seven payload hashes, Cargo default/http3, wheel and rebuilt-sdist consumers verified |
-| Windows x86-64 | [13216217708](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747/artifacts/13216217708) | Both payload hashes, wheel RECORD/source/native identity and clean consumer verified |
-| macOS ARM64 | No candidate bundle | Raw parity passed, then Bash 3.2 rejected an empty array in the evidence wrapper before packaging |
+| Linux x86-64 | [13234310894](https://github.com/appunni-m/uvicorn-rs/actions/runs/41641278412/artifacts/13234310894) | Actual Cargo archives, wheel and sdist inspected; clean default/http3, wheel and rebuilt-sdist consumers pass |
+| macOS ARM64 | [13233983122](https://github.com/appunni-m/uvicorn-rs/actions/runs/41641278412/artifacts/13233983122) | Wheel RECORD/source/native identity and clean consumer pass; local replacement/uninstall/rollback passes |
+| Python 3.9.25 | [13235318123](https://github.com/appunni-m/uvicorn-rs/actions/runs/41641278412/artifacts/13235318123) | Exact Linux abi3 wheel consumer passes; this is not full Python 3.9 parity |
+| Windows x86-64 | [Raw parity 13234834280](https://github.com/appunni-m/uvicorn-rs/actions/runs/41641278412/artifacts/13234834280) | 757/759 raw passes, one reference SIGINT mismatch and one reference SIGBREAK infrastructure timeout; no candidate package bundle |
 
-Candidate archive SHA-256 values:
-
-- Linux x86-64: `7a45a51bd29b577de1535de522014a0e9bc791acd29e7793f4010160d55ab890`.
-- Windows x86-64: `cfcbd9e3508c20a8297733a7af064e5f764fa0b50d03c12ff61db9be8d98decb`.
-
-The separate [CPython 3.9.25 consumer](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747/artifacts/13216023731)
-passes on the exact Linux abi3 wheel. All public parity profiles above used
-CPython 3.12.13. The Python-floor check is not the full parity suite.
-
-The inspected package SHA-256 values for this source are:
+The inspected package SHA-256 values for this producer are:
 
 | Package | SHA-256 |
 | --- | --- |
-| `asgi-lifespan-protocol-rs-0.3.0.crate` | `9666a24157e431ed2649838aec3a1a632c3809fa577f8ada84f00f9fbe4e404b` |
-| `uvicorn-rs-0.3.0.crate` | `f90308f46bfdc5c37aac50a43c7260b516747d2fce93fad186198e1c9481f4ee` |
-| `uvicorn_rs-0.3.0-cp39-abi3-manylinux_2_34_x86_64.whl` | `21b451c6b0e8240616615c72dc7fb79fd0c4f3250fe58f7cff0c75abd54fc598` |
-| `uvicorn_rs-0.3.0-cp39-abi3-win_amd64.whl` | `ad77bde2078714558b20c45d1db9827f0ccae0ccf79d51fc46e132e231fa5e6b` |
-| `uvicorn_rs-0.3.0.tar.gz` | `67c6eaf0ef3e01aa0fb2a5a9fc0a1a5513a13abf9bda9180ebb8f9eabb32e8f4` |
+| `asgi-lifespan-protocol-rs-0.3.0.crate` | `7bf50d79cdbe79f4360a474604cbf56d5281fb2f1326a3f8850f38dcaea794e5` |
+| `uvicorn-rs-0.3.0.crate` | `e258b3f246721a8c7f958008ecf854fcfdfc290d093af9a046ccfe64885bbd43` |
+| `uvicorn_rs-0.3.0-cp39-abi3-manylinux_2_34_x86_64.whl` | `2cc4b119424bcbbcddee777f9a7d20021ee3520d80130e6a7f1a56ffd43bb6d7` |
+| `uvicorn_rs-0.3.0-cp39-abi3-macosx_11_0_arm64.whl` | `3d70ab009020699f059cc763b9b953ad592d390acf266e038afa0cc6c0dabcec` |
+| `uvicorn_rs-0.3.0.tar.gz` | `1090fdab6800860a94e07c783f753679e49811d8c4ec24bbae1515ede77475c7` |
 
-These are inspection artifacts for CI #636, not upload approval for later
-source. The macOS wrapper fix and subsequent upload-diagnostic changes need
-qualification. Coverage measured 100%, but its evidence gate failed while
-hashing the TLS fixture directory; that validator repair also needs hosted
-qualification. Exact-main coverage and independent Coverage-MCP handoff,
-matched ordinary-FastAPI measurements on three systems,
-the buffer-reuse decision and final artifact assembly remain open.
+An independent local Rust 1.85.0 consumer of these exact extracted Cargo
+archives passes malformed HTTP/3 DATA-frame rejection with error 262 and a
+fresh-connection HTTP 200/healthy recovery. These are PR-source inspection
+artifacts, not publication approval or a complete final-main bundle.
 
-[Documentation #262](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907499)
-built successfully; deployment was skipped for the PR. Later documentation
-changes require a fresh strict build. After every gate passes, merge the qualified source, verify
-the exact-main receipts, publish Cargo locally in lifecycle/server order,
-publish PyPI `uvicorn-rs` through `release.yml`, then verify registry bytes
-and clean installs. Do not create the 0.3.0 tag or publish before qualification.
-See the [completion plan](maintainers/release-completion-plan.md).
+The Windows candidate serves requests and shuts down cleanly in both failed
+reference cases. The existing SIGINT exception passes offline review.
+SIGBREAK lacked recovery evidence, so the full job correctly failed.
+[Focused CI #641](https://github.com/appunni-m/uvicorn-rs/actions/runs/41647390647/job/125956212708)
+then captures the known startup listen failure plus one SIGBREAK worker hang;
+one diagnostic TCP connection releases stock shutdown after the original
+deadline. The candidate keeps its two original workers and exits zero within
+the deadline. Raw parity remains failed. Offline review of the composed policy
+requires both defect signatures and a clean candidate; hosted qualification
+of the updated checker remains pending. See the
+[compatibility contract](maintainers/uvicorn-0.54.0-contract.md#acceptance-of-known-differences).
+
+The measured buffer decision is complete: recycling was removed after the
+small-response uvloop regression failed the frozen retention rule. The
+three-system ordinary-FastAPI matrix and upload investigation remain open.
+[Documentation #264](https://github.com/appunni-m/uvicorn-rs/actions/runs/41641278411)
+built successfully for its recorded source, with PR deployment skipped; this
+subsequent documentation refresh needs its own strict build.
+
+After all gates pass, merge through PR #21, verify exact-main CI, independent
+Coverage-MCP handoff and benchmark evidence, assemble the complete candidate,
+publish Cargo locally in lifecycle/server order, then publish PyPI `uvicorn-rs`
+through `release.yml`. Verify registry bytes and clean installs. No 0.3.0 tag
+or publication has been made. See the [completion plan](maintainers/release-completion-plan.md).
 
 ## Registry and packaging audit (2026-10-27; earlier source snapshot)
 

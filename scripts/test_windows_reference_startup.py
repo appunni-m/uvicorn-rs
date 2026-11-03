@@ -12,7 +12,7 @@ import unittest
 
 import check_ci_evidence as evidence
 from test_windows_reference_hang import encode, fixture
-from windows_reference_startup import POLICY, _windows_log_events
+from windows_reference_startup import POLICY, SIGBREAK_POLICY, _windows_log_events
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -164,6 +164,142 @@ class ReferenceStartupPolicyTests(unittest.TestCase):
             command[-1] = str(raw)
             self.assertNotEqual(subprocess.run(command, capture_output=True, timeout=20).returncode, 0)
             self.assertEqual(raw.read_bytes(), before)
+
+
+class CombinedReferenceDefectTests(unittest.TestCase):
+    """Replay the captured pair of defects without manufacturing a live receipt."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.template, _ = fixture()
+        capture = json.loads((ROOT / "tools/upstream/uvicorn-windows/evidence/ci641-sigbreak-startup-and-hang.json").read_text())
+        cls.template["cases"] = [capture["row"]]
+        cls.template["run"]["environment"] = capture["environment"]
+        _, cases, _ = evidence.load_contract()
+        cls.case_template = next(c for c in cases if c["case_id"] == capture["row"]["case_id"])
+
+    def setUp(self):
+        self.result, self.case = deepcopy(self.template), deepcopy(self.case_template)
+        self.row = self.result["cases"][0]
+
+    def check(self):
+        return evidence.validate_parity(self.result, expected_cases=[self.case],
+            allow_windows_reference_startup=True, allow_windows_reference_hang=True)
+
+    def edit_raw(self, side, edit):
+        observation = self.row[side + "_observation"]
+        raw = json.loads(base64.b64decode(observation["stdout_base64"]))["run_http"]
+        edit(raw)
+        observation["stdout_base64"] = encode(json.dumps({"run_http": raw}))
+        observation["server_log_events"] = _windows_log_events(raw)
+
+    def test_both_explicit_policies_required_and_raw_failure_retained(self):
+        before = deepcopy(self.result)
+        decision = self.check()
+        self.assertEqual(decision["accepted_reference_defects"][0]["policy"],
+                         f"{POLICY}+{SIGBREAK_POLICY}")
+        self.assertEqual(decision["raw_parity_summary"]["failed"], 1)
+        self.assertEqual(decision["candidate_contract_cases"], [self.case["case_id"]])
+        self.assertEqual(self.result, before)
+        for kwargs in ({}, {"allow_windows_reference_startup": True},
+                       {"allow_windows_reference_hang": True}):
+            with self.subTest(kwargs=kwargs), self.assertRaises(evidence.EvidenceError):
+                evidence.validate_parity(self.result, expected_cases=[self.case], **kwargs)
+
+    def test_composition_also_checks_the_previously_reviewed_sigint_input(self):
+        _, cases, _ = evidence.load_contract()
+        self.case = next(c for c in cases if c["case_id"] ==
+                         "python-api.module-cli-two-workers-serve-request")
+        self.row["case_id"] = self.case["case_id"]
+        for side in ("oracle", "target"):
+            self.row[side + "_observation"]["shutdown_signals_sent"] = ["SIGINT"]
+            def edit(raw):
+                raw["shutdown_signals_sent"] = ["SIGINT"]
+                raw["server_stderr_base64"] = encode(base64.b64decode(
+                    raw["server_stderr_base64"]).decode().replace("SIGBREAK", "SIGINT"))
+                if raw["reference_shutdown_diagnostic"] is not None:
+                    diagnostic = raw["reference_shutdown_diagnostic"]
+                    diagnostic["stderr_before_connection_base64"] = encode(base64.b64decode(
+                        diagnostic["stderr_before_connection_base64"]).decode().replace("SIGBREAK", "SIGINT"))
+            self.edit_raw(side, edit)
+        self.assertEqual(self.check()["status"], "accepted_with_reference_exception")
+
+    def test_sigbreak_startup_without_hang_needs_no_hang_waiver(self):
+        self.row["oracle_observation"]["process_timed_out"] = False
+        self.edit_raw("oracle", lambda raw: raw.update(
+            process_timed_out=False, reference_shutdown_diagnostic=None))
+        decision = evidence.validate_parity(self.result, expected_cases=[self.case],
+                                           allow_windows_reference_startup=True)
+        self.assertEqual(decision["accepted_reference_defects"][0]["policy"], POLICY)
+
+    def test_candidate_must_remain_independently_clean(self):
+        for field, value in (("process_timed_out", True), ("process_exit_code", 1),
+                             ("worker_replacement_observed", True), ("worker_start_count", 3),
+                             ("worker_clean_shutdown_count", 1),
+                             ("shutdown_signals_sent", ["SIGTERM", "SIGTERM"])):
+            with self.subTest(field=field):
+                self.setUp()
+                self.row["target_observation"][field] = value
+                with self.assertRaises(evidence.EvidenceError):
+                    self.check()
+        self.setUp()
+        self.edit_raw("target", lambda raw: raw.update(reference_shutdown_diagnostic={"connection_opened": True}))
+        with self.assertRaises(evidence.EvidenceError):
+            self.check()
+        self.setUp()
+        self.row["target_observation"] = deepcopy(self.row["oracle_observation"])
+        self.row.update(status="passed", difference=None)
+        self.result.update(status="completed")
+        self.result["summary"].update(passed=1, failed=0)
+        with self.assertRaises(evidence.EvidenceError):
+            self.check()
+
+    def test_no_response_mismatch_is_waived(self):
+        self.row["target_observation"]["response_body_base64"] = encode("wrong")
+        self.edit_raw("target", lambda raw: raw.update(response_body_base64=encode("wrong")))
+        with self.assertRaisesRegex(evidence.EvidenceError, "live observations differ"):
+            self.check()
+
+    def test_both_signatures_must_be_complete(self):
+        for old, new in (("WinError 10022", "WinError 10038"),
+                         ("sock.listen(self._backlog)", "sock.accept()"),
+                         ("Received SIGBREAK", "Received SIGINT"),
+                         ("Finished server process [4984]", "Finished server process [1292]")):
+            with self.subTest(old=old):
+                self.setUp()
+                self.edit_raw("oracle", lambda raw: raw.update(server_stderr_base64=encode(
+                    base64.b64decode(raw["server_stderr_base64"]).decode().replace(old, new))))
+                with self.assertRaises(evidence.EvidenceError):
+                    self.check()
+        self.setUp()
+        self.edit_raw("oracle", lambda raw: raw.update(server_stderr_base64=encode(
+            base64.b64decode(raw["server_stderr_base64"]).decode() + "ERROR: unrelated failure\n")))
+        with self.assertRaises(evidence.EvidenceError):
+            self.check()
+
+    def test_wakeup_deadline_and_pre_wakeup_join_are_required(self):
+        for changes in ({"connection_opened": False}, {"exit_code_after_connection": 1},
+                        {"timeout_seconds": 30}, {"error": "TimeoutExpired"},
+                        {"stderr_before_connection_base64": encode("unrelated log")},
+                        {"stderr_before_connection_base64": ""}):
+            with self.subTest(changes=changes):
+                self.setUp()
+                self.edit_raw("oracle", lambda raw: raw["reference_shutdown_diagnostic"].update(changes))
+                with self.assertRaises(evidence.EvidenceError):
+                    self.check()
+
+    def test_scope_does_not_expand_to_other_inputs_or_versions(self):
+        for key, value in (("workers", 3), ("timeout_seconds", 30),
+                           ("shutdown_signal", "SIGINT"), ("path", "/other")):
+            with self.subTest(key=key):
+                self.setUp()
+                self.case["api"]["run_http"][key] = value
+                with self.assertRaises(evidence.EvidenceError):
+                    self.check()
+        self.setUp()
+        self.result["run"]["environment"]["dependencies"]["uvicorn"] = "0.55.0"
+        with self.assertRaises(evidence.EvidenceError):
+            self.check()
 
 
 if __name__ == "__main__":

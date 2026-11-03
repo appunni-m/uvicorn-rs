@@ -934,7 +934,7 @@ jobs:
               "target/parity-${{ matrix.platform }}.json" --offline --require-clean)
             if [ "$RUNNER_OS" = 'Windows' ]; then
               # Keep raw parity failed when stock Uvicorn hits the reviewed
-              # SIGINT/TCP-wakeup hang or captured listen WinError 10022.
+              # Captured console-signal/TCP-wakeup hang or listen WinError 10022.
               # Each has a separate policy; independently verify the candidate.
               evidence_args+=(--accept-windows-reference-hang --accept-windows-reference-startup
                 --acceptance-output "target/parity-diagnostics-${{ matrix.platform }}/compatibility-acceptance.json")

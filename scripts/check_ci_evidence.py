@@ -28,7 +28,7 @@ from coverage_contract import pending_coverage_mcp_request
 from coverage_toolchain import ToolchainError, validate_coverage_tools
 from parity_identity import runtime_source_digest, runtime_source_hashes
 from windows_reference_hang import eligible_input, validate_candidate_lifecycle, validate_reference_hang
-from windows_reference_startup import validate_reference_startup
+from windows_reference_startup import validate_reference_startup, validate_reference_startup_and_hang
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -803,6 +803,8 @@ def validate_parity(
             for enabled, validator in (
                 (allow_windows_reference_hang, validate_reference_hang),
                 (allow_windows_reference_startup, validate_reference_startup),
+                (allow_windows_reference_hang and allow_windows_reference_startup,
+                 validate_reference_startup_and_hang),
             ):
                 if not enabled:
                     continue
@@ -812,8 +814,8 @@ def validate_parity(
                     failures.append(str(error))
                     continue
                 accepted_reference_defects.append(decision)
-                accepted_hang = validator is validate_reference_hang
-                accepted_startup = validator is validate_reference_startup
+                accepted_hang = validator in (validate_reference_hang, validate_reference_startup_and_hang)
+                accepted_startup = validator in (validate_reference_startup, validate_reference_startup_and_hang)
                 break
             require(accepted_hang or accepted_startup,
                     "reference exception rejected: " + "; ".join(failures))
@@ -2101,7 +2103,7 @@ def main() -> int:
     parser.add_argument("--offline", action="store_true", help="validate retained evidence without importing the installed native")
     parser.add_argument("--require-clean", action="store_true", help="require evidence produced from a clean source checkout")
     parser.add_argument("--accept-windows-reference-hang", action="store_true",
-                        help="accept only the recorded stock two-worker SIGINT/TCP-wakeup defect; preserve failed parity")
+                        help="accept only recorded stock two-worker console-signal/TCP-wakeup defects; preserve failed parity")
     parser.add_argument("--accept-windows-reference-startup", action="store_true",
                         help="accept only the captured stock two-worker listen WinError 10022; preserve failed parity")
     parser.add_argument("--acceptance-output", type=Path,

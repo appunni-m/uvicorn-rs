@@ -38,14 +38,18 @@ The executable exception is
 `scripts/windows_reference_hang.py` and enabled only by the Windows CI gates.
 It applies to the three ordinary two-worker SIGINT inputs: explicit
 `--workers 2`, `WEB_CONCURRENCY=2`, and explicit workers overriding that
-environment setting. It does not cover SIGTERM, reload, intentional worker
-crashes, startup `WinError(10022)`, other reference versions, or generic
+environment setting. A separate
+`uvicorn-0.54.0-windows-two-worker-sigbreak-tcp-wakeup@1` policy covers the
+existing explicit two-worker SIGTERM input, which Windows delivers as
+`CTRL_BREAK_EVENT`. Its request and 12-second deadline are fixed, and it is
+bound to Windows x86-64 / CPython 3.12.13 / Uvicorn 0.54.0. Neither policy
+covers reload, intentional worker crashes, other reference versions, or generic
 timeouts. After the original timeout, the stock reference alone receives one
 diagnostic TCP connection. Acceptance requires the captured one-worker stall,
 the supervisor already joining that worker, and complete reference shutdown
 within three seconds of that connection. All other compared observations must
 still match. The candidate must complete both worker lifespans and exit zero
-after one SIGINT within the original deadline, without this diagnostic.
+after the original single console signal within the deadline, without this diagnostic.
 The independent candidate checks run even when the raw comparison passes;
 matching worker crashes or replacement cannot satisfy this contract.
 
@@ -54,16 +58,31 @@ The separately captured startup failure in
 has its own policy,
 `uvicorn-0.54.0-windows-two-worker-listen-winerror10022@1`, implemented in
 `scripts/windows_reference_startup.py`. It covers only the explicit
-`--workers 2` input on Windows x86-64, CPython 3.12.13 and stock Uvicorn
+`--workers 2` SIGINT and SIGTERM inputs on Windows x86-64, CPython 3.12.13 and stock Uvicorn
 0.54.0. The retained traceback must end in
 `create_server → _start_serving → sock.listen` with `WinError 10022`.
 Exactly one original reference worker must fail and be replaced before
-SIGINT; both surviving workers and the supervisor must then finish cleanly
+the declared console signal; both surviving workers and the supervisor must then finish cleanly
 within the original deadline. Unknown errors, additional replacements,
 timeouts or wakeup connections are rejected. Raw and normalized logs must
 agree, and every response, signal and deadline comparison still applies.
 The candidate must satisfy the unchanged clean two-worker lifecycle contract.
 This does not identify the underlying cause or validate an upstream fix.
+
+[Focused CI #641](https://github.com/appunni-m/uvicorn-rs/actions/runs/41647390647/job/125956212708)
+captures both signatures together on the SIGTERM input: one startup listen
+failure and replacement, then one surviving worker stalled after SIGBREAK.
+The post-deadline TCP connection releases shutdown within three seconds.
+The candidate serves the request with its two original workers and exits zero
+within the unchanged deadline. The
+[captured row](https://github.com/appunni-m/uvicorn-rs/blob/develop/tools/upstream/uvicorn-windows/evidence/ci641-sigbreak-startup-and-hang.json)
+retains source/native/environment/run identities and raw observations.
+Composition requires both explicit policy flags, the complete startup traceback
+and worker identities, a pre-wakeup supervisor join stall, the successful single
+TCP recovery and an independently clean candidate. Neither policy alone can
+accept that combined failure. Response mismatches and candidate failures remain
+rejected. Offline replay passes; the original hosted diagnostic remains failed,
+and the updated gate still needs hosted qualification.
 The [captured row](https://github.com/appunni-m/uvicorn-rs/blob/develop/tools/upstream/uvicorn-windows/evidence/ci637-startup-worker-failure.json)
 retains the original source, native, report, artifact and run identities.
 Hosted [focused CI #638](https://github.com/appunni-m/uvicorn-rs/actions/runs/41624376500/job/125877907532)

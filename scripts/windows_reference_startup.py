@@ -1,7 +1,8 @@
 """Separate improvement acceptance for a captured stock Windows startup failure.
 
-This does not change parity, the reference, or the shutdown-hang policy. Only
-the recorded two-worker listen failure and one successful replacement qualify.
+Raw parity and the reference remain unchanged. Only the recorded two-worker
+listen failure and one successful replacement qualify. A separately enabled
+hang policy is required when the same run also needs the captured TCP wakeup.
 """
 
 from __future__ import annotations
@@ -10,7 +11,11 @@ import json
 import re
 from typing import Any
 
-from windows_reference_hang import _decode, eligible_input, validate_candidate_lifecycle
+from windows_reference_hang import (
+    POLICY as SIGINT_HANG_POLICY,
+    SIGBREAK_CASE_ID, SIGBREAK_POLICY, _decode, _reference_recovery,
+    eligible_input, validate_candidate_lifecycle,
+)
 
 
 POLICY = "uvicorn-0.54.0-windows-two-worker-listen-winerror10022@1"
@@ -38,12 +43,30 @@ def validate_reference_startup(
     row: dict[str, Any], case: dict[str, Any], environment: dict[str, Any]
 ) -> dict[str, Any]:
     """Accept one identified reference defect only with a clean candidate."""
+    return _validate_reference_startup(row, case, environment, with_shutdown_hang=False)
+
+
+def validate_reference_startup_and_hang(
+    row: dict[str, Any], case: dict[str, Any], environment: dict[str, Any]
+) -> dict[str, Any]:
+    """Require both defect signatures on an explicitly reviewed worker input."""
+    return _validate_reference_startup(row, case, environment, with_shutdown_hang=True)
+
+
+def _validate_reference_startup(
+    row: dict[str, Any], case: dict[str, Any], environment: dict[str, Any], *,
+    with_shutdown_hang: bool,
+) -> dict[str, Any]:
     # Reuse the existing independent candidate contract, not reference behavior.
     validate_candidate_lifecycle(row, case)
-    _require(eligible_input(case) and case["case_id"] == CASE_ID,
+    sigbreak = case.get("case_id") == SIGBREAK_CASE_ID
+    shutdown_signal = "SIGTERM" if sigbreak else "SIGINT"
+    console_signal = "SIGBREAK" if sigbreak else "SIGINT"
+    _require(eligible_input(case) and case["case_id"] in {CASE_ID, SIGBREAK_CASE_ID},
              "input is outside the captured explicit two-worker case")
     _require(case["api"]["run_http"] == {
-        "method": "GET", "path": "/python-api-two-workers", "shutdown_signal": "SIGINT",
+        "method": "GET", "path": "/python-api-two-workers-sigterm" if sigbreak
+        else "/python-api-two-workers", "shutdown_signal": shutdown_signal,
         "timeout_seconds": 12, "lifespan": "auto", "invocation": "module-cli",
         "root_path": "", "post_response_settle_seconds": 1, "workers": 2,
     }, "captured request or deadline changed")
@@ -60,15 +83,18 @@ def validate_reference_startup(
              and oracle["worker_clean_shutdown_count"] == 2,
              "not one replaced reference worker with two clean surviving workers")
     for side in (oracle, target):
+        expected_timeout = with_shutdown_hang and side is oracle
         _require(side["exit_code"] == 0 and side["process_exit_code"] == 0
-                 and side["process_timed_out"] is False, "probe or server failed or timed out")
+                 and side["process_timed_out"] is expected_timeout,
+                 "probe or server failed or has an unexpected timeout")
         _require(side["response_received"] is True and side["response_status"] == 200,
                  "request was not served")
-        _require(side["shutdown_signal_sent"] is True and side["shutdown_signals_sent"] == ["SIGINT"],
+        _require(side["shutdown_signal_sent"] is True and side["shutdown_signals_sent"] == [shutdown_signal],
                  "signal sequence differs")
         raw = json.loads(_decode(side["stdout_base64"]))["run_http"]
-        _require("reference_shutdown_diagnostic" in raw
-                 and raw["reference_shutdown_diagnostic"] is None, "wakeup or missing diagnostic evidence")
+        if not (with_shutdown_hang and side is oracle):
+            _require("reference_shutdown_diagnostic" in raw
+                     and raw["reference_shutdown_diagnostic"] is None, "wakeup or missing diagnostic evidence")
         for field in ("process_timed_out", "process_exit_code", "shutdown_signal_sent",
                       "shutdown_signals_sent", "response_received", "response_status",
                       "response_content_type", "response_body_base64", "listener_responses",
@@ -110,7 +136,9 @@ def validate_reference_startup(
         r"Started (?:parent|server) process \[\d+\]|Waiting for application (?:startup|shutdown)\.|"
         r"Application (?:startup|shutdown) complete\.|ASGI 'lifespan' protocol appears unsupported\.|"
         r"Shutting down|Finished server process \[\d+\]|Waiting for child process \[\d+\]|"
-        r"Child process \[\d+\] died|Received SIGINT, exiting\.|Stopping parent process \[\d+\])"
+        r"Child process \[\d+\] died|Received " + console_signal + r", exiting\.|"
+        + (r"Terminated child process \[\d+\]|" if with_shutdown_hang or sigbreak else "")
+        + r"Stopping parent process \[\d+\])"
     )
     _require(all(allowed_message.fullmatch(line) for line in remainder.splitlines() if line),
              "additional reference error or unreviewed log message")
@@ -129,14 +157,32 @@ def validate_reference_startup(
              "incomplete worker lifespans")
     _require(remainder.index(f"Child process [{died[0]}] died")
              < remainder.index(f"Started server process [{starts[2]}]")
-             < remainder.index("Received SIGINT, exiting."), "replacement was not before shutdown")
-    _require(remainder.count("Received SIGINT, exiting.") == 1
+             < remainder.index(f"Received {console_signal}, exiting."), "replacement was not before shutdown")
+    _require(remainder.count(f"Received {console_signal}, exiting.") == 1
              and re.findall(r"Stopping parent process \[(\d+)\]", remainder) == parents,
-             "supervisor did not complete one SIGINT shutdown")
+             "supervisor did not complete one console-signal shutdown")
     joins = re.findall(r"Waiting for child process \[(\d+)\]", remainder)
     _require(len(joins) == 3 and set(joins) == set(starts),
              "supervisor did not join all children")
     _require(crash.start() < log.index(f"Child process [{died[0]}] died"),
              "traceback was not before the observed replacement")
-    return {"case_id": case["case_id"], "policy": POLICY,
+    if with_shutdown_hang:
+        raw_target = json.loads(_decode(target["stdout_base64"]))["run_http"]
+        before = _reference_recovery(raw, raw_target, case).replace("\r\n", "\n")
+        before_finishes = re.findall(r"Finished server process \[(\d+)\]", before)
+        _require(len(before_finishes) == 1 and before_finishes[0] in finishes,
+                 "not one clean surviving worker stalled before the wakeup")
+        pending = (set(finishes) - set(before_finishes)).pop()
+        _require(f"Waiting for child process [{pending}]" in before
+                 and before.count("Application shutdown complete.") == 1
+                 and before.count(f"Received {console_signal}, exiting.") == 1
+                 and "Stopping parent process" not in before,
+                 "pre-wakeup evidence does not show the captured supervisor join stall")
+    if with_shutdown_hang or sigbreak:
+        terminated = re.findall(r"Terminated child process \[(\d+)\]", remainder)
+        _require(len(terminated) == len(set(terminated))
+                 and set(terminated) <= set(finishes), "unreviewed child termination")
+    hang_policy = SIGBREAK_POLICY if sigbreak else SIGINT_HANG_POLICY
+    return {"case_id": case["case_id"],
+            "policy": f"{POLICY}+{hang_policy}" if with_shutdown_hang else POLICY,
             "raw_comparison": "failed", "candidate_contract": "passed"}

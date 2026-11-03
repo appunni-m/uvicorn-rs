@@ -45,6 +45,10 @@ obtain its own full unified measurement, three verification repeats and
 source-bound independent review. CI #637's totals above are retained evidence,
 not a coverage claim for the removal. See the
 [measured rejection decision](benchmark-status.md#buffer-recycling-decision-and-arm64-trace-2026-11-03).
+The corresponding [CI #640 job](https://github.com/appunni-m/uvicorn-rs/actions/runs/41641278412/job/125935287032)
+has completed attribution of all 1,192 ASGI and 259 native cases and is still
+running the required full verification repeats. No final-source 100% claim or
+independent receipt is inferred from its progress logs.
 
 For evidence-checker repairs, CI's `replay-unified-coverage` dispatch mode
 accepts the original CI run ID, attempt, producer commit and artifact ID. It

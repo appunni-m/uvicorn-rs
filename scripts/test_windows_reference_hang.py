@@ -15,7 +15,7 @@ import unittest
 import check_ci_evidence as evidence
 from parity_identity import runtime_source_digest, runtime_source_hashes
 from run_parity import _python_api_server_log_events
-from windows_reference_hang import CASE_IDS, diagnostic_input, eligible_input, validate_reference_hang
+from windows_reference_hang import CASE_IDS, SIGBREAK_POLICY, diagnostic_input, eligible_input
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -160,15 +160,14 @@ class ReferenceHangPolicyTests(unittest.TestCase):
         _, cases, _ = evidence.load_contract()
         self.assertEqual({c["case_id"] for c in cases if eligible_input(c)}, CASE_IDS)
 
-    def test_sigbreak_diagnostic_does_not_expand_acceptance(self):
+    def test_sigbreak_diagnostic_requires_recorded_input(self):
         _, cases, _ = evidence.load_contract()
         case = next(c for c in cases if c["case_id"] ==
                     "python-api.module-cli-two-workers-stop-on-sigterm")
         self.assertTrue(diagnostic_input(case))
-        self.assertFalse(eligible_input(case))
-        with self.assertRaisesRegex(ValueError, "outside the three reviewed"):
-            validate_reference_hang(self.row, case, self.result["run"]["environment"])
+        self.assertTrue(eligible_input(case))
         for field, value in (("workers", 3), ("shutdown_signal", "SIGINT"),
+                             ("timeout_seconds", 30),
                              ("shutdown_signal_sequence", ["SIGTERM", "SIGTERM"])):
             changed = deepcopy(case)
             changed["api"]["run_http"][field] = value
@@ -177,7 +176,29 @@ class ReferenceHangPolicyTests(unittest.TestCase):
     def test_exact_diagnostic_input_selection(self):
         _, cases, _ = evidence.load_contract()
         self.assertEqual({c["case_id"] for c in cases if diagnostic_input(c)},
-                         CASE_IDS | {"python-api.module-cli-two-workers-stop-on-sigterm"})
+                         CASE_IDS)
+
+    def test_sigbreak_hang_uses_its_own_signal_policy(self):
+        _, cases, _ = evidence.load_contract()
+        self.case = next(c for c in cases if c["case_id"] ==
+                         "python-api.module-cli-two-workers-stop-on-sigterm")
+        self.row["case_id"] = self.case["case_id"]
+        for side in ("oracle", "target"):
+            self.row[side + "_observation"]["shutdown_signals_sent"] = ["SIGTERM"]
+            def edit(raw):
+                raw["shutdown_signals_sent"] = ["SIGTERM"]
+                raw["server_stderr_base64"] = encode(base64.b64decode(
+                    raw["server_stderr_base64"]).decode().replace("SIGINT", "SIGBREAK"))
+                if raw["reference_shutdown_diagnostic"] is not None:
+                    diagnostic = raw["reference_shutdown_diagnostic"]
+                    diagnostic["stderr_before_connection_base64"] = encode(base64.b64decode(
+                        diagnostic["stderr_before_connection_base64"]).decode().replace("SIGINT", "SIGBREAK"))
+            self.change_raw(side, edit)
+        decision = self.check()
+        self.assertEqual(decision["accepted_reference_defects"][0]["policy"], SIGBREAK_POLICY)
+        self.row["target_observation"]["shutdown_signals_sent"] = ["SIGINT"]
+        with self.assertRaises(evidence.EvidenceError):
+            self.check()
 
     def test_rejects_candidate_failures(self):
         for field, value in (("process_timed_out", True), ("process_exit_code", 1),
