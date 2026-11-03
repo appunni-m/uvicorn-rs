@@ -725,6 +725,7 @@ jobs:
               --offline --require-clean "$@"
           }
           if [ "$RUNNER_OS" = 'Windows' ]; then
+            export UVICORN_RS_SHUTDOWN_TRACE_OUTPUT="target/parity-diagnostics-${{ matrix.platform }}/shutdown-trace.log"
             run_platform_parity "${parity_args[@]}"
           else
             run_platform_parity
@@ -735,6 +736,7 @@ jobs:
           name: uvicorn-rs-platform-parity-${{ matrix.platform }}
           path: |
             target/parity-${{ matrix.platform }}.json
+            target/parity-diagnostics-${{ matrix.platform }}/
           if-no-files-found: warn
           retention-days: 90
       - name: Build source distribution

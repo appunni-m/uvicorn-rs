@@ -1,27 +1,10 @@
-"""Windows oracle shims for worker signal routing and optional signal tracing."""
+"""Opt-in signal receipt tracing for the pinned Windows Uvicorn oracle."""
 
 from __future__ import annotations
 
 import os
 import signal
-import sys
 import time
-
-
-if os.name == "nt" and os.environ.get("ASGI_PARITY_WINDOWS_WORKER_GROUPS") == "1":
-    helper_dir = os.environ.get("ASGI_PARITY_WINDOWS_SPAWN_HELPER_DIR")
-    if not helper_dir:
-        raise RuntimeError("Windows oracle worker-group shim has no helper directory")
-    sys.path.insert(0, helper_dir)
-    try:
-        import _windows_spawn
-        import multiprocessing
-
-        multiprocessing.get_context("spawn").Process = (
-            _windows_spawn.WindowsSpawnProcess
-        )
-    finally:
-        sys.path.remove(helper_dir)
 
 
 if (
@@ -75,23 +58,6 @@ if (
             os.write(2, (line + "\n").encode("ascii", errors="backslashreplace"))
         except Exception:
             pass
-
-    if os.environ.get("ASGI_PARITY_WINDOWS_WORKER_GROUPS") == "1":
-        _windows_spawn = sys.modules["_windows_spawn"]
-        _original_spawn_popen = _windows_spawn.WindowsSpawnProcess._Popen
-
-        def _trace_spawn(process_obj):
-            popen = _original_spawn_popen(process_obj)
-            group_flag = int(_windows_spawn._winapi.CREATE_NEW_PROCESS_GROUP)
-            _write(
-                "worker-spawn",
-                getattr(signal, "SIGBREAK", None),
-                f"child_pid={popen.pid} group_id={popen.pid} "
-                f"creation_flag={group_flag}",
-            )
-            return popen
-
-        _windows_spawn.WindowsSpawnProcess._Popen = staticmethod(_trace_spawn)
 
     def _trace_signal(signum, handler):
         number = _number(signum)
@@ -147,15 +113,6 @@ if (
             raise
         if should_trace:
             _write("kill-return", signum, detail)
-        if (
-            control_event == "CTRL_BREAK_EVENT"
-            and os.environ.get("ASGI_PARITY_WINDOWS_WORKER_GROUPS") == "1"
-        ):
-            # Windows queues console control callbacks asynchronously. Leave
-            # enough time for this worker group to enter its handler before
-            # Uvicorn signals the next worker; a 50 ms gap can overlap queued
-            # CTRL_BREAK_EVENT delivery on the hosted Windows runner.
-            time.sleep(0.25)
         return result
 
     def _console_process_snapshot() -> None:

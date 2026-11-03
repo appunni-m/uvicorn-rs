@@ -38,12 +38,6 @@ def subprocess_environment() -> dict[str, str]:
     for name in ("PYTHONHOME", "PYTHONSTARTUP"):
         environment.pop(name, None)
     environment["PYTHONNOUSERSITE"] = "1"
-    if os.name == "nt" and hasattr(signal, "SIGBREAK"):
-        # Keep the reference signal tracer available to server subprocesses.
-        signal_site = str(Path(__file__).parent / "oracle_signal_trace")
-        environment["PYTHONPATH"] = os.pathsep.join(
-            path for path in (signal_site, environment.get("PYTHONPATH")) if path
-        )
     if environment.get("ASGI_PARITY_COVERAGE_CAPTURE_SHUTDOWN") == "1":
         coverage_site = str(Path(__file__).parent / "coverage_site")
         environment["PYTHONPATH"] = os.pathsep.join(
@@ -1121,35 +1115,6 @@ except KeyboardInterrupt:
         ]
 
     environment = subprocess_environment()
-    worker_count = request.get("workers")
-    if worker_count is None:
-        worker_environment = request.get("environment", {})
-        worker_count = worker_environment.get(
-            "UVICORN_WORKERS",
-            worker_environment.get(
-                "WEB_CONCURRENCY",
-                environment.get(
-                    "UVICORN_WORKERS",
-                    environment.get("WEB_CONCURRENCY", 1),
-                ),
-            ),
-        )
-    try:
-        has_multiple_workers = int(worker_count) > 1
-    except (TypeError, ValueError):
-        has_multiple_workers = False
-    if (
-        os.name == "nt"
-        and os.environ.get("ASGI_PARITY_SERVER_ID") == "uvicorn"
-        and has_multiple_workers
-    ):
-        # Multi-worker Uvicorn-RS sends CTRL_BREAK_EVENT to each worker PID.
-        # Give only those oracle inputs matching process-group support; reload
-        # subprocesses keep stock Uvicorn's shared-console signal behavior.
-        environment["ASGI_PARITY_WINDOWS_WORKER_GROUPS"] = "1"
-        environment["ASGI_PARITY_WINDOWS_SPAWN_HELPER_DIR"] = str(
-            Path(__file__).resolve().parents[2] / "python" / "uvicorn"
-        )
     if os.environ.get("ASGI_PARITY_TRACE_ORACLE_SIGNAL") == "1":
         signal_trace_site = str(Path(__file__).parent / "oracle_signal_trace")
         environment["PYTHONPATH"] = os.pathsep.join(
@@ -1296,7 +1261,11 @@ except KeyboardInterrupt:
     expected_worker_count = request.get("workers")
     if type(expected_worker_count) is not int:
         try:
-            expected_worker_count = int(environment.get("WEB_CONCURRENCY", "1"))
+            expected_worker_count = int(
+                environment.get(
+                    "UVICORN_WORKERS", environment.get("WEB_CONCURRENCY", "1")
+                )
+            )
         except ValueError:
             expected_worker_count = 1
     reload_requested = request.get("reload") or str(
@@ -1405,14 +1374,34 @@ except KeyboardInterrupt:
     stderr_chunks: list[bytes] = []
     output_reader_threads: list[threading.Thread] = []
     output_chunks_lock = threading.Lock()
+    server_log_directory = os.environ.get("ASGI_PARITY_SERVER_LOG_DIRECTORY")
+    if server_log_directory:
+        Path(server_log_directory).mkdir(parents=True, exist_ok=True)
 
-    def drain_process_output(stream, chunks: list[bytes]) -> None:
-        while True:
-            chunk = stream.read1(4096)
-            if not chunk:
-                return
-            with output_chunks_lock:
-                chunks.append(chunk)
+    def drain_process_output(stream, chunks: list[bytes], name: str) -> None:
+        # Retain the beginning of failed worker runs, even when the probe
+        # raises before returning JSON. A shutdown-only tail can hide an
+        # earlier worker startup error or replacement.
+        log_file = (
+            (Path(server_log_directory) / f"{name}.log").open("wb")
+            if server_log_directory else None
+        )
+        logged_bytes = 0
+        try:
+            while True:
+                chunk = stream.read1(4096)
+                if not chunk:
+                    return
+                with output_chunks_lock:
+                    chunks.append(chunk)
+                if log_file is not None and logged_bytes < 4 * 1024 * 1024:
+                    retained = chunk[:4 * 1024 * 1024 - logged_bytes]
+                    log_file.write(retained)
+                    log_file.flush()
+                    logged_bytes += len(retained)
+        finally:
+            if log_file is not None:
+                log_file.close()
 
     try:
         process = subprocess.Popen(
@@ -1459,7 +1448,7 @@ except KeyboardInterrupt:
                 continue
             reader = threading.Thread(
                 target=drain_process_output,
-                args=(stream, chunks),
+                args=(stream, chunks, name),
                 name=f"uvicorn-rs-parity-worker-{name}-reader",
                 daemon=True,
             )
@@ -2019,14 +2008,25 @@ except KeyboardInterrupt:
         if response is not None and output_reader_threads and process.poll() is None:
             started_worker_pids = set()
             started_worker_marker = b"Started server process ["
+            startup_complete_count = 0
+            expected_startup_complete_count = (
+                expected_worker_count if request["lifespan"] != "off" else 0
+            )
             startup_deadline = time.monotonic() + request["timeout_seconds"]
             while (
-                len(started_worker_pids) < expected_worker_count
+                (
+                    len(started_worker_pids) < expected_worker_count
+                    or startup_complete_count < expected_startup_complete_count
+                )
                 and process.poll() is None
                 and time.monotonic() < startup_deadline
             ):
                 with output_chunks_lock:
                     outputs = (b"".join(stdout_chunks), b"".join(stderr_chunks))
+                startup_complete_count = sum(
+                    output.count(b"Application startup complete.")
+                    for output in outputs
+                )
                 for output in outputs:
                     for line in output.splitlines():
                         marker_offset = line.find(started_worker_marker)
@@ -2037,17 +2037,24 @@ except KeyboardInterrupt:
                         ].split(b"]", 1)[0].strip()
                         if pid_text.isdigit():
                             started_worker_pids.add(int(pid_text))
-                if len(started_worker_pids) < expected_worker_count:
+                if (
+                    len(started_worker_pids) < expected_worker_count
+                    or startup_complete_count < expected_startup_complete_count
+                ):
                     time.sleep(0.025)
             if (
                 process.poll() is None
-                and len(started_worker_pids) < expected_worker_count
+                and (
+                    len(started_worker_pids) < expected_worker_count
+                    or startup_complete_count < expected_startup_complete_count
+                )
             ):
                 raise RuntimeError(
-                    "server did not report all configured workers as started "
+                    "server did not report all configured workers as ready "
                     "before shutdown; "
-                    f"observed={len(started_worker_pids)} "
-                    f"expected={expected_worker_count}"
+                    f"started={len(started_worker_pids)}/{expected_worker_count} "
+                    f"startup_complete={startup_complete_count}/"
+                    f"{expected_startup_complete_count}"
                 )
         for index, signal_name in enumerate(shutdown_signal_names):
             if process.poll() is not None:

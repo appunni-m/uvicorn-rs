@@ -15178,6 +15178,14 @@ def run_python_api_probe(
     environment.pop("PYTHONSTARTUP", None)
     environment["PYTHONNOUSERSITE"] = "1"
     environment["ASGI_PARITY_SERVER_ID"] = server_id
+    shutdown_trace_output = os.environ.get("UVICORN_RS_SHUTDOWN_TRACE_OUTPUT")
+    if shutdown_trace_output:
+        environment["ASGI_PARITY_SERVER_LOG_DIRECTORY"] = str(
+            Path(shutdown_trace_output).resolve().parent
+            / "server-logs"
+            / case["case_id"]
+            / server_id
+        )
     if (
         os.name == "nt"
         and server_id == "uvicorn"
@@ -15344,11 +15352,15 @@ def run_python_api_probe(
         str(ROOT / "tests/parity/python_api_probe.py"),
         json.dumps(probe_api, sort_keys=True, separators=(",", ":")),
     ]
-    # The probe can use one deadline for startup/request, another for reload,
-    # and a final one for graceful shutdown. Keep the outer process bound above
+    # The probe can use deadlines for startup/request, all-worker readiness or
+    # reload, and graceful shutdown. Keep the outer process bound above
     # the work it is supervising so timeout evidence comes from the probe.
     if "run_http" in case["api"]:
         probe_timeout = max(10, 2 * run_http.get("timeout_seconds", 5) + 10)
+        if os.name == "nt":
+            probe_timeout = max(
+                probe_timeout, 3 * run_http.get("timeout_seconds", 5) + 10
+            )
     elif run_http_reload is not None:
         probe_timeout = max(10, 3 * run_http_reload["timeout_seconds"] + 10)
     else:
