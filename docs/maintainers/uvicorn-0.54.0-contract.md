@@ -14,16 +14,37 @@ behavior matching the applicable specification. An unsupported-setting note does
 not satisfy that requirement. Custom HTTP/WebSocket protocol-class hooks and
 `ssl_context_factory` are implemented at the Python integration boundary.
 
+Reference crashes, hangs, and specification violations must not be reproduced
+in uvicorn-rs to obtain matching observations. Preserve specified validation
+and error behavior, while treating a confirmed reference defect as a separate
+correctness or improvement decision. Retain the failing stock reference input,
+logs, source identity and observed difference; require explicit, source-bound
+candidate acceptance checks. A failed comparison stays failed, and the
+candidate must satisfy its correctness checks even if the reference fails.
+Upstream issue resolution is not a prerequisite for this acceptance.
+
+For the isolated Windows two-worker shutdown hang, candidate acceptance means
+both configured workers finish startup, the request succeeds, and one shutdown
+signal produces complete worker and supervisor shutdown within the original
+deadline. There must be no unexpected worker crash or replacement, forced
+cleanup, second signal, or diagnostic wakeup connection needed for success.
+The stock-only reproducer and captured blocked-accept evidence are retained in
+[`tools/upstream/uvicorn-windows`](https://github.com/appunni-m/uvicorn-rs/tree/f0eef8911fa334c7a37a723db9fefc4ffee810f6/tools/upstream/uvicorn-windows).
+This rule does not waive coverage, independent review, benchmark or artifact
+requirements.
+
 At the 2026-11-03 audit, CI
 [#629](https://github.com/appunni-m/uvicorn-rs/actions/runs/41582985537)
 has passed Linux x86-64 installed-wheel public parity: 786/786 cases, with zero
 behavioral failures, infrastructure failures or not-run cases. This report binds
 runtime batch `a2a02070fe573c61b84aed90f4f48bdb5f267131` to clean PR merge
-source `1c8f16c80e4ac5115c9282037b30473d0016c04a`. The macOS and Windows
-candidate comparisons and full unified coverage are still running at this
-snapshot. Later reporting-only changes are not qualified by that run.
+source `1c8f16c80e4ac5115c9282037b30473d0016c04a`. Linux, macOS and Windows
+candidate package jobs and the Python 3.9 floor consumer have also passed;
+Windows public parity passed 759/759 applicable cases. Full unified coverage
+is still running at this snapshot. Later reporting-only changes are not
+qualified by that run.
 
-Windows qualification remains open. CI
+Historical Windows failures remain retained. CI
 [#627](https://github.com/appunni-m/uvicorn-rs/actions/runs/41560262953)
 completed 758/758 applicable Windows cases, with 757 passing and one mismatch:
 stock Uvicorn raised WinError 10022 while starting a worker and replaced it;
@@ -33,8 +54,9 @@ the candidate served the request with two clean workers. The untraced Server
 completed 15 comparisons across three repetitions: 14 passed and one recorded a
 stock-Uvicorn SIGINT shutdown timeout; the candidate completed all 15 cleanly. Changing the
 runner image does not resolve the reference failure. Earlier green Windows
-receipts predate restoration of stock oracle multiprocessing behavior and do
-not clear this gate. No failed reference result is counted as passing parity.
+receipts predate restoration of stock oracle multiprocessing behavior and
+do not replace current qualification. No failed reference result is counted as
+passing parity, and no candidate failure is required to match the reference.
 
 CI #627's unified matrix completed its three repeats but missed two regions
 and one line. The latest focused coverage batch exercises the missing teardown

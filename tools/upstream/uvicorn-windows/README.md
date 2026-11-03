@@ -115,6 +115,9 @@ reports are [Uvicorn discussion #2292](https://github.com/Kludex/uvicorn/discuss
 and [Microsoft terminal issue #335](https://github.com/microsoft/terminal/issues/335).
 
 Keep the unmodified failing baseline. Before proposing a fix upstream, require
-a causal change and a matched focused
-regression check. This reproduction is diagnostic evidence and does not waive
-any uvicorn-rs release gate.
+a causal change and a matched focused regression check. uvicorn-rs must retain
+correct startup and shutdown behavior; it must not reproduce this reference
+hang. A source-bound candidate correctness check can establish an improvement
+while the failed reference comparison remains visible. Upstream repair is not
+a prerequisite for that decision. Coverage, independent review, benchmark and
+artifact release requirements remain required.

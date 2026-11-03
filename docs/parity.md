@@ -955,6 +955,12 @@ ASGI requirements govern the Python application boundary. If a live oracle
 observation conflicts with an HTTP RFC or the ASGI specification, preserve the
 observed difference as a mismatch and follow the normative requirement. Do not
 change the target or expected contract merely to reproduce an oracle quirk.
+The same rule applies to a confirmed reference crash or lifecycle hang. Keep
+the failed comparison and its diagnostics, and evaluate correct candidate
+behavior against a documented, source-bound acceptance contract. A reference
+failure is not an instruction to make the candidate fail, and upstream repair
+is not a prerequisite for accepting a verified improvement. See the
+[known-difference acceptance rule](maintainers/uvicorn-0.54.0-contract.md#acceptance-of-known-differences).
 HTTP/1.1, HTTP/2, and HTTP/3 claims use the applicable
 [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html),
 [RFC 9112](https://www.rfc-editor.org/rfc/rfc9112.html),
