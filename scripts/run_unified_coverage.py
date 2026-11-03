@@ -1299,6 +1299,10 @@ def main() -> int:
     shutil.copy2(native_runner, native_runner_snapshot)
     if digest_file(native_runner_snapshot) != build_identity["native_runner_sha256"]:
         raise CoverageError("native coverage runner snapshot differs from the recorded build")
+    extension_snapshot = native_runner_snapshot.parent / "native-extension"
+    shutil.copy2(extension, extension_snapshot)
+    if digest_file(extension_snapshot) != build_identity["native_extension_sha256"]:
+        raise CoverageError("native extension snapshot differs from the recorded build")
 
     case_receipts: list[dict[str, Any]] = []
     native_case_receipts: list[dict[str, Any]] = []
@@ -2362,7 +2366,7 @@ def main() -> int:
     if source_identity(manifest, input_paths, native_manifest)["sha256"] != source["sha256"]:
         raise CoverageError("source or parity inputs changed while the coverage run was in progress")
     restore_native_runner(native_runner, native_runner_snapshot, build_identity["native_runner_sha256"])
-    native_runner_snapshot.unlink(missing_ok=True)
+    # Retain both exact objects for fresh-runner profile replay, without rebuilding.
     aggregate_llvm = filter_llvm_export_sources(aggregate_llvm, set(PRODUCTION_SOURCE_SET))
     normalize_llvm_source_summaries(
         aggregate_llvm,

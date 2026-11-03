@@ -266,6 +266,22 @@ def main() -> int:
             "--selection-output", str(selection_path),
         )
         run(*verify_args)
+        recheck_path = root / "valid" / "publication-selection.json"
+        recheck_args = (
+            str(HANDOFF), "verify-selection", "--manifest", str(manifest_path),
+            "--selection", str(selection_path), "--source", SOURCE,
+            "--ci-raw-root", str(ci_raw), "--review-root", str(review_root),
+            "--output", str(recheck_path),
+        )
+        run(*recheck_args)
+        if selection_path.read_bytes() != recheck_path.read_bytes():
+            raise AssertionError("publication recheck must reproduce the complete original selection")
+        selected_bytes = selection_path.read_bytes()
+        changed_selection = json.loads(selected_bytes)
+        changed_selection["projection_report_sha256"] = "f" * 64
+        write_json(selection_path, changed_selection)
+        run(*recheck_args, expected=1, detail="differs from the retained original")
+        selection_path.write_bytes(selected_bytes)
         if hashlib.sha256(report.read_bytes()).hexdigest() != raw_sha_before:
             raise AssertionError("projection attachment changed the canonical raw report")
 

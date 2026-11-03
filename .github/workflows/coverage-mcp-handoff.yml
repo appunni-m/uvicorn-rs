@@ -36,6 +36,10 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.12.13"
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: "1.98.1"
+          components: llvm-tools-preview
       - name: Require dispatch from the exact main commit and select successful CI artifact
         id: ci
         env:

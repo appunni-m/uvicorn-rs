@@ -998,9 +998,9 @@ def llvm_production_regions(
     return regions, summaries, selected_functions, selected_spans, raw_file_summaries
 
 
-def resolve_llvm_tools(expected: dict[str, Any]) -> tuple[Path, Path]:
+def resolve_llvm_tools(expected: dict[str, Any], *, replay: bool = False) -> tuple[Path, Path]:
     try:
-        return validate_coverage_tools(expected)
+        return validate_coverage_tools(expected, replay=replay)
     except ToolchainError as error:
         raise EvidenceError(str(error)) from error
 
@@ -1149,8 +1149,24 @@ def validate_native_case_contracts(native_cases: Any) -> list[str]:
     return native_ids
 
 
+def resolve_coverage_binaries(build: dict[str, Any], artifacts_root: str, *, offline: bool) -> tuple[Path, Path]:
+    """Check exact object hashes before LLVM reads local or retained binaries."""
+    if offline:
+        objects = repo_path(artifacts_root) / "coverage-objects"
+        extension = objects / "native-extension"
+        native_runner = objects / Path(build["native_runner"]).name
+    else:
+        extension = repo_path(build["native_extension"])
+        native_runner = repo_path(build["native_runner"])
+    require(extension.resolve().is_relative_to(ROOT) and native_runner.resolve().is_relative_to(ROOT)
+            and extension.is_file() and sha256(extension) == build["native_extension_sha256"]
+            and native_runner.is_file() and sha256(native_runner) == build["native_runner_sha256"],
+            "coverage binaries are missing or differ from the recorded build")
+    return extension, native_runner
+
+
 def validate_coverage(
-    report: dict[str, Any], report_path: Path, *, allow_pending_mcp: bool = False,
+    report: dict[str, Any], report_path: Path, *, allow_pending_mcp: bool = False, offline: bool = False,
 ) -> dict[str, Any]:
     manifest, asgi_cases, input_paths = load_contract()
     native_manifest_path = ROOT / "tests/native-core/manifest.json"
@@ -1220,13 +1236,8 @@ def validate_coverage(
             "coverage build inputs/tool version differ")
     require(all(isinstance(build.get(key), str) and build[key] for key in ("machine", "platform", "python")),
             "coverage environment identity is incomplete")
-    llvm_cov, llvm_profdata = resolve_llvm_tools(build.get("tools"))
-    extension = repo_path(build["native_extension"])
-    native_runner = repo_path(build["native_runner"])
-    require(extension.is_file() and sha256(extension) == native_sha
-            and native_runner.is_file() and sha256(native_runner) == build["native_runner_sha256"],
-            "coverage binaries are missing or differ from the recorded build")
-    coverage_binaries = (extension, native_runner)
+    llvm_cov, llvm_profdata = resolve_llvm_tools(build.get("tools"), replay=offline)
+    coverage_binaries = resolve_coverage_binaries(build, run["artifacts_root"], offline=offline)
 
     matrix = ext["matrix"]
     exact_keys(matrix, {"scope", "manifest_case_count", "asgi_manifest_case_count", "native_manifest_case_count",
@@ -2026,7 +2037,7 @@ def main() -> int:
             allow_windows_reference_hang=args.accept_windows_reference_hang,
         )
         if args.kind == "parity"
-        else validate_coverage(result, path, allow_pending_mcp=args.allow_pending_mcp)
+        else validate_coverage(result, path, allow_pending_mcp=args.allow_pending_mcp, offline=args.offline)
     )
     if args.kind == "coverage" and not args.offline:
         imported = Path(importlib.import_module("uvicorn_rs._native").__file__).resolve()

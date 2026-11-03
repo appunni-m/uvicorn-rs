@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 from pathlib import Path
+import re
 import shlex
 import shutil
 import subprocess
@@ -54,11 +55,9 @@ def _capture(path: Path, arguments: tuple[str, ...]) -> dict[str, str]:
     }
 
 
-def capture_coverage_tools() -> tuple[dict[str, dict[str, str]], dict[str, Path]]:
+def capture_coverage_tools(*, include_build_tools: bool = True) -> tuple[dict[str, dict[str, str]], dict[str, Path]]:
     """Return exact executable receipts and paths for the active coverage toolchain."""
     rustc_entrypoint = _resolve_executable("rustc", "RUSTC")
-    cargo = _resolve_executable("cargo")
-    cargo_llvm_cov = _resolve_executable("cargo-llvm-cov")
     entrypoint_version = _capture(rustc_entrypoint, ("-vV",))
     host = next((line.split(": ", 1)[1] for line in entrypoint_version["version"].splitlines()
                  if line.startswith("host: ")), None)
@@ -97,30 +96,47 @@ def capture_coverage_tools() -> tuple[dict[str, dict[str, str]], dict[str, Path]
 
     llvm_cov = llvm_path("LLVM_COV", "llvm-cov")
     llvm_profdata = llvm_path("LLVM_PROFDATA", "llvm-profdata")
-    paths = {
-        "rustc": rustc,
-        "cargo": cargo,
-        "cargo_llvm_cov": cargo_llvm_cov,
-        "llvm_cov": llvm_cov,
-        "llvm_profdata": llvm_profdata,
-    }
+    paths = {"llvm_cov": llvm_cov, "llvm_profdata": llvm_profdata}
     receipts: dict[str, dict[str, str]] = {
-        "rustc": rustc_receipt,
-        "cargo": _capture(cargo, ("-Vv",)),
-        "cargo_llvm_cov": _capture(cargo_llvm_cov, ("llvm-cov", "--version")),
         "llvm_cov": _capture(llvm_cov, ("--version",)),
         "llvm_profdata": _capture(llvm_profdata, ("--version",)),
     }
+    if include_build_tools:
+        cargo = _resolve_executable("cargo")
+        cargo_llvm_cov = _resolve_executable("cargo-llvm-cov")
+        paths.update(rustc=rustc, cargo=cargo, cargo_llvm_cov=cargo_llvm_cov)
+        receipts.update(rustc=rustc_receipt, cargo=_capture(cargo, ("-Vv",)),
+                        cargo_llvm_cov=_capture(cargo_llvm_cov, ("llvm-cov", "--version")))
     return receipts, paths
 
 
-def validate_coverage_tools(expected: Any) -> tuple[Path, Path]:
-    """Compare current executables byte-for-byte and return the LLVM tools."""
+def validate_coverage_tools(expected: Any, *, replay: bool = False) -> tuple[Path, Path]:
+    """Verify exact tools; replay uses only LLVM and permits relocated paths.
+
+    Offline replay exports retained binaries and profiles without rebuilding.
+    It needs the original LLVM executable bytes and versions, but does not
+    execute Cargo, cargo-llvm-cov or the producer's Rust compiler. Their
+    original receipts remain immutable build evidence.
+    """
     if not isinstance(expected, dict) or set(expected) != {
         "rustc", "cargo", "cargo_llvm_cov", "llvm_cov", "llvm_profdata",
     }:
         raise ToolchainError("coverage toolchain receipt is incomplete")
-    actual, paths = capture_coverage_tools()
-    if actual != expected:
+    for name, receipt in expected.items():
+        if (not isinstance(receipt, dict) or set(receipt) != {"path", "sha256", "version"}
+                or not all(isinstance(receipt[key], str) and receipt[key] for key in receipt)
+                or not Path(receipt["path"]).is_absolute()
+                or re.fullmatch(r"[0-9a-f]{64}", receipt["sha256"]) is None):
+            raise ToolchainError(f"invalid coverage tool receipt: {name}")
+    actual, paths = capture_coverage_tools(include_build_tools=not replay)
+    if replay:
+        matches = all(
+            {key: actual[name][key] for key in ("sha256", "version")}
+            == {key: expected[name][key] for key in ("sha256", "version")}
+            for name in ("llvm_cov", "llvm_profdata")
+        )
+    else:
+        matches = actual == expected
+    if not matches:
         raise ToolchainError("current coverage tool executable paths, hashes, or versions differ from receipt")
     return paths["llvm_cov"], paths["llvm_profdata"]

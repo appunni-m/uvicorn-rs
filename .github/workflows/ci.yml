@@ -124,6 +124,7 @@ jobs:
         run: |
           python scripts/check_release_version.py
           python scripts/test_native_fault_contracts.py
+          python scripts/test_coverage_replay.py
           python scripts/test_coverage_mcp_handoff.py
 
   rust:
@@ -526,6 +527,8 @@ jobs:
           uv sync --python "$PYTHON_VERSION" --group benchmark --extra standard --frozen
           uv pip install --python .venv/bin/python "gunicorn==$GUNICORN_VERSION"
           cargo install cargo-llvm-cov --version 0.8.7 --locked
+      - name: Verify retained-object replay with the pinned LLVM tools
+        run: .venv/bin/python scripts/test_coverage_replay.py --smoke
       - name: Prepare the isolated stock Uvicorn oracle
         run: |
           oracle_environment="$RUNNER_TEMP/uvicorn-rs-coverage-oracle"

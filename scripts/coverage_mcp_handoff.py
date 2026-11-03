@@ -763,6 +763,29 @@ def command_verify(args: argparse.Namespace) -> None:
                       "report_sha256": selection["reviewed_report_sha256"]}, sort_keys=True))
 
 
+def command_verify_selection(args: argparse.Namespace) -> None:
+    """Reverify a candidate's selection against its retained raw and review trees."""
+    selected = read_json(args.selection)
+    require(isinstance(selected, dict) and selected.get("schema") == "uvicorn-rs-coverage-mcp-selection@1"
+            and selected.get("source_commit") == args.source,
+            "candidate coverage selection does not match the requested source")
+    require(args.selection.resolve() != args.output.resolve(), "recheck must not overwrite the original selection")
+    ci, handoff = selected["ci_run"], selected["handoff_run"]
+    raw, reviewed = selected["raw_coverage_artifact"], selected["handoff_artifact"]
+    command_verify(argparse.Namespace(
+        manifest=args.manifest, source=args.source, ci_run_id=ci["id"], ci_attempt=ci["attempt"],
+        raw_artifact_id=raw["id"], raw_artifact_name=raw["name"],
+        raw_artifact_size=raw["size_in_bytes"], raw_artifact_digest=raw["digest"],
+        ci_raw_root=args.ci_raw_root, review_root=args.review_root,
+        handoff_run_id=handoff["id"], handoff_attempt=handoff["attempt"],
+        handoff_artifact_id=reviewed["id"], handoff_artifact_name=reviewed["name"],
+        handoff_artifact_size=reviewed["size_in_bytes"], handoff_artifact_digest=reviewed["digest"],
+        selection_output=args.output,
+    ))
+    require(read_json(args.output) == selected,
+            "reverified candidate coverage selection differs from the retained original")
+
+
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(description=__doc__)
     commands = root.add_subparsers(dest="command", required=True)
@@ -855,6 +878,15 @@ def parser() -> argparse.ArgumentParser:
     verify.add_argument("--handoff-artifact-digest", required=True)
     verify.add_argument("--selection-output", type=Path, required=True)
     verify.set_defaults(func=command_verify)
+
+    recheck = commands.add_parser("verify-selection", help="reverify a retained candidate coverage selection")
+    recheck.add_argument("--manifest", type=Path, required=True)
+    recheck.add_argument("--selection", type=Path, required=True)
+    recheck.add_argument("--source", required=True)
+    recheck.add_argument("--ci-raw-root", type=Path, required=True)
+    recheck.add_argument("--review-root", type=Path, required=True)
+    recheck.add_argument("--output", type=Path, required=True)
+    recheck.set_defaults(func=command_verify_selection)
     return root
 
 

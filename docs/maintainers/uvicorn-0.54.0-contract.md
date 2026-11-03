@@ -83,6 +83,18 @@ The canonical report is unchanged. Strict full evidence replay and final
 exact-main CI/review handoff qualification remain pending; later harness changes
 are not qualified by that historical run.
 
+Fresh-runner replay also requires the original instrumented objects. The raw
+coverage artifact now retains the extension and native contract runner under
+its run's `coverage-objects` directory, bound to the existing build hashes.
+Offline replay reads those objects without rebuilding them and requires exact
+LLVM executable hashes and versions. Handoff, candidate and publication jobs
+install the pinned Rust LLVM tools. Publication restores the raw and reviewed
+trees separately, revalidates the complete independent-review selection, then
+replays the raw profiles. A raw report's pending MCP marker is accepted only
+alongside that separately verified review; missing or changed review evidence
+still blocks publication. Five focused replay checks and an actual two-object
+LLVM fixture pass locally; hosted final-source qualification remains required.
+
 Historical Windows failures remain retained. CI
 [#627](https://github.com/appunni-m/uvicorn-rs/actions/runs/41560262953)
 completed 758/758 applicable Windows cases, with 757 passing and one mismatch:

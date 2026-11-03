@@ -54,6 +54,10 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.12.13"
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: "1.98.1"
+          components: llvm-tools-preview
       - name: Verify the annotated tag, main ancestry, versions and explicit authorization
         id: source
         env:
@@ -173,10 +177,18 @@ jobs:
           cd target/release-candidate
           sha256sum --check --strict SHA256SUMS
           cd ../..
-          mkdir -p target/asgi-coverage
-          cp -a target/release-candidate/evidence/coverage/reviewed/. target/asgi-coverage/
+          mkdir -p target/asgi-coverage target/asgi-coverage-review
+          cp -a target/release-candidate/evidence/coverage/raw/. target/asgi-coverage/
+          cp -a target/release-candidate/evidence/coverage/reviewed/. target/asgi-coverage-review/
+          python scripts/coverage_mcp_handoff.py verify-selection \
+            --manifest target/release-candidate/evidence/coverage/handoff.json \
+            --selection target/release-candidate/evidence/coverage/handoff-selection.json \
+            --source "$RELEASE_COMMIT" \
+            --ci-raw-root target/asgi-coverage \
+            --review-root target/asgi-coverage-review \
+            --output target/publication-coverage-selection.json
           python scripts/check_ci_evidence.py coverage \
-            target/asgi-coverage/coverage-report.json --offline --require-clean
+            target/asgi-coverage/coverage-report.json --offline --allow-pending-mcp --require-clean
           python - "$RELEASE_VERSION" "$RELEASE_COMMIT" <<'PY'
           import hashlib
           import json
@@ -201,6 +213,8 @@ jobs:
               "selection_sha256": hashlib.sha256(selection_path.read_bytes()).hexdigest(),
               "handoff_manifest_sha256": selection.get("handoff_manifest_sha256"),
               "reviewed_report_sha256": selection.get("reviewed_report_sha256"),
+              "projection_report_sha256": selection.get("projection_report_sha256"),
+              "projection_context_sha256": selection.get("projection_context_sha256"),
               "coverage_mcp_receipt_sha256": selection.get("coverage_mcp_receipt_sha256"),
               "handoff_artifact": selection.get("handoff_artifact"),
           }
