@@ -4397,7 +4397,8 @@
           "root_path": "",
           "host": "::1",
           "workers": 2,
-          "fd": true
+          "fd": true,
+          "client_timeout_seconds": 4
         }
       }
     },
