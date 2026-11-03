@@ -1043,6 +1043,31 @@ ClientDisconnect. Keep the 15-second client timeout. Limit the first diagnostic
 batch to three attempts; if it does not reproduce, record that and the missing
 evidence instead of launching an unrelated matrix.
 
+The focused stage workflow uses one asyncio candidate/reference pair and one
+planned repeat by default; it allows at most three repeats. Select
+`focused-fastapi-stage`, `linux-aarch64`, and `fastapi-upload-1m-write-1k` only
+after the preceding acceptance gates. The workload overrides concurrency to
+eight. Its `runtime-diagnostics` build and `UVICORN_RS_UPLOAD_TRACE=1` opt-in
+record client PID/worker/attempt IDs in a diagnostic request header. The same
+IDs join libcurl callback counts and first/last callback timestamps, Rust body
+frame/queue/cancellation events, and the ASGI receive/send/cancellation timeline.
+Client callback size does not imply TCP packet or socket-write boundaries.
+
+Rust retains the last 128 events independently for each traced request, plus
+cumulative read/offered/delivered byte counts and explicit dropped-event counts.
+The ASGI wrapper retains the slowest 32 requests per path and the last 128
+events in each. Monotonic offsets have wall-clock calibration and recorded
+calibration uncertainty; do not assert cross-process ordering finer than those
+bounds. The recorded uncertainty is the clock-sampling window, not a guarantee
+of nanosecond wall-clock accuracy; clock resolution and wall-clock adjustments
+also matter. Prefer within-process monotonic order and request-ID correlation
+when identifying a stall. Rust events describe framed body reads, not raw
+socket reads. A killed process can lack terminal traces, which remains missing
+evidence. Failed warmup and measured client JSON is retained in
+`partial_client_metrics`, including the first failure's correlation ID. These
+instrumented samples are diagnostic only; the normal three-system benchmark
+still compares both asyncio and uvloop without this opt-in.
+
 **Close with:** A supported root cause and corrected behavior, plus a focused
 public regression when the defect is in the server, and passing exact-source
 workload execution. A client/load defect needs equivalent evidence and a

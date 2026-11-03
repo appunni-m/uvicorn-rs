@@ -125,6 +125,7 @@ jobs:
           python scripts/check_release_version.py
           python scripts/test_native_fault_contracts.py
           python scripts/test_coverage_replay.py
+          python scripts/test_platform_parity_shell.py
           python scripts/test_coverage_mcp_handoff.py
 
   rust:
@@ -787,19 +788,20 @@ jobs:
               --oracle-python "$oracle_python" \
               --installed-candidate "$@" \
               --output "target/parity-${{ matrix.platform }}.json" || parity_exit=$?
-            acceptance_args=()
+            # macOS ships Bash 3.2, where expanding an empty array under
+            # nounset fails. Keep the command array nonempty on every platform.
+            evidence_args=(scripts/check_ci_evidence.py parity
+              "target/parity-${{ matrix.platform }}.json" --offline --require-clean)
             if [ "$RUNNER_OS" = 'Windows' ]; then
               # Keep raw parity failed when stock Uvicorn hits the reviewed
               # SIGINT/TCP-wakeup hang; independently verify the clean candidate.
-              acceptance_args+=(--accept-windows-reference-hang
+              evidence_args+=(--accept-windows-reference-hang
                 --acceptance-output "target/parity-diagnostics-${{ matrix.platform }}/compatibility-acceptance.json")
             fi
             if ((parity_exit > 1)) || { ((parity_exit != 0)) && [ "$RUNNER_OS" != 'Windows' ]; }; then
               return "$parity_exit"
             fi
-            "$candidate_python" scripts/check_ci_evidence.py parity \
-              "target/parity-${{ matrix.platform }}.json" \
-              --offline --require-clean "${acceptance_args[@]}" "$@"
+            "$candidate_python" "${evidence_args[@]}" "$@"
           }
           if [ "$RUNNER_OS" = 'Windows' ]; then
             export UVICORN_RS_SHUTDOWN_TRACE_OUTPUT="target/parity-diagnostics-${{ matrix.platform }}/shutdown-trace.log"

@@ -29,6 +29,9 @@ use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 use std::task::{Context, Poll};
 
+#[cfg(feature = "runtime-diagnostics")]
+mod upload_trace;
+
 use aes::cipher::{BlockModeDecrypt, KeyIvInit, block_padding::Pkcs7};
 use aes::{Aes128, Aes192, Aes256};
 use base64::Engine as _;
@@ -1304,6 +1307,8 @@ const HTTP_REQUEST_BODY_BATCH_MAX_WAIT: std::time::Duration = std::time::Duratio
 struct RuntimeDiagnostics {
     #[cfg(feature = "runtime-diagnostics")]
     counters: Arc<RuntimeDiagnosticCounters>,
+    #[cfg(feature = "runtime-diagnostics")]
+    upload_trace: Option<Arc<upload_trace::RequestUploadTrace>>,
 }
 
 #[cfg(feature = "runtime-diagnostics")]
@@ -1367,6 +1372,56 @@ struct RuntimeDiagnosticCounters {
 }
 
 impl RuntimeDiagnostics {
+    #[inline]
+    fn for_upload_trace(&self, headers: &HeaderMap, lane: &'static str) -> Self {
+        #[cfg(feature = "runtime-diagnostics")]
+        {
+            let mut diagnostics = self.clone();
+            if std::env::var_os("UVICORN_RS_UPLOAD_TRACE").as_deref()
+                == Some(std::ffi::OsStr::new("1"))
+            {
+                diagnostics.upload_trace = headers
+                    .get("x-uvicorn-rs-upload-trace")
+                    .and_then(|value| value.to_str().ok())
+                    .and_then(|id| upload_trace::RequestUploadTrace::new(id, lane))
+                    .map(Arc::new);
+            }
+            diagnostics
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        {
+            let _ = (headers, lane);
+            self.clone()
+        }
+    }
+
+    #[inline]
+    fn upload_event(&self, kind: &'static str, bytes: usize, flag: bool) {
+        #[cfg(feature = "runtime-diagnostics")]
+        if let Some(trace) = &self.upload_trace {
+            trace.record(kind, bytes, flag);
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let _ = (kind, bytes, flag);
+    }
+
+    #[inline]
+    fn upload_stop(
+        &self,
+        connection: &ConnectionClosed,
+        server: &CancellationToken,
+        request: &CancellationToken,
+    ) {
+        #[cfg(feature = "runtime-diagnostics")]
+        {
+            self.upload_event("connection-closed", 0, connection.is_closed());
+            self.upload_event("server-cancelled", 0, server.is_cancelled());
+            self.upload_event("request-cancelled", 0, request.is_cancelled());
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let _ = (connection, server, request);
+    }
+
     #[inline]
     fn asgi_task_scheduled(&self) {
         #[cfg(feature = "runtime-diagnostics")]
@@ -1597,6 +1652,7 @@ impl RuntimeDiagnostics {
 
     #[inline]
     fn http_body_data_frame(&self, bytes: usize) {
+        self.upload_event("read-data", bytes, false);
         #[cfg(feature = "runtime-diagnostics")]
         {
             self.counters
@@ -1628,6 +1684,7 @@ impl RuntimeDiagnostics {
 
     #[inline]
     fn http_body_channel_send_started(&self, channel_was_full: bool) -> Option<std::time::Instant> {
+        self.upload_event("queue-send-wait", 0, channel_was_full);
         #[cfg(feature = "runtime-diagnostics")]
         {
             self.counters
@@ -1653,6 +1710,7 @@ impl RuntimeDiagnostics {
         started: Option<std::time::Instant>,
         channel_was_full: bool,
     ) {
+        self.upload_event("queue-send-finished", 0, channel_was_full);
         #[cfg(feature = "runtime-diagnostics")]
         if let Some(started) = started {
             let elapsed = started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
@@ -3114,6 +3172,7 @@ fn make_http_request_message(
     let message = PyDict::new(py);
     match request.filter(|request| !request.disconnected) {
         Some(request) => {
+            diagnostics.upload_event("asgi-deliver", request.body.len(), request.more_body);
             diagnostics.http_request_python_bytes_copied(request.body.len());
             coverage_try!(
                 HttpRequestTypeSetItem,
@@ -3132,6 +3191,7 @@ fn make_http_request_message(
             );
         }
         _ => {
+            diagnostics.upload_event("asgi-disconnect", 0, false);
             request_disconnected.store(true, Ordering::Release);
             coverage_try!(
                 HttpRequestDisconnectTypeSetItem,
@@ -5702,13 +5762,21 @@ async fn pump_http_request_body(
             || cancellation.is_cancelled()
             || request_cancellation.is_cancelled()
         {
+            diagnostics.upload_event("pump-stop", 0, true);
+            diagnostics.upload_stop(&connection_closed, &cancellation, &request_cancellation);
             return;
         }
+        diagnostics.upload_event("read-wait", 0, false);
         let frame_wait_started = diagnostics.http_body_frame_wait_started();
         let frame = tokio::select! {
             biased;
-            _ = wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation) => return,
+            _ = wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation) => {
+                diagnostics.upload_event("read-cancelled", 0, true);
+                diagnostics.upload_stop(&connection_closed, &cancellation, &request_cancellation);
+                return;
+            },
             _ = sender.closed() => {
+                diagnostics.upload_event("queue-closed", 0, true);
                 #[cfg(coverage)]
                 if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpDrainStopWait) {
                     wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation).await;
@@ -5840,6 +5908,7 @@ async fn pump_http_request_body(
                 }
             }
             Some(Err(_)) => {
+                diagnostics.upload_event("read-error", 0, true);
                 #[cfg(coverage)]
                 if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpErrorStop)
                     || coverage_fault_take(CoverageFaultPoint::HttpBodyPumpErrorStopWait)
@@ -5897,6 +5966,7 @@ async fn pump_http_request_body(
                 return;
             }
             None => {
+                diagnostics.upload_event("read-eof", 0, false);
                 if !body_segments.is_empty() {
                     diagnostics.http_request_body_eof_flush();
                     let message = RequestMessage {
@@ -5973,6 +6043,7 @@ async fn send_http_request_message(
     #[cfg(not(feature = "runtime-diagnostics"))]
     let channel_was_full = false;
     let send_wait_started = diagnostics.http_body_channel_send_started(channel_was_full);
+    diagnostics.upload_event("queue-offer", message.body.len(), message.more_body);
     let result = tokio::select! {
         biased;
         _ = async {
@@ -6003,10 +6074,13 @@ async fn send_http_request_message(
             wait_for_body_pump_stop(connection_closed, cancellation, request_cancellation).await;
         } => {
             diagnostics.http_body_channel_send_finished(send_wait_started, channel_was_full);
+            diagnostics.upload_event("queue-send-cancelled", 0, true);
+            diagnostics.upload_stop(connection_closed, cancellation, request_cancellation);
             return false;
         },
         result = sender.send(message) => {
             diagnostics.http_body_channel_send_finished(send_wait_started, channel_was_full);
+            diagnostics.upload_event("queue-send-result", 0, result.is_err());
             result
         },
     };
@@ -10155,7 +10229,10 @@ async fn handle_request_inner(
         let cancellation = context.server.cancellation.clone();
         let connection_closed = context.connection_closed.clone();
         let pump_request_cancellation = request_cancellation.clone();
-        let pump_diagnostics = context.server.diagnostics.clone();
+        let pump_diagnostics = context
+            .server
+            .diagnostics
+            .for_upload_trace(&parts.headers, "pump");
         #[cfg(coverage)]
         let completed_pumps = Arc::clone(&context.server.completed_request_body_pumps);
         spawn_request_body_task(&request_body_tasks, async move {
@@ -10207,7 +10284,10 @@ async fn handle_request_parts(
         .extensions
         .get::<hyper::ext::Http2InformationalSender>()
         .cloned();
-    let diagnostics = context.server.diagnostics.clone();
+    let diagnostics = context
+        .server
+        .diagnostics
+        .for_upload_trace(&parts.headers, "asgi");
     #[cfg(coverage)]
     let default_header_error =
         if coverage_fault_take(CoverageFaultPoint::ServerDefaultHeaderResponseFinalization) {

@@ -492,23 +492,30 @@ def _runtime_diagnostics(log) -> dict[str, int] | None:
     return None
 
 
+def _checked_client_metrics(returncode: int, stdout: str, stderr: str) -> dict:
+    try:
+        metrics = json.loads(stdout)
+    except (json.JSONDecodeError, TypeError):
+        metrics = None
+    if not isinstance(metrics, dict):
+        metrics = None
+    if returncode != 0:
+        raise _HttpClientFailure(
+            f"HTTP client failed ({returncode}):\n{stdout}\n{stderr}", metrics,
+        )
+    if metrics is None:
+        raise _HttpClientFailure(f"HTTP client emitted no metrics object:\n{stdout}\n{stderr}", None)
+    if metrics.get("failures"):
+        raise _HttpClientFailure(f"correctness gate failed: {metrics}", metrics)
+    return metrics
+
+
 def _client(port: int, seconds: float, concurrency: int, case: dict, server) -> dict:
     result = run_bounded_client(
         _client_command(port, seconds, concurrency, case),
         seconds, server, cwd=ROOT,
     )
-    if result.returncode != 0:
-        try:
-            partial_client_metrics = json.loads(result.stdout)
-        except (json.JSONDecodeError, TypeError):
-            partial_client_metrics = None
-        if not isinstance(partial_client_metrics, dict):
-            partial_client_metrics = None
-        raise _HttpClientFailure(
-            f"HTTP client failed ({result.returncode}):\n{result.stdout}\n{result.stderr}",
-            partial_client_metrics,
-        )
-    return json.loads(result.stdout)
+    return _checked_client_metrics(result.returncode, result.stdout, result.stderr)
 
 
 def _sample(
@@ -548,6 +555,7 @@ def _sample(
         text=True,
     )
     client = None
+    metrics = None
     server_cleanup_attempted = False
     try:
         _wait_ready(process, port, log)
@@ -564,11 +572,7 @@ def _sample(
         )
         monitor = SampleMonitor(server_process, psutil.Process(client.pid))
         stdout, stderr = collect_bounded_client(client, seconds, process, monitor)
-        if client.returncode != 0:
-            raise RuntimeError(f"HTTP client failed ({client.returncode}):\n{stdout}\n{stderr}")
-        metrics = json.loads(stdout)
-        if metrics["failures"]:
-            raise RuntimeError(f"correctness gate failed: {metrics}")
+        metrics = _checked_client_metrics(client.returncode, stdout, stderr)
         metrics.update(monitor.finish(metrics))
         metrics.update(finalize_server(process, log, permit_app_error=workload == "exception-to-500"))
         if not definition.get("timing_rankable", True):
@@ -644,7 +648,7 @@ def _sample(
             f"{server_name} {workload} failed: {error}\n"
             f"server output (last 4000 characters):\n{server_output[-4000:]}",
             identity_result,
-            getattr(error, "partial_client_metrics", None),
+            getattr(error, "partial_client_metrics", None) or metrics,
             asgi_timings_path,
             runtime_diagnostics,
             runtime_diagnostics_error,
@@ -712,6 +716,7 @@ def _source_digest(workloads: list[str], asgi_stage_diagnostics: bool = False) -
     )
     if asgi_stage_diagnostics:
         paths.append("examples/profile_fastapi.py")
+        paths.append("src/upload_trace.rs")
     digest = hashlib.sha256()
     for path in paths:
         digest.update(path.encode("utf-8"))
@@ -779,6 +784,13 @@ def main() -> None:
     uvicorn_python = args.uvicorn_python.absolute()
     assert_clean_coverage_environment()
     native_client = _build_native_client()
+    upload_trace = os.environ.get("UVICORN_RS_UPLOAD_TRACE") == "1"
+    if upload_trace and (
+        not args.asgi_stage_diagnostics or not args.require_runtime_diagnostics or native_client is None
+    ):
+        parser.error("UVICORN_RS_UPLOAD_TRACE=1 requires ASGI-stage diagnostics, runtime diagnostics and the native libcurl client")
+    if upload_trace and args.repetitions > 3:
+        parser.error("upload tracing is limited to three planned attempts per server")
     node_executable = shutil.which("node")
     node_required = native_client is None or any(
         WORKLOADS[name]["client"].get("read_delay_ms", 0) > 0
@@ -1092,6 +1104,7 @@ def main() -> None:
             "correctness_gate": "every measured response status and complete body exactly matches the workload oracle",
             "runtime_diagnostics_required": args.require_runtime_diagnostics,
             "asgi_stage_diagnostics": args.asgi_stage_diagnostics,
+            "upload_trace": upload_trace,
             "diagnostic_only": args.asgi_stage_diagnostics,
             "diagnostic_interpretation": (
                 "Instrumented wall-time stages are not CPU time or normal benchmark evidence. "
