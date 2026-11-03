@@ -15,6 +15,7 @@ on:
           - full
           - focused-windows-parity
           - focused-linux-parity
+          - diagnose-stock-windows-workers
       parity_case_ids:
         description: Comma-separated case IDs for a focused parity mode (up to 20)
         required: false
@@ -71,6 +72,34 @@ env:
   ASGI_PARITY_UVICORN_WEBSOCKET_DEBUG: "1"
 
 jobs:
+  stock-windows-worker-diagnostic:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'diagnose-stock-windows-workers'
+    name: Isolate unmodified Uvicorn Windows worker shutdown
+    runs-on: ${{ inputs.windows_runner || 'windows-2022' }}
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12.13"
+      - name: Install only the stock server and minimal dependencies
+        run: python -m pip install uvicorn==0.54.0 click==8.5.0 h11==0.16.0 colorama==0.4.6
+      - name: Isolate one ready worker's terminate operation
+        working-directory: tools/upstream/uvicorn-windows
+        run: python worker_terminate.py --output ../../../target/stock-windows/worker-terminate.json
+      - name: Reproduce the two-worker CLI Ctrl+C lifecycle at most three times
+        if: always() && !cancelled()
+        working-directory: tools/upstream/uvicorn-windows
+        run: python cli_ctrl_c.py --output ../../../target/stock-windows/cli-ctrl-c --attempts 3
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: uvicorn-stock-windows-worker-diagnostic
+          path: target/stock-windows/
+          if-no-files-found: error
+
   release-evidence-contracts:
     if: github.event_name != 'workflow_dispatch' || inputs.mode == 'full'
     name: Release artifact and Coverage-MCP handoff contract
