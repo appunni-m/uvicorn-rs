@@ -10979,14 +10979,12 @@ where
             coverage_fault_is_armed(CoverageFaultPoint::WebSocketDriverDrainSendError);
         #[cfg(not(coverage))]
         let hold_outgoing_for_drain = false;
-        let keepalive_deadline = pending_ping
-            .as_ref()
-            .and_then(|(_, sent_at)| {
-                keepalive
-                    .timeout
-                    .and_then(|timeout| sent_at.checked_add(timeout))
-            })
-            .or(next_ping);
+        let ping_timeout_deadline = pending_ping.as_ref().and_then(|(_, sent_at)| {
+            keepalive
+                .timeout
+                .and_then(|timeout| sent_at.checked_add(timeout))
+        });
+        let keepalive_deadline = ping_timeout_deadline.or(next_ping);
         tokio::select! {
             biased;
             _ = async {
@@ -11036,15 +11034,7 @@ where
                 keepalive_deadline.map(tokio::time::sleep_until)
             ), if keepalive_deadline.is_some() => {
                 let now = tokio::time::Instant::now();
-                let ping_timed_out = pending_ping
-                    .as_ref()
-                    .and_then(|(_, sent_at)| {
-                        keepalive
-                            .timeout
-                            .and_then(|timeout| sent_at.checked_add(timeout))
-                    })
-                    .is_some_and(|deadline| deadline <= now);
-                if ping_timed_out {
+                if ping_timeout_deadline.is_some() {
                     app_task_completed = close_websocket_after_ping_timeout(
                         &mut socket,
                         &incoming,
@@ -11056,34 +11046,35 @@ where
                     break;
                 }
 
-                if next_ping.is_some_and(|deadline| deadline <= now) {
-                    next_ping = None;
-                    let payload = ping_sequence.to_be_bytes().to_vec();
-                    ping_sequence = ping_sequence.wrapping_add(1);
-                    if let Err(error) = socket
-                        .send_message(Message::Ping(payload.clone().into()))
-                        .await
-                    {
-                        driver_error = Some(error);
-                        break 'driver;
-                    }
-                    pending_ping = Some((payload, now));
-                    if keepalive.timeout.is_some_and(|timeout| timeout.is_zero()) {
-                        app_task_completed = close_websocket_after_ping_timeout(
-                            &mut socket,
-                            &incoming,
-                            &mut app_task,
-                            &state,
-                            &mut driver_error,
-                        )
-                        .await;
-                        break 'driver;
-                    }
-                    if keepalive.timeout.is_none() {
-                        next_ping = keepalive.interval.and_then(|interval| {
-                            now.checked_add(interval.saturating_sub(last_ping_rtt))
-                        });
-                    }
+                // The selected sleep has reached its deadline. With no pong
+                // timeout scheduled, that deadline is necessarily next_ping;
+                // no state can change while this select branch is suspended.
+                next_ping = None;
+                let payload = ping_sequence.to_be_bytes().to_vec();
+                ping_sequence = ping_sequence.wrapping_add(1);
+                if let Err(error) = socket
+                    .send_message(Message::Ping(payload.clone().into()))
+                    .await
+                {
+                    driver_error = Some(error);
+                    break 'driver;
+                }
+                pending_ping = Some((payload, now));
+                if keepalive.timeout.is_some_and(|timeout| timeout.is_zero()) {
+                    app_task_completed = close_websocket_after_ping_timeout(
+                        &mut socket,
+                        &incoming,
+                        &mut app_task,
+                        &state,
+                        &mut driver_error,
+                    )
+                    .await;
+                    break 'driver;
+                }
+                if keepalive.timeout.is_none() {
+                    next_ping = keepalive.interval.and_then(|interval| {
+                        now.checked_add(interval.saturating_sub(last_ping_rtt))
+                    });
                 }
             }
             result = &mut app_task => {

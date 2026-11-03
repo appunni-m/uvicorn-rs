@@ -815,7 +815,10 @@ jobs:
           overwrite: true
 
   python-floor:
-    if: github.event_name != 'workflow_dispatch' || inputs.mode == 'full'
+    # The Linux wheel remains useful evidence if another platform fails.
+    # Keep this independent consumer check runnable after matrix failures;
+    # release qualification still requires every platform job to pass.
+    if: always() && !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.mode == 'full')
     name: Install abi3 wheel on the declared Python floor
     needs: release-candidate
     runs-on: ubuntu-24.04

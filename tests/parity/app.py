@@ -1573,6 +1573,19 @@ async def _app_impl(scope, receive, send):
         _record("response.shutdown.finished")
         return
 
+    if path == "/stream-return-before-peer-reset":
+        await send({
+            "type": "http.response.start", "status": 200,
+            "headers": [(b"content-type", b"application/octet-stream")],
+        })
+        await send({"type": "http.response.body", "body": b"first/", "more_body": True})
+        # Leave a body larger than the transport buffer queued when the peer
+        # resets after its first chunk. The application itself has returned,
+        # but its response has not completed because no final event was sent.
+        await send({"type": "http.response.body", "body": b"x" * (8 * 1024 * 1024), "more_body": True})
+        _record("response.reset.hold")
+        return
+
     if path == "/stream-cancel-until-reset":
         # Let the Rust-side PythonTaskFuture observe the newly scheduled
         # asyncio.Task before this reset probe starts its response. Without

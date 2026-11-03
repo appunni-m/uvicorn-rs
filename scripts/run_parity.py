@@ -631,6 +631,7 @@ FAULT_CONTRACTS = {
     "http-task-panic-before-final-body-closes-stream",
     "http-start-and-final-body-preserved-after-task-wins-select",
     "http-content-length-body-preserved-after-app-return",
+    "http-reset-after-app-return-followup-200",
     "http-native-service-error-close-followup-200",
     "http-native-connection-write-error-followup-200",
     "http-concurrent-receive-after-lock-contention",
@@ -1965,6 +1966,14 @@ def load_contract(
                     or case.get("request", {}).get("path") != "/content-length-return-without-final"
                 ):
                     raise ParityError(f"{case_id}: completed content-length app requires its response workflow")
+            elif fault["contract"] == "http-reset-after-app-return-followup-200":
+                if (
+                    case.get("profile") != "http1"
+                    or case.get("operation") != "http.response-stream-reset"
+                    or fault["point"] != "http.response.task-wins-start-select"
+                    or case.get("response_reset", {}).get("path") != "/stream-return-before-peer-reset"
+                ):
+                    raise ParityError(f"{case_id}: completed-app peer reset requires its partial-response workflow")
             elif fault["contract"] == "http-start-and-final-body-preserved-after-task-wins-select":
                 if (
                     case.get("profile") != "http1"
@@ -12039,7 +12048,7 @@ def execute_case(
                     observation = http1_response_reset_request(
                         server["port"], case["response_reset"], server["events"]
                     )
-                if fault is not None:
+                if fault is not None and fault["contract"] != "http-reset-after-app-return-followup-200":
                     deadline = time.monotonic() + 3
                     while (
                         "response.reset.app-cancelled" not in read_events(server["events"])
@@ -14193,6 +14202,16 @@ def fault_contract_matches(
             observation.get("status") == 200
             and observation.get("body_bytes") == "aW5jb21wbGV0ZS8="
             and observation.get("connection_closed") is True
+        )
+    if fault["contract"] == "http-reset-after-app-return-followup-200":
+        followup = observation.get("followup_response")
+        return (
+            observation.get("status") == 200
+            and observation.get("early_body_bytes") == "Zmlyc3Qv"
+            and observation.get("streamed_before_completion") is True
+            and observation.get("connection_closed") is True
+            and isinstance(followup, dict)
+            and followup.get("status") == 200
         )
     if fault["contract"] == "http-start-and-final-body-preserved-after-task-wins-select":
         return (

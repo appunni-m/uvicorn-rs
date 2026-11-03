@@ -6088,6 +6088,31 @@
       ]
     },
     {
+      "case_id": "http1.peer-reset-after-partial-response-app-return",
+      "profile": "http1",
+      "operation": "http.response-stream-reset",
+      "covers": ["http.response-stream-reset"],
+      "response_reset": {
+        "path": "/stream-return-before-peer-reset",
+        "followup_path": "/scope"
+      }
+    },
+    {
+      "case_id": "fault.http1.peer-reset-after-completed-partial-response-app",
+      "profile": "http1",
+      "operation": "http.response-stream-reset",
+      "covers": ["http.response-stream-reset"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http.response.task-wins-start-select",
+        "contract": "http-reset-after-app-return-followup-200"
+      },
+      "response_reset": {
+        "path": "/stream-return-before-peer-reset",
+        "followup_path": "/scope"
+      }
+    },
+    {
       "case_id": "http1.content-length-app-return-without-final-event",
       "profile": "http1",
       "operation": "http.scope-and-body",
