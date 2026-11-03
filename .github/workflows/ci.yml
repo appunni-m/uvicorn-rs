@@ -27,6 +27,11 @@ on:
         required: false
         type: boolean
         default: false
+      trace_startup_teardown:
+        description: Diagnose only startup-failure teardown on normal and instrumented Linux builds
+        required: false
+        type: boolean
+        default: false
       windows_runner:
         description: Windows image for selected diagnostics (full qualification remains on Server 2022)
         required: true
@@ -1229,6 +1234,43 @@ jobs:
             --installed-candidate \
             "${parity_args[@]}" \
             --output target/focused-linux/parity.json
+      - name: Capture bounded startup-failure teardown diagnostics
+        if: ${{ !cancelled() && inputs.trace_startup_teardown }}
+        shell: bash
+        env:
+          PARITY_CASE_IDS: ${{ inputs.parity_case_ids }}
+        run: |
+          set -euo pipefail
+          test "$PARITY_CASE_IDS" = python-api.concurrent-startup-failure-waiter
+          core_directory="$RUNNER_TEMP/uvicorn-rs-startup-teardown-cores"
+          mkdir -p "$core_directory"
+          command -v gdb
+          ulimit -c unlimited
+          sudo sysctl -w "kernel.core_pattern=$core_directory/core.%p"
+          normal_exit=0
+          .venv/bin/python scripts/diagnose_startup_teardown.py \
+            --python .venv/bin/python --variant normal --attempts 500 \
+            --core-directory "$core_directory" \
+            --output target/focused-linux/startup-teardown/normal || normal_exit=$?
+          test "$normal_exit" -le 1
+
+          # Keep the installed normal wheel untouched. This separate build adds
+          # the same coverage cfg used by unified coverage, plus native symbols
+          # for a crash trace. Neither diagnostic run supplies release evidence.
+          unset CARGO_ENCODED_RUSTFLAGS
+          export RUSTFLAGS='-C instrument-coverage --cfg coverage -C debuginfo=1'
+          export CARGO_TARGET_DIR="$PWD/target/startup-teardown-build"
+          cargo build --release --lib --locked
+          cp target/startup-teardown-build/release/libuvicorn_rs.so \
+            python/uvicorn_rs/_native.abi3.so
+          instrumented_exit=0
+          .venv/bin/python scripts/diagnose_startup_teardown.py \
+            --python .venv/bin/python --variant instrumented --attempts 500 \
+            --core-directory "$core_directory" \
+            --python-source "$PWD/python" \
+            --output target/focused-linux/startup-teardown/instrumented || instrumented_exit=$?
+          test "$instrumented_exit" -le 1
+          test "$normal_exit" -eq 0 && test "$instrumented_exit" -eq 0
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:

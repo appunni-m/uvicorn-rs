@@ -15372,6 +15372,7 @@ def run_python_api_probe(
         str(ROOT / "tests/parity/python_api_probe.py"),
         json.dumps(probe_api, sort_keys=True, separators=(",", ":")),
     ]
+    environment.setdefault("PYTHONFAULTHANDLER", "1")
     # The probe can use deadlines for startup/request, all-worker readiness or
     # reload, and graceful shutdown. Keep the outer process bound above
     # the work it is supervising so timeout evidence comes from the probe.
@@ -15414,6 +15415,16 @@ def run_python_api_probe(
             fault_control_directory.cleanup()
     if len(completed.stdout) > 4 * 1024 * 1024 or len(completed.stderr) > 4 * 1024 * 1024:
         raise ParityError(f"{case['case_id']}: Python API probe output exceeded the 4 MiB evidence bound")
+    if server_id == "uvicorn-rs" and completed.returncode < 0:
+        # Normalized observations intentionally omit raw probe streams. Keep
+        # the crash stack in the runner log without altering the comparison.
+        print(
+            f"{case['case_id']}: candidate probe terminated by signal "
+            f"{-completed.returncode}; stderr follows:\n"
+            f"{completed.stderr.decode('utf-8', errors='replace')[-32000:]}",
+            file=sys.stderr,
+            flush=True,
+        )
     observation = {
         "exit_code": completed.returncode,
         "stdout_base64": base64.b64encode(completed.stdout).decode("ascii"),
