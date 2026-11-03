@@ -15,7 +15,7 @@ import unittest
 import check_ci_evidence as evidence
 from parity_identity import runtime_source_digest, runtime_source_hashes
 from run_parity import _python_api_server_log_events
-from windows_reference_hang import CASE_IDS, eligible_input
+from windows_reference_hang import CASE_IDS, diagnostic_input, eligible_input, validate_reference_hang
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -159,6 +159,25 @@ class ReferenceHangPolicyTests(unittest.TestCase):
     def test_exact_reviewed_input_selection(self):
         _, cases, _ = evidence.load_contract()
         self.assertEqual({c["case_id"] for c in cases if eligible_input(c)}, CASE_IDS)
+
+    def test_sigbreak_diagnostic_does_not_expand_acceptance(self):
+        _, cases, _ = evidence.load_contract()
+        case = next(c for c in cases if c["case_id"] ==
+                    "python-api.module-cli-two-workers-stop-on-sigterm")
+        self.assertTrue(diagnostic_input(case))
+        self.assertFalse(eligible_input(case))
+        with self.assertRaisesRegex(ValueError, "outside the three reviewed"):
+            validate_reference_hang(self.row, case, self.result["run"]["environment"])
+        for field, value in (("workers", 3), ("shutdown_signal", "SIGINT"),
+                             ("shutdown_signal_sequence", ["SIGTERM", "SIGTERM"])):
+            changed = deepcopy(case)
+            changed["api"]["run_http"][field] = value
+            self.assertFalse(diagnostic_input(changed), field)
+
+    def test_exact_diagnostic_input_selection(self):
+        _, cases, _ = evidence.load_contract()
+        self.assertEqual({c["case_id"] for c in cases if diagnostic_input(c)},
+                         CASE_IDS | {"python-api.module-cli-two-workers-stop-on-sigterm"})
 
     def test_rejects_candidate_failures(self):
         for field, value in (("process_timed_out", True), ("process_exit_code", 1),

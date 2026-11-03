@@ -2121,7 +2121,7 @@ except KeyboardInterrupt:
                     os.name == "nt"
                     and os.environ.get("ASGI_PARITY_SERVER_ID") == "uvicorn"
                     and expected_worker_count == 2
-                    and shutdown_signals_sent == ["SIGINT"]
+                    and shutdown_signals_sent in (["SIGINT"], ["SIGTERM"])
                     and response is not None
                 ):
                     # The deadline has already failed. Retain that failure,

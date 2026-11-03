@@ -61,7 +61,7 @@ from h2.settings import SettingCodes
 from websockets.exceptions import ConnectionClosed, InvalidHandshake, InvalidStatus
 from websockets.sync.client import connect as websocket_connect
 from parity_identity import runtime_source_digest, runtime_source_hashes
-from windows_reference_hang import eligible_input as windows_reference_hang_input
+from windows_reference_hang import diagnostic_input as windows_reference_hang_input
 
 
 ROOT = Path(__file__).resolve().parents[1]

@@ -21,11 +21,13 @@ CASE_IDS = {
 }
 
 
-def eligible_input(case: dict[str, Any]) -> bool:
+def _eligible_worker_input(
+    case: dict[str, Any], case_ids: set[str], shutdown_signal: str
+) -> bool:
     request = case.get("api", {}).get("run_http", {})
     environment = request.get("environment", {})
     return (
-        case.get("case_id") in CASE_IDS
+        case.get("case_id") in case_ids
         and case.get("profile") == "python-api"
         and case.get("operation") == "python.api.run-http"
         and case.get("verification", "oracle-parity") == "oracle-parity"
@@ -37,13 +39,30 @@ def eligible_input(case: dict[str, Any]) -> bool:
         and request.get("invocation") == "module-cli"
         and request.get("lifespan") == "auto"
         and request.get("method") == "GET"
-        and request.get("shutdown_signal") == "SIGINT"
+        and request.get("shutdown_signal") == shutdown_signal
         and request.get("root_path") == ""
         and set(environment) <= {"WEB_CONCURRENCY"}
         and (
             request.get("workers") == 2 if "workers" in request
             else environment.get("WEB_CONCURRENCY") == "2"
         )
+    )
+
+
+def eligible_input(case: dict[str, Any]) -> bool:
+    return _eligible_worker_input(case, CASE_IDS, "SIGINT")
+
+
+def diagnostic_input(case: dict[str, Any]) -> bool:
+    """Retain a SIGBREAK timeout for investigation without accepting it.
+
+    Windows maps the public SIGTERM input to CTRL_BREAK_EVENT. CI #640
+    captured a reference-only stall there, but no TCP recovery observation.
+    The existing SIGINT acceptance policy remains unchanged until that
+    evidence is collected and reviewed.
+    """
+    return eligible_input(case) or _eligible_worker_input(
+        case, {"python-api.module-cli-two-workers-stop-on-sigterm"}, "SIGTERM"
     )
 
 
