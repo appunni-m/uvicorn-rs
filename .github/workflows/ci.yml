@@ -123,6 +123,7 @@ jobs:
       - name: Exercise exact-run handoff and fail-closed receipt cases
         run: |
           python scripts/check_release_version.py
+          python scripts/test_native_fault_contracts.py
           python scripts/test_coverage_mcp_handoff.py
 
   rust:

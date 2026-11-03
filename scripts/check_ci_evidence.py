@@ -108,6 +108,10 @@ NATIVE_FAULT_CONTRACTS = {
         "operation": "native-http1-keepalive-deadline-channel-closed",
         "scenario": "deadline-channel-closed",
     },
+    "http1.keep-alive.deadline-rescheduled-before-expiry": {
+        "operation": "native-http1-keepalive-deadline-rescheduled",
+        "scenario": "deadline-rescheduled-before-expiry",
+    },
     "http1.upgrade.receiver-closed": {
         "contracts": [
             {
@@ -212,6 +216,10 @@ NATIVE_FAULT_CONTRACTS = {
         "operation": "native-http1-websocket",
         "scenario": "accepted-session-extension-header-error",
     },
+    "websocket.session.extension-header-value-error": {
+        "operation": "native-http1-websocket",
+        "scenario": "accepted-session-extension-header-value-error",
+    },
     "websocket.receive.close-reply.flush": {
         "operation": "native-http1-websocket",
         "scenario": "close-reply-flush-failure",
@@ -234,6 +242,10 @@ NATIVE_FAULT_CONTRACTS = {
                 "operation": "native-tcp-multi-listener-accept-error",
                 "scenario": "multi-listener-accept-error",
             },
+            {
+                "operation": "native-server-listener-accept-error",
+                "scenario": "unix-accept-error",
+            },
         ],
     },
     "server.listener.unexpected-clean-exit": {
@@ -241,8 +253,16 @@ NATIVE_FAULT_CONTRACTS = {
         "scenario": "unexpected-clean-exit",
     },
     "server.listener.admission-closed": {
-        "operation": "native-server-listener-admission-closed",
-        "scenario": "admission-closed",
+        "contracts": [
+            {
+                "operation": "native-server-listener-admission-closed",
+                "scenario": "admission-closed",
+            },
+            {
+                "operation": "native-unix-listener-admission-closed",
+                "scenario": "unix-admission-closed",
+            },
+        ],
     },
     "server.http3.admission-closed": {
         "operation": "native-server-http3-admission-closed",
@@ -1101,13 +1121,8 @@ def source_lines_for_region(region: dict[str, Any]) -> set[int]:
     return set(range(start_line, last_line + 1))
 
 
-def validate_coverage(
-    report: dict[str, Any], report_path: Path, *, allow_pending_mcp: bool = False,
-) -> dict[str, Any]:
-    manifest, asgi_cases, input_paths = load_contract()
-    native_manifest_path = ROOT / "tests/native-core/manifest.json"
-    native_manifest = read_json(native_manifest_path)
-    native_cases = native_manifest.get("cases")
+def validate_native_case_contracts(native_cases: Any) -> list[str]:
+    """Check the native registry before measuring or replaying coverage."""
     require(isinstance(native_cases, list) and bool(native_cases), "native manifest has no cases")
     native_ids = [case.get("id") for case in native_cases if isinstance(case, dict)]
     require(len(native_ids) == len(native_cases) and all(isinstance(item, str) and item.strip() for item in native_ids)
@@ -1131,6 +1146,17 @@ def validate_coverage(
                     f"invalid native fault contract: {case['id']}")
         else:
             require(fault is None, f"native target contract cannot declare a fault: {case['id']}")
+    return native_ids
+
+
+def validate_coverage(
+    report: dict[str, Any], report_path: Path, *, allow_pending_mcp: bool = False,
+) -> dict[str, Any]:
+    manifest, asgi_cases, input_paths = load_contract()
+    native_manifest_path = ROOT / "tests/native-core/manifest.json"
+    native_manifest = read_json(native_manifest_path)
+    native_cases = native_manifest.get("cases")
+    native_ids = validate_native_case_contracts(native_cases)
 
     ext = report.get("uvicorn_rs_unified")
     require(report.get("type") == "llvm.coverage.json.export" and isinstance(ext, dict)

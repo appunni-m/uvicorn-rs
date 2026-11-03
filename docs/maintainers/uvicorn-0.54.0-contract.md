@@ -64,9 +64,18 @@ behavioral failures, infrastructure failures or not-run cases. This report binds
 runtime batch `a2a02070fe573c61b84aed90f4f48bdb5f267131` to clean PR merge
 source `1c8f16c80e4ac5115c9282037b30473d0016c04a`. Linux, macOS and Windows
 candidate package jobs and the Python 3.9 floor consumer have also passed;
-Windows public parity passed 759/759 applicable cases. Full unified coverage
-is still running at this snapshot. Later reporting-only changes are not
-qualified by that run.
+Windows public parity passed 759/759 applicable cases. Unified coverage has
+now completed: 14,740/14,740 regions and 10,855/10,855 lines, all 1,451
+attributed cases passed, and all three ASGI and native matrix repeats passed.
+The CI job nevertheless failed during evidence validation because four
+already-executed native fault bindings were missing from the validator's
+registry: keep-alive deadline rescheduling, WebSocket extension header-value
+failure, Unix listener accept failure, and Unix admission closure. Their
+retained results report the intended fault consumed and match the recorded
+artifact hashes. The registry is repaired and a static preflight now checks
+all indexed native contracts before the expensive CI jobs begin. Strict
+evidence replay, independent Coverage-MCP review and final source qualification
+remain pending; later harness changes are not qualified by that historical run.
 
 Historical Windows failures remain retained. CI
 [#627](https://github.com/appunni-m/uvicorn-rs/actions/runs/41560262953)
