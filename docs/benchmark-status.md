@@ -47,8 +47,12 @@ The removal keeps 64 KiB chunks, queue capacity two, reservation before socket
 read/allocation, partial-read ownership, ordered data/EOF/errors and the explicit
 copy into `ReadBuf`. It also removes the return-buffer channel. The experiment's
 fresh-allocation control retained that channel, so its timing is not a measurement
-of the final removal binary. Final-source parity, coverage and the three-system
-benchmark are still required. The frozen experiment remains reproducible from
+of the final removal binary. The clean normal macOS ARM64 wheel from removal
+commit `893fd9202057c89eb8cbfff127a747e51a55dc41` passes all 13 affected
+installed-wheel parity cases against live Uvicorn 0.54.0, with strict
+source/native identity verification and a verified wheel RECORD. Full
+final-source CI, coverage and the three-system benchmark remain required.
+The frozen experiment remains reproducible from
 its recorded source; its runtime identity intentionally rejects later source.
 
 The separate Linux ARM64

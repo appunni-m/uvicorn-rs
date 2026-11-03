@@ -4847,7 +4847,7 @@
     "One noisy pair is excluded without replacement. All 80 invocations and failures remain in the hosted archive.",
     "Descriptive comparison on this Linux x86-64 runner only; no allocation count, statistical confidence, stock-Uvicorn gain or other-system claim.",
     "The nonexecuting py.typed marker is checked in both wheel payload audits and source/parity identity; the per-sample executable ledger does not record it.",
-    "Final removal installed-wheel parity and full final-source CI/coverage/review remain required."
+    "Final removal selected installed-wheel parity and strict source/native audit passed 13/13. Full final-source CI/coverage/review and three-system measurements remain required."
   ],
   "rationale": [
     "Mixed upload gains are retained, including lower CPU/request in all five asyncio 1 KiB-write pairs.",
@@ -4859,6 +4859,41 @@
     "Preserve partial chunks, ordered data/EOF/errors, reset/cancellation/half-close behavior and explicit ReadBuf copy.",
     "Remove the returned-buffer channel as well as recycling. The measured fresh control retained that channel, so its timings do not measure this final removal binary."
   ],
+  "removal_verification": {
+    "case_ids": [
+      "python-api.run-websocket-over-unix-domain-socket",
+      "python-api.module-cli-serves-unix-domain-socket-request",
+      "python-api.config-server-serves-unix-domain-socket-request",
+      "python-api.module-cli-serves-tls-over-unix-domain-socket",
+      "http1.response-reset-after-first-streamed-chunk",
+      "http1.response-reset-cancels-held-application",
+      "http1.request-upload-stream",
+      "http1.request-streaming-progress-before-upload-complete",
+      "http1.request-trailers-after-streamed-upload",
+      "http1.response-before-upload-drained",
+      "http1.upload-remains-after-one-asgi-receive",
+      "http1.upload-remains-unread-after-early-response",
+      "http1.upload-one-mib-in-sixteen-64k-chunks"
+    ],
+    "clean_source": true,
+    "native_sha256": "36843fef4ffad7fe1073b4f9a0edd3699163a510b3bb5d8992fe7bb030f2d402",
+    "parity_report_sha256": "fe889c7c91c60023759e29b749082c8dc41485d550eb7929d2fde72638993366",
+    "record_verified": true,
+    "revision": "893fd9202057c89eb8cbfff127a747e51a55dc41",
+    "runtime_sha256": "c3b34f3eec9888f42984aac28421183d947a80700e634312afac9579e0c5a88c",
+    "scope": "Normal release wheel, macOS ARM64, CPython 3.12.13, live pinned Uvicorn 0.54.0; selected behavior evidence only, not full final-source coverage or performance.",
+    "strict_parity_audit_passed": true,
+    "summary": {
+      "executed": 13,
+      "failed": 0,
+      "infrastructure_failed": 0,
+      "not_run": 0,
+      "passed": 13,
+      "selected": 13
+    },
+    "wheel_filename": "uvicorn_rs-0.3.0-cp39-abi3-macosx_11_0_arm64.whl",
+    "wheel_sha256": "2aba086e75ad80892a4354d910714473b7284cd687277c6fa8870da5867ca5ad"
+  },
   "schema": "peer-read-buffer-retention-review@1",
   "scope": "normal release candidate reuse versus fresh allocations on this recorded hosted runner only",
   "workflow_conclusion": "failure",

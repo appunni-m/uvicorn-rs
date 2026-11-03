@@ -103,9 +103,10 @@ retains 39 valid pairs from its 40-pair plan on Linux x86-64. The workflow
 failed only during analysis; the installed-Python identity join is repaired and
 the existing rows pass offline analysis without new measurements. Upload gains
 are mixed and the small-response uvloop guard regresses, so the frozen retention
-rule rejects recycling. Remove the return-buffer channel, preserve the read
-bound and behavioral contracts, then qualify the removal with selected normal
-installed-wheel parity. The [decision record](../benchmark-status.md#buffer-recycling-decision-and-arm64-trace-2026-11-03)
+rule rejects recycling. Commit `893fd9202057c89eb8cbfff127a747e51a55dc41`
+removes the return-buffer channel and preserves the read bound and behavioral
+contracts. Its clean normal macOS ARM64 wheel passes all 13 affected installed
+parity cases and strict source/native verification. The [decision record](../benchmark-status.md#buffer-recycling-decision-and-arm64-trace-2026-11-03)
 retains benefits, regressions, invalid rows and exact evidence identities.
 
 Focused ARM64 H3 trace #279 passes 40 requests with zero failures and clean
