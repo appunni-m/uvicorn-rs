@@ -15,7 +15,13 @@ import unittest
 import check_ci_evidence as evidence
 from parity_identity import runtime_source_digest, runtime_source_hashes
 from run_parity import _python_api_server_log_events
-from windows_reference_hang import CASE_IDS, SIGBREAK_POLICY, diagnostic_input, eligible_input
+from windows_reference_hang import (
+    CASE_IDS,
+    SIGBREAK_POLICY,
+    SIGBREAK_STALL_POLICY,
+    diagnostic_input,
+    eligible_input,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -104,6 +110,89 @@ class ReferenceHangPolicyTests(unittest.TestCase):
         raw = json.loads(base64.b64decode(observation["stdout_base64"]))
         edit(raw["run_http"])
         observation["stdout_base64"] = encode(json.dumps(raw))
+
+    def set_sigbreak_stall(self):
+        _, cases, _ = evidence.load_contract()
+        self.case = next(c for c in cases if c["case_id"] ==
+                         "python-api.module-cli-two-workers-stop-on-sigterm")
+        self.row.update(case_id=self.case["case_id"], profile=self.case["profile"],
+                        operation=self.case["operation"], requirements=self.case["covers"],
+                        status="failed",
+                        difference="Python API observations differ: process_exit_code, process_timed_out")
+        self.result["run"]["environment"].update(
+            python="3.12.13", platform="Windows-10-10.0.19045-SP0", machine="AMD64"
+        )
+        reference_log = """INFO:     Started parent process [100]
+INFO:     Started server process [101]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Started server process [102]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Received SIGBREAK, exiting.
+INFO:     Finished server process [101]
+INFO:     Terminated child process [102]
+INFO:     Waiting for child process [102]
+"""
+        candidate_log = """INFO:     Started parent process [200]
+INFO:     Started server process [201]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Started server process [202]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Received SIGBREAK, exiting.
+INFO:     Finished server process [201]
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [202]
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Stopping parent process [200]
+"""
+        for side, server_log, timed_out, process_exit, clean_workers in (
+            ("oracle", reference_log, True, 1, 1),
+            ("target", candidate_log, False, 0, 2),
+        ):
+            observation = self.row[f"{side}_observation"]
+            raw = json.loads(base64.b64decode(observation["stdout_base64"]))
+            raw_http = raw["run_http"]
+            raw_http.update(
+                process_timed_out=timed_out,
+                process_exit_code=process_exit,
+                shutdown_signals_sent=["SIGTERM"],
+                server_stderr_base64=encode(server_log),
+                reference_shutdown_diagnostic=None,
+            )
+            observation.update(
+                process_timed_out=timed_out,
+                process_exit_code=process_exit,
+                shutdown_signals_sent=["SIGTERM"],
+                worker_start_count=2,
+                worker_clean_shutdown_count=clean_workers,
+                worker_replacement_observed=False,
+                server_log_events=_python_api_server_log_events(raw_http),
+                stdout_base64=encode(json.dumps(raw)),
+            )
+        self.result["summary"].update(passed=0, failed=1)
+
+    def test_sigbreak_no_wakeup_stall_accepts_only_clean_candidate(self):
+        self.set_sigbreak_stall()
+        checked = self.check()
+        self.assertEqual(checked["status"], "accepted_with_reference_exception")
+        self.assertEqual(checked["accepted_reference_defects"][0]["policy"],
+                         SIGBREAK_STALL_POLICY)
+        self.assertEqual(checked["raw_parity_status"], "failed")
+
+    def test_sigbreak_no_wakeup_stall_rejects_candidate_timeout(self):
+        self.set_sigbreak_stall()
+        observation = self.row["target_observation"]
+        raw = json.loads(base64.b64decode(observation["stdout_base64"]))
+        raw["run_http"].update(process_timed_out=True, process_exit_code=1)
+        observation.update(process_timed_out=True, process_exit_code=1,
+                           stdout_base64=encode(json.dumps(raw)))
+        with self.assertRaises(evidence.EvidenceError):
+            self.check()
 
     def test_acceptance_retains_failed_parity_and_does_not_mutate_evidence(self):
         original = deepcopy(self.result)

@@ -1,8 +1,9 @@
-"""Explicit acceptance for one recorded stock-Uvicorn defect, outside parity.
+"""Explicit acceptance for recorded stock-Uvicorn worker-shutdown defects.
 
-The raw comparison stays failed. This policy accepts only the Windows
-two-worker console-signal timeout that completes after one diagnostic TCP connection,
-with an independently clean candidate lifecycle on the same input.
+The raw comparison stays failed. The Windows two-worker console-signal hang
+must match its captured log signature, and the candidate must complete its
+worker lifecycle cleanly on the same input. When captured stock evidence has
+the bounded TCP wakeup, its recovery is also checked.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from typing import Any
 
 POLICY = "uvicorn-0.54.0-windows-two-worker-sigint-tcp-wakeup@1"
 SIGBREAK_POLICY = "uvicorn-0.54.0-windows-two-worker-sigbreak-tcp-wakeup@1"
+SIGBREAK_STALL_POLICY = "uvicorn-0.54.0-windows-two-worker-sigbreak-stall-candidate-clean@1"
 SIGBREAK_CASE_ID = "python-api.module-cli-two-workers-stop-on-sigterm"
 CASE_IDS = {
     "python-api.module-cli-two-workers-serve-request",
@@ -150,6 +152,58 @@ def _reference_recovery(raw_oracle: dict, raw_target: dict, case: dict) -> str:
     return before
 
 
+def _validate_sigbreak_stall(
+    row: dict[str, Any], case: dict[str, Any], environment: dict[str, Any],
+    oracle: dict[str, Any], target: dict[str, Any],
+    raw_oracle: dict[str, Any], raw_target: dict[str, Any],
+) -> dict[str, Any]:
+    """Accept only the captured stock SIGBREAK join stall with a clean candidate."""
+    _require(case.get("case_id") == SIGBREAK_CASE_ID and eligible_input(case),
+             "input is outside the exact two-worker SIGBREAK case")
+    _require(environment["platform"].lower().startswith(("windows", "win32")), "not Windows")
+    _require(environment["dependencies"].get("uvicorn") == "0.54.0", "reference version changed")
+    _require(environment["machine"].lower() in {"amd64", "x86_64"}
+             and environment["python"] == "3.12.13", "captured SIGBREAK environment changed")
+    _require(row.get("status") == "failed" and bool(row.get("difference")),
+             "raw comparison must retain the reference failure")
+    _require(row["server_exit_codes"] == {"oracle": 0, "target": 0}, "probe process failed")
+    for label, observation in (("reference", oracle), ("candidate", target)):
+        _require(observation["exit_code"] == 0, f"{label} probe failed")
+        _require(observation["response_received"] is True and observation["response_status"] == 200,
+                 f"{label} did not serve the request")
+        _require(observation["shutdown_signal_sent"] is True
+                 and observation["shutdown_signals_sent"] == ["SIGTERM"],
+                 f"{label} signal sequence differs")
+        _require(observation["worker_replacement_observed"] is False
+                 and observation["worker_start_count"] == 2,
+                 f"{label} did not retain the original two workers")
+
+    _require(oracle["process_timed_out"] is True
+             and type(oracle["process_exit_code"]) is int
+             and oracle["process_exit_code"] != 0,
+             "reference did not retain the timed-out worker shutdown")
+    _require(target["process_timed_out"] is False and target["process_exit_code"] == 0
+             and target["worker_clean_shutdown_count"] == 2,
+             "candidate did not finish both workers within the original deadline")
+    for field in ("response_content_type", "response_body_base64", "listener_responses"):
+        _require(oracle[field] == target[field], f"served response differs: {field}")
+    _require(raw_oracle.get("reference_shutdown_diagnostic") is None
+             and raw_target.get("reference_shutdown_diagnostic") is None,
+             "this policy covers only the captured no-wakeup reference stall")
+    for side, raw in ((oracle, raw_oracle), (target, raw_target)):
+        for field in ("process_timed_out", "process_exit_code", "shutdown_signals_sent",
+                      "response_received", "response_status", "response_content_type",
+                      "response_body_base64", "listener_responses"):
+            _require(raw[field] == side[field], f"raw evidence disagrees with {field}")
+    _clean_lifecycle(_decode(raw_oracle["server_stderr_base64"]), completed=False,
+                     shutdown_signal="SIGTERM")
+    _clean_lifecycle(_decode(raw_target["server_stderr_base64"]), completed=True,
+                     shutdown_signal="SIGTERM")
+    return {"case_id": case["case_id"], "policy": SIGBREAK_STALL_POLICY,
+            "raw_comparison": "failed", "candidate_contract": "passed",
+            "reference_signature": "one worker remains in supervisor join after SIGBREAK"}
+
+
 def validate_reference_hang(
     row: dict[str, Any], case: dict[str, Any], environment: dict[str, Any]
 ) -> dict[str, Any]:
@@ -166,6 +220,12 @@ def validate_reference_hang(
     target = row["target_observation"]
     _require(set(oracle) == set(target), "reference observation envelope differs")
     _require(row["server_exit_codes"] == {"oracle": 0, "target": 0}, "probe process failed")
+    raw_oracle = json.loads(_decode(oracle["stdout_base64"]))["run_http"]
+    raw_target = json.loads(_decode(target["stdout_base64"]))["run_http"]
+    if shutdown_signal == "SIGTERM" and raw_oracle.get("reference_shutdown_diagnostic") is None:
+        return _validate_sigbreak_stall(
+            row, case, environment, oracle, target, raw_oracle, raw_target
+        )
     for label, observation in (("reference", oracle), ("candidate", target)):
         _require(observation["exit_code"] == 0, f"{label} probe failed")
         _require(observation["response_received"] is True and observation["response_status"] == 200,
@@ -178,8 +238,6 @@ def validate_reference_hang(
                  f"{label} worker lifecycle is incomplete")
     _require(oracle["process_timed_out"] is True, "reference did not time out")
     _require(target["process_timed_out"] is False, "candidate exceeded the original deadline")
-    raw_oracle = json.loads(_decode(oracle["stdout_base64"]))["run_http"]
-    raw_target = json.loads(_decode(target["stdout_base64"]))["run_http"]
     before = _reference_recovery(raw_oracle, raw_target, case)
     for side, raw in ((oracle, raw_oracle), (target, raw_target)):
         for field in ("process_timed_out", "process_exit_code", "shutdown_signals_sent",

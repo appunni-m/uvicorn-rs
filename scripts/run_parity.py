@@ -15548,8 +15548,10 @@ def run_python_api_probe(
             os.name == "nt"
             and server_id == "uvicorn"
             and windows_reference_hang_input(case)
-            and isinstance(run_http_observation.get("reference_shutdown_diagnostic"), dict)
         )
+        # Preserve raw timeout observations for the exact reviewed worker
+        # inputs. The separate Windows acceptance check verifies the known
+        # stock hang signature and rejects any candidate lifecycle failure.
         if run_http_observation.get("process_timed_out") and not retain_reference_hang:
             diagnostic = server_stderr or server_stdout
             diagnostic_tail = "\n".join(diagnostic.splitlines()[-20:])[-3000:]

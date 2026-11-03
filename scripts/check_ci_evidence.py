@@ -27,7 +27,12 @@ from typing import Any
 from coverage_contract import pending_coverage_mcp_request
 from coverage_toolchain import ToolchainError, validate_coverage_tools
 from parity_identity import runtime_source_digest, runtime_source_hashes
-from windows_reference_hang import eligible_input, validate_candidate_lifecycle, validate_reference_hang
+from windows_reference_hang import (
+    SIGBREAK_STALL_POLICY,
+    eligible_input,
+    validate_candidate_lifecycle,
+    validate_reference_hang,
+)
 from windows_reference_startup import validate_reference_startup, validate_reference_startup_and_hang
 
 
@@ -588,6 +593,7 @@ def validate_observations(
     row: dict[str, Any], case: dict[str, Any], manifest: dict[str, Any], *,
     accepted_reference_hang: bool = False,
     accepted_reference_startup: bool = False,
+    accepted_reference_sigbreak_stall: bool = False,
 ) -> None:
     exact_keys(row, {"case_id", "profile", "operation", "requirements", "verification", "fault", "status",
                      "oracle_observation", "target_observation", "server_exit_codes", "difference"},
@@ -610,6 +616,13 @@ def validate_observations(
             # This is compatibility acceptance, never a passing parity result.
             # Every observation other than this diagnosed timeout must match.
             compare = [field for field in compare if field != "process_timed_out"]
+        if accepted_reference_sigbreak_stall:
+            # The retained stock process has already been terminated after
+            # the deadline. Keep request and signal parity; validate the exact
+            # one-worker stall and clean candidate logs in the exception rule.
+            compare = [field for field in compare if field not in {
+                "process_exit_code", "process_timed_out", "server_log_events",
+            }]
         if accepted_reference_startup:
             # The separate startup policy has checked the exact raw traceback,
             # worker identities and clean candidate. Keep every response and
@@ -797,7 +810,7 @@ def validate_parity(
             except (ValueError, KeyError, TypeError) as error:
                 raise EvidenceError(f"independent candidate lifecycle rejected: {error}") from error
             candidate_contract_cases.append(case["case_id"])
-        accepted_hang = accepted_startup = False
+        accepted_hang = accepted_startup = accepted_sigbreak_stall = False
         if accepted:
             failures = []
             for enabled, validator in (
@@ -816,12 +829,14 @@ def validate_parity(
                 accepted_reference_defects.append(decision)
                 accepted_hang = validator in (validate_reference_hang, validate_reference_startup_and_hang)
                 accepted_startup = validator in (validate_reference_startup, validate_reference_startup_and_hang)
+                accepted_sigbreak_stall = decision.get("policy") == SIGBREAK_STALL_POLICY
                 break
             require(accepted_hang or accepted_startup,
                     "reference exception rejected: " + "; ".join(failures))
         validate_case_metadata(row, case, expected_status="failed" if accepted else "passed")
         validate_observations(row, case, manifest, accepted_reference_hang=accepted_hang,
-                              accepted_reference_startup=accepted_startup)
+                              accepted_reference_startup=accepted_startup,
+                              accepted_reference_sigbreak_stall=accepted_sigbreak_stall)
     checked = {"status": "accepted_with_reference_exception" if accepted_reference_defects else "passed",
             "cases": len(expected), "source_sha256": target["source_sha256"],
             "native_sha256": native_sha, "commit": target["revision"], "recorded_dirty": target["dirty"],
