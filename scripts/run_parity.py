@@ -15911,6 +15911,28 @@ def required_observations_for_case(
     )
 
 
+def print_parity_difference(
+    profile_id: str,
+    case_id: str,
+    difference: str | None,
+    oracle: dict[str, Any] | None = None,
+    target: dict[str, Any] | None = None,
+) -> None:
+    """Print bounded failure details without changing the retained observations."""
+    prefix = f"DIFF {profile_id}: {case_id}: "
+    print(prefix + str(difference)[:3000], flush=True)
+    if oracle is None or target is None:
+        return
+    for field in oracle:
+        if oracle[field] == target[field]:
+            continue
+        detail = json.dumps(
+            {"oracle": oracle[field], "target": target[field]}, sort_keys=True
+        )
+        # Artifacts retain full observations; keep the live CI log readable.
+        print(f"{prefix}{field}: {detail[:4000]}", flush=True)
+
+
 def execute_python_api_profile(
     profile: dict[str, Any],
     cases: list[dict[str, Any]],
@@ -16085,6 +16107,11 @@ def execute_python_api_profile(
                 f"{'PASS' if matches else 'FAIL'} {profile['id']}: {case['case_id']}",
                 flush=True,
             )
+            if not matches:
+                print_parity_difference(
+                    profile["id"], case["case_id"], difference,
+                    oracle_comparison, target_comparison,
+                )
         except Exception as error:
             outcomes.append({
                 "case_id": case["case_id"],
@@ -16836,29 +16863,12 @@ def execute_profile(
                     })
                     print(f"{'PASS' if matches else 'FAIL'} {profile['id']}: {case['case_id']}", flush=True)
                     if not matches:
-                        print(
-                            f"DIFF {profile['id']}: {case['case_id']}: "
-                            f"{str(difference)[:3000]}",
-                            flush=True,
+                        is_fault_contract = case.get("verification") == "fault-contract"
+                        print_parity_difference(
+                            profile["id"], case["case_id"], difference,
+                            None if is_fault_contract else oracle_comparison,
+                            None if is_fault_contract else target_comparison,
                         )
-                        if case.get("verification") != "fault-contract":
-                            for field in comparison_fields:
-                                if oracle_comparison[field] == target_comparison[field]:
-                                    continue
-                                detail = json.dumps(
-                                    {
-                                        "oracle": oracle_comparison[field],
-                                        "target": target_comparison[field],
-                                    },
-                                    sort_keys=True,
-                                )
-                                # Keep the live job log bounded. The result
-                                # artifact retains both full observations.
-                                print(
-                                    f"DIFF {profile['id']}: {case['case_id']}: "
-                                    f"{field}: {detail[:4000]}",
-                                    flush=True,
-                                )
                 except Exception as error:  # Preserve adapter failures in the generated result.
                     outcomes.append({
                         "case_id": case["case_id"],
