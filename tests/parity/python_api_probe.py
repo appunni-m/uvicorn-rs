@@ -1664,6 +1664,60 @@ except KeyboardInterrupt:
             "tls_alpn_protocol": negotiated_alpn,
         }
 
+    def wait_for_worker_startup() -> None:
+        if not output_reader_threads or process.poll() is not None:
+            return
+        started_worker_pids = set()
+        started_worker_marker = b"Started server process ["
+        startup_complete_count = 0
+        expected_startup_complete_count = (
+            expected_worker_count if request["lifespan"] != "off" else 0
+        )
+        startup_deadline = time.monotonic() + request["timeout_seconds"]
+        while (
+            (
+                len(started_worker_pids) < expected_worker_count
+                or startup_complete_count < expected_startup_complete_count
+            )
+            and process.poll() is None
+            and time.monotonic() < startup_deadline
+        ):
+            with output_chunks_lock:
+                outputs = (b"".join(stdout_chunks), b"".join(stderr_chunks))
+            startup_complete_count = sum(
+                output.count(b"Application startup complete.")
+                for output in outputs
+            )
+            for output in outputs:
+                for line in output.splitlines():
+                    marker_offset = line.find(started_worker_marker)
+                    if marker_offset < 0:
+                        continue
+                    pid_text = line[
+                        marker_offset + len(started_worker_marker) :
+                    ].split(b"]", 1)[0].strip()
+                    if pid_text.isdigit():
+                        started_worker_pids.add(int(pid_text))
+            if (
+                len(started_worker_pids) < expected_worker_count
+                or startup_complete_count < expected_startup_complete_count
+            ):
+                time.sleep(0.025)
+        if (
+            process.poll() is None
+            and (
+                len(started_worker_pids) < expected_worker_count
+                or startup_complete_count < expected_startup_complete_count
+            )
+        ):
+            raise RuntimeError(
+                "server did not report all configured workers as ready "
+                "before client traffic or shutdown; "
+                f"started={len(started_worker_pids)}/{expected_worker_count} "
+                f"startup_complete={startup_complete_count}/"
+                f"{expected_startup_complete_count}"
+            )
+
     request_limit = None
     request_limit_jitter = 0
     limit_environment = request.get("environment", {})
@@ -1677,8 +1731,12 @@ except KeyboardInterrupt:
     except (TypeError, ValueError):
         request_limit = None
         request_limit_jitter = 0
-    deadline = time.monotonic() + request["timeout_seconds"]
     try:
+        # Each spawned worker initializes the shared listener separately.
+        # Complete the existing all-worker startup barrier before any client
+        # traffic, using the same observation for both implementations.
+        wait_for_worker_startup()
+        deadline = time.monotonic() + request["timeout_seconds"]
         incomplete_request_buffer_length = request.get(
             "incomplete_request_buffer_length"
         )
@@ -2005,57 +2063,8 @@ except KeyboardInterrupt:
                 )
         if response is not None:
             time.sleep(request.get("post_response_settle_seconds", 0))
-        if response is not None and output_reader_threads and process.poll() is None:
-            started_worker_pids = set()
-            started_worker_marker = b"Started server process ["
-            startup_complete_count = 0
-            expected_startup_complete_count = (
-                expected_worker_count if request["lifespan"] != "off" else 0
-            )
-            startup_deadline = time.monotonic() + request["timeout_seconds"]
-            while (
-                (
-                    len(started_worker_pids) < expected_worker_count
-                    or startup_complete_count < expected_startup_complete_count
-                )
-                and process.poll() is None
-                and time.monotonic() < startup_deadline
-            ):
-                with output_chunks_lock:
-                    outputs = (b"".join(stdout_chunks), b"".join(stderr_chunks))
-                startup_complete_count = sum(
-                    output.count(b"Application startup complete.")
-                    for output in outputs
-                )
-                for output in outputs:
-                    for line in output.splitlines():
-                        marker_offset = line.find(started_worker_marker)
-                        if marker_offset < 0:
-                            continue
-                        pid_text = line[
-                            marker_offset + len(started_worker_marker) :
-                        ].split(b"]", 1)[0].strip()
-                        if pid_text.isdigit():
-                            started_worker_pids.add(int(pid_text))
-                if (
-                    len(started_worker_pids) < expected_worker_count
-                    or startup_complete_count < expected_startup_complete_count
-                ):
-                    time.sleep(0.025)
-            if (
-                process.poll() is None
-                and (
-                    len(started_worker_pids) < expected_worker_count
-                    or startup_complete_count < expected_startup_complete_count
-                )
-            ):
-                raise RuntimeError(
-                    "server did not report all configured workers as ready "
-                    "before shutdown; "
-                    f"started={len(started_worker_pids)}/{expected_worker_count} "
-                    f"startup_complete={startup_complete_count}/"
-                    f"{expected_startup_complete_count}"
-                )
+        if response is not None:
+            wait_for_worker_startup()
         for index, signal_name in enumerate(shutdown_signal_names):
             if process.poll() is not None:
                 break
