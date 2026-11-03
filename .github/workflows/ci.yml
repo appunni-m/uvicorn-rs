@@ -1234,6 +1234,11 @@ jobs:
             --installed-candidate \
             "${parity_args[@]}" \
             --output target/focused-linux/parity.json
+      - name: Install the native crash debugger for startup diagnostics
+        if: ${{ !cancelled() && inputs.trace_startup_teardown }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends gdb
       - name: Capture bounded startup-failure teardown diagnostics
         if: ${{ !cancelled() && inputs.trace_startup_teardown }}
         shell: bash
