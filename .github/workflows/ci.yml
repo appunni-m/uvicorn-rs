@@ -28,7 +28,7 @@ on:
         type: boolean
         default: false
       trace_startup_teardown:
-        description: Diagnose only startup-failure teardown on normal and instrumented Linux builds
+        description: Trace one unified-coverage startup case and collect a core backtrace if it crashes
         required: false
         type: boolean
         default: false
@@ -1184,6 +1184,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # reviewed stable action
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: llvm-tools-preview
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           version: ${{ env.UV_VERSION }}
@@ -1234,50 +1235,88 @@ jobs:
             --installed-candidate \
             "${parity_args[@]}" \
             --output target/focused-linux/parity.json
-      - name: Install the native crash debugger for startup diagnostics
+      - name: Install the native crash debugger and pinned coverage tool
         if: ${{ !cancelled() && inputs.trace_startup_teardown }}
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends gdb
-      - name: Capture bounded startup-failure teardown diagnostics
+          cargo install cargo-llvm-cov --version 0.8.7 --locked
+      - name: Replay the startup case through the unified-coverage parity runner
         if: ${{ !cancelled() && inputs.trace_startup_teardown }}
         shell: bash
         env:
           PARITY_CASE_IDS: ${{ inputs.parity_case_ids }}
+          COVERAGE_TARGET_ROOT: ${{ github.workspace }}/target/focused-linux/coverage-build
         run: |
           set -euo pipefail
-          test "$PARITY_CASE_IDS" = python-api.concurrent-startup-failure-waiter
+          case_id=python-api.concurrent-startup-failure-waiter
+          test "$PARITY_CASE_IDS" = "$case_id"
           core_directory="$RUNNER_TEMP/uvicorn-rs-startup-teardown-cores"
           mkdir -p "$core_directory"
           command -v gdb
           ulimit -c unlimited
           sudo sysctl -w "kernel.core_pattern=$core_directory/core.%p"
-          normal_exit=0
-          .venv/bin/python scripts/diagnose_startup_teardown.py \
-            --python .venv/bin/python --variant normal --attempts 4 \
-            --delivery-finalization-barrier \
-            --core-directory "$core_directory" \
-            --output target/focused-linux/startup-teardown/normal || normal_exit=$?
-          test "$normal_exit" -le 1
+          export UVICORN_RS_COVERAGE_TARGET_ROOT="$COVERAGE_TARGET_ROOT"
+          export PYTHONFAULTHANDLER=1
+          export RUST_BACKTRACE=full
+          mkdir -p target/focused-linux/startup-teardown
+          .venv/bin/python scripts/build_coverage_extension.py \
+            2>&1 | tee target/focused-linux/startup-teardown-build.log
 
-          # Keep the installed normal wheel untouched. This separate build adds
-          # the same coverage cfg used by unified coverage, plus native symbols
-          # for a crash trace. Neither diagnostic run supplies release evidence.
-          unset CARGO_ENCODED_RUSTFLAGS
-          export RUSTFLAGS='-C instrument-coverage --cfg coverage -C debuginfo=1'
-          export CARGO_TARGET_DIR="$PWD/target/startup-teardown-build"
-          cargo build --release --lib --locked
-          cp target/startup-teardown-build/release/libuvicorn_rs.so \
-            python/uvicorn_rs/_native.abi3.so
-          instrumented_exit=0
-          .venv/bin/python scripts/diagnose_startup_teardown.py \
-            --python .venv/bin/python --variant instrumented --attempts 4 \
-            --delivery-finalization-barrier \
-            --core-directory "$core_directory" \
-            --python-source "$PWD/python" \
-            --output target/focused-linux/startup-teardown/instrumented || instrumented_exit=$?
-          test "$instrumented_exit" -le 1
-          test "$normal_exit" -eq 0 && test "$instrumented_exit" -eq 0
+          oracle_environment="$RUNNER_TEMP/uvicorn-rs-focused-linux-oracle"
+          oracle_python="$oracle_environment/bin/python"
+          case_root=target/focused-linux/startup-teardown/coverage-path
+          mkdir -p "$case_root"
+          reproduced=0
+          for attempt in 1 2 3; do
+            attempt_dir="$case_root/attempt-$attempt"
+            profile_dir="$attempt_dir/profiles"
+            mkdir -p "$profile_dir"
+            rm -f "$core_directory"/core.*
+            runner_exit=0
+            .venv/bin/python scripts/run_parity.py \
+              --oracle-python "$oracle_python" \
+              --case-id "$case_id" \
+              --coverage-profile-dir "$profile_dir" \
+              --output "$attempt_dir/parity.json" \
+              >"$attempt_dir/runner.stdout" 2>"$attempt_dir/runner.stderr" || runner_exit=$?
+            target_exit=missing
+            if [[ -f "$attempt_dir/parity.json" ]]; then
+              target_exit="$(.venv/bin/python - "$attempt_dir/parity.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          row = next(item for item in report["cases"]
+                     if item["case_id"] == "python-api.concurrent-startup-failure-waiter")
+          print(row["server_exit_codes"]["target"])
+          PY
+              )"
+            fi
+            printf '{"attempt":%s,"runner_exit":%s,"target_exit":"%s"}\n' \
+              "$attempt" "$runner_exit" "$target_exit" >"$attempt_dir/exit-summary.json"
+            for core in "$core_directory"/core.*; do
+              [[ -f "$core" ]] || continue
+              gdb --batch -ex 'set pagination off' -ex 'thread apply all bt 32' \
+                "$PWD/.venv/bin/python" "$core" \
+                >"$attempt_dir/$(basename "$core").backtrace" 2>&1 || true
+              rm -f "$core"
+            done
+            if [[ "$target_exit" == -11 ]]; then
+              reproduced=1
+              break
+            fi
+            if [[ "$runner_exit" -ne 0 ]]; then
+              cat "$attempt_dir/runner.stdout" "$attempt_dir/runner.stderr"
+              exit "$runner_exit"
+            fi
+          done
+          if [[ "$reproduced" == 1 ]]; then
+            echo "Target SIGSEGV reproduced through the unified-coverage parity runner; see retained core/backtrace artifacts." >&2
+            exit 1
+          fi
+          echo "The exact coverage parity path passed all three selected attempts; the intermittent SIGSEGV was not reproduced. This diagnostic does not qualify coverage."
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
