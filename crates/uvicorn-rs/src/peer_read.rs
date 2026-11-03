@@ -44,7 +44,6 @@ enum ReadMode {
 struct BufferedReadIo<W> {
     writer: W,
     receiver: mpsc::Receiver<ReadEvent>,
-    recycled: mpsc::Sender<BytesMut>,
     current: Option<(BytesMut, usize)>,
     terminal: ReadTerminal,
 }
@@ -110,7 +109,6 @@ pub(super) fn observe_peer_read(
         PeerReadHalfCloseMode::Proactive => {
             let (reader, writer) = stream.into_split();
             let (sender, receiver) = mpsc::channel(READ_QUEUE_CAPACITY);
-            let (recycled, recycled_receiver) = mpsc::channel(READ_QUEUE_CAPACITY + 1);
             #[cfg(coverage)]
             let (receiver, prioritize_receiver_close_fault) = {
                 let mut receiver = receiver;
@@ -127,17 +125,10 @@ pub(super) fn observe_peer_read(
                 ReadMode::Proactive(BufferedReadIo {
                     writer,
                     receiver,
-                    recycled,
                     current: None,
                     terminal: ReadTerminal::Open,
                 }),
-                Some(pump_peer_read(
-                    reader,
-                    sender,
-                    recycled_receiver,
-                    closed,
-                    failed,
-                )),
+                Some(pump_peer_read(reader, sender, closed, failed)),
                 prioritize_receiver_close_fault,
             )
         }
@@ -154,7 +145,6 @@ pub(super) fn observe_peer_read(
 async fn pump_peer_read<R>(
     mut reader: R,
     sender: mpsc::Sender<ReadEvent>,
-    mut recycled: mpsc::Receiver<BytesMut>,
     closed: watch::Sender<bool>,
     failed: watch::Sender<Option<io::ErrorKind>>,
 ) -> PeerReadPumpOutcome
@@ -183,13 +173,7 @@ where
             super::observe_http1_peer_read_failure_after_data_fault();
             return PeerReadPumpOutcome::ReadFailed(kind);
         }
-        // Reserving before each read bounds queued plus in-flight chunks to
-        // READ_QUEUE_CAPACITY; the connection reader may hold one more partial
-        // chunk. Recycling therefore stays within those three allocations.
-        let mut chunk = recycled
-            .try_recv()
-            .unwrap_or_else(|_| BytesMut::with_capacity(READ_CHUNK_SIZE));
-        chunk.clear();
+        let mut chunk = BytesMut::with_capacity(READ_CHUNK_SIZE);
         let mut destination = (&mut chunk).limit(READ_CHUNK_SIZE);
         match reader.read_buf(&mut destination).await {
             Ok(0) => {
@@ -249,7 +233,6 @@ pub(super) fn observe_peer_read_unix(
         PeerReadHalfCloseMode::Proactive => {
             let (reader, writer): (UnixOwnedReadHalf, UnixOwnedWriteHalf) = stream.into_split();
             let (sender, receiver) = mpsc::channel(READ_QUEUE_CAPACITY);
-            let (recycled, recycled_receiver) = mpsc::channel(READ_QUEUE_CAPACITY + 1);
             #[cfg(coverage)]
             let (receiver, prioritize_receiver_close_fault) = {
                 let mut receiver = receiver;
@@ -266,17 +249,10 @@ pub(super) fn observe_peer_read_unix(
                 UnixReadMode::Proactive(BufferedReadIo {
                     writer,
                     receiver,
-                    recycled,
                     current: None,
                     terminal: ReadTerminal::Open,
                 }),
-                Some(pump_peer_read(
-                    reader,
-                    sender,
-                    recycled_receiver,
-                    closed,
-                    failed,
-                )),
+                Some(pump_peer_read(reader, sender, closed, failed)),
                 prioritize_receiver_close_fault,
             )
         }
@@ -297,14 +273,11 @@ impl<W: AsyncWrite + Unpin> BufferedReadIo<W> {
         buffer: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
         loop {
-            if let Some((mut current, offset)) = self.current.take() {
+            if let Some((current, offset)) = self.current.take() {
                 let count = buffer.remaining().min(current.len() - offset);
                 buffer.put_slice(&current[offset..offset + count]);
                 let next_offset = offset + count;
-                if next_offset == current.len() {
-                    current.clear();
-                    let _ = self.recycled.try_send(current);
-                } else {
+                if next_offset != current.len() {
                     self.current = Some((current, next_offset));
                 }
                 return Poll::Ready(Ok(()));
@@ -522,16 +495,13 @@ impl AsyncWrite for PeerReadIo {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        collections::VecDeque,
-        sync::{Arc, Mutex},
-    };
+    use std::{collections::VecDeque, sync::Arc};
 
     use super::*;
 
     struct ChunkReader {
         chunks: VecDeque<&'static [u8]>,
-        destinations: Arc<Mutex<Vec<usize>>>,
+        reads: usize,
         second_chunk_read: Arc<tokio::sync::Notify>,
     }
 
@@ -546,20 +516,9 @@ mod tests {
                 return Poll::Ready(Ok(()));
             };
             let count = buffer.remaining().min(chunk.len());
-            let destination = {
-                let unfilled = buffer.initialize_unfilled();
-                unfilled[..count].copy_from_slice(&chunk[..count]);
-                unfilled.as_ptr() as usize
-            };
-            buffer.advance(count);
-            let second_chunk_was_read = match this.destinations.lock() {
-                Ok(mut destinations) => {
-                    destinations.push(destination);
-                    destinations.len() == 2
-                }
-                Err(_) => false,
-            };
-            if second_chunk_was_read {
+            buffer.put_slice(&chunk[..count]);
+            this.reads += 1;
+            if this.reads == 2 {
                 this.second_chunk_read.notify_one();
             }
             Poll::Ready(Ok(()))
@@ -579,31 +538,27 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn pump_reuses_chunk_after_partial_consumer_read_finishes() {
+    async fn pump_preserves_partial_chunk_while_reading_ahead() {
         // A one-slot queue pauses the pump until the consumer dequeues each
         // event, letting the test hold one buffer partially consumed while
         // the pump performs the following read.
         let (sender, receiver) = mpsc::channel(1);
-        let (recycled, recycled_receiver) = mpsc::channel(READ_QUEUE_CAPACITY + 1);
         let (closed, _) = watch::channel(false);
         let (failed, _) = watch::channel(None);
-        let destinations = Arc::new(Mutex::new(Vec::new()));
         let second_chunk_read = Arc::new(tokio::sync::Notify::new());
         let pump = tokio::spawn(pump_peer_read(
             ChunkReader {
                 chunks: VecDeque::from([&b"first"[..], &b"second"[..], &b"third"[..]]),
-                destinations: Arc::clone(&destinations),
+                reads: 0,
                 second_chunk_read: Arc::clone(&second_chunk_read),
             },
             sender,
-            recycled_receiver,
             closed,
             failed,
         ));
         let mut reader = BufferedReadAdapter(BufferedReadIo {
             writer: tokio::io::sink(),
             receiver,
-            recycled,
             current: None,
             terminal: ReadTerminal::Open,
         });
@@ -626,11 +581,7 @@ mod tests {
             Ok(PeerReadPumpOutcome::ReadHalfClosed)
         ));
 
-        let destinations = destinations
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        assert_eq!(destinations.len(), 3);
-        assert_ne!(destinations[0], destinations[1]);
-        assert_eq!(destinations[0], destinations[2]);
+        let mut after_eof = [0; 1];
+        assert_eq!(reader.read(&mut after_eof).await.ok(), Some(0));
     }
 }

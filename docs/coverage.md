@@ -39,6 +39,13 @@ attaches successfully to the captured measurement. Coverage Kata `b8k7` is
 closed. The final exact-main hosted review handoff remains open under `7t4g`;
 neither the replay nor this receipt qualifies a later source automatically.
 
+The subsequent peer-read recycling removal changes Rust runtime source after
+this accepted producer. It preserves the existing input contracts, but must
+obtain its own full unified measurement, three verification repeats and
+source-bound independent review. CI #637's totals above are retained evidence,
+not a coverage claim for the removal. See the
+[measured rejection decision](benchmark-status.md#buffer-recycling-decision-and-arm64-trace-2026-11-03).
+
 For evidence-checker repairs, CI's `replay-unified-coverage` dispatch mode
 accepts the original CI run ID, attempt, producer commit and artifact ID. It
 downloads and digest-checks the existing artifact, checks out the actual

@@ -12,6 +12,56 @@
 This attempt did not produce a validated three-system aggregate or a complete performance report. Partial per-system measurements remain in this run's artifacts. The [previous complete report](benchmark-results.md) remains the latest complete measurement; inspect the [workflow artifacts and logs](https://github.com/appunni-m/uvicorn-rs/actions/runs/40228012455) for this attempt.
 <!-- END GENERATED LATEST ATTEMPT -->
 
+## Buffer recycling decision and ARM64 trace (2026-11-03)
+
+**Reject and remove peer-read buffer recycling.** The normal-build
+[on/off experiment #278](https://github.com/appunni-m/uvicorn-rs/actions/runs/41636866892)
+completed all 80 invocations in its frozen 40-pair plan on Linux x86-64.
+One pair failed the predeclared host-contention policy and remains excluded,
+without a replacement; 39 pairs remain across four ordinary-FastAPI workloads
+and both loops. Each wheel first passed the same 13 affected installed-wheel
+parity cases. This compares recycling with fresh allocation, not stock Uvicorn.
+
+Results are mixed. Recycling reduced paired median server CPU/request by
+6.51% for the 1 MiB/1 KiB-write asyncio upload (all five pairs improved), and
+increased throughput by 3.70% for the 1 MiB/16 KiB-write asyncio upload.
+However, the uvloop small-response guard has 1.75% lower paired median
+throughput, 1.86% higher p95 latency and 1.45% higher CPU/request. All four
+accepted guard pairs have worse p95 and CPU/request. These descriptive results
+do not establish a repeatable improvement without a guard regression, as the
+frozen retention rule requires. No allocation count or statistical confidence
+is inferred from these measurements.
+
+The workflow failed during analysis after sampling because checkout hashes
+were incorrectly used to locate installed Python module hashes. The repair
+joins the existing before/after installed-package ledger and rejects changed
+or missing executable bytes. Strict offline replay of the retained rows and
+both parity receipts passes; no workload was rerun to repair this analysis.
+The [raw artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/41636866892/artifacts/13231363744)
+has SHA-256 `bbf6bad29b7047328e680a74e9f2668869fc06c6d64334ddf6e4dae176132621`.
+The [decision receipt](evidence/peer-read-buffer-decision-2026-11-03.json)
+retains all metric distributions, pair IDs, rejection, binary identities and
+evidence digests. The failed workflow conclusion is unchanged.
+
+The removal keeps 64 KiB chunks, queue capacity two, reservation before socket
+read/allocation, partial-read ownership, ordered data/EOF/errors and the explicit
+copy into `ReadBuf`. It also removes the return-buffer channel. The experiment's
+fresh-allocation control retained that channel, so its timing is not a measurement
+of the final removal binary. Final-source parity, coverage and the three-system
+benchmark are still required. The frozen experiment remains reproducible from
+its recorded source; its runtime identity intentionally rejects later source.
+
+The separate Linux ARM64
+[Hypercorn trace #279](https://github.com/appunni-m/uvicorn-rs/actions/runs/41638244371)
+completed 40 requests / 40 MiB with zero failures and clean shutdown at effective
+concurrency two. Its 432 retained events have no overwrite or missing-stream
+lookup. Both observed stream-52 lifecycles show creation, removal and duplicate
+close notifications, with no later data lookup. This does not establish the
+event order in the historical failing run. Tracing and unrelated host CPU make
+timing invalid. The [trace artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/41638244371/artifacts/13231049210)
+has SHA-256 `fbca599a4b479a32f343c9742cf608a5711f5c46f7f00d52aa24672ea78c40fa`.
+Do not repeat the unchanged diagnostic or count it as a completed timing cell.
+
 ## Focused Linux ARM64 diagnostics after parity work (2026-10-27)
 
 The HTTP/1 upload diagnostic

@@ -98,8 +98,23 @@ The earlier run #276 was cancelled
 before parity or timing after its selector incorrectly started full jobs;
 the corrected selector admits only `full` dispatch to the full matrix.
 
-The upload diagnosis, buffer-reuse decision, three-system measurements, final
-candidate, merge and publication remain open.
+The completed [on/off experiment #278](https://github.com/appunni-m/uvicorn-rs/actions/runs/41636866892)
+retains 39 valid pairs from its 40-pair plan on Linux x86-64. The workflow
+failed only during analysis; the installed-Python identity join is repaired and
+the existing rows pass offline analysis without new measurements. Upload gains
+are mixed and the small-response uvloop guard regresses, so the frozen retention
+rule rejects recycling. Remove the return-buffer channel, preserve the read
+bound and behavioral contracts, then qualify the removal with selected normal
+installed-wheel parity. The [decision record](../benchmark-status.md#buffer-recycling-decision-and-arm64-trace-2026-11-03)
+retains benefits, regressions, invalid rows and exact evidence identities.
+
+Focused ARM64 H3 trace #279 passes 40 requests with zero failures and clean
+shutdown; it does not reproduce the old missing-stream lookup. Its timing is
+invalid and no unchanged diagnostic repeat is planned. The upload investigation,
+three-system normal benchmarks, final candidate, merge and publication remain
+open. The buffer removal changes Rust source, so CI #637's accepted coverage
+and independent review remain historical; collect final-source coverage and
+the exact-main review handoff before release.
 
 ### Earlier release audit — 2026-11-03 (PR #21 / CI #629)
 

@@ -95,6 +95,31 @@ class ComparisonAdmission(unittest.TestCase):
         with self.assertRaises(AssertionError):
             self.analyze()
 
+    def test_installed_python_files_join_the_runtime_identity(self):
+        expected = {'src/lib.rs': 'rust', 'python/uvicorn/config.py': 'python',
+                    'python/uvicorn/py.typed': 'typing'}
+        metadata = {}
+        for phase in ('before', 'after'):
+            metadata['identity_' + phase] = {'source_files': {
+                'src/lib.rs': 'rust', 'python/uvicorn/config.py': 'python'}}
+            metadata['installed_dependencies_' + phase] = {'uvicorn-rs': {
+                'package_roots': ['/env/site-packages/uvicorn'],
+                'files': {'/env/site-packages/uvicorn/config.py': 'python'}}}
+        analyzer.verify_runtime_files(metadata, expected)
+        for phase in ('before', 'after'):
+            del metadata['identity_' + phase]['source_files']['python/uvicorn/config.py']
+        analyzer.verify_runtime_files(metadata, expected)
+        metadata['installed_dependencies_after']['uvicorn-rs']['files'][
+            '/env/site-packages/uvicorn/config.py'] = 'drift'
+        with self.assertRaises(AssertionError):
+            analyzer.verify_runtime_files(metadata, expected)
+
+    def test_missing_source_identity_is_not_accepted(self):
+        metadata = {f'identity_{phase}': {'source_files': {}} for phase in ('before', 'after')}
+        for name in ('src/lib.rs', 'python/uvicorn/config.py', '.cargo/config.toml'):
+            with self.assertRaises(AssertionError):
+                analyzer.verify_runtime_files(metadata, {name: 'missing'})
+
     def test_artifact_digest_is_checked(self):
         self.edit_first(lambda r: r.update(extra="modified"), rehash=False)
         with self.assertRaises(AssertionError):

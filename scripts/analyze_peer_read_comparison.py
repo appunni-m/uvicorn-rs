@@ -7,7 +7,7 @@ general performance.
 import argparse
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import statistics
 
 
@@ -32,6 +32,32 @@ def distribution(values):
         return None
     return {'count': len(values), 'median': statistics.median(values),
             'minimum': min(values), 'maximum': max(values), 'values': values}
+
+
+def verify_runtime_files(metadata, expected):
+    """Join checkout hashes with the separately captured installed Python bytes.
+
+    BenchmarkEvidence records every loaded package .py file in its dependency
+    ledger, including the uvicorn replacement namespace. The source snapshot
+    only duplicates selected Python files. The non-executable py.typed marker
+    remains bound by the clean Git revision and pre-measurement parity receipt;
+    it is not a per-sample executable-source observation.
+    """
+    for phase in ('before', 'after'):
+        sources = metadata['identity_' + phase]['source_files']
+        package = metadata.get('installed_dependencies_' + phase, {}).get('uvicorn-rs', {})
+        for name, digest in expected.items():
+            if name in sources:
+                assert sources[name] == digest, name
+            relative = PurePosixPath(name)
+            if name.startswith('python/') and relative.suffix == '.py':
+                module, *tail = relative.parts[1:]
+                observations = [package.get('files', {}).get(str(PurePosixPath(root).joinpath(*tail)))
+                                for root in package.get('package_roots', [])
+                                if PurePosixPath(root).name == module]
+                assert observations == [digest], name
+            elif name not in sources:
+                assert name == 'python/uvicorn/py.typed', name
 
 
 def main():
@@ -75,9 +101,7 @@ def main():
                 assert meta['rustc']
                 variant = execution['variants'][attempt['variant']]
                 assert meta['git_revision'] == variant['git_commit']
-                for name, digest in variant['runtime_files'].items():
-                    assert meta['identity_before']['source_files'][name] == digest
-                    assert meta['identity_after']['source_files'][name] == digest
+                verify_runtime_files(meta, variant['runtime_files'])
                 assert meta['duration_seconds'] == plan['duration_seconds']
                 assert meta['warmup_seconds'] == plan['warmup_seconds']
                 assert meta['seed'] == plan['seed']
@@ -134,6 +158,10 @@ def main():
                         'Compare paired ratios and raw spread across all four workloads and both loops. '
                         'Do not infer allocation counts, a stock-Uvicorn gain, other systems, '
                         'or statistical confidence from these descriptive summaries.',
+              'source_identity_policy': 'Every executable runtime source hash must match the '
+                        'checkout snapshot or installed Python dependency ledger before and after '
+                        'each sample. The non-executable py.typed marker is bound by the clean '
+                        'Git revision and selected parity receipt, not sampled as executable code.',
               'groups': groups, 'rejected_attempts': rejected,
               'retention_decision': 'requires review against the frozen plan; no automatic speed claim'}
     with args.output.open('x') as output:
