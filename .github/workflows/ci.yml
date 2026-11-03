@@ -865,11 +865,16 @@ jobs:
         shell: bash
         env:
           PARITY_CASE_IDS: ${{ inputs.parity_case_ids }}
-          UVICORN_RS_SHUTDOWN_TRACE: ${{ inputs.trace_windows_signals && '1' || '0' }}
           UVICORN_RS_SHUTDOWN_TRACE_OUTPUT: target/focused-windows/shutdown-trace.log
-          UVICORN_RS_TRACE_ORACLE_SIGNAL: ${{ inputs.trace_windows_signals && '1' || '0' }}
+          TRACE_WINDOWS_SIGNALS: ${{ inputs.trace_windows_signals }}
         run: |
           set -euo pipefail
+          if [ "$TRACE_WINDOWS_SIGNALS" = 'true' ]; then
+            export UVICORN_RS_SHUTDOWN_TRACE=1
+            export UVICORN_RS_TRACE_ORACLE_SIGNAL=1
+          else
+            unset UVICORN_RS_SHUTDOWN_TRACE UVICORN_RS_TRACE_ORACLE_SIGNAL
+          fi
           uv sync --python "$PYTHON_VERSION" --group benchmark --extra standard \
             --no-install-project --frozen
           wheel_python="$(uv python find --managed-python "$PYTHON_VERSION")"
