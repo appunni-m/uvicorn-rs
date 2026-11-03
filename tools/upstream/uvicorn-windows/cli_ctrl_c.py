@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import signal
 import socket
 import subprocess
@@ -15,7 +16,7 @@ import sys
 import time
 
 
-def attempt(directory):
+def attempt(directory, dump_exe=None):
     directory.mkdir(parents=True, exist_ok=True)
     # All processes in this private console receive the same Ctrl+C, as in an
     # interactive terminal. Enable delivery before spawning Uvicorn.
@@ -66,6 +67,15 @@ def attempt(directory):
             except subprocess.TimeoutExpired:
                 result["exit_code"] = None
                 result["shutdown_timed_out"] = True
+                # Read stacks only after the failure is already observed;
+                # this does not instrument or alter the server's signal path.
+                if dump_exe:
+                    pids = dict.fromkeys(re.findall(
+                        rb"Started (?:parent|server) process \[(\d+)\]", log_path.read_bytes()))
+                    for pid in list(pids)[:8]:
+                        dump = subprocess.run([str(dump_exe), "dump", "--pid", pid.decode()],
+                                              capture_output=True, timeout=5, check=False)
+                        (directory / f"stack-{pid.decode()}.txt").write_bytes(dump.stdout + dump.stderr)
         except Exception as error:
             result["error"] = f"{type(error).__name__}: {error}"
         finally:
@@ -81,6 +91,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=Path("cli-ctrl-c"))
     parser.add_argument("--attempts", type=int, choices=range(1, 4), default=3)
+    parser.add_argument("--dump-exe", type=Path, help="optional py-spy executable; used only after a timeout")
     parser.add_argument("--in-console", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if os.name != "nt":
@@ -90,13 +101,15 @@ if __name__ == "__main__":
             directory = (args.output / str(index)).resolve()
             completed = subprocess.run(
                 [sys.executable, str(Path(__file__).resolve()), "--in-console",
-                 "--output", str(directory)], creationflags=subprocess.CREATE_NEW_CONSOLE,
+                 "--output", str(directory),
+                 *(["--dump-exe", str(args.dump_exe.resolve())] if args.dump_exe else [])],
+                creationflags=subprocess.CREATE_NEW_CONSOLE,
                 timeout=60, check=False,
             )
             if completed.returncode:
                 raise SystemExit(completed.returncode)
         raise SystemExit(0)
-    result = attempt(args.output)
+    result = attempt(args.output, args.dump_exe)
     (args.output / "result.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result), flush=True)
     # A reproduced failure is diagnostic evidence, not a successful server run.
