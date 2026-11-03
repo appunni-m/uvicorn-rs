@@ -216,6 +216,25 @@ INFO:     Stopping parent process [200]
         self.assertEqual(checked["accepted_reference_defects"], [])
         self.assertEqual(checked["candidate_contract_cases"], [self.case["case_id"]])
 
+    def test_case_comparison_and_target_requirements_are_enforced(self):
+        manifest, cases, _ = evidence.load_contract()
+        case = next(c for c in cases if c["case_id"] ==
+                    "python-api.module-cli-two-workers-from-uvicorn-workers-environment")
+        row = deepcopy(self.row)
+        row.update(case_id=case["case_id"], profile=case["profile"],
+                   operation=case["operation"], requirements=case["covers"],
+                   status="passed", difference=None)
+        oracle, target = row["oracle_observation"], row["target_observation"]
+        oracle["process_timed_out"] = target["process_timed_out"]
+        oracle["worker_replacement_observed"] = True
+        oracle["server_log_events"] = {"stderr": [{"kind": "reference-only-crash"}], "stdout": []}
+
+        evidence.validate_observations(row, case, manifest)
+
+        target["worker_start_count"] = 3
+        with self.assertRaises(evidence.EvidenceError):
+            evidence.validate_observations(row, case, manifest)
+
     def test_equal_reference_and_candidate_crashes_cannot_pass_by_agreeing(self):
         self.row["target_observation"]["worker_replacement_observed"] = True
         self.row["target_observation"]["worker_start_count"] = 3

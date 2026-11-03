@@ -611,7 +611,7 @@ def validate_observations(
         require(row.get("difference") is None, f"passing case carries a difference: {case['case_id']}")
     if case.get("verification", "oracle-parity") == "oracle-parity":
         require(isinstance(oracle, dict), f"oracle observation is missing: {case['case_id']}")
-        compare = operation.get("compare", operation["observe"])
+        compare = case.get("compare", operation.get("compare", operation["observe"]))
         if accepted_reference_hang:
             # This is compatibility acceptance, never a passing parity result.
             # Every observation other than this diagnosed timeout must match.
@@ -649,7 +649,10 @@ def validate_observations(
                 f"live observations differ on declared comparison fields: {case['case_id']}")
         for field, expected in required_observations_for_case(case, operation).items():
             require(target.get(field) == expected, f"required observation differs: {case['case_id']} ({field})")
-        for field, expected in operation.get("target_requirements", {}).items():
+        target_requirements = case.get(
+            "target_requirements", operation.get("target_requirements", {})
+        )
+        for field, expected in target_requirements.items():
             require(target.get(field) == expected, f"target requirement differs: {case['case_id']} ({field})")
     else:
         require(oracle is None, f"target-only contract contains oracle observations: {case['case_id']}")
