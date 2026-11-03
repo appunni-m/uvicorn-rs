@@ -1002,19 +1002,19 @@ jobs:
           retention-days: 90
 
   update-docs:
-    name: Record benchmark status and update documentation
+    name: Prepare benchmark documentation for review
     needs: [categories, aggregate]
     if: always() && !((github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-match' || inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-h2' || inputs.run_mode == 'focused-h3')) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-match]') || contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) && github.ref == 'refs/heads/main' && github.repository == 'appunni-m/uvicorn-rs'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       actions: read
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
-          persist-credentials: true
+          persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         if: needs.aggregate.result == 'success'
         with:
@@ -1076,37 +1076,18 @@ jobs:
               encoding="utf-8",
           )
           PY
-      - name: Propose the updated results documentation
-        env:
-          AGGREGATE_RESULT: ${{ needs.aggregate.result }}
-          MATRIX_STATUS: ${{ needs.aggregate.outputs.matrix_status }}
+      - name: Retain the documentation changes for develop or main
         shell: bash
         run: |
           set -euo pipefail
-          branch="automation/benchmark-results"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin "+refs/heads/$branch:refs/remotes/origin/$branch" || true
-          git checkout -B "$branch" "$GITHUB_SHA"
-          git add docs/benchmark-status.md
-          if [[ "$AGGREGATE_RESULT" == "success" ]]; then
-            if [[ "$MATRIX_STATUS" == "validated_complete_matrix" ]]; then
-              git add docs/benchmark-results.md
-              commit_message="docs: refresh hosted benchmark results"
-            else
-              commit_message="docs: record partial benchmark status"
-            fi
-          else
-            commit_message="docs: record hosted benchmark attempt"
-          fi
-          git commit -m "$commit_message"
-          if git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
-            previous="$(git rev-parse "refs/remotes/origin/$branch")"
-            git push --force-with-lease="refs/heads/$branch:$previous" origin "HEAD:refs/heads/$branch"
-          else
-            git push origin "HEAD:refs/heads/$branch"
-          fi
-          compare_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/main...${branch}"
+          git diff --binary -- docs/benchmark-status.md docs/benchmark-results.md \
+            > target/benchmark-status/docs-update.patch
           cat >> "$GITHUB_STEP_SUMMARY" <<EOF
-          Documentation changes were pushed to [`${branch}`](${compare_url}) for review. This repository's Actions token cannot create pull requests, so the compare link is provided for manual review. The branch contains only maintained documentation; generated benchmark logs, raw reports, and coverage outputs remain in workflow artifacts or ignored local paths.
+          The benchmark documentation patch is retained in this run's artifact for review and application on develop or main. Raw results and hashed receipts remain in the benchmark artifacts. This job does not push a branch.
           EOF
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: asgi-benchmark-docs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: target/benchmark-status/
+          if-no-files-found: error
+          retention-days: 90
