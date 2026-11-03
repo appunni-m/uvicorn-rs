@@ -4,9 +4,13 @@ import contextlib
 import io
 import json
 from pathlib import Path
+import re
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
+
+import yaml
 
 import analyze_peer_read_comparison as analyzer
 
@@ -103,6 +107,24 @@ class ComparisonAdmission(unittest.TestCase):
             self.assertEqual({p["repeat"] for p in rows}, set(range(1, 6)))
             self.assertIn(sum(p["variant_order"] == ["fresh", "reuse"] for p in rows), (2, 3))
         self.assertEqual(len(set(plan["case_ids"])), 13)
+
+    def test_focused_dispatch_cannot_start_full_matrix_jobs(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = yaml.safe_load((root / ".github/workflows/benchmark-categories.yml").read_text())
+        event = SimpleNamespace(head_commit=SimpleNamespace(message="normal change"))
+        for mode in ("full", "focused-fastapi-match", "focused-fastapi-stage", "focused-h2",
+                     "focused-h3", "peer-read-comparison", "future-focused-mode"):
+            for name in ("categories", "aggregate", "update-docs"):
+                expression = workflow["jobs"][name]["if"].removeprefix("${{").removesuffix("}}")
+                expression = re.sub(r"!(?!=)", "not ", expression).replace("&&", " and ").replace("||", " or ")
+                environment = {
+                    "github": SimpleNamespace(event_name="workflow_dispatch", event=event,
+                        ref="refs/heads/main", repository="appunni-m/uvicorn-rs"),
+                    "inputs": SimpleNamespace(run_mode=mode), "always": lambda: True,
+                    "contains": lambda text, part: part in text,
+                    "needs": SimpleNamespace(categories=SimpleNamespace(result="success")),
+                }
+                self.assertEqual(bool(eval(expression, {"__builtins__": {}}, environment)), mode == "full", (mode, name))
 
 
 if __name__ == "__main__":

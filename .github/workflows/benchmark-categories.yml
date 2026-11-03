@@ -215,7 +215,7 @@ env:
 jobs:
   categories:
     name: ${{ matrix.system.id }} · parity and sequential categories
-    if: ${{ !((github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-match' || inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-h2' || inputs.run_mode == 'focused-h3')) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-match]') || contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) }}
+    if: ${{ !((github.event_name == 'workflow_dispatch' && inputs.run_mode != 'full') || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-match]') || contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) }}
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -980,7 +980,7 @@ jobs:
   aggregate:
     name: Validate and render the multi-system evidence
     needs: categories
-    if: always() && !((github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-match' || inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-h2' || inputs.run_mode == 'focused-h3')) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-match]') || contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) && needs.categories.result != 'cancelled'
+    if: always() && !((github.event_name == 'workflow_dispatch' && inputs.run_mode != 'full') || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-match]') || contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) && needs.categories.result != 'cancelled'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
@@ -1023,7 +1023,7 @@ jobs:
   update-docs:
     name: Prepare benchmark documentation for review
     needs: [categories, aggregate]
-    if: always() && !((github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-match' || inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-h2' || inputs.run_mode == 'focused-h3')) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-match]') || contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) && github.ref == 'refs/heads/main' && github.repository == 'appunni-m/uvicorn-rs'
+    if: always() && !((github.event_name == 'workflow_dispatch' && inputs.run_mode != 'full') || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-match]') || contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) && github.ref == 'refs/heads/main' && github.repository == 'appunni-m/uvicorn-rs'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
