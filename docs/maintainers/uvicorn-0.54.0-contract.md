@@ -9,11 +9,42 @@ a drop-in replacement.
 
 ## Acceptance of known differences
 
-The maintainer requires full compatibility, a demonstrated improvement, or behavior matching the applicable specification. An unsupported-setting note does not satisfy that requirement. Custom HTTP/WebSocket protocol-class hooks and `ssl_context_factory` are implemented at the Python integration boundary. The latest exact-source public installed-wheel parity batch is CI [#615](https://github.com/appunni-m/uvicorn-rs/actions/runs/41402063098), which tested `develop` head `c28474a164cce437cf41ec12d7ebd789027f8637`: Linux x86-64 and macOS ARM64 each passed 784/784, and Windows x86-64 passed all 757 applicable cases; all report zero behavioral failures, infrastructure failures, or not-run applicable cases. Windows excludes 27 inputs requiring POSIX-only facilities. These current reports cover the custom HTTP/WebSocket protocol hooks, `ssl_context_factory`, and response header/trailer capacity inputs. The full maintained public matrix is green on all three configured platform profiles. CI #615's unified coverage job completed below its separate gate with 34 regions and 18 lines uncovered; the six affected local fault cases now pass, pending a full exact-source rerun.
+The maintainer requires full compatibility, a demonstrated improvement, or
+behavior matching the applicable specification. An unsupported-setting note does
+not satisfy that requirement. Custom HTTP/WebSocket protocol-class hooks and
+`ssl_context_factory` are implemented at the Python integration boundary.
+
+At the 2026-11-03 audit, CI
+[#629](https://github.com/appunni-m/uvicorn-rs/actions/runs/41582985537)
+has passed Linux x86-64 installed-wheel public parity: 786/786 cases, with zero
+behavioral failures, infrastructure failures or not-run cases. This report binds
+runtime batch `a2a02070fe573c61b84aed90f4f48bdb5f267131` to clean PR merge
+source `1c8f16c80e4ac5115c9282037b30473d0016c04a`. The macOS and Windows
+candidate comparisons and full unified coverage are still running at this
+snapshot. Later reporting-only changes are not qualified by that run.
+
+Windows qualification remains open. CI
+[#627](https://github.com/appunni-m/uvicorn-rs/actions/runs/41560262953)
+completed 758/758 applicable Windows cases, with 757 passing and one mismatch:
+stock Uvicorn raised WinError 10022 while starting a worker and replaced it;
+the candidate served the request with two clean workers. The untraced Server
+2025 comparison
+[#630](https://github.com/appunni-m/uvicorn-rs/actions/runs/41583517779)
+completed 15 comparisons across three repetitions: 14 passed and one recorded a
+stock-Uvicorn SIGINT shutdown timeout; the candidate completed all 15 cleanly. Changing the
+runner image does not resolve the reference failure. Earlier green Windows
+receipts predate restoration of stock oracle multiprocessing behavior and do
+not clear this gate. No failed reference result is counted as passing parity.
+
+CI #627's unified matrix completed its three repeats but missed two regions
+and one line. The latest focused coverage batch exercises the missing teardown
+path and removes a redundant WebSocket timer condition; seven related selected
+checks pass. Full 100% coverage and an accepted source-bound Coverage-MCP review
+remain separate release requirements.
 
 The default TLS floor follows [RFC 8996 sections 4 and 5](https://www.rfc-editor.org/rfc/rfc8996.html#section-4): TLS 1.0 and 1.1 must not negotiate. Selected live inputs verify rejection, admission of a TLS 1.2 control, and a healthy follow-up request. These checks establish the default listener floor, not every TLS configuration or custom-context behavior.
 
-The `http` 1.5.0 `HeaderMap` stores 24,576 distinct names. The adapter preserves additional validated HTTP/1 and HTTP/2 response fields in an ordered sidecar. CI #615's installed-candidate matrix includes the maintained HTTP/1 header capacity, HTTP/2 trailer capacity, and WebSocket accept response header capacity cases on each applicable platform. The extended boundary cases at 24,575, 24,576, 24,577, and 32,769 fields were exercised in the prior focused capacity batch; the current exact-source matrix re-ran its indexed public capacity inputs. HTTP/2 cases compare the configured implementation against the pinned protocol oracle in the parity manifest. See `tests/parity/inputs/http2.json` and the indexed receipts before making any broader HTTP/2 equivalence claim.
+The `http` 1.5.0 `HeaderMap` stores 24,576 distinct names. The adapter preserves additional validated HTTP/1 and HTTP/2 response fields in an ordered sidecar. Historical CI #615's installed-candidate matrix includes the maintained HTTP/1 header capacity, HTTP/2 trailer capacity, and WebSocket accept response header capacity cases on each applicable platform. The extended boundary cases at 24,575, 24,576, 24,577, and 32,769 fields were exercised in the prior focused capacity batch; that historical full matrix re-ran its indexed public capacity inputs. HTTP/2 cases compare the configured implementation against the pinned protocol oracle in the parity manifest. See `tests/parity/inputs/http2.json` and the indexed receipts before making any broader HTTP/2 equivalence claim.
 
 ## Pinned authority
 

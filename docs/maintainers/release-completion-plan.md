@@ -35,7 +35,44 @@ No original release gate is waived by this plan. Historical measurements remain
 historical. A task closes on its own deliverable; downstream publication gates
 belong to the release tasks rather than being copied into every prerequisite.
 
-### Current release candidate — 2026-11-02 (PR #21 / CI #618)
+### Release audit — 2026-11-03 (PR #21 / CI #629)
+
+Implementation remains on `develop` and promotion remains
+[PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21). CI
+[#629](https://github.com/appunni-m/uvicorn-rs/actions/runs/41582985537)
+tests runtime batch `a2a02070fe573c61b84aed90f4f48bdb5f267131` through clean
+merge source `1c8f16c80e4ac5115c9282037b30473d0016c04a`. Linux public parity
+passes 786/786 and its candidate package/consumer checks pass. Rust quality,
+MSRV, native composition and release-evidence contracts pass. macOS and Windows
+candidate parity and full coverage are still running at this audit snapshot.
+[Documentation #261](https://github.com/appunni-m/uvicorn-rs/actions/runs/41582985534)
+passed for the runtime batch, before this documentation refresh.
+
+CI #627 completed all 1,449 unified cases and three complete verification
+repeats, but failed coverage at 14,754/14,756 regions and 10,866/10,867 lines.
+The runtime batch adds normal/fault inputs for completed-application body
+teardown and simplifies redundant WebSocket deadline dispatch. Seven related
+selected checks pass; the full new report must confirm 100% coverage. The
+Coverage-MCP projection now maps recorded checkout paths to repository-relative
+source receipts; focused handoff checks pass. Its accepted final-source review
+and reviewed handoff remain pending. This reporting-only fix is commit
+`a015ec0de570edef1fe28a8ddcc86cd40256218e` and does not alter server behavior.
+
+The stock Windows oracle remains unstable. CI #627 completed 757/758 comparisons
+with one stock-Uvicorn worker listener failure/replacement. Controlled untraced
+Server 2025 run
+[#630](https://github.com/appunni-m/uvicorn-rs/actions/runs/41583517779)
+completed 15 selected comparisons, with 14 passing and one stock-Uvicorn SIGINT shutdown hang;
+the candidate completed all 15 cleanly. The runner-image hypothesis did not
+resolve the failure. The failed comparison remains visible and unchanged
+reruns are not planned. The required Server 2022 platform gate remains open.
+After compatibility acceptance, the bounded upload diagnostic, matched
+three-system FastAPI measurements and buffer-reuse decision still precede final
+artifact qualification and publication. No release tag or package was published
+by this audit. The maintainer will run their own FastAPI application trial after
+repository acceptance.
+
+### Earlier release-candidate snapshot — 2026-11-02 (PR #21 / CI #618)
 
 Open [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21) promotes
 `develop` head `87ab887b07c7d2f54b868dec16b115f93026ca69` to `main` at
