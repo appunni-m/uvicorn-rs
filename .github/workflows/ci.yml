@@ -25,6 +25,14 @@ on:
         required: false
         type: boolean
         default: false
+      windows_runner:
+        description: Windows image for selected diagnostics (full qualification remains on Server 2022)
+        required: true
+        type: choice
+        default: windows-2022
+        options:
+          - windows-2022
+          - windows-2025
       parity_repeats:
         description: Consecutive repetitions of selected Windows cases (every run must pass)
         required: true
@@ -855,7 +863,7 @@ jobs:
   focused-windows-parity:
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'focused-windows-parity'
     name: Selected Windows parity cases
-    runs-on: windows-2022
+    runs-on: ${{ inputs.windows_runner || 'windows-2022' }}
     timeout-minutes: 35
     env:
       GIT_CONFIG_COUNT: "1"
