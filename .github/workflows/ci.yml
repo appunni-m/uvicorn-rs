@@ -1254,7 +1254,8 @@ jobs:
           sudo sysctl -w "kernel.core_pattern=$core_directory/core.%p"
           normal_exit=0
           .venv/bin/python scripts/diagnose_startup_teardown.py \
-            --python .venv/bin/python --variant normal --attempts 500 \
+            --python .venv/bin/python --variant normal --attempts 4 \
+            --delivery-finalization-barrier \
             --core-directory "$core_directory" \
             --output target/focused-linux/startup-teardown/normal || normal_exit=$?
           test "$normal_exit" -le 1
@@ -1270,7 +1271,8 @@ jobs:
             python/uvicorn_rs/_native.abi3.so
           instrumented_exit=0
           .venv/bin/python scripts/diagnose_startup_teardown.py \
-            --python .venv/bin/python --variant instrumented --attempts 500 \
+            --python .venv/bin/python --variant instrumented --attempts 4 \
+            --delivery-finalization-barrier \
             --core-directory "$core_directory" \
             --python-source "$PWD/python" \
             --output target/focused-linux/startup-teardown/instrumented || instrumented_exit=$?

@@ -15,6 +15,58 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 CASE_ID = "python-api.concurrent-startup-failure-waiter"
 
+# This changes scheduling only: callbacks still run on the owning event loop,
+# with their original arguments and results. Hold the delivery thread after it
+# wakes that loop, then release it from atexit while Python is still usable.
+# A late cyclic finalizer releases the GIL so a delivery left running by the
+# extension has a deterministic opportunity to return during finalization.
+DELIVERY_BARRIER_DRIVER = r'''
+import asyncio
+import atexit
+import gc
+import os
+import runpy
+import sys
+import threading
+import time
+
+# Import before registering our release callback. An extension's exit drain
+# must run after that callback (atexit runs callbacks in reverse order).
+import uvicorn_rs._native
+
+release = threading.Event()
+original = asyncio.BaseEventLoop.call_soon_threadsafe
+main_thread_id = threading.get_ident()
+
+class FinalizationWindow:
+    def __init__(self):
+        self.cycle = self
+
+    def __del__(self, finalizing=sys.is_finalizing, pause=time.sleep, write=os.write):
+        write(2, b"delivery-barrier: finalizing=" + str(finalizing()).encode() + b"\n")
+        pause(0.1)
+
+gc.disable()
+finalizers = [FinalizationWindow()]
+atexit.register(release.set)
+atexit.register(finalizers.clear)
+
+def defer_delivery_return(self, *args, **kwargs):
+    result = original(self, *args, **kwargs)
+    # Isolate the dependency's completion delivery. Holding ASGI task-start
+    # callbacks would instead block the single Tokio worker before startup.
+    if (threading.get_ident() != main_thread_id and args
+            and type(args[0]).__name__ == "CheckedCompletor"):
+        # Bound the diagnostic even if the owning program fails before exit.
+        os.write(2, b"delivery-barrier: completion held\n")
+        release.wait(10)
+    return result
+
+asyncio.BaseEventLoop.call_soon_threadsafe = defer_delivery_return
+sys.argv = sys.argv[1:]
+runpy.run_path(sys.argv[0], run_name="__main__")
+'''
+
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -28,6 +80,8 @@ def main() -> int:
     parser.add_argument("--attempts", type=int, default=500)
     parser.add_argument("--python-source", type=Path)
     parser.add_argument("--core-directory", type=Path)
+    parser.add_argument("--delivery-finalization-barrier", action="store_true",
+                        help="hold native callback returns until interpreter exit (diagnostic only)")
     args = parser.parse_args()
     if not 1 <= args.attempts <= 1000:
         parser.error("--attempts must be between 1 and 1000")
@@ -76,16 +130,23 @@ def main() -> int:
         "identity": json.loads(identity.stdout),
         "fixture_sha256": sha256(fixture), "manifest_sha256": sha256(manifest),
         "probe_sha256": sha256(probe), "requested_attempts": args.attempts,
+        "diagnostic_sha256": sha256(Path(__file__)),
+        "scheduling": ("delivery-finalization-barrier"
+                       if args.delivery_finalization_barrier else "unchanged"),
         "profile_retention": "failed attempt only; no coverage acceptance",
         "attempts": [],
     }
     required = {**contract["required_observations"], **contract["target_requirements"]}
     result_path = output / "diagnostic.json"
+    command = [str(python)]
+    if args.delivery_finalization_barrier:
+        command.extend(["-c", DELIVERY_BARRIER_DRIVER])
+    command.extend([str(probe), json.dumps(case["api"])])
     for attempt in range(1, args.attempts + 1):
         timed_out = False
         try:
             completed = subprocess.run(
-                [str(python), str(probe), json.dumps(case["api"])], cwd=ROOT,
+                command, cwd=ROOT,
                 env=environment, capture_output=True, timeout=12, check=False,
             )
             stdout, stderr, exit_code = completed.stdout, completed.stderr, completed.returncode
@@ -107,9 +168,12 @@ def main() -> int:
                        for key, expected in required.items()
                        if type(observed.get(key)) is not type(expected)
                        or observed.get(key) != expected}
-        failed = timed_out or bool(differences)
+        scheduling_observed = (not args.delivery_finalization_barrier or
+                               b"delivery-barrier: completion held\n" in stderr)
+        failed = timed_out or bool(differences) or not scheduling_observed
         report["attempts"].append({
             "attempt": attempt, "exit_code": exit_code, "timed_out": timed_out,
+            "scheduling_observed": scheduling_observed,
             "differences": differences, "stdout": stdout_path.name,
             "stderr": stderr_path.name, "stdout_sha256": sha256(stdout_path),
             "stderr_sha256": sha256(stderr_path),
