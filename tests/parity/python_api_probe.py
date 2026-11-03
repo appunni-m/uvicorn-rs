@@ -2108,6 +2108,7 @@ except KeyboardInterrupt:
             except OSError:
                 break
         shutdown_signal_sent = bool(shutdown_signals_sent)
+        reference_shutdown_diagnostic = None
         server_stdout = b""
         server_stderr = b""
         if output_reader_threads:
@@ -2116,8 +2117,35 @@ except KeyboardInterrupt:
                 process_timed_out = False
             except subprocess.TimeoutExpired:
                 process_timed_out = True
-                kill_server_process_group()
-                process.wait(timeout=5)
+                if (
+                    os.name == "nt"
+                    and os.environ.get("ASGI_PARITY_SERVER_ID") == "uvicorn"
+                    and expected_worker_count == 2
+                    and shutdown_signals_sent == ["SIGINT"]
+                    and response is not None
+                ):
+                    # The deadline has already failed. Retain that failure,
+                    # then identify the recorded stock-only TCP wakeup hang.
+                    # Never help the candidate finish its lifecycle this way.
+                    with output_chunks_lock:
+                        before = b"".join(stderr_chunks)
+                    reference_shutdown_diagnostic = {
+                        "stderr_before_connection_base64": base64.b64encode(before).decode("ascii"),
+                        "timeout_seconds": request["timeout_seconds"],
+                        "recovery_timeout_seconds": 3,
+                        "connection_opened": False,
+                        "exit_code_after_connection": None,
+                        "error": None,
+                    }
+                    try:
+                        with socket.create_connection((host, port), timeout=1):
+                            reference_shutdown_diagnostic["connection_opened"] = True
+                        reference_shutdown_diagnostic["exit_code_after_connection"] = process.wait(timeout=3)
+                    except (OSError, subprocess.TimeoutExpired) as error:
+                        reference_shutdown_diagnostic["error"] = type(error).__name__
+                if process.poll() is None:
+                    kill_server_process_group()
+                    process.wait(timeout=5)
             for reader in output_reader_threads:
                 reader.join(timeout=2)
             with output_chunks_lock:
@@ -2154,6 +2182,7 @@ except KeyboardInterrupt:
             "shutdown_signals_sent": shutdown_signals_sent,
             "process_exit_code": process.returncode,
             "process_timed_out": process_timed_out,
+            "reference_shutdown_diagnostic": reference_shutdown_diagnostic,
             "graceful_shutdown_cancellation_observed": (
                 (signal_cancel_marker is not None and signal_cancel_marker.exists())
                 or (

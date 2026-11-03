@@ -27,6 +27,7 @@ from typing import Any
 from coverage_contract import pending_coverage_mcp_request
 from coverage_toolchain import ToolchainError, validate_coverage_tools
 from parity_identity import runtime_source_digest, runtime_source_hashes
+from windows_reference_hang import validate_reference_hang
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -397,13 +398,15 @@ def require_summary(summary: dict[str, Any], count: int) -> None:
             and summary == expected, f"incomplete or failing result summary: {summary}")
 
 
-def validate_case_metadata(row: dict[str, Any], case: dict[str, Any]) -> None:
+def validate_case_metadata(
+    row: dict[str, Any], case: dict[str, Any], *, expected_status: str = "passed"
+) -> None:
     for field, source_field in (("profile", "profile"), ("operation", "operation"),
                                 ("requirements", "covers"), ("fault", "fault")):
         require(row.get(field) == case.get(source_field), f"case contract differs: {case['case_id']} ({field})")
     require(row.get("verification") == case.get("verification", "oracle-parity"),
             f"case verification policy differs: {case['case_id']}")
-    require(row.get("status") == "passed", f"case did not pass: {case['case_id']}")
+    require(row.get("status") == expected_status, f"case did not pass: {case['case_id']}")
 
 
 def normalize_comparison_observation(value: Any, profile_id: str) -> Any:
@@ -557,7 +560,10 @@ def required_observations_for_case(
     )
 
 
-def validate_observations(row: dict[str, Any], case: dict[str, Any], manifest: dict[str, Any]) -> None:
+def validate_observations(
+    row: dict[str, Any], case: dict[str, Any], manifest: dict[str, Any], *,
+    accepted_reference_hang: bool = False,
+) -> None:
     exact_keys(row, {"case_id", "profile", "operation", "requirements", "verification", "fault", "status",
                      "oracle_observation", "target_observation", "server_exit_codes", "difference"},
                f"case {case['case_id']}")
@@ -567,10 +573,18 @@ def validate_observations(row: dict[str, Any], case: dict[str, Any], manifest: d
     oracle = row.get("oracle_observation")
     require(isinstance(target, dict) and set(target) == set(operation["observe"]),
             f"target observation envelope differs: {case['case_id']}")
-    require(row.get("difference") is None, f"passing case carries a difference: {case['case_id']}")
+    if accepted_reference_hang:
+        require(isinstance(row.get("difference"), str) and bool(row["difference"]),
+                f"reference exception must retain its failed comparison: {case['case_id']}")
+    else:
+        require(row.get("difference") is None, f"passing case carries a difference: {case['case_id']}")
     if case.get("verification", "oracle-parity") == "oracle-parity":
         require(isinstance(oracle, dict), f"oracle observation is missing: {case['case_id']}")
         compare = operation.get("compare", operation["observe"])
+        if accepted_reference_hang:
+            # This is compatibility acceptance, never a passing parity result.
+            # Every observation other than this diagnosed timeout must match.
+            compare = [field for field in compare if field != "process_timed_out"]
         require(isinstance(compare, list) and bool(compare)
                 and len(compare) == len(set(compare))
                 and set(compare).issubset(operation["observe"]),
@@ -602,6 +616,7 @@ def validate_parity(
     expected_native_sha256: str | None = None, offline: bool = True,
     expected_excluded_case_ids: set[str] | None = None,
     _current_revision: str | None = None, expected_coverage_profile_dir: Path | None = None,
+    allow_windows_reference_hang: bool = False,
 ) -> dict[str, Any]:
     """Check exact indexed cases; callers may bind evidence to a shipping native hash."""
     manifest, all_cases, input_paths = load_contract()
@@ -628,8 +643,23 @@ def validate_parity(
     require(len(expected) == len(expected_cases) and bool(expected), "expected parity case selection is empty or duplicated")
     exact_keys(result, {"schema", "status", "run", "summary", "cases", "infrastructure_errors"}, "parity report")
     require(result.get("schema") == manifest["result_schema"], "parity report uses a predecessor or unsupported schema")
-    require(result.get("status") == "completed" and result.get("infrastructure_errors") == [], "parity did not complete cleanly")
-    require_summary(result.get("summary"), len(expected))
+    require(result.get("infrastructure_errors") == [], "parity contains infrastructure failures")
+    if not allow_windows_reference_hang:
+        require(result.get("status") == "completed", "parity did not complete cleanly")
+        require_summary(result.get("summary"), len(expected))
+    else:
+        counts = Counter(row.get("status") for row in result.get("cases", []))
+        require(set(counts) <= {"passed", "failed"}, "reference exception cannot waive missing or infrastructure-failed cases")
+        require(isinstance(result.get("summary"), dict)
+                and all(type(value) is int for value in result["summary"].values()),
+                "reference exception summary counts must be integers")
+        require(result.get("summary") == {
+            "selected": len(expected), "executed": len(expected),
+            "passed": counts["passed"], "failed": counts["failed"],
+            "infrastructure_failed": 0, "not_run": 0,
+        }, "reference exception summary differs from raw case evidence")
+        require(result.get("status") == ("failed" if counts["failed"] else "completed"),
+                "reference exception cannot relabel the raw parity status")
     run = result["run"]
     exact_keys(run, {"run_id", "started_at", "finished_at", "manifest", "inputs", "environment", "target", "harness", "command"},
                "parity run")
@@ -723,13 +753,25 @@ def validate_parity(
     require(isinstance(rows, list), "parity has no case rows")
     ids = [row.get("case_id") for row in rows]
     require(len(ids) == len(set(ids)) and set(ids) == set(expected), "parity omitted, added, or duplicated indexed cases")
+    accepted_reference_defects = []
     for row in rows:
         case = expected[row["case_id"]]
-        validate_case_metadata(row, case)
-        validate_observations(row, case, manifest)
-    return {"status": "passed", "cases": len(expected), "source_sha256": target["source_sha256"],
+        accepted = allow_windows_reference_hang and row.get("status") == "failed"
+        if accepted:
+            try:
+                accepted_reference_defects.append(validate_reference_hang(row, case, run["environment"]))
+            except (ValueError, KeyError, TypeError) as error:
+                raise EvidenceError(f"reference hang exception rejected: {error}") from error
+        validate_case_metadata(row, case, expected_status="failed" if accepted else "passed")
+        validate_observations(row, case, manifest, accepted_reference_hang=accepted)
+    checked = {"status": "accepted_with_reference_exception" if accepted_reference_defects else "passed",
+            "cases": len(expected), "source_sha256": target["source_sha256"],
             "native_sha256": native_sha, "commit": target["revision"], "recorded_dirty": target["dirty"],
             "scope": "retained current evidence; this check does not publish or establish a clean release"}
+    if allow_windows_reference_hang:
+        checked.update({"raw_parity_status": result["status"], "raw_parity_summary": result["summary"],
+                        "accepted_reference_defects": accepted_reference_defects})
+    return checked
 
 
 def llvm_source_name(path: Path) -> str | None:
@@ -1903,6 +1945,12 @@ def main() -> int:
     parser.add_argument("report", type=Path)
     parser.add_argument("--offline", action="store_true", help="validate retained evidence without importing the installed native")
     parser.add_argument("--require-clean", action="store_true", help="require evidence produced from a clean source checkout")
+    parser.add_argument("--accept-windows-reference-hang", action="store_true",
+                        help="accept only the recorded stock two-worker SIGINT/TCP-wakeup defect; preserve failed parity")
+    parser.add_argument("--acceptance-output", type=Path,
+                        help="write the separate, source-bound compatibility decision")
+    parser.add_argument("--case-id", action="append", default=[],
+                        help="validate an exact focused parity selection; repeat for each case")
     parser.add_argument(
         "--exclude-case-id",
         action="append",
@@ -1920,13 +1968,28 @@ def main() -> int:
         parser.error("--allow-pending-mcp is valid only for coverage reports")
     if args.kind != "parity" and args.exclude_case_id:
         parser.error("--exclude-case-id is valid only for parity reports")
+    if args.case_id and (args.kind != "parity" or args.exclude_case_id):
+        parser.error("--case-id requires parity and cannot be combined with exclusions")
+    if args.accept_windows_reference_hang and (args.kind != "parity" or args.acceptance_output is None):
+        parser.error("--accept-windows-reference-hang requires parity and --acceptance-output")
+    if args.acceptance_output and not args.accept_windows_reference_hang:
+        parser.error("--acceptance-output requires --accept-windows-reference-hang")
     path = args.report.resolve()
     result = read_json(path)
+    selected_cases = None
+    if args.case_id:
+        _, indexed_cases, _ = load_contract()
+        requested = set(args.case_id)
+        require(len(requested) == len(args.case_id), "duplicate focused case IDs")
+        selected_cases = [case for case in indexed_cases if case["case_id"] in requested]
+        require({case["case_id"] for case in selected_cases} == requested, "unknown focused case IDs")
     checked = (
         validate_parity(
             result,
+            expected_cases=selected_cases,
             offline=args.offline,
             expected_excluded_case_ids=set(args.exclude_case_id) if args.exclude_case_id else None,
+            allow_windows_reference_hang=args.accept_windows_reference_hang,
         )
         if args.kind == "parity"
         else validate_coverage(result, path, allow_pending_mcp=args.allow_pending_mcp)
@@ -1937,6 +2000,17 @@ def main() -> int:
                 "coverage did not execute the currently imported instrumented native")
     if args.require_clean:
         require(checked["recorded_dirty"] is False, "release evidence was produced from a dirty source checkout")
+    if args.acceptance_output:
+        require(args.acceptance_output.resolve() != path, "acceptance must not overwrite raw parity")
+        receipt = {
+            "schema": "uvicorn-rs-compatibility-acceptance@1",
+            "parity_report": {"path": str(path), "sha256": sha256(path), "run_id": result["run"]["run_id"]},
+            "validator_sha256": sha256(Path(__file__)),
+            "policy_sha256": sha256(ROOT / "scripts/windows_reference_hang.py"),
+            "decision": checked,
+        }
+        args.acceptance_output.parent.mkdir(parents=True, exist_ok=True)
+        args.acceptance_output.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({"kind": args.kind, "report": str(path), **checked}, sort_keys=True))
     return 0
 

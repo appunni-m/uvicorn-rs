@@ -33,6 +33,28 @@ The stock-only reproducer and captured blocked-accept evidence are retained in
 This rule does not waive coverage, independent review, benchmark or artifact
 requirements.
 
+The executable exception is
+`uvicorn-0.54.0-windows-two-worker-sigint-tcp-wakeup@1`, implemented in
+`scripts/windows_reference_hang.py` and enabled only by the Windows CI gates.
+It applies to the three ordinary two-worker SIGINT inputs: explicit
+`--workers 2`, `WEB_CONCURRENCY=2`, and explicit workers overriding that
+environment setting. It does not cover SIGTERM, reload, intentional worker
+crashes, startup `WinError(10022)`, other reference versions, or generic
+timeouts. After the original timeout, the stock reference alone receives one
+diagnostic TCP connection. Acceptance requires the captured one-worker stall,
+the supervisor already joining that worker, and complete reference shutdown
+within three seconds of that connection. All other compared observations must
+still match. The candidate must complete both worker lifespans and exit zero
+after one SIGINT within the original deadline, without this diagnostic.
+
+Raw parity remains `failed` when this defect occurs. The separate
+`compatibility-acceptance.json` receipt records
+`accepted_with_reference_exception`, the original failed counts, the accepted
+case IDs, and the report, policy, validator, source and native identities.
+Missing diagnostic evidence remains blocking; historical timeouts are not
+retroactively accepted by their case name alone. The default parity validator
+and every non-Windows lane retain their existing strict behavior.
+
 At the 2026-11-03 audit, CI
 [#629](https://github.com/appunni-m/uvicorn-rs/actions/runs/41582985537)
 has passed Linux x86-64 installed-wheel public parity: 786/786 cases, with zero

@@ -740,6 +740,9 @@ jobs:
             uv pip install --python "$oracle_python" "gunicorn==$GUNICORN_VERSION"
           fi
           uv pip install --python "$candidate_python" --no-deps "${wheels[0]}"
+          if [ "$RUNNER_OS" = 'Windows' ]; then
+            "$candidate_python" scripts/test_windows_reference_hang.py
+          fi
           parity_args=()
           if [ "$RUNNER_OS" = 'Windows' ]; then
             # These inputs require Unix-domain sockets, inherited POSIX
@@ -775,13 +778,24 @@ jobs:
             )
           fi
           run_platform_parity() {
+            parity_exit=0
             "$candidate_python" scripts/run_parity.py \
               --oracle-python "$oracle_python" \
               --installed-candidate "$@" \
-              --output "target/parity-${{ matrix.platform }}.json"
+              --output "target/parity-${{ matrix.platform }}.json" || parity_exit=$?
+            acceptance_args=()
+            if [ "$RUNNER_OS" = 'Windows' ]; then
+              # Keep raw parity failed when stock Uvicorn hits the reviewed
+              # SIGINT/TCP-wakeup hang; independently verify the clean candidate.
+              acceptance_args+=(--accept-windows-reference-hang
+                --acceptance-output "target/parity-diagnostics-${{ matrix.platform }}/compatibility-acceptance.json")
+            fi
+            if ((parity_exit > 1)) || { ((parity_exit != 0)) && [ "$RUNNER_OS" != 'Windows' ]; }; then
+              return "$parity_exit"
+            fi
             "$candidate_python" scripts/check_ci_evidence.py parity \
               "target/parity-${{ matrix.platform }}.json" \
-              --offline --require-clean "$@"
+              --offline --require-clean "${acceptance_args[@]}" "$@"
           }
           if [ "$RUNNER_OS" = 'Windows' ]; then
             export UVICORN_RS_SHUTDOWN_TRACE_OUTPUT="target/parity-diagnostics-${{ matrix.platform }}/shutdown-trace.log"
@@ -955,6 +969,7 @@ jobs:
           candidate_python="$candidate_environment/Scripts/python.exe"
           oracle_python="$oracle_environment/Scripts/python.exe"
           uv pip install --python "$candidate_python" --no-deps "${wheels[0]}"
+          "$candidate_python" scripts/test_windows_reference_hang.py
 
           IFS=',' read -r -a case_ids <<< "$PARITY_CASE_IDS"
           if (( ${#case_ids[@]} == 0 || ${#case_ids[@]} > 20 )); then
@@ -982,11 +997,19 @@ jobs:
             if ((attempt > 1)); then
               output="target/focused-windows/parity-repeat-$attempt.json"
             fi
+            parity_exit=0
             "$candidate_python" scripts/run_parity.py \
               --oracle-python "$oracle_python" \
               --installed-candidate \
               "${parity_args[@]}" \
-              --output "$output"
+              --output "$output" || parity_exit=$?
+            if ((parity_exit > 1)); then
+              exit "$parity_exit"
+            fi
+            "$candidate_python" scripts/check_ci_evidence.py parity "$output" \
+              --offline --require-clean "${parity_args[@]}" \
+              --accept-windows-reference-hang \
+              --acceptance-output "target/focused-windows/attempt-$attempt/compatibility-acceptance.json"
           done
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
