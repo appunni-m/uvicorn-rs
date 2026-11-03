@@ -46,6 +46,8 @@ the supervisor already joining that worker, and complete reference shutdown
 within three seconds of that connection. All other compared observations must
 still match. The candidate must complete both worker lifespans and exit zero
 after one SIGINT within the original deadline, without this diagnostic.
+The independent candidate checks run even when the raw comparison passes;
+matching worker crashes or replacement cannot satisfy this contract.
 
 Raw parity remains `failed` when this defect occurs. The separate
 `compatibility-acceptance.json` receipt records

@@ -80,6 +80,29 @@ def _clean_lifecycle(log: str, *, completed: bool) -> None:
         _require("Stopping parent process" not in log, "supervisor had already finished")
 
 
+def validate_candidate_lifecycle(row: dict[str, Any], case: dict[str, Any]) -> None:
+    """Require a clean candidate even when a defective reference happens to match."""
+    _require(eligible_input(case), "candidate contract input is outside the reviewed scope")
+    target = row["target_observation"]
+    _require(row["server_exit_codes"]["target"] == target["exit_code"] == 0, "candidate probe failed")
+    _require(target["response_received"] is True and target["response_status"] == 200,
+             "candidate did not serve the request")
+    _require(target["process_timed_out"] is False and target["process_exit_code"] == 0,
+             "candidate did not exit within the original deadline")
+    _require(target["shutdown_signal_sent"] is True and target["shutdown_signals_sent"] == ["SIGINT"],
+             "candidate required a different signal sequence")
+    _require(target["worker_replacement_observed"] is False
+             and target["worker_start_count"] == target["worker_clean_shutdown_count"] == 2,
+             "candidate worker lifecycle is not clean")
+    raw = json.loads(_decode(target["stdout_base64"]))["run_http"]
+    _require("reference_shutdown_diagnostic" in raw and raw["reference_shutdown_diagnostic"] is None,
+             "candidate needed a wakeup or lacks evidence")
+    for field in ("process_timed_out", "process_exit_code", "shutdown_signals_sent",
+                  "response_received", "response_status", "response_body_base64", "listener_responses"):
+        _require(raw[field] == target[field], f"candidate raw evidence disagrees with {field}")
+    _clean_lifecycle(_decode(raw["server_stderr_base64"]), completed=True)
+
+
 def validate_reference_hang(
     row: dict[str, Any], case: dict[str, Any], environment: dict[str, Any]
 ) -> dict[str, Any]:
@@ -90,6 +113,7 @@ def validate_reference_hang(
     _require(row.get("status") == "failed", "raw comparison must remain failed")
     oracle = row["oracle_observation"]
     target = row["target_observation"]
+    _require(set(oracle) == set(target), "reference observation envelope differs")
     _require(row["server_exit_codes"] == {"oracle": 0, "target": 0}, "probe process failed")
     for label, observation in (("reference", oracle), ("candidate", target)):
         _require(observation["exit_code"] == 0, f"{label} probe failed")

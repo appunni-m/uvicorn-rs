@@ -27,7 +27,7 @@ from typing import Any
 from coverage_contract import pending_coverage_mcp_request
 from coverage_toolchain import ToolchainError, validate_coverage_tools
 from parity_identity import runtime_source_digest, runtime_source_hashes
-from windows_reference_hang import validate_reference_hang
+from windows_reference_hang import eligible_input, validate_candidate_lifecycle, validate_reference_hang
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -754,9 +754,16 @@ def validate_parity(
     ids = [row.get("case_id") for row in rows]
     require(len(ids) == len(set(ids)) and set(ids) == set(expected), "parity omitted, added, or duplicated indexed cases")
     accepted_reference_defects = []
+    candidate_contract_cases = []
     for row in rows:
         case = expected[row["case_id"]]
         accepted = allow_windows_reference_hang and row.get("status") == "failed"
+        if allow_windows_reference_hang and parity_platform == "windows" and eligible_input(case):
+            try:
+                validate_candidate_lifecycle(row, case)
+            except (ValueError, KeyError, TypeError) as error:
+                raise EvidenceError(f"independent candidate lifecycle rejected: {error}") from error
+            candidate_contract_cases.append(case["case_id"])
         if accepted:
             try:
                 accepted_reference_defects.append(validate_reference_hang(row, case, run["environment"]))
@@ -770,7 +777,8 @@ def validate_parity(
             "scope": "retained current evidence; this check does not publish or establish a clean release"}
     if allow_windows_reference_hang:
         checked.update({"raw_parity_status": result["status"], "raw_parity_summary": result["summary"],
-                        "accepted_reference_defects": accepted_reference_defects})
+                        "accepted_reference_defects": accepted_reference_defects,
+                        "candidate_contract_cases": candidate_contract_cases})
     return checked
 
 

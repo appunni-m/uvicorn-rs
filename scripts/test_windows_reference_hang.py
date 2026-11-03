@@ -125,6 +125,17 @@ class ReferenceHangPolicyTests(unittest.TestCase):
         checked = self.check()
         self.assertEqual(checked["status"], "passed")
         self.assertEqual(checked["accepted_reference_defects"], [])
+        self.assertEqual(checked["candidate_contract_cases"], [self.case["case_id"]])
+
+    def test_equal_reference_and_candidate_crashes_cannot_pass_by_agreeing(self):
+        self.row["target_observation"]["worker_replacement_observed"] = True
+        self.row["target_observation"]["worker_start_count"] = 3
+        self.row.update(status="passed", difference=None,
+                        oracle_observation=deepcopy(self.row["target_observation"]))
+        self.result["status"] = "completed"
+        self.result["summary"].update(passed=1, failed=0)
+        with self.assertRaises(evidence.EvidenceError):
+            self.check()
 
     def test_cli_writes_separate_receipt_without_rewriting_raw_result(self):
         with tempfile.TemporaryDirectory() as temporary:
