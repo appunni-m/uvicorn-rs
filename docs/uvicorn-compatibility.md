@@ -1,69 +1,91 @@
 # Can I replace Uvicorn?
 
-The current Uvicorn 0.54.0 parity evidence is complete on Linux x86-64 and
-macOS ARM64. On Windows x86-64, 756/757 applicable cases passed; the remaining
-case is an infrastructure timeout in the stock Uvicorn oracle. The focused
-case passes, but the complete Windows release gate remains open. The 0.3.0
-PyPI release is not published; coverage, independent review, benchmarks, and
-Windows artifact checks remain release gates. Plan an isolated application
-trial after publication and keep an upstream environment available for
-rollback.
+The latest installed-wheel evidence passes the indexed Uvicorn 0.54.0
+comparisons on Linux x86-64 and macOS ARM64. Windows has one raw comparison
+failure for an isolated stock-Uvicorn shutdown hang, with a separate receipt
+requiring correct candidate behavior. The 0.3.0 PyPI distribution remains
+unpublished. Final-source coverage/review, benchmarks and candidate
+qualification are still release gates.
 
-Both distributions install files under the `uvicorn` import namespace. Do not
-install `uvicorn-rs` and upstream `uvicorn` in the same environment.
+Both distributions install files under the `uvicorn` import namespace. Keep
+upstream `uvicorn` and `uvicorn-rs` in separate environments. Use the
+[quickstart](quickstart.md) after publication and retain the
+[rollback environment](fastapi-evaluation.md#restore-upstream-uvicorn).
 
-## Current status (2026-11-02)
+<a id="current-status-2026-11-02"></a>
 
-Open [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21) promotes
-develop head 87ab887b07c7d2f54b868dec16b115f93026ca69 to main at
-86e72e181d00feca1b4db7f30377d5d9d4345b83. Candidate manifests identify the
-clean merge source as a1e1f47b46be6e2c9419639baed02e71f2c41b75. CI
-[#618](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747) is
-complete. Its installed-wheel parity results against Uvicorn 0.54.0 are:
+## Current status (2026-11-03)
 
-| Platform | Result | Failed | Infrastructure failed | Not run | Artifact (archive SHA-256) |
+[CI #636](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747)
+tests [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21) head
+`2d3633d8b79e6f0b8ab0bf72466418d1d8b1662f` at clean merge source
+`86a89b51984ac6649faa1d30f7948df0c841fa90`. The reports share runtime-source
+digest `4512a95de10a276a52d80a3ddc5a6b1fc29c6679b2ebd26ee89426ed012e40e9`.
+All three public matrices used CPython 3.12.13 and the pinned Uvicorn 0.54.0
+oracle.
+
+| Platform | Raw passed/selected | Failed | Infrastructure failed | Not run | Retained report |
 | --- | ---: | ---: | ---: | ---: | --- |
-| Linux x86-64 | 784/784 | 0 | 0 | 0 | [13144878506](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13144878506) (1f20398b08b4c1ee6932664ba9da5101f550ca14ab822360c9bf273099fc60ff) |
-| macOS ARM64 | 784/784 | 0 | 0 | 0 | [13146731810](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13146731810) (210e6a9c1adf009e17989e6a3ab75b353d7012520a726b4068dd8a7047ff4fde) |
-| Windows x86-64 | 756/757 | 0 | 1 | 0 | [13147445957](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13147445957) (8338a5d03f452514df1ab32af5f422fc5b5563ba7492a4903de6340bf4604fb0) |
+| Linux x86-64 | 786/786 | 0 | 0 | 0 | [13215701889](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747/artifacts/13215701889) |
+| macOS ARM64 | 786/786 | 0 | 0 | 0 | [13216431123](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747/artifacts/13216431123) |
+| Windows x86-64 | 758/759 | 1 | 0 | 0 | [13216576788](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747/artifacts/13216576788) |
 
-Windows excludes 27 explicitly declared inputs that require Unix-domain
+Windows excludes the 27 explicitly declared inputs requiring Unix-domain
 sockets, inherited POSIX descriptors, a Unix-only listener-transfer race, or
-POSIX-only signals and worker health checks. The maintained matrix includes
-custom HTTP and WebSocket protocol classes, `ssl_context_factory`, HTTP/2
-ALPN configuration, and HTTP/1, HTTP/2, and WebSocket response header/trailer
-capacity cases. The exact case inventory is in the
-[maintainer contract](maintainers/uvicorn-0.54.0-contract.md), and the platform
-exclusions are listed in
-[`ci.yml`](https://github.com/appunni-m/uvicorn-rs/blob/develop/.github/workflows/ci.yml).
-The CI #618 artifact rows confirm that all 16 cases in those named feature
-groups passed on Linux, macOS, and Windows. This is evidence for the indexed
-inputs against Uvicorn 0.54.0, not for arbitrary protocol classes or every
-possible Uvicorn behavior.
+POSIX-only signals and worker health checks. The exact exclusions are in the
+[recorded workflow](https://github.com/appunni-m/uvicorn-rs/blob/2d3633d8b79e6f0b8ab0bf72466418d1d8b1662f/.github/workflows/ci.yml).
 
-Linux candidate bundle [13146517275](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13146517275)
-(archive SHA-256 a60ede29bfdb71495bed2addd0398b2f41fe829b3d6ca30cd40ff2bc61415e29)
-and macOS bundle [13146676910](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13146676910)
-(38abe129358fb43f5a67bc48536ac990245a5641043842c773cc1eab4c34e967) have
-clean consumers. The Windows candidate wheel was built and installed, but the
-package, Cargo, and clean-consumer steps were skipped after the oracle timeout.
-Focused trace run [#619](https://github.com/appunni-m/uvicorn-rs/actions/runs/41457927984)
-passed the affected case 1/1; this does not complete the Windows matrix or
-artifact gate. The documentation build [#256](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660320)
-passed for the PR source; deployment is skipped until merge. The local
-documentation refresh in this checkout has not yet received a hosted docs run.
+All 16 indexed custom HTTP/WebSocket protocol, `ssl_context_factory`, HTTP/2
+ALPN and response header/trailer capacity cases passed on all three systems.
+The [versioned contract](maintainers/uvicorn-0.54.0-contract.md) identifies the
+mandatory surface and case inventory. The matrix proves those inputs; it does
+not claim every possible hook, application or configuration combination.
 
-The exact-source coverage job completed all 1,184 ASGI and 259 native cases in
-three repeats, with zero failures, infrastructure failures, retries, or unrun
-cases. Its 100% gate failed: 14,861/14,895 executable regions and
-10,915/10,933 lines were covered (34 regions and 18 lines missing). The report
-is artifact [13149969193](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747/artifacts/13149969193),
-SHA-256 `8d7cbfd7abbb2fd8322bb12725a5a48386c4459ae5a1de4c2bcce5b7c565e636`,
-bound to clean merge revision `a1e1f47b46be6e2c9419639baed02e71f2c41b75`
-and source digest `6d2bb8d7e441b0d4541bee7e559220d76fb69eb59ff2746235801c20e7f44b6f`.
-Independent Coverage-MCP review remains open. Matched three-system
-ordinary-FastAPI benchmarks and complete Windows candidate artifact checks are
-also open; the candidate is not published.
+### Windows reference-hang acceptance
+
+The raw failed comparison is
+`python-api.module-cli-web-concurrency-two-workers-serve-request`.
+The stock reference serves requests but hangs after one Ctrl+C; a diagnostic
+TCP connection releases it. This is the narrow symptom accepted by
+[policy uvicorn-0.54.0-windows-two-worker-sigint-tcp-wakeup@1](https://github.com/appunni-m/uvicorn-rs/blob/2d3633d8b79e6f0b8ab0bf72466418d1d8b1662f/scripts/windows_reference_hang.py).
+
+The retained `compatibility-acceptance.json` records
+`accepted_with_reference_exception`, separately from failed raw parity.
+All three eligible candidate lifecycle contracts pass: correct responses,
+both workers stopping within the original deadline, and no forced kill,
+replacement, extra signal or diagnostic wakeup. A candidate crash/hang or a
+different reference failure is rejected. This is not a claim that 759 raw
+parity comparisons passed, and the upstream hang's precise cause remains
+unverified.
+
+### Artifacts, Python profiles and remaining gates
+
+The [Linux candidate](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747/artifacts/13214953716)
+contains both intended Cargo archives, an abi3 wheel and an sdist. Its
+default/`http3` Cargo, wheel and rebuilt-sdist consumers pass. The
+[Windows candidate](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747/artifacts/13216217708)
+wheel and clean consumer pass. Their manifests, payload hashes, packaged
+source and wheel RECORD/native identities were checked against the clean
+producer source.
+
+The separate [Python-floor consumer](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747/artifacts/13216023731)
+passes on CPython 3.9.25 using the exact Linux abi3 wheel. It verifies install,
+CLI/imports, live ASGI lifecycle, cancellation and caller-loop behavior; it is
+not the complete parity matrix on Python 3.9.
+
+macOS raw parity passed 786/786, but Bash 3.2 rejected an empty array in the
+evidence wrapper before packaging. That wrapper fix needs hosted verification.
+CI #636 measured 100% regions and lines, but failed afterward when the
+validator treated the TLS fixture directory as a file. That repair needs
+hosted qualification. Independent final-source Coverage-MCP handoff, matched
+three-system FastAPI measurements, complete final-source artifacts and
+publication remain open. Later wrapper, upload-diagnostic and
+documentation changes are not qualified by these older receipts.
+
+[Documentation #262](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907499)
+built successfully for its recorded source; PR deployment was skipped. This
+documentation refresh needs its own build. See the [release guide](releases.md)
+and [coverage record](coverage.md) for the remaining acceptance sequence.
 
 ## Historical diagnostic records
 

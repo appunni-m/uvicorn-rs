@@ -2,9 +2,41 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Current source status (2026-11-02)
+<a id="current-source-status-2026-11-02"></a>
 
-### PR #21 CI #618 — completed exact-source results
+## Current source status (2026-11-03)
+
+### PR #21 CI #636 — installed-wheel results and coverage evidence failure
+
+[CI #636](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747)
+tests develop head `2d3633d8b79e6f0b8ab0bf72466418d1d8b1662f` at clean
+merge source `86a89b51984ac6649faa1d30f7948df0c841fa90`.
+Installed normal-wheel parity against Uvicorn 0.54.0 on CPython 3.12.13 is:
+
+| Platform | Raw passed/selected | Failed | Infrastructure failed | Not run |
+| --- | ---: | ---: | ---: | ---: |
+| Linux x86-64 | 786/786 | 0 | 0 | 0 |
+| macOS ARM64 | 786/786 | 0 | 0 | 0 |
+| Windows x86-64 | 758/759 | 1 | 0 | 0 |
+
+The Windows raw mismatch remains failed. A separate
+`accepted_with_reference_exception` receipt accepts only the isolated
+stock-Uvicorn SIGINT/TCP-wakeup hang and requires all three candidate
+lifecycle contracts to pass. Candidate crashes/hangs and other reference
+failures are rejected. Windows has the 27 explicitly declared
+platform-inapplicable exclusions. All 16 custom-protocol, TLS-factory and
+response-capacity inputs passed on all three platforms.
+
+Linux and Windows package/consumer jobs and the separate CPython 3.9.25
+consumer passed. macOS packaging stopped after raw parity on a Bash 3.2
+empty-array wrapper error. Its local fix needs hosted verification.
+Coverage measured 14,740/14,740 regions and 10,855/10,855 lines. The job then
+failed because evidence validation treated the TLS fixture directory as a
+file; the fix still needs hosted qualification. The [compatibility record](uvicorn-compatibility.md#current-status-2026-11-03)
+links report and acceptance artifacts; [release status](releases.md) records
+package hashes. Later source changes require their own qualification.
+
+### Historical PR #21 CI #618 — earlier exact-source results
 
 CI [run 41451660747](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747)
 tests develop head 87ab887b07c7d2f54b868dec16b115f93026ca69 against main at

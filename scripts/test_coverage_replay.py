@@ -32,6 +32,58 @@ def tools_fixture() -> dict[str, dict[str, str]]:
 
 
 class CoverageReplayTests(unittest.TestCase):
+    def test_declared_native_tls_directory_binds_every_fixture_file(self) -> None:
+        _, _, input_paths = evidence.load_contract()
+        selected = evidence.expected_source_hashes(ROOT / "scripts/run_unified_coverage.py", input_paths)
+        directory = "tests/native-core/tls"
+        expected = {path.relative_to(ROOT).as_posix(): digest(path)
+                    for path in (ROOT / directory).rglob("*") if path.is_file()}
+        self.assertTrue(expected)
+        self.assertNotIn(directory, selected)
+        self.assertEqual({name: value for name, value in selected.items()
+                          if name.startswith(directory + "/")}, expected)
+
+    def test_report_directory_binds_nested_and_non_rust_inputs(self) -> None:
+        (ROOT / "target").mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="coverage-inputs-", dir=ROOT / "target") as temporary:
+            directory = Path(temporary)
+            nested = directory / "nested" / "fixture.pem"
+            nested.parent.mkdir()
+            nested.write_bytes(b"first fixture")
+            hidden = directory / ".fixture.json"
+            hidden.write_bytes(b"{}")
+            relative = directory.relative_to(ROOT).as_posix()
+            original_constant = evidence.source_constant
+
+            def source_constant(path: Path, name: str):
+                return [relative] if name == "REPORT_INPUT_PATHS" else original_constant(path, name)
+
+            with patch.object(evidence, "source_constant", side_effect=source_constant):
+                def inputs():
+                    selected = evidence.expected_source_hashes(ROOT / "scripts/run_unified_coverage.py", [])
+                    return {name: value for name, value in selected.items() if name.startswith(relative + "/")}
+
+                before = inputs()
+                self.assertEqual(before, {path.relative_to(ROOT).as_posix(): digest(path)
+                                          for path in (nested, hidden)})
+                nested.write_bytes(b"changed fixture")
+                self.assertNotEqual(inputs(), before)
+                hidden.unlink()
+                self.assertNotIn(hidden.relative_to(ROOT).as_posix(), inputs())
+                added = directory / "added.txt"
+                added.write_bytes(b"new input")
+                self.assertEqual(inputs()[added.relative_to(ROOT).as_posix()], digest(added))
+
+    def test_missing_declared_report_input_is_rejected(self) -> None:
+        original_constant = evidence.source_constant
+
+        def source_constant(path: Path, name: str):
+            return ["target/missing-coverage-input/fixture.pem"] if name == "REPORT_INPUT_PATHS" else original_constant(path, name)
+
+        with patch.object(evidence, "source_constant", side_effect=source_constant):
+            with self.assertRaisesRegex(evidence.EvidenceError, "missing declared report input"):
+                evidence.expected_source_hashes(ROOT / "scripts/run_unified_coverage.py", [])
+
     def test_relocated_exact_llvm_does_not_require_build_tools(self) -> None:
         expected = tools_fixture()
         actual = {name: {**expected[name], "path": f"/reviewer/{name}"}

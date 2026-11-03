@@ -7,6 +7,9 @@ application trial. Repository benchmarks do not establish a gain for that app.
 
 The distribution is `uvicorn-rs`. It provides the `uvicorn` command and imports,
 so upstream `uvicorn` and this distribution should use separate environments.
+The [compatibility record](uvicorn-compatibility.md#artifacts-python-profiles-and-remaining-gates)
+identifies the exact inspected artifacts, tested Python profiles and remaining
+release gates. A clean-consumer pass does not qualify an arbitrary application.
 
 ## Prepare two equivalent environments
 

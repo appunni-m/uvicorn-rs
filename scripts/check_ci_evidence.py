@@ -41,9 +41,12 @@ PRODUCTION_SOURCE_SET = (
     "crates/uvicorn-rs/src/websocket.rs",
     "crates/uvicorn-rs/src/peer_read.rs",
     "crates/asgi-lifespan-protocol-rs/src/lib.rs",
+    "src/upload_trace.rs",
 )
-EXECUTABLE_SOURCE_SET = PRODUCTION_SOURCE_SET[:-1]
-NO_COUNTER_SOURCE_SET = (PRODUCTION_SOURCE_SET[-1],)
+EXECUTABLE_SOURCE_SET = PRODUCTION_SOURCE_SET[:-2]
+# Match the measured feature configuration, without dropping either source
+# file from identity checks. Unexpected counters in these files are rejected.
+NO_COUNTER_SOURCE_SET = PRODUCTION_SOURCE_SET[-2:]
 COVERAGE_SUPPORT_SOURCE_SET = (
     "crates/uvicorn-rs/src/coverage.rs",
     "crates/uvicorn-rs/src/http3/coverage.rs",
@@ -1085,7 +1088,14 @@ def expected_source_hashes(coverage_runner: Path, input_paths: list[Path]) -> di
     require(python_sources == set(PYTHON_SOURCE_SET), "Python adapter source inventory is incomplete or unclassified")
     selected.update({relative: sha256(repo_path(relative)) for relative in PYTHON_SOURCE_SET})
     for relative in source_constant(coverage_runner, "REPORT_INPUT_PATHS"):
-        selected[relative] = sha256(repo_path(relative))
+        path = repo_path(relative)
+        if path.is_dir():
+            for artifact in sorted(path.rglob("*")):
+                if artifact.is_file():
+                    selected[artifact.relative_to(ROOT).as_posix()] = sha256(artifact)
+        else:
+            require(path.is_file(), f"missing declared report input: {relative}")
+            selected[relative] = sha256(path)
     selected.update({path.relative_to(ROOT).as_posix(): sha256(path) for path in input_paths})
     require(set(PRODUCTION_SOURCE_SET) <= set(selected), "source hash receipt omits production files")
     return selected

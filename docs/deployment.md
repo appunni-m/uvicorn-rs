@@ -1,18 +1,17 @@
 # Deployment guidance
 
 The `uvicorn-rs` 0.3.0 PyPI release is still being qualified and is not
-published. The latest exact-source PR run is CI
-[#618](https://github.com/appunni-m/uvicorn-rs/actions/runs/41451660747), on
-`develop` head `87ab887` and clean merge revision `a1e1f47`. Its Uvicorn 0.54.0
-installed-wheel parity passed 784/784 on Linux x86-64 and macOS ARM64. Windows
-passed 756/757 applicable cases with zero behavior mismatches and one
-stock-Uvicorn oracle shutdown timeout; its candidate package and consumer
-steps did not complete. The named custom HTTP/WebSocket protocol,
-`ssl_context_factory`, and response-capacity cases passed on all three systems.
-The unified coverage matrix completed three repeats of 1,184 ASGI and 259
-native cases, but the 100% gate failed at 14,861/14,895 regions and
-10,915/10,933 lines. Independent Coverage-MCP review and matched FastAPI
-benchmarks remain release gates. Use the
+published. The CI
+[#636](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747)
+installed-wheel matrix passed 786/786 on Linux x86-64 and macOS ARM64. Windows
+passed 758/759 raw comparisons; a separate receipt accepts the isolated
+stock-Uvicorn shutdown hang only when the candidate lifecycle is clean.
+Linux and Windows artifact/consumer jobs and the separate Python 3.9 consumer
+passed. macOS packaging stopped after parity because of a shell-wrapper error.
+Coverage measured 100%, but the evidence validator failed on the TLS fixture
+directory. Its repair, independent review, matched FastAPI benchmarks and
+final-source artifact qualification remain release gates. See the
+[source-bound receipts](uvicorn-compatibility.md), then use the
 [support matrix](support-matrix.md) to check the tested surface, then evaluate
 the released candidate with your application before deploying it.
 

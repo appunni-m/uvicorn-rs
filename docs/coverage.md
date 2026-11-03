@@ -8,9 +8,48 @@
 <a id="current-unified-coverage-status-2026-10-31"></a>
 <a id="current-unified-coverage-status-2026-11-01"></a>
 
-## Current unified coverage status (2026-11-01)
+## Current unified coverage status (2026-11-03)
 
-The latest completed full report is from
+[CI #636](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747)
+completed on PR head `2d3633d8`, clean merge source
+`86a89b51984ac6649faa1d30f7948df0c841fa90`. All **1,451 attributed cases**
+(1,192 ASGI and 259 native) and three verification repeats passed. The measured
+result is **14,740/14,740 regions** and **10,855/10,855 lines**.
+
+The job nevertheless failed during evidence validation: the checker tried to
+hash `tests/native-core/tls` as a file rather than enumerate its directory.
+The producer had already recorded all 45 fixture files. Its retained-object
+replay preflight passed, and the
+[coverage archive](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747/artifacts/13220215506)
+includes both measured binaries. Archive SHA-256:
+`1476766ce890b4b9300748458917a357837009a84f68a05b8e9d18ec84ed0136`.
+The measured 100% result does not make the failed evidence gate successful.
+The directory-handling repair requires hosted qualification.
+
+The pending upload diagnostics also add `src/upload_trace.rs` to the explicit
+source inventory. It is source-bound and classified as having no executable
+counters in this measured configuration because `runtime-diagnostics` is
+disabled. The validator rejects unexpected counters in that file; no existing
+production source or region is removed from the gate. Independent review and
+strict replay of the final source remain required.
+
+The preceding [CI #629](https://github.com/appunni-m/uvicorn-rs/actions/runs/41582985537)
+measured **14,740/14,740 regions** and **10,855/10,855 lines** on clean source
+`1c8f16c80e4ac5115c9282037b30473d0016c04a`. All 1,451 attributed cases
+(1,192 ASGI and 259 native) and three verification repeats passed. Its job
+failed afterward on four missing evidence-checker native fault bindings, and
+its archive omitted the measured objects required for strict offline replay.
+Those issues motivated the latest evidence-tooling batch. The historical
+measurement does not qualify current source or complete release acceptance.
+
+The final-source report must retain both measured objects, pass strict replay,
+and obtain actual unfiltered Coverage-MCP region/line pages through the
+source-bound handoff. Coverage thresholds and source exclusions are unchanged.
+See the [release sequence](releases.md).
+
+### Historical full report: CI #596 (2026-11-01)
+
+This earlier completed full report is from
 [CI #596](https://github.com/appunni-m/uvicorn-rs/actions/runs/41305880925),
 on source `16cc3e974f4ad0b9d046f081fe67ba1c872ee0c7`. All 1,425 indexed cases
 and three verification repeats passed. Coverage remains below 100%:
