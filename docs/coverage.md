@@ -10,6 +10,39 @@
 
 ## Current unified coverage status (2026-11-03)
 
+[CI #637](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084)
+completes all **1,451 cases** (1,192 ASGI and 259 native), full attribution and
+three complete verification repeats on clean producer
+`00f38c82dd869ba0dcc7068cbc5cc769cd0f6294`. It measures
+**14,809/14,809 regions and 10,894/10,894 physical source lines**. The directory
+identity repair passes, but evidence validation then fails on an incorrect
+comparison between raw LLVM function-line totals and unique physical lines.
+
+The correction retains the raw JSON summary checks and independently replays
+LCOV physical-line and hit sets from the recorded objects and aggregate profile.
+Twelve focused checks, a real retained-object closure fixture and cross-host
+replay of the actual report pass. Acceptance with the recorded Linux LLVM
+executable bytes remains required. The original
+[archive](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084/artifacts/13225094864)
+is unchanged, SHA-256
+`b6ba9e17a5338e369fcd2d8bccea7d6a1777e91905a10dd36fbf99e335d23dc4`.
+
+Actual Coverage-MCP review completes all 45 unfiltered region pages and one
+line page with matching source, passing tests and zero gaps. Receipt SHA-256
+`4f77ad641d4105dfa1f66ff757cf30dcf2d8957a5a466496b5a407ad92ee8330`
+attaches successfully to the captured measurement. Strict coverage acceptance
+and the final exact-main hosted review handoff remain open.
+
+For evidence-checker repairs, CI's `replay-unified-coverage` dispatch mode
+accepts the original CI run ID, attempt, producer commit and artifact ID. It
+downloads and digest-checks the existing artifact, checks out the actual
+producer, and replays all retained profiles with the recorded LLVM bytes using
+the updated validator. It runs no server or reference tests and does not
+qualify a later source or create the final-main MCP handoff. The separate replay
+artifact records both validator and producer identities and any rejection.
+
+### Earlier full report: CI #636
+
 [CI #636](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747)
 completed on PR head `2d3633d8`, clean merge source
 `86a89b51984ac6649faa1d30f7948df0c841fa90`. All **1,451 attributed cases**

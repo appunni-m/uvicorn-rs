@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Run the full CI matrix or selected parity cases on Linux or Windows
+        description: Run full CI, selected parity, or retained coverage replay
         required: true
         type: choice
         default: full
@@ -15,6 +15,7 @@ on:
           - full
           - focused-windows-parity
           - focused-linux-parity
+          - replay-unified-coverage
           - diagnose-stock-windows-workers
       parity_case_ids:
         description: Comma-separated case IDs for a focused parity mode (up to 20)
@@ -43,6 +44,23 @@ on:
           - "1"
           - "3"
           - "10"
+      coverage_ci_run_id:
+        description: Original completed CI run for retained coverage replay
+        required: false
+        type: number
+      coverage_ci_attempt:
+        description: Original CI attempt for retained coverage replay
+        required: false
+        type: number
+        default: 1
+      coverage_source:
+        description: Exact 40-character producer commit for retained coverage replay
+        required: false
+        type: string
+      coverage_artifact_id:
+        description: Unified coverage artifact ID from the original CI run
+        required: false
+        type: number
 
 permissions:
   contents: read
@@ -72,6 +90,127 @@ env:
   ASGI_PARITY_UVICORN_WEBSOCKET_DEBUG: "1"
 
 jobs:
+  retained-coverage-replay:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'replay-unified-coverage'
+    name: Replay retained unified coverage without running servers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12.13"
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: llvm-tools-preview
+      - name: Retain the current validator separately from the measurement source
+        env:
+          PRODUCER_SOURCE: ${{ inputs.coverage_source }}
+        run: |
+          set -euo pipefail
+          python -c 'import os,re; assert re.fullmatch("[0-9a-f]{40}", os.environ["PRODUCER_SOURCE"]), "exact producer commit required"'
+          test -z "$(git status --porcelain --untracked-files=all)"
+          mkdir -p "$RUNNER_TEMP/coverage-replay/validator"
+          cp scripts/check_ci_evidence.py scripts/windows_reference_startup.py "$RUNNER_TEMP/coverage-replay/validator/"
+          git rev-parse HEAD > "$RUNNER_TEMP/coverage-replay/validator-revision.txt"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.coverage_source }}
+          persist-credentials: false
+      - name: Download the exact original coverage artifact and verify its digest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.coverage_ci_run_id }}
+          artifact-ids: ${{ inputs.coverage_artifact_id }}
+          digest-mismatch: error
+          path: target/asgi-coverage
+      - name: Bind original artifact, producer source and updated validator
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRODUCER_SOURCE: ${{ inputs.coverage_source }}
+          PRODUCER_RUN_ID: ${{ inputs.coverage_ci_run_id }}
+          PRODUCER_ATTEMPT: ${{ inputs.coverage_ci_attempt }}
+          PRODUCER_ARTIFACT_ID: ${{ inputs.coverage_artifact_id }}
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain --untracked-files=all)"
+          python - <<'PY'
+          import hashlib, json, os, re, subprocess, urllib.request
+          from pathlib import Path
+          root = Path.cwd()
+          audit = Path(os.environ["RUNNER_TEMP"]) / "coverage-replay"
+          source = os.environ["PRODUCER_SOURCE"]
+          run_id, attempt, artifact_id = (int(os.environ[key]) for key in
+              ("PRODUCER_RUN_ID", "PRODUCER_ATTEMPT", "PRODUCER_ARTIFACT_ID"))
+          assert min(run_id, attempt, artifact_id) > 0
+          def api(path):
+              request = urllib.request.Request(
+                  f'https://api.github.com/repos/{os.environ["GITHUB_REPOSITORY"]}/{path}',
+                  headers={"Authorization": f'Bearer {os.environ["GH_TOKEN"]}',
+                           "Accept": "application/vnd.github+json"})
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return json.load(response)
+          artifact = api(f"actions/artifacts/{artifact_id}")
+          run = api(f"actions/runs/{run_id}/attempts/{attempt}")
+          assert artifact["id"] == artifact_id and artifact["workflow_run"]["id"] == run_id
+          assert artifact["name"] == "uvicorn-rs-unified-coverage" and not artifact["expired"]
+          assert re.fullmatch(r"sha256:[0-9a-f]{64}", artifact["digest"])
+          assert run["id"] == run_id and run["run_attempt"] == attempt
+          assert run["status"] == "completed" and run["path"] == ".github/workflows/ci.yml"
+          identity = json.loads((root / "target/asgi-coverage/ci-run.json").read_text())
+          assert identity == {"schema": "uvicorn-rs-ci-artifact-identity@1",
+              "head_sha": source, "run_id": run_id, "run_attempt": attempt,
+              "workflow_path": ".github/workflows/ci.yml"}
+          assert subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip() == source
+          report = root / "target/asgi-coverage/coverage-report.json"
+          data = json.loads(report.read_text())
+          assert data["uvicorn_rs_unified"]["run"]["source"]["revision"] == source
+          digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+          validator = audit / "validator/check_ci_evidence.py"
+          original = root / "scripts/check_ci_evidence.py"
+          (audit / "original-check_ci_evidence.py").write_bytes(original.read_bytes())
+          receipt = {"schema": "uvicorn-rs-retained-coverage-replay@1",
+              "producer": identity, "artifact": {key: artifact[key] for key in
+                  ("id", "name", "size_in_bytes", "digest")},
+              "report_sha256": digest(report), "validator_revision":
+                  (audit / "validator-revision.txt").read_text().strip(),
+              "validator_sha256": digest(validator), "original_validator_sha256": digest(original),
+              "scope": "retained producer evidence replay; not final-source CI or MCP handoff"}
+          (audit / "identity.json").write_text(json.dumps(receipt, indent=2) + "\n")
+          original.write_bytes(validator.read_bytes())
+          PY
+          git diff --exit-code -- . ':!scripts/check_ci_evidence.py'
+      - name: Strictly replay every retained case and aggregate profile with the recorded LLVM bytes
+        env:
+          PYTHONPATH: ${{ runner.temp }}/coverage-replay/validator
+        run: |
+          set -euo pipefail
+          python scripts/check_ci_evidence.py coverage \
+            target/asgi-coverage/coverage-report.json --offline --allow-pending-mcp --require-clean \
+            2> "$RUNNER_TEMP/coverage-replay/stderr.log" \
+            | tee "$RUNNER_TEMP/coverage-replay/validation.json"
+      - name: Retain any replay rejection diagnostics
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/coverage-replay/stderr.log" ]; then
+            cat "$RUNNER_TEMP/coverage-replay/stderr.log"
+          fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: uvicorn-rs-retained-coverage-replay-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/coverage-replay/
+          if-no-files-found: error
+          retention-days: 90
+
   stock-windows-worker-diagnostic:
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'diagnose-stock-windows-workers'
     name: Isolate unmodified Uvicorn Windows worker shutdown
