@@ -747,6 +747,7 @@ jobs:
           uv pip install --python "$candidate_python" --no-deps "${wheels[0]}"
           if [ "$RUNNER_OS" = 'Windows' ]; then
             "$candidate_python" scripts/test_windows_reference_hang.py
+            "$candidate_python" scripts/test_windows_reference_startup.py
           fi
           parity_args=()
           if [ "$RUNNER_OS" = 'Windows' ]; then
@@ -794,8 +795,9 @@ jobs:
               "target/parity-${{ matrix.platform }}.json" --offline --require-clean)
             if [ "$RUNNER_OS" = 'Windows' ]; then
               # Keep raw parity failed when stock Uvicorn hits the reviewed
-              # SIGINT/TCP-wakeup hang; independently verify the clean candidate.
-              evidence_args+=(--accept-windows-reference-hang
+              # SIGINT/TCP-wakeup hang or captured listen WinError 10022.
+              # Each has a separate policy; independently verify the candidate.
+              evidence_args+=(--accept-windows-reference-hang --accept-windows-reference-startup
                 --acceptance-output "target/parity-diagnostics-${{ matrix.platform }}/compatibility-acceptance.json")
             fi
             if ((parity_exit > 1)) || { ((parity_exit != 0)) && [ "$RUNNER_OS" != 'Windows' ]; }; then
@@ -976,6 +978,7 @@ jobs:
           oracle_python="$oracle_environment/Scripts/python.exe"
           uv pip install --python "$candidate_python" --no-deps "${wheels[0]}"
           "$candidate_python" scripts/test_windows_reference_hang.py
+          "$candidate_python" scripts/test_windows_reference_startup.py
 
           IFS=',' read -r -a case_ids <<< "$PARITY_CASE_IDS"
           if (( ${#case_ids[@]} == 0 || ${#case_ids[@]} > 20 )); then
@@ -1014,7 +1017,7 @@ jobs:
             fi
             "$candidate_python" scripts/check_ci_evidence.py parity "$output" \
               --offline --require-clean "${parity_args[@]}" \
-              --accept-windows-reference-hang \
+              --accept-windows-reference-hang --accept-windows-reference-startup \
               --acceptance-output "target/focused-windows/attempt-$attempt/compatibility-acceptance.json"
           done
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

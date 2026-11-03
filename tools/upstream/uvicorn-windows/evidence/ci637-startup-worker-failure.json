@@ -1,0 +1,364 @@
+{
+  "artifact_id": 13222662150,
+  "artifact_zip_sha256": "5c78f8c8fc929ddd7547ee7cdf9590813183d726fc2895099c3bc8c67318039f",
+  "ci_job_id": 125850961385,
+  "ci_run_id": 41614642084,
+  "ci_url": "https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084/job/125850961385",
+  "environment": {
+    "dependencies": {
+      "aioquic": "1.3.0",
+      "h11": "0.16.0",
+      "h2": "4.4.1",
+      "httptools": "0.8.0",
+      "hypercorn": "0.18.0",
+      "uvicorn": "0.54.0",
+      "websockets": "17.1",
+      "wsproto": "1.3.2",
+      "zttp": "0.0.34"
+    },
+    "machine": "AMD64",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "python": "3.12.13",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)"
+  },
+  "evidence_kind": "captured-live-ci-not-current-source-acceptance",
+  "native_sha256": "9b2649eb2b03329d55c632c0019917a1324243cf407e63caaf2d2b157461332c",
+  "parity_report_sha256": "045f17aa15fc7367e1b987cd916dc0c0d22c1d295bb67e7d58bd9e15ac639c8c",
+  "row": {
+    "case_id": "python-api.module-cli-two-workers-serve-request",
+    "difference": "Python API observations differ: server_log_events, worker_replacement_observed",
+    "fault": null,
+    "operation": "python.api.run-http",
+    "oracle_observation": {
+      "exit_code": 0,
+      "idle_connection_closed": null,
+      "listener_responses": [
+        {
+          "body_base64": "bGlmZXNwYW4tc3RhcnRlZHxzY29wZS1zdGF0ZS1lbXB0eXxyb290X3BhdGg9fHBhdGg9L3B5dGhvbi1hcGktdHdvLXdvcmtlcnN8cmF3X3BhdGg9TDNCNWRHaHZiaTFoY0drdGRIZHZMWGR2Y210bGNuTT0=",
+          "content_type": "text/plain",
+          "observed_headers": {},
+          "status": 200
+        }
+      ],
+      "process_exit_code": 0,
+      "process_timed_out": false,
+      "response_body_base64": "bGlmZXNwYW4tc3RhcnRlZHxzY29wZS1zdGF0ZS1lbXB0eXxyb290X3BhdGg9fHBhdGg9L3B5dGhvbi1hcGktdHdvLXdvcmtlcnN8cmF3X3BhdGg9TDNCNWRHaHZiaTFoY0drdGRIZHZMWGR2Y210bGNuTT0=",
+      "response_content_type": "text/plain",
+      "response_received": true,
+      "response_status": 200,
+      "server_log_events": {
+        "stderr": [
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Uvicorn running on http://127.0.0.1:<port> (Press CTRL+C to quit)"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Started parent process [<pid>]"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Started server process [<pid>]"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Started server process [<pid>]"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Started server process [<pid>]"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Waiting for application startup."
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Waiting for application startup."
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Waiting for application startup."
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Application startup complete."
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Application startup complete."
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Application startup complete."
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Shutting down"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Shutting down"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Waiting for application shutdown."
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Waiting for application shutdown."
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Application shutdown complete."
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Application shutdown complete."
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Finished server process [<pid>]"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Finished server process [<pid>]"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "ASGI 'lifespan' protocol appears unsupported."
+          },
+          {
+            "kind": "raw",
+            "message": "Process SpawnProcess-2:"
+          },
+          {
+            "class": "OSError",
+            "kind": "exception",
+            "message": "[WinError 10022] An invalid argument was supplied"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Waiting for child process [<pid>]"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Child process [<pid>] died"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Received SIGINT, exiting."
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Waiting for child process [<pid>]"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Waiting for child process [<pid>]"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Stopping parent process [<pid>]"
+          }
+        ],
+        "stdout": [
+          {
+            "client": "127.0.0.1:<port>",
+            "kind": "access",
+            "level": "INFO",
+            "request": "GET /python-api-two-workers HTTP/1.1",
+            "status": "200 OK"
+          }
+        ]
+      },
+      "shutdown_signal_sent": true,
+      "shutdown_signals_sent": [
+        "SIGINT"
+      ],
+      "stderr_base64": "",
+      "stdout_base64": "eyJydW5faHR0cCI6eyJncmFjZWZ1bF9zaHV0ZG93bl9jYW5jZWxsYXRpb25fb2JzZXJ2ZWQiOmZhbHNlLCJpZGxlX2Nvbm5lY3Rpb25fY2xvc2VkIjpudWxsLCJsaXN0ZW5lcl9yZXNwb25zZXMiOlt7ImJvZHlfYmFzZTY0IjoiYkdsbVpYTndZVzR0YzNSaGNuUmxaSHh6WTI5d1pTMXpkR0YwWlMxbGJYQjBlWHh5YjI5MFgzQmhkR2c5ZkhCaGRHZzlMM0I1ZEdodmJpMWhjR2t0ZEhkdkxYZHZjbXRsY25OOGNtRjNYM0JoZEdnOVRETkNOV1JIYUhaaWFURm9ZMGRyZEdSSVpIWk1XR1IyWTIxMGJHTnVUVDA9IiwiY29udGVudF90eXBlIjoidGV4dC9wbGFpbiIsIm9ic2VydmVkX2hlYWRlcnMiOnt9LCJzdGF0dXMiOjIwMH1dLCJwcm9jZXNzX2V4aXRfY29kZSI6MCwicHJvY2Vzc190aW1lZF9vdXQiOmZhbHNlLCJyYXdfY29ubmVjdGlvbl9vcGVuX2FmdGVyX3RpbWVvdXQiOm51bGwsInJlZmVyZW5jZV9zaHV0ZG93bl9kaWFnbm9zdGljIjpudWxsLCJyZXF1ZXN0X2xpbWl0X3JhbmdlX3NhdGlzZmllZCI6bnVsbCwicmVxdWVzdF9saW1pdF9yZXNwb25zZV9jb3VudCI6MSwicmVzcG9uc2VfYm9keV9iYXNlNjQiOiJiR2xtWlhOd1lXNHRjM1JoY25SbFpIeHpZMjl3WlMxemRHRjBaUzFsYlhCMGVYeHliMjkwWDNCaGRHZzlmSEJoZEdnOUwzQjVkR2h2YmkxaGNHa3RkSGR2TFhkdmNtdGxjbk44Y21GM1gzQmhkR2c5VEROQ05XUkhhSFppYVRGb1kwZHJkR1JJWkhaTVdHUjJZMjEwYkdOdVRUMD0iLCJyZXNwb25zZV9jb250ZW50X3R5cGUiOiJ0ZXh0L3BsYWluIiwicmVzcG9uc2VfcmVjZWl2ZWQiOnRydWUsInJlc3BvbnNlX3N0YXR1cyI6MjAwLCJzZXJ2ZXJfc3RkZXJyX2Jhc2U2NCI6IlNVNUdUem9nSUNBZ0lGVjJhV052Y200Z2NuVnVibWx1WnlCdmJpQm9kSFJ3T2k4dk1USTNMakF1TUM0eE9qVTRNVEl3SUNoUWNtVnpjeUJEVkZKTUswTWdkRzhnY1hWcGRDa05Da2xPUms4NklDQWdJQ0JUZEdGeWRHVmtJSEJoY21WdWRDQndjbTlqWlhOeklGc3pOakk0WFEwS1NVNUdUem9nSUNBZ0lGTjBZWEowWldRZ2MyVnlkbVZ5SUhCeWIyTmxjM01nV3pRek5EaGREUXBKVGtaUE9pQWdJQ0FnVjJGcGRHbHVaeUJtYjNJZ1lYQndiR2xqWVhScGIyNGdjM1JoY25SMWNDNE5Da2xPUms4NklDQWdJQ0JCY0hCc2FXTmhkR2x2YmlCemRHRnlkSFZ3SUdOdmJYQnNaWFJsTGcwS1NVNUdUem9nSUNBZ0lGTjBZWEowWldRZ2MyVnlkbVZ5SUhCeWIyTmxjM01nV3pZeE9UWmREUXBKVGtaUE9pQWdJQ0FnVjJGcGRHbHVaeUJtYjNJZ1lYQndiR2xqWVhScGIyNGdjM1JoY25SMWNDNE5Da2xPUms4NklDQWdJQ0JCY0hCc2FXTmhkR2x2YmlCemRHRnlkSFZ3SUdOdmJYQnNaWFJsTGcwS1NVNUdUem9nSUNBZ0lFRlRSMGtnSjJ4cFptVnpjR0Z1SnlCd2NtOTBiMk52YkNCaGNIQmxZWEp6SUhWdWMzVndjRzl5ZEdWa0xnMEtVSEp2WTJWemN5QlRjR0YzYmxCeWIyTmxjM010TWpvTkNsUnlZV05sWW1GamF5QW9iVzl6ZENCeVpXTmxiblFnWTJGc2JDQnNZWE4wS1RvTkNpQWdSbWxzWlNBaVJEcGNZVnhmZEdWdGNGeDFkaTF3ZVhSb2IyNHRaR2x5WEdOd2VYUm9iMjR0TXk0eE1pNHhNeTEzYVc1a2IzZHpMWGc0Tmw4Mk5DMXViMjVsWEV4cFlseHRkV3gwYVhCeWIyTmxjM05wYm1kY2NISnZZMlZ6Y3k1d2VTSXNJR3hwYm1VZ016RTBMQ0JwYmlCZlltOXZkSE4wY21Gd0RRb2dJQ0FnYzJWc1ppNXlkVzRvS1EwS0lDQkdhV3hsSUNKRU9seGhYRjkwWlcxd1hIVjJMWEI1ZEdodmJpMWthWEpjWTNCNWRHaHZiaTB6TGpFeUxqRXpMWGRwYm1SdmQzTXRlRGcyWHpZMExXNXZibVZjVEdsaVhHMTFiSFJwY0hKdlkyVnpjMmx1WjF4d2NtOWpaWE56TG5CNUlpd2diR2x1WlNBeE1EZ3NJR2x1SUhKMWJnMEtJQ0FnSUhObGJHWXVYM1JoY21kbGRDZ3FjMlZzWmk1ZllYSm5jeXdnS2lwelpXeG1MbDlyZDJGeVozTXBEUW9nSUVacGJHVWdJa1E2WEdGY1gzUmxiWEJjZFhacFkyOXliaTF5Y3kxMWNITjBjbVZoYlMxdmNtRmpiR1ZjVEdsaVhITnBkR1V0Y0dGamEyRm5aWE5jZFhacFkyOXlibHhmYzNWaWNISnZZMlZ6Y3k1d2VTSXNJR3hwYm1VZ09EQXNJR2x1SUhOMVluQnliMk5sYzNOZmMzUmhjblJsWkEwS0lDQWdJSFJoY21kbGRDaHpiMk5yWlhSelBYTnZZMnRsZEhNcERRb2dJRVpwYkdVZ0lrUTZYR0ZjWDNSbGJYQmNkWFpwWTI5eWJpMXljeTExY0hOMGNtVmhiUzF2Y21GamJHVmNUR2xpWEhOcGRHVXRjR0ZqYTJGblpYTmNkWFpwWTI5eWJseHpkWEJsY25acGMyOXljMXh0ZFd4MGFYQnliMk5sYzNNdWNIa2lMQ0JzYVc1bElEYzNMQ0JwYmlCMFlYSm5aWFFOQ2lBZ0lDQnpaV3htTG5ObGNuWmxjaTV5ZFc0b2MyOWphMlYwY3lrTkNpQWdSbWxzWlNBaVJEcGNZVnhmZEdWdGNGeDFkbWxqYjNKdUxYSnpMWFZ3YzNSeVpXRnRMVzl5WVdOc1pWeE1hV0pjYzJsMFpTMXdZV05yWVdkbGMxeDFkbWxqYjNKdVhITmxjblpsY2k1d2VTSXNJR3hwYm1VZ09EWXNJR2x1SUhKMWJnMEtJQ0FnSUhKbGRIVnliaUJoYzNsdVkybHZYM0oxYmloelpXeG1Mbk5sY25abEtITnZZMnRsZEhNOWMyOWphMlYwY3lrc0lHeHZiM0JmWm1GamRHOXllVDF6Wld4bUxtTnZibVpwWnk1blpYUmZiRzl2Y0Y5bVlXTjBiM0o1S0NrcERRb2dJQ0FnSUNBZ0lDQWdJRjVlWGw1ZVhsNWVYbDVlWGw1ZVhsNWVYbDVlWGw1ZVhsNWVYbDVlWGw1ZVhsNWVYbDVlWGw1ZVhsNWVYbDVlWGw1ZVhsNWVYbDVlWGw1ZVhsNWVYbDVlWGw1ZVhsNWVYbDVlWGw1ZVhsNWVYbDVlWGw0TkNpQWdSbWxzWlNBaVJEcGNZVnhmZEdWdGNGeDFkaTF3ZVhSb2IyNHRaR2x5WEdOd2VYUm9iMjR0TXk0eE1pNHhNeTEzYVc1a2IzZHpMWGc0Tmw4Mk5DMXViMjVsWEV4cFlseGhjM2x1WTJsdlhISjFibTVsY25NdWNIa2lMQ0JzYVc1bElERTVOU3dnYVc0Z2NuVnVEUW9nSUNBZ2NtVjBkWEp1SUhKMWJtNWxjaTV5ZFc0b2JXRnBiaWtOQ2lBZ0lDQWdJQ0FnSUNBZ1hsNWVYbDVlWGw1ZVhsNWVYbDVlWGcwS0lDQkdhV3hsSUNKRU9seGhYRjkwWlcxd1hIVjJMWEI1ZEdodmJpMWthWEpjWTNCNWRHaHZiaTB6TGpFeUxqRXpMWGRwYm1SdmQzTXRlRGcyWHpZMExXNXZibVZjVEdsaVhHRnplVzVqYVc5Y2NuVnVibVZ5Y3k1d2VTSXNJR3hwYm1VZ01URTRMQ0JwYmlCeWRXNE5DaUFnSUNCeVpYUjFjbTRnYzJWc1ppNWZiRzl2Y0M1eWRXNWZkVzUwYVd4ZlkyOXRjR3hsZEdVb2RHRnpheWtOQ2lBZ0lDQWdJQ0FnSUNBZ1hsNWVYbDVlWGw1ZVhsNWVYbDVlWGw1ZVhsNWVYbDVlWGw1ZVhsNWVYbDVlWGw0TkNpQWdSbWxzWlNBaVJEcGNZVnhmZEdWdGNGeDFkaTF3ZVhSb2IyNHRaR2x5WEdOd2VYUm9iMjR0TXk0eE1pNHhNeTEzYVc1a2IzZHpMWGc0Tmw4Mk5DMXViMjVsWEV4cFlseGhjM2x1WTJsdlhHSmhjMlZmWlhabGJuUnpMbkI1SWl3Z2JHbHVaU0EyT1RFc0lHbHVJSEoxYmw5MWJuUnBiRjlqYjIxd2JHVjBaUTBLSUNBZ0lISmxkSFZ5YmlCbWRYUjFjbVV1Y21WemRXeDBLQ2tOQ2lBZ0lDQWdJQ0FnSUNBZ1hsNWVYbDVlWGw1ZVhsNWVYbDVlRFFvZ0lFWnBiR1VnSWtRNlhHRmNYM1JsYlhCY2RYWnBZMjl5YmkxeWN5MTFjSE4wY21WaGJTMXZjbUZqYkdWY1RHbGlYSE5wZEdVdGNHRmphMkZuWlhOY2RYWnBZMjl5Ymx4elpYSjJaWEl1Y0hraUxDQnNhVzVsSURrd0xDQnBiaUJ6WlhKMlpRMEtJQ0FnSUdGM1lXbDBJSE5sYkdZdVgzTmxjblpsS0hOdlkydGxkSE1wRFFvZ0lFWnBiR1VnSWtRNlhHRmNYM1JsYlhCY2RYWnBZMjl5YmkxeWN5MTFjSE4wY21WaGJTMXZjbUZqYkdWY1RHbGlYSE5wZEdVdGNHRmphMkZuWlhOY2RYWnBZMjl5Ymx4elpYSjJaWEl1Y0hraUxDQnNhVzVsSURFd05Td2dhVzRnWDNObGNuWmxEUW9nSUNBZ1lYZGhhWFFnYzJWc1ppNXpkR0Z5ZEhWd0tITnZZMnRsZEhNOWMyOWphMlYwY3lrTkNpQWdSbWxzWlNBaVJEcGNZVnhmZEdWdGNGeDFkbWxqYjNKdUxYSnpMWFZ3YzNSeVpXRnRMVzl5WVdOc1pWeE1hV0pjYzJsMFpTMXdZV05yWVdkbGMxeDFkbWxqYjNKdVhITmxjblpsY2k1d2VTSXNJR3hwYm1VZ01UVTBMQ0JwYmlCemRHRnlkSFZ3RFFvZ0lDQWdjMlZ5ZG1WeUlEMGdZWGRoYVhRZ2JHOXZjQzVqY21WaGRHVmZjMlZ5ZG1WeUtHTnlaV0YwWlY5d2NtOTBiMk52YkN3Z2MyOWphejF6YjJOckxDQnpjMnc5WTI5dVptbG5Mbk56YkN3Z1ltRmphMnh2WnoxamIyNW1hV2N1WW1GamEyeHZaeWtOQ2lBZ0lDQWdJQ0FnSUNBZ0lDQmVYbDVlWGw1ZVhsNWVYbDVlWGw1ZVhsNWVYbDVlWGw1ZVhsNWVYbDVlWGw1ZVhsNWVYbDVlWGw1ZVhsNWVYbDVlWGw1ZVhsNWVYbDVlWGw1ZVhsNWVYbDVlWGw1ZVhsNWVYbDVlWGw1ZVhsNWVYbDVlWGw1ZVhsNWVYZzBLSUNCR2FXeGxJQ0pFT2x4aFhGOTBaVzF3WEhWMkxYQjVkR2h2Ymkxa2FYSmNZM0I1ZEdodmJpMHpMakV5TGpFekxYZHBibVJ2ZDNNdGVEZzJYelkwTFc1dmJtVmNUR2xpWEdGemVXNWphVzljWW1GelpWOWxkbVZ1ZEhNdWNIa2lMQ0JzYVc1bElERTJNRGtzSUdsdUlHTnlaV0YwWlY5elpYSjJaWElOQ2lBZ0lDQnpaWEoyWlhJdVgzTjBZWEowWDNObGNuWnBibWNvS1EwS0lDQkdhV3hsSUNKRU9seGhYRjkwWlcxd1hIVjJMWEI1ZEdodmJpMWthWEpjWTNCNWRHaHZiaTB6TGpFeUxqRXpMWGRwYm1SdmQzTXRlRGcyWHpZMExXNXZibVZjVEdsaVhHRnplVzVqYVc5Y1ltRnpaVjlsZG1WdWRITXVjSGtpTENCc2FXNWxJRE14Tml3Z2FXNGdYM04wWVhKMFgzTmxjblpwYm1jTkNpQWdJQ0J6YjJOckxteHBjM1JsYmloelpXeG1MbDlpWVdOcmJHOW5LUTBLVDFORmNuSnZjam9nVzFkcGJrVnljbTl5SURFd01ESXlYU0JCYmlCcGJuWmhiR2xrSUdGeVozVnRaVzUwSUhkaGN5QnpkWEJ3YkdsbFpBMEtTVTVHVHpvZ0lDQWdJRmRoYVhScGJtY2dabTl5SUdOb2FXeGtJSEJ5YjJObGMzTWdXell4T1RaZERRcEpUa1pQT2lBZ0lDQWdRMmhwYkdRZ2NISnZZMlZ6Y3lCYk5qRTVObDBnWkdsbFpBMEtTVTVHVHpvZ0lDQWdJRk4wWVhKMFpXUWdjMlZ5ZG1WeUlIQnliMk5sYzNNZ1d6Y3dNVEpkRFFwSlRrWlBPaUFnSUNBZ1YyRnBkR2x1WnlCbWIzSWdZWEJ3YkdsallYUnBiMjRnYzNSaGNuUjFjQzROQ2tsT1JrODZJQ0FnSUNCQmNIQnNhV05oZEdsdmJpQnpkR0Z5ZEhWd0lHTnZiWEJzWlhSbExnMEtTVTVHVHpvZ0lDQWdJRk5vZFhSMGFXNW5JR1J2ZDI0TkNrbE9Sazg2SUNBZ0lDQlRhSFYwZEdsdVp5QmtiM2R1RFFwSlRrWlBPaUFnSUNBZ1YyRnBkR2x1WnlCbWIzSWdZWEJ3YkdsallYUnBiMjRnYzJoMWRHUnZkMjR1RFFwSlRrWlBPaUFnSUNBZ1FYQndiR2xqWVhScGIyNGdjMmgxZEdSdmQyNGdZMjl0Y0d4bGRHVXVEUXBKVGtaUE9pQWdJQ0FnUm1sdWFYTm9aV1FnYzJWeWRtVnlJSEJ5YjJObGMzTWdXelF6TkRoZERRcEpUa1pQT2lBZ0lDQWdWMkZwZEdsdVp5Qm1iM0lnWVhCd2JHbGpZWFJwYjI0Z2MyaDFkR1J2ZDI0dURRcEpUa1pQT2lBZ0lDQWdRWEJ3YkdsallYUnBiMjRnYzJoMWRHUnZkMjRnWTI5dGNHeGxkR1V1RFFwSlRrWlBPaUFnSUNBZ1JtbHVhWE5vWldRZ2MyVnlkbVZ5SUhCeWIyTmxjM01nV3pjd01USmREUXBKVGtaUE9pQWdJQ0FnVW1WalpXbDJaV1FnVTBsSFNVNVVMQ0JsZUdsMGFXNW5MZzBLU1U1R1R6b2dJQ0FnSUZkaGFYUnBibWNnWm05eUlHTm9hV3hrSUhCeWIyTmxjM01nV3pRek5EaGREUXBKVGtaUE9pQWdJQ0FnVjJGcGRHbHVaeUJtYjNJZ1kyaHBiR1FnY0hKdlkyVnpjeUJiTnpBeE1sME5Da2xPUms4NklDQWdJQ0JUZEc5d2NHbHVaeUJ3WVhKbGJuUWdjSEp2WTJWemN5QmJNell5T0YwTkNnPT0iLCJzZXJ2ZXJfc3Rkb3V0X2Jhc2U2NCI6IlNVNUdUem9nSUNBZ0lERXlOeTR3TGpBdU1UbzFPREV5T0NBdElDSkhSVlFnTDNCNWRHaHZiaTFoY0drdGRIZHZMWGR2Y210bGNuTWdTRlJVVUM4eExqRWlJREl3TUNCUFN3MEsiLCJzaHV0ZG93bl9zaWduYWxfc2VudCI6dHJ1ZSwic2h1dGRvd25fc2lnbmFsc19zZW50IjpbIlNJR0lOVCJdfX0NCg==",
+      "worker_clean_shutdown_count": 2,
+      "worker_replacement_observed": true,
+      "worker_start_count": 3
+    },
+    "profile": "python-api",
+    "requirements": [
+      "python.api.run-http"
+    ],
+    "server_exit_codes": {
+      "oracle": 0,
+      "target": 0
+    },
+    "status": "failed",
+    "target_observation": {
+      "exit_code": 0,
+      "idle_connection_closed": null,
+      "listener_responses": [
+        {
+          "body_base64": "bGlmZXNwYW4tc3RhcnRlZHxzY29wZS1zdGF0ZS1lbXB0eXxyb290X3BhdGg9fHBhdGg9L3B5dGhvbi1hcGktdHdvLXdvcmtlcnN8cmF3X3BhdGg9TDNCNWRHaHZiaTFoY0drdGRIZHZMWGR2Y210bGNuTT0=",
+          "content_type": "text/plain",
+          "observed_headers": {},
+          "status": 200
+        }
+      ],
+      "process_exit_code": 0,
+      "process_timed_out": false,
+      "response_body_base64": "bGlmZXNwYW4tc3RhcnRlZHxzY29wZS1zdGF0ZS1lbXB0eXxyb290X3BhdGg9fHBhdGg9L3B5dGhvbi1hcGktdHdvLXdvcmtlcnN8cmF3X3BhdGg9TDNCNWRHaHZiaTFoY0drdGRIZHZMWGR2Y210bGNuTT0=",
+      "response_content_type": "text/plain",
+      "response_received": true,
+      "response_status": 200,
+      "server_log_events": {
+        "stderr": [
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Uvicorn running on http://127.0.0.1:<port> (Press CTRL+C to quit)"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Started parent process [<pid>]"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Started server process [<pid>]"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Started server process [<pid>]"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Waiting for application startup."
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Waiting for application startup."
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Application startup complete."
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Application startup complete."
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Shutting down"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Shutting down"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Waiting for application shutdown."
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Waiting for application shutdown."
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Application shutdown complete."
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Application shutdown complete."
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Finished server process [<pid>]"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Finished server process [<pid>]"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Received SIGINT, exiting."
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Waiting for child process [<pid>]"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Waiting for child process [<pid>]"
+          },
+          {
+            "kind": "message",
+            "level": "INFO",
+            "message": "Stopping parent process [<pid>]"
+          }
+        ],
+        "stdout": [
+          {
+            "client": "127.0.0.1:<port>",
+            "kind": "access",
+            "level": "INFO",
+            "request": "GET /python-api-two-workers HTTP/1.1",
+            "status": "200 OK"
+          }
+        ]
+      },
+      "shutdown_signal_sent": true,
+      "shutdown_signals_sent": [
+        "SIGINT"
+      ],
+      "stderr_base64": "",
+      "stdout_base64": "eyJydW5faHR0cCI6eyJncmFjZWZ1bF9zaHV0ZG93bl9jYW5jZWxsYXRpb25fb2JzZXJ2ZWQiOmZhbHNlLCJpZGxlX2Nvbm5lY3Rpb25fY2xvc2VkIjpudWxsLCJsaXN0ZW5lcl9yZXNwb25zZXMiOlt7ImJvZHlfYmFzZTY0IjoiYkdsbVpYTndZVzR0YzNSaGNuUmxaSHh6WTI5d1pTMXpkR0YwWlMxbGJYQjBlWHh5YjI5MFgzQmhkR2c5ZkhCaGRHZzlMM0I1ZEdodmJpMWhjR2t0ZEhkdkxYZHZjbXRsY25OOGNtRjNYM0JoZEdnOVRETkNOV1JIYUhaaWFURm9ZMGRyZEdSSVpIWk1XR1IyWTIxMGJHTnVUVDA9IiwiY29udGVudF90eXBlIjoidGV4dC9wbGFpbiIsIm9ic2VydmVkX2hlYWRlcnMiOnt9LCJzdGF0dXMiOjIwMH1dLCJwcm9jZXNzX2V4aXRfY29kZSI6MCwicHJvY2Vzc190aW1lZF9vdXQiOmZhbHNlLCJyYXdfY29ubmVjdGlvbl9vcGVuX2FmdGVyX3RpbWVvdXQiOm51bGwsInJlZmVyZW5jZV9zaHV0ZG93bl9kaWFnbm9zdGljIjpudWxsLCJyZXF1ZXN0X2xpbWl0X3JhbmdlX3NhdGlzZmllZCI6bnVsbCwicmVxdWVzdF9saW1pdF9yZXNwb25zZV9jb3VudCI6MSwicmVzcG9uc2VfYm9keV9iYXNlNjQiOiJiR2xtWlhOd1lXNHRjM1JoY25SbFpIeHpZMjl3WlMxemRHRjBaUzFsYlhCMGVYeHliMjkwWDNCaGRHZzlmSEJoZEdnOUwzQjVkR2h2YmkxaGNHa3RkSGR2TFhkdmNtdGxjbk44Y21GM1gzQmhkR2c5VEROQ05XUkhhSFppYVRGb1kwZHJkR1JJWkhaTVdHUjJZMjEwYkdOdVRUMD0iLCJyZXNwb25zZV9jb250ZW50X3R5cGUiOiJ0ZXh0L3BsYWluIiwicmVzcG9uc2VfcmVjZWl2ZWQiOnRydWUsInJlc3BvbnNlX3N0YXR1cyI6MjAwLCJzZXJ2ZXJfc3RkZXJyX2Jhc2U2NCI6IlNVNUdUem9nSUNBZ0lGVjJhV052Y200Z2NuVnVibWx1WnlCdmJpQm9kSFJ3T2k4dk1USTNMakF1TUM0eE9qVTRNVEk1SUNoUWNtVnpjeUJEVkZKTUswTWdkRzhnY1hWcGRDa05Da2xPUms4NklDQWdJQ0JUZEdGeWRHVmtJSEJoY21WdWRDQndjbTlqWlhOeklGczJNVE0yWFEwS1NVNUdUem9nSUNBZ0lGTjBZWEowWldRZ2MyVnlkbVZ5SUhCeWIyTmxjM01nV3pFME16WmREUXBKVGtaUE9pQWdJQ0FnVjJGcGRHbHVaeUJtYjNJZ1lYQndiR2xqWVhScGIyNGdjM1JoY25SMWNDNE5Da2xPUms4NklDQWdJQ0JUZEdGeWRHVmtJSE5sY25abGNpQndjbTlqWlhOeklGc3lPVEUyWFEwS1NVNUdUem9nSUNBZ0lFRndjR3hwWTJGMGFXOXVJSE4wWVhKMGRYQWdZMjl0Y0d4bGRHVXVEUXBKVGtaUE9pQWdJQ0FnVjJGcGRHbHVaeUJtYjNJZ1lYQndiR2xqWVhScGIyNGdjM1JoY25SMWNDNE5Da2xPUms4NklDQWdJQ0JCY0hCc2FXTmhkR2x2YmlCemRHRnlkSFZ3SUdOdmJYQnNaWFJsTGcwS1NVNUdUem9nSUNBZ0lGSmxZMlZwZG1Wa0lGTkpSMGxPVkN3Z1pYaHBkR2x1Wnk0TkNrbE9Sazg2SUNBZ0lDQlRhSFYwZEdsdVp5QmtiM2R1RFFwSlRrWlBPaUFnSUNBZ1UyaDFkSFJwYm1jZ1pHOTNiZzBLU1U1R1R6b2dJQ0FnSUZkaGFYUnBibWNnWm05eUlHRndjR3hwWTJGMGFXOXVJSE5vZFhSa2IzZHVMZzBLU1U1R1R6b2dJQ0FnSUZkaGFYUnBibWNnWm05eUlHRndjR3hwWTJGMGFXOXVJSE5vZFhSa2IzZHVMZzBLU1U1R1R6b2dJQ0FnSUVGd2NHeHBZMkYwYVc5dUlITm9kWFJrYjNkdUlHTnZiWEJzWlhSbExnMEtTVTVHVHpvZ0lDQWdJRUZ3Y0d4cFkyRjBhVzl1SUhOb2RYUmtiM2R1SUdOdmJYQnNaWFJsTGcwS1NVNUdUem9nSUNBZ0lFWnBibWx6YUdWa0lITmxjblpsY2lCd2NtOWpaWE56SUZzeE5ETTJYUTBLU1U1R1R6b2dJQ0FnSUVacGJtbHphR1ZrSUhObGNuWmxjaUJ3Y205alpYTnpJRnN5T1RFMlhRMEtTVTVHVHpvZ0lDQWdJRlJsY20xcGJtRjBaV1FnWTJocGJHUWdjSEp2WTJWemN5QmJNVFF6TmwwTkNrbE9Sazg2SUNBZ0lDQlVaWEp0YVc1aGRHVmtJR05vYVd4a0lIQnliMk5sYzNNZ1d6STVNVFpkRFFwSlRrWlBPaUFnSUNBZ1YyRnBkR2x1WnlCbWIzSWdZMmhwYkdRZ2NISnZZMlZ6Y3lCYk1UUXpObDBOQ2tsT1JrODZJQ0FnSUNCWFlXbDBhVzVuSUdadmNpQmphR2xzWkNCd2NtOWpaWE56SUZzeU9URTJYUTBLU1U1R1R6b2dJQ0FnSUZOMGIzQndhVzVuSUhCaGNtVnVkQ0J3Y205alpYTnpJRnMyTVRNMlhRMEsiLCJzZXJ2ZXJfc3Rkb3V0X2Jhc2U2NCI6IlNVNUdUem9nSUNBZ0lERXlOeTR3TGpBdU1UbzFPREV6TkNBdElDSkhSVlFnTDNCNWRHaHZiaTFoY0drdGRIZHZMWGR2Y210bGNuTWdTRlJVVUM4eExqRWlJREl3TUNCUFN3MEsiLCJzaHV0ZG93bl9zaWduYWxfc2VudCI6dHJ1ZSwic2h1dGRvd25fc2lnbmFsc19zZW50IjpbIlNJR0lOVCJdfX0NCg==",
+      "worker_clean_shutdown_count": 2,
+      "worker_replacement_observed": false,
+      "worker_start_count": 2
+    },
+    "verification": "oracle-parity"
+  },
+  "source_commit": "00f38c82dd869ba0dcc7068cbc5cc769cd0f6294",
+  "source_sha256": "7646e41b9dd9ca6b43b2f93d60f83e7ed712c69c1758d97053974bb2c5a09795"
+}

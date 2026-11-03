@@ -49,6 +49,26 @@ after one SIGINT within the original deadline, without this diagnostic.
 The independent candidate checks run even when the raw comparison passes;
 matching worker crashes or replacement cannot satisfy this contract.
 
+The separately captured startup failure in
+[CI #637](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084/job/125850961385)
+has its own policy,
+`uvicorn-0.54.0-windows-two-worker-listen-winerror10022@1`, implemented in
+`scripts/windows_reference_startup.py`. It covers only the explicit
+`--workers 2` input on Windows x86-64, CPython 3.12.13 and stock Uvicorn
+0.54.0. The retained traceback must end in
+`create_server → _start_serving → sock.listen` with `WinError 10022`.
+Exactly one original reference worker must fail and be replaced before
+SIGINT; both surviving workers and the supervisor must then finish cleanly
+within the original deadline. Unknown errors, additional replacements,
+timeouts or wakeup connections are rejected. Raw and normalized logs must
+agree, and every response, signal and deadline comparison still applies.
+The candidate must satisfy the unchanged clean two-worker lifecycle contract.
+This does not identify the underlying cause or validate an upstream fix.
+The [captured row](https://github.com/appunni-m/uvicorn-rs/blob/develop/tools/upstream/uvicorn-windows/evidence/ci637-startup-worker-failure.json)
+retains the original source, native, report, artifact and run identities.
+Local retained-evidence replay accepts the identified improvement without
+rewriting raw parity; hosted qualification of this policy remains pending.
+
 Raw parity remains `failed` when this defect occurs. The separate
 `compatibility-acceptance.json` receipt records
 `accepted_with_reference_exception`, the original failed counts, the accepted
@@ -56,6 +76,8 @@ case IDs, and the report, policy, validator, source and native identities.
 Missing diagnostic evidence remains blocking; historical timeouts are not
 retroactively accepted by their case name alone. The default parity validator
 and every non-Windows lane retain their existing strict behavior.
+Both policies require explicit flags and a separate acceptance output. The
+receipt hashes each enabled policy and the validator as well as the raw report.
 
 At the 2026-11-03 audit, CI
 [#629](https://github.com/appunni-m/uvicorn-rs/actions/runs/41582985537)

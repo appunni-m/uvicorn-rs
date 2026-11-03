@@ -65,6 +65,18 @@ This shutdown failure is separate from the earlier `socket.listen()`
 `WinError(10022)` startup crash. The standalone three-attempt batch did not
 reproduce the startup crash. Do not combine them into a single proven cause.
 
+CI #637 later captured the separate startup failure on Windows Server 2022,
+CPython 3.12.13 and stock Uvicorn 0.54.0. One of the original two workers
+raised `OSError: [WinError 10022]` in `sock.listen(self._backlog)`, reached
+through `loop.create_server()` during Uvicorn startup. The supervisor replaced
+that worker; the request succeeded and the surviving workers exited after
+one SIGINT. The candidate served the same response with its original two
+workers and completed shutdown within the original deadline. The full
+comparison row and producer identities are retained in
+[the startup-failure capture](evidence/ci637-startup-worker-failure.json).
+This is evidence of the failure and candidate behavior, not a reliable
+standalone startup reproducer or proof that it shares the shutdown hang's cause.
+
 ## Confirmed stall and wakeup
 
 [CI #634](https://github.com/appunni-m/uvicorn-rs/actions/runs/41587452848/job/125756162041)

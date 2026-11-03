@@ -28,6 +28,7 @@ from coverage_contract import pending_coverage_mcp_request
 from coverage_toolchain import ToolchainError, validate_coverage_tools
 from parity_identity import runtime_source_digest, runtime_source_hashes
 from windows_reference_hang import eligible_input, validate_candidate_lifecycle, validate_reference_hang
+from windows_reference_startup import validate_reference_startup
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -586,6 +587,7 @@ def required_observations_for_case(
 def validate_observations(
     row: dict[str, Any], case: dict[str, Any], manifest: dict[str, Any], *,
     accepted_reference_hang: bool = False,
+    accepted_reference_startup: bool = False,
 ) -> None:
     exact_keys(row, {"case_id", "profile", "operation", "requirements", "verification", "fault", "status",
                      "oracle_observation", "target_observation", "server_exit_codes", "difference"},
@@ -596,7 +598,7 @@ def validate_observations(
     oracle = row.get("oracle_observation")
     require(isinstance(target, dict) and set(target) == set(operation["observe"]),
             f"target observation envelope differs: {case['case_id']}")
-    if accepted_reference_hang:
+    if accepted_reference_hang or accepted_reference_startup:
         require(isinstance(row.get("difference"), str) and bool(row["difference"]),
                 f"reference exception must retain its failed comparison: {case['case_id']}")
     else:
@@ -608,6 +610,12 @@ def validate_observations(
             # This is compatibility acceptance, never a passing parity result.
             # Every observation other than this diagnosed timeout must match.
             compare = [field for field in compare if field != "process_timed_out"]
+        if accepted_reference_startup:
+            # The separate startup policy has checked the exact raw traceback,
+            # worker identities and clean candidate. Keep every response and
+            # deadline comparison; only its diagnosed reference events differ.
+            compare = [field for field in compare
+                       if field not in {"server_log_events", "worker_replacement_observed"}]
         require(isinstance(compare, list) and bool(compare)
                 and len(compare) == len(set(compare))
                 and set(compare).issubset(operation["observe"]),
@@ -640,6 +648,7 @@ def validate_parity(
     expected_excluded_case_ids: set[str] | None = None,
     _current_revision: str | None = None, expected_coverage_profile_dir: Path | None = None,
     allow_windows_reference_hang: bool = False,
+    allow_windows_reference_startup: bool = False,
 ) -> dict[str, Any]:
     """Check exact indexed cases; callers may bind evidence to a shipping native hash."""
     manifest, all_cases, input_paths = load_contract()
@@ -667,7 +676,8 @@ def validate_parity(
     exact_keys(result, {"schema", "status", "run", "summary", "cases", "infrastructure_errors"}, "parity report")
     require(result.get("schema") == manifest["result_schema"], "parity report uses a predecessor or unsupported schema")
     require(result.get("infrastructure_errors") == [], "parity contains infrastructure failures")
-    if not allow_windows_reference_hang:
+    allow_reference_exception = allow_windows_reference_hang or allow_windows_reference_startup
+    if not allow_reference_exception:
         require(result.get("status") == "completed", "parity did not complete cleanly")
         require_summary(result.get("summary"), len(expected))
     else:
@@ -780,25 +790,41 @@ def validate_parity(
     candidate_contract_cases = []
     for row in rows:
         case = expected[row["case_id"]]
-        accepted = allow_windows_reference_hang and row.get("status") == "failed"
-        if allow_windows_reference_hang and parity_platform == "windows" and eligible_input(case):
+        accepted = allow_reference_exception and row.get("status") == "failed"
+        if allow_reference_exception and parity_platform == "windows" and eligible_input(case):
             try:
                 validate_candidate_lifecycle(row, case)
             except (ValueError, KeyError, TypeError) as error:
                 raise EvidenceError(f"independent candidate lifecycle rejected: {error}") from error
             candidate_contract_cases.append(case["case_id"])
+        accepted_hang = accepted_startup = False
         if accepted:
-            try:
-                accepted_reference_defects.append(validate_reference_hang(row, case, run["environment"]))
-            except (ValueError, KeyError, TypeError) as error:
-                raise EvidenceError(f"reference hang exception rejected: {error}") from error
+            failures = []
+            for enabled, validator in (
+                (allow_windows_reference_hang, validate_reference_hang),
+                (allow_windows_reference_startup, validate_reference_startup),
+            ):
+                if not enabled:
+                    continue
+                try:
+                    decision = validator(row, case, run["environment"])
+                except (ValueError, KeyError, TypeError) as error:
+                    failures.append(str(error))
+                    continue
+                accepted_reference_defects.append(decision)
+                accepted_hang = validator is validate_reference_hang
+                accepted_startup = validator is validate_reference_startup
+                break
+            require(accepted_hang or accepted_startup,
+                    "reference exception rejected: " + "; ".join(failures))
         validate_case_metadata(row, case, expected_status="failed" if accepted else "passed")
-        validate_observations(row, case, manifest, accepted_reference_hang=accepted)
+        validate_observations(row, case, manifest, accepted_reference_hang=accepted_hang,
+                              accepted_reference_startup=accepted_startup)
     checked = {"status": "accepted_with_reference_exception" if accepted_reference_defects else "passed",
             "cases": len(expected), "source_sha256": target["source_sha256"],
             "native_sha256": native_sha, "commit": target["revision"], "recorded_dirty": target["dirty"],
             "scope": "retained current evidence; this check does not publish or establish a clean release"}
-    if allow_windows_reference_hang:
+    if allow_reference_exception:
         checked.update({"raw_parity_status": result["status"], "raw_parity_summary": result["summary"],
                         "accepted_reference_defects": accepted_reference_defects,
                         "candidate_contract_cases": candidate_contract_cases})
@@ -2002,6 +2028,8 @@ def main() -> int:
     parser.add_argument("--require-clean", action="store_true", help="require evidence produced from a clean source checkout")
     parser.add_argument("--accept-windows-reference-hang", action="store_true",
                         help="accept only the recorded stock two-worker SIGINT/TCP-wakeup defect; preserve failed parity")
+    parser.add_argument("--accept-windows-reference-startup", action="store_true",
+                        help="accept only the captured stock two-worker listen WinError 10022; preserve failed parity")
     parser.add_argument("--acceptance-output", type=Path,
                         help="write the separate, source-bound compatibility decision")
     parser.add_argument("--case-id", action="append", default=[],
@@ -2025,10 +2053,11 @@ def main() -> int:
         parser.error("--exclude-case-id is valid only for parity reports")
     if args.case_id and (args.kind != "parity" or args.exclude_case_id):
         parser.error("--case-id requires parity and cannot be combined with exclusions")
-    if args.accept_windows_reference_hang and (args.kind != "parity" or args.acceptance_output is None):
-        parser.error("--accept-windows-reference-hang requires parity and --acceptance-output")
-    if args.acceptance_output and not args.accept_windows_reference_hang:
-        parser.error("--acceptance-output requires --accept-windows-reference-hang")
+    accept_reference_exception = args.accept_windows_reference_hang or args.accept_windows_reference_startup
+    if accept_reference_exception and (args.kind != "parity" or args.acceptance_output is None):
+        parser.error("Windows reference acceptance requires parity and --acceptance-output")
+    if args.acceptance_output and not accept_reference_exception:
+        parser.error("--acceptance-output requires an explicit Windows reference policy")
     path = args.report.resolve()
     result = read_json(path)
     selected_cases = None
@@ -2045,6 +2074,7 @@ def main() -> int:
             offline=args.offline,
             expected_excluded_case_ids=set(args.exclude_case_id) if args.exclude_case_id else None,
             allow_windows_reference_hang=args.accept_windows_reference_hang,
+            allow_windows_reference_startup=args.accept_windows_reference_startup,
         )
         if args.kind == "parity"
         else validate_coverage(result, path, allow_pending_mcp=args.allow_pending_mcp, offline=args.offline)
@@ -2062,6 +2092,8 @@ def main() -> int:
             "parity_report": {"path": str(path), "sha256": sha256(path), "run_id": result["run"]["run_id"]},
             "validator_sha256": sha256(Path(__file__)),
             "policy_sha256": sha256(ROOT / "scripts/windows_reference_hang.py"),
+            "startup_policy_sha256": (sha256(ROOT / "scripts/windows_reference_startup.py")
+                                      if args.accept_windows_reference_startup else None),
             "decision": checked,
         }
         args.acceptance_output.parent.mkdir(parents=True, exist_ok=True)

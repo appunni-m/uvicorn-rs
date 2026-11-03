@@ -48,6 +48,7 @@ class PlatformShellTests(unittest.TestCase):
                             "target/parity-fixture-platform.json", "--offline", "--require-clean"])
                         self.assertEqual(args[-2:], ["--case-id", "fixture-case"])
                         self.assertEqual("--accept-windows-reference-hang" in args, platform == "Windows")
+                        self.assertEqual("--accept-windows-reference-startup" in args, platform == "Windows")
 
 
 if __name__ == "__main__":

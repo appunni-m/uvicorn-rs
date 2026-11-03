@@ -2,8 +2,9 @@
 
 The latest installed-wheel evidence passes the indexed Uvicorn 0.54.0
 comparisons on Linux x86-64 and macOS ARM64. Windows has one raw comparison
-failure for an isolated stock-Uvicorn shutdown hang, with a separate receipt
-requiring correct candidate behavior. The 0.3.0 PyPI distribution remains
+failure for a stock-Uvicorn worker startup crash. Separate improvement
+acceptance passes local evidence replay and awaits hosted qualification.
+The 0.3.0 PyPI distribution remains
 unpublished. Final-source coverage/review, benchmarks and candidate
 qualification are still release gates.
 
@@ -16,24 +17,24 @@ upstream `uvicorn` and `uvicorn-rs` in separate environments. Use the
 
 ## Current status (2026-11-03)
 
-[CI #636](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747)
+[CI #637](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084)
 tests [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21) head
-`2d3633d8b79e6f0b8ab0bf72466418d1d8b1662f` at clean merge source
-`86a89b51984ac6649faa1d30f7948df0c841fa90`. The reports share runtime-source
-digest `4512a95de10a276a52d80a3ddc5a6b1fc29c6679b2ebd26ee89426ed012e40e9`.
+`b9ed5c693889a54c5ba1d3f8796702da735981cc` at clean merge source
+`00f38c82dd869ba0dcc7068cbc5cc769cd0f6294`. The reports share runtime-source
+digest `7646e41b9dd9ca6b43b2f93d60f83e7ed712c69c1758d97053974bb2c5a09795`.
 All three public matrices used CPython 3.12.13 and the pinned Uvicorn 0.54.0
 oracle.
 
 | Platform | Raw passed/selected | Failed | Infrastructure failed | Not run | Retained report |
 | --- | ---: | ---: | ---: | ---: | --- |
-| Linux x86-64 | 786/786 | 0 | 0 | 0 | [13215701889](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747/artifacts/13215701889) |
-| macOS ARM64 | 786/786 | 0 | 0 | 0 | [13216431123](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747/artifacts/13216431123) |
-| Windows x86-64 | 758/759 | 1 | 0 | 0 | [13216576788](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747/artifacts/13216576788) |
+| Linux x86-64 | 786/786 | 0 | 0 | 0 | [13221198169](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084/artifacts/13221198169) |
+| macOS ARM64 | 786/786 | 0 | 0 | 0 | [13222316858](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084/artifacts/13222316858) |
+| Windows x86-64 | 758/759 | 1 | 0 | 0 | [13222662150](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084/artifacts/13222662150) |
 
 Windows excludes the 27 explicitly declared inputs requiring Unix-domain
 sockets, inherited POSIX descriptors, a Unix-only listener-transfer race, or
 POSIX-only signals and worker health checks. The exact exclusions are in the
-[recorded workflow](https://github.com/appunni-m/uvicorn-rs/blob/2d3633d8b79e6f0b8ab0bf72466418d1d8b1662f/.github/workflows/ci.yml).
+[recorded workflow](https://github.com/appunni-m/uvicorn-rs/blob/b9ed5c693889a54c5ba1d3f8796702da735981cc/.github/workflows/ci.yml).
 
 All 16 indexed custom HTTP/WebSocket protocol, `ssl_context_factory`, HTTP/2
 ALPN and response header/trailer capacity cases passed on all three systems.
@@ -41,15 +42,17 @@ The [versioned contract](maintainers/uvicorn-0.54.0-contract.md) identifies the
 mandatory surface and case inventory. The matrix proves those inputs; it does
 not claim every possible hook, application or configuration combination.
 
-### Windows reference-hang acceptance
+<a id="windows-reference-hang-acceptance"></a>
 
-The raw failed comparison is
+### Windows reference-defect acceptance
+
+In historical CI #636 the raw failed comparison was
 `python-api.module-cli-web-concurrency-two-workers-serve-request`.
 The stock reference serves requests but hangs after one Ctrl+C; a diagnostic
 TCP connection releases it. This is the narrow symptom accepted by
 [policy uvicorn-0.54.0-windows-two-worker-sigint-tcp-wakeup@1](https://github.com/appunni-m/uvicorn-rs/blob/2d3633d8b79e6f0b8ab0bf72466418d1d8b1662f/scripts/windows_reference_hang.py).
 
-The retained `compatibility-acceptance.json` records
+That retained `compatibility-acceptance.json` records
 `accepted_with_reference_exception`, separately from failed raw parity.
 All three eligible candidate lifecycle contracts pass: correct responses,
 both workers stopping within the original deadline, and no forced kill,
@@ -58,31 +61,49 @@ different reference failure is rejected. This is not a claim that 759 raw
 parity comparisons passed, and the upstream hang's precise cause remains
 unverified.
 
+CI #637 instead captures a stock startup failure in
+`python-api.module-cli-two-workers-serve-request`: one worker raises
+`WinError 10022` in `sock.listen()` and the supervisor replaces it. The
+candidate returns the same response, retains both original workers and stops
+cleanly after one SIGINT. The shutdown-hang policy correctly rejects this
+different failure. A separate startup policy requires the exact captured
+traceback, one reference replacement before shutdown, complete surviving
+worker cleanup, and the unchanged candidate correctness contract. Every
+response, signal and deadline comparison remains required.
+
+Local replay against the clean CI #637 source passes that separate decision
+and all three candidate lifecycle checks. Raw parity remains 758/759 with one
+failure; this does not make the already-failed hosted job successful. The
+updated gate needs hosted qualification. See the
+[versioned policies](maintainers/uvicorn-0.54.0-contract.md#acceptance-of-known-differences)
+and [original capture](https://github.com/appunni-m/uvicorn-rs/blob/develop/tools/upstream/uvicorn-windows/evidence/ci637-startup-worker-failure.json).
+
 ### Artifacts, Python profiles and remaining gates
 
-The [Linux candidate](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747/artifacts/13214953716)
+The [CI #637 Linux candidate](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084/artifacts/13220888591)
 contains both intended Cargo archives, an abi3 wheel and an sdist. Its
 default/`http3` Cargo, wheel and rebuilt-sdist consumers pass. The
-[Windows candidate](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747/artifacts/13216217708)
+[macOS candidate](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084/artifacts/13221564463)
 wheel and clean consumer pass. Their manifests, payload hashes, packaged
 source and wheel RECORD/native identities were checked against the clean
 producer source.
 
-The separate [Python-floor consumer](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747/artifacts/13216023731)
+The separate [Python-floor consumer](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084/artifacts/13222178838)
 passes on CPython 3.9.25 using the exact Linux abi3 wheel. It verifies install,
 CLI/imports, live ASGI lifecycle, cancellation and caller-loop behavior; it is
 not the complete parity matrix on Python 3.9.
 
-macOS raw parity passed 786/786, but Bash 3.2 rejected an empty array in the
-evidence wrapper before packaging. That wrapper fix needs hosted verification.
-CI #636 measured 100% regions and lines, but failed afterward when the
-validator treated the TLS fixture directory as a file. That repair needs
-hosted qualification. Independent final-source Coverage-MCP handoff, matched
+CI #637 proves the macOS Bash 3.2 wrapper repair. Windows package/consumer
+qualification remains incomplete after the reference mismatch. CI #636
+measured 100% regions and lines, but failed afterward when the validator
+treated the TLS fixture directory as a file. CI #637 is qualifying that repair;
+its unified coverage job is still running at this update.
+Independent final-source Coverage-MCP handoff, matched
 three-system FastAPI measurements, complete final-source artifacts and
 publication remain open. Later wrapper, upload-diagnostic and
 documentation changes are not qualified by these older receipts.
 
-[Documentation #262](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907499)
+[Documentation #263](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642063)
 built successfully for its recorded source; PR deployment was skipped. This
 documentation refresh needs its own build. See the [release guide](releases.md)
 and [coverage record](coverage.md) for the remaining acceptance sequence.
