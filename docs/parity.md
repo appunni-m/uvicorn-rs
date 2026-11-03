@@ -6,11 +6,11 @@
 
 ## Current source status (2026-11-03)
 
-### PR #21 CI #636 — installed-wheel results and coverage evidence failure
+### PR #21 CI #637–638 — full inputs and separate reference-defect acceptance
 
-[CI #636](https://github.com/appunni-m/uvicorn-rs/actions/runs/41601907747)
-tests develop head `2d3633d8b79e6f0b8ab0bf72466418d1d8b1662f` at clean
-merge source `86a89b51984ac6649faa1d30f7948df0c841fa90`.
+[CI #637](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084)
+tests develop head `b9ed5c693889a54c5ba1d3f8796702da735981cc` at clean
+merge source `00f38c82dd869ba0dcc7068cbc5cc769cd0f6294`.
 Installed normal-wheel parity against Uvicorn 0.54.0 on CPython 3.12.13 is:
 
 | Platform | Raw passed/selected | Failed | Infrastructure failed | Not run |
@@ -19,20 +19,31 @@ Installed normal-wheel parity against Uvicorn 0.54.0 on CPython 3.12.13 is:
 | macOS ARM64 | 786/786 | 0 | 0 | 0 |
 | Windows x86-64 | 758/759 | 1 | 0 | 0 |
 
-The Windows raw mismatch remains failed. A separate
-`accepted_with_reference_exception` receipt accepts only the isolated
-stock-Uvicorn SIGINT/TCP-wakeup hang and requires all three candidate
-lifecycle contracts to pass. Candidate crashes/hangs and other reference
-failures are rejected. Windows has the 27 explicitly declared
+The Windows raw mismatch remains failed: stock Uvicorn loses one worker in
+`create_server → _start_serving → sock.listen` with `WinError 10022`, then
+starts one replacement. The candidate serves the same response and stops
+both original workers cleanly. Local replay accepts the captured startup
+defect separately and passes all three candidate lifecycle checks.
+[Focused CI #638](https://github.com/appunni-m/uvicorn-rs/actions/runs/41624376500)
+then qualifies both the startup and SIGINT/TCP-wakeup policies on source
+`68c063f623852bcfd0dfe937fe2a6eca189aeb65`, with the same runtime digest.
+Its raw comparisons remain one pass and two reference failures; separate
+acceptance requires all three candidate lifecycle contracts to pass.
+Candidate crashes/hangs and unknown reference failures are rejected.
+Windows has the 27 explicitly declared
 platform-inapplicable exclusions. All 16 custom-protocol, TLS-factory and
 response-capacity inputs passed on all three platforms.
 
-Linux and Windows package/consumer jobs and the separate CPython 3.9.25
-consumer passed. macOS packaging stopped after raw parity on a Bash 3.2
-empty-array wrapper error. Its local fix needs hosted verification.
-Coverage measured 14,740/14,740 regions and 10,855/10,855 lines. The job then
-failed because evidence validation treated the TLS fixture directory as a
-file; the fix still needs hosted qualification. The [compatibility record](uvicorn-compatibility.md#current-status-2026-11-03)
+Linux/macOS package consumers and the separate CPython 3.9.25 consumer pass;
+the macOS Bash 3.2 repair is qualified. Full Windows package qualification
+remains pending. Coverage measures 14,809/14,809 regions and 10,894/10,894
+physical lines, with all 1,451 cases, attribution and three full repeats
+passing. Strict validation then fails on raw LLVM function-line versus unique
+source-line totals. The repair retains raw JSON checks and independently
+replays LCOV line/hit sets; Linux acceptance is pending. Actual Coverage-MCP
+review finds zero gaps over all 46 pages and attaches successfully for this
+producer. Final-main review handoff remains required.
+The [compatibility record](uvicorn-compatibility.md#current-status-2026-11-03)
 links report and acceptance artifacts; [release status](releases.md) records
 package hashes. Later source changes require their own qualification.
 

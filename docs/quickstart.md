@@ -52,13 +52,14 @@ measurements, and restore upstream Uvicorn.
 
 ## Compatibility evidence
 
-The CI #636 installed-wheel matrix passed 786/786 cases on Linux x86-64 and
-macOS ARM64. Windows passed 758/759 raw comparisons, with a separate acceptance
-receipt for one isolated stock-Uvicorn shutdown hang; the candidate must serve
-correct responses and shut down cleanly. Linux and Windows consumer jobs and
-the separate Python 3.9 consumer passed. macOS packaging stopped after parity
-because of a shell-wrapper error. Coverage, final-source qualification and
-benchmarks remain open, so the 0.3.0 distribution is still unpublished. See the
+The CI #637 installed-wheel matrix passed 786/786 cases on Linux x86-64 and
+macOS ARM64. Windows passed 758/759 raw comparisons, with one captured
+stock-Uvicorn startup defect. Focused CI #638 qualifies narrow startup and
+shutdown reference-defect policies while requiring all three candidate worker
+lifecycles to pass independently. Linux/macOS package consumers and the
+separate Python 3.9 floor consumer pass. Full Windows packaging, strict
+coverage acceptance, final-source review/qualification and benchmarks remain
+open, so the 0.3.0 distribution is still unpublished. See the
 [compatibility status](uvicorn-compatibility.md) and
 [support matrix](support-matrix.md) for scope and remaining gates. The
 maintainer will perform the real-application trial after the repository
