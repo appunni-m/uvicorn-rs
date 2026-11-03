@@ -20,6 +20,7 @@ import uuid
 
 from coverage_contract import pending_coverage_mcp_request
 from coverage_toolchain import ToolchainError, capture_coverage_tools
+from summarize_unified_coverage import MAX_CASE_DIAGNOSTICS, case_message, failing_cases
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON_SOURCE = ROOT / "python"
@@ -1896,6 +1897,19 @@ def main() -> int:
             f"(transient infrastructure failures: {matrix_runs[-1]['transient_infrastructure_failures']})",
             flush=True,
         )
+        if not final_passed:
+            # LLVM attribution can take much longer than a repeat. Surface the
+            # failed inputs now while retaining the original result and logs.
+            prefix = f"[matrix {repeat}/{args.matrix_repeats} failure]"
+            print(f"{prefix} result={matrix_runs[-1]['artifact']} "
+                  f"stdout={attempts[-1]['stdout_artifact']} "
+                  f"stderr={attempts[-1]['stderr_artifact']}", flush=True)
+            failures = failing_cases(final_result or {})
+            for row in failures[:MAX_CASE_DIAGNOSTICS]:
+                print(f"{prefix} {case_message(row)}", flush=True)
+            if len(failures) > MAX_CASE_DIAGNOSTICS:
+                print(f"{prefix} {len(failures) - MAX_CASE_DIAGNOSTICS} additional "
+                      "failures retained in the result", flush=True)
 
     native_matrix_runs: list[dict[str, Any]] = []
     for repeat in range(1, args.matrix_repeats + 1):
