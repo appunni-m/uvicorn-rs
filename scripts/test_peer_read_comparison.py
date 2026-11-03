@@ -3,16 +3,20 @@
 import contextlib
 import io
 import json
+import os
 from pathlib import Path
 import re
+import subprocess
 import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
+import venv
 
 import yaml
 
 import analyze_peer_read_comparison as analyzer
+from run_peer_read_comparison import absolute_python
 
 
 class ComparisonAdmission(unittest.TestCase):
@@ -95,6 +99,19 @@ class ComparisonAdmission(unittest.TestCase):
         self.edit_first(lambda r: r.update(extra="modified"), rehash=False)
         with self.assertRaises(AssertionError):
             self.analyze()
+
+    @unittest.skipIf(os.name == "nt", "hosted comparison uses POSIX virtualenv symlinks")
+    def test_oracle_python_keeps_virtualenv_packages(self):
+        oracle = self.root / "oracle"
+        venv.EnvBuilder(with_pip=False, symlinks=True).create(oracle)
+        python = oracle / "bin/python"
+        self.assertTrue(python.is_symlink())
+        packages = Path(subprocess.check_output(
+            [str(python), "-c", "import site; print(site.getsitepackages()[0])"], text=True).strip())
+        (packages / "oracle_marker.py").write_text("VALUE = 'virtualenv oracle'\n")
+        result = subprocess.check_output([str(absolute_python(python)), "-c",
+            "import oracle_marker; print(oracle_marker.VALUE)"], text=True)
+        self.assertEqual(result.strip(), "virtualenv oracle")
 
     def test_frozen_plan_covers_cells_and_preserves_order(self):
         source = Path(__file__).resolve().parents[1] / "tests/performance/peer-read-comparison.json"

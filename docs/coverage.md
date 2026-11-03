@@ -15,14 +15,19 @@ completes all **1,451 cases** (1,192 ASGI and 259 native), full attribution and
 three complete verification repeats on clean producer
 `00f38c82dd869ba0dcc7068cbc5cc769cd0f6294`. It measures
 **14,809/14,809 regions and 10,894/10,894 physical source lines**. The directory
-identity repair passes, but evidence validation then fails on an incorrect
+identity repair passes, but its original evidence validation fails on an incorrect
 comparison between raw LLVM function-line totals and unique physical lines.
 
 The correction retains the raw JSON summary checks and independently replays
 LCOV physical-line and hit sets from the recorded objects and aggregate profile.
 Twelve focused checks, a real retained-object closure fixture and cross-host
-replay of the actual report pass. Acceptance with the recorded Linux LLVM
-executable bytes remains required. The original
+replay of the actual report pass. [CI #639](https://github.com/appunni-m/uvicorn-rs/actions/runs/41629464593)
+then passes strict replay of every retained case and the aggregate with the
+recorded Linux LLVM executable bytes. Its digest-checked
+[audit artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/41629464593/artifacts/13227718896)
+has SHA-256 `7379fcf882c2ab804fc4328539ac97e8f9694d70f6db35b913c984b99b5f4584`.
+This accepts the retained producer's 100% result without rerunning servers.
+The original
 [archive](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084/artifacts/13225094864)
 is unchanged, SHA-256
 `b6ba9e17a5338e369fcd2d8bccea7d6a1777e91905a10dd36fbf99e335d23dc4`.
@@ -30,8 +35,9 @@ is unchanged, SHA-256
 Actual Coverage-MCP review completes all 45 unfiltered region pages and one
 line page with matching source, passing tests and zero gaps. Receipt SHA-256
 `4f77ad641d4105dfa1f66ff757cf30dcf2d8957a5a466496b5a407ad92ee8330`
-attaches successfully to the captured measurement. Strict coverage acceptance
-and the final exact-main hosted review handoff remain open.
+attaches successfully to the captured measurement. Coverage Kata `b8k7` is
+closed. The final exact-main hosted review handoff remains open under `7t4g`;
+neither the replay nor this receipt qualifies a later source automatically.
 
 For evidence-checker repairs, CI's `replay-unified-coverage` dispatch mode
 accepts the original CI run ID, attempt, producer commit and artifact ID. It

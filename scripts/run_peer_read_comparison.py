@@ -44,12 +44,17 @@ def run(command: list[str], root: Path, log: Path, **kwargs) -> None:
                        stderr=subprocess.STDOUT, check=True, **kwargs)
 
 
+def absolute_python(path: Path) -> Path:
+    """Keep a virtualenv interpreter's symlink so Python loads that environment."""
+    return path.absolute()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--oracle-python", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    oracle = args.oracle_python.resolve()
+    oracle = absolute_python(args.oracle_python)
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     plan = json.loads(PLAN.read_text())

@@ -35,7 +35,7 @@ No original release gate is waived by this plan. Historical measurements remain
 historical. A task closes on its own deliverable; downstream publication gates
 belong to the release tasks rather than being copied into every prerequisite.
 
-### Release audit — 2026-11-03 (PR #21 / CI #637–638)
+### Release audit — 2026-11-03 (PR #21 / CI #637–639)
 
 Changes are developed on `develop` and promoted through
 [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21).
@@ -51,7 +51,11 @@ independently replays LCOV line and hit sets from the retained objects/profile
 and preserves raw JSON counter checks. Twelve focused regression checks and
 an actual retained-object fixture pass; cross-host replay also reproduces
 the captured report's exact line sets and raw JSON. Recorded Linux toolchain
-acceptance remains required. The Windows raw matrix is 758/759,
+acceptance then passes in [CI #639](https://github.com/appunni-m/uvicorn-rs/actions/runs/41629464593),
+which strictly replays every retained case and aggregate profile with the
+recorded Linux LLVM bytes. Its audit archive SHA-256 is
+`7379fcf882c2ab804fc4328539ac97e8f9694d70f6db35b913c984b99b5f4584`.
+Coverage task `b8k7` is closed for this producer. The Windows raw matrix is 758/759,
 with one stock-Uvicorn startup crash, so its package qualification stopped.
 
 [Focused CI #638](https://github.com/appunni-m/uvicorn-rs/actions/runs/41624376500)
@@ -66,13 +70,36 @@ Actual Coverage-MCP review of CI #637 completes all 45 region pages and one
 line page with source `matches_receipt`, tests passed and zero gaps. Receipt
 SHA-256 is `4f77ad641d4105dfa1f66ff757cf30dcf2d8957a5a466496b5a407ad92ee8330`;
 attachment passes. This review is bound to the captured producer, not final
-main. Strict coverage acceptance and the hosted exact-main handoff remain open.
+main. The hosted exact-main handoff remains open under `7t4g`.
 
 Interim `[skip ci]` commits avoid broad unchanged reruns while focused tooling
 and Windows checks qualify their changes. Required PR checks remain pending;
 complete final-source CI is still required before merge and release. Coverage
-acceptance and independent review precede benchmark timing. The upload diagnostic, buffer-reuse decision,
-three-system measurements, final candidate, merge and publication remain open.
+acceptance and independent review precede benchmark timing. Compatibility
+task `x3az` and all ten children are closed. The capped Linux ARM64
+[upload diagnostic #275](https://github.com/appunni-m/uvicorn-rs/actions/runs/41632864829)
+completes three candidate/reference pairs with zero failures; it does not
+reproduce the historical timeout or establish its cause. Its instrumented
+rows are diagnostic only.
+
+The `peer-read-comparison` dispatch mode uses the fixed plan in
+`tests/performance/peer-read-comparison.json`: four ordinary-FastAPI workloads,
+both event loops, five adjacent on/off pairs per cell and one Tokio worker.
+It builds the control in a separate checkout and empty Cargo target, verifies
+13 affected parity cases on each installed normal wheel, and retains every
+attempt and rejected sample. Local timing was rejected before sampling because
+of unrelated CPU load. [Focused run #277](https://github.com/appunni-m/uvicorn-rs/actions/runs/41635726267)
+built both Linux ARM64 wheels, then stopped before parity or timing because
+the driver resolved the oracle virtualenv's Python symlink to a base
+interpreter without Uvicorn. The driver now preserves that executable path;
+a regression check imports a package available only in the virtualenv.
+No performance result or retention decision comes from the failed run.
+The earlier run #276 was cancelled
+before parity or timing after its selector incorrectly started full jobs;
+the corrected selector admits only `full` dispatch to the full matrix.
+
+The upload diagnosis, buffer-reuse decision, three-system measurements, final
+candidate, merge and publication remain open.
 
 ### Earlier release audit — 2026-11-03 (PR #21 / CI #629)
 
