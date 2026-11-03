@@ -76,6 +76,14 @@ def attempt(directory, dump_exe=None):
                         dump = subprocess.run([str(dump_exe), "dump", "--pid", pid.decode()],
                                               capture_output=True, timeout=5, check=False)
                         (directory / f"stack-{pid.decode()}.txt").write_bytes(dump.stdout + dump.stderr)
+                # Preserve the timeout, then test whether one TCP connection
+                # releases the observed blocking accept and pending shutdown.
+                try:
+                    with socket.create_connection(("127.0.0.1", port), timeout=1):
+                        result["post_timeout_connection_opened"] = True
+                    result["exit_code_after_connection"] = process.wait(timeout=3)
+                except (OSError, subprocess.TimeoutExpired) as error:
+                    result["post_timeout_connection_result"] = type(error).__name__
         except Exception as error:
             result["error"] = f"{type(error).__name__}: {error}"
         finally:
