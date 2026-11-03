@@ -59,7 +59,10 @@ def defer_delivery_return(self, *args, **kwargs):
             and type(args[0]).__name__ == "CheckedCompletor"):
         # Bound the diagnostic even if the owning program fails before exit.
         os.write(2, b"delivery-barrier: completion held\n")
-        release.wait(10)
+        if release.wait(10):
+            os.write(2, b"delivery-barrier: completion resumed\n")
+        else:
+            os.write(2, b"delivery-barrier: completion timed out\n")
     return result
 
 asyncio.BaseEventLoop.call_soon_threadsafe = defer_delivery_return
@@ -170,10 +173,14 @@ def main() -> int:
                        or observed.get(key) != expected}
         scheduling_observed = (not args.delivery_finalization_barrier or
                                b"delivery-barrier: completion held\n" in stderr)
+        finalization_observed = b"delivery-barrier: finalizing=True\n" in stderr
+        completion_resumed = b"delivery-barrier: completion resumed\n" in stderr
         failed = timed_out or bool(differences) or not scheduling_observed
         report["attempts"].append({
             "attempt": attempt, "exit_code": exit_code, "timed_out": timed_out,
             "scheduling_observed": scheduling_observed,
+            "finalization_observed": finalization_observed,
+            "completion_resumed": completion_resumed,
             "differences": differences, "stdout": stdout_path.name,
             "stderr": stderr_path.name, "stdout_sha256": sha256(stdout_path),
             "stderr_sha256": sha256(stderr_path),
