@@ -34,11 +34,13 @@ This rule does not waive coverage, independent review, benchmark or artifact
 requirements.
 
 The executable exception is
-`uvicorn-0.54.0-windows-two-worker-sigint-tcp-wakeup@1`, implemented in
+`uvicorn-0.54.0-windows-two-worker-sigint-tcp-wakeup@2`, implemented in
 `scripts/windows_reference_hang.py` and enabled only by the Windows CI gates.
-It applies to the three ordinary two-worker SIGINT inputs: explicit
-`--workers 2`, `WEB_CONCURRENCY=2`, and explicit workers overriding that
-environment setting. A separate
+It applies to four exact two-worker SIGINT inputs: explicit `--workers 2`,
+`WEB_CONCURRENCY=2`, explicit workers overriding that environment setting,
+and `UVICORN_WORKERS=2`. The latter is restricted to the indexed
+`python-api.module-cli-two-workers-from-uvicorn-workers-environment` case.
+A separate
 `uvicorn-0.54.0-windows-two-worker-sigbreak-tcp-wakeup@1` policy covers the
 existing explicit two-worker SIGTERM input, which Windows delivers as
 `CTRL_BREAK_EVENT`. Its request and 12-second deadline are fixed, and it is

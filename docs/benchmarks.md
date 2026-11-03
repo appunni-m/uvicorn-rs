@@ -755,9 +755,12 @@ normalizes at most one exact Rust `CancelledError` line and, only for the active
 Rust held-request phase, one native TCP graceful-timeout line that precedes the
 ASGI cancellation marker. This is the native transport's report that it reached
 the same configured deadline before aborting the deliberately held connection.
-Uvicorn's single intentional held-task timeout plus its exact four-frame
-`CancelledError` traceback is verified against the installed sources. Required
-markers and official exit must pass first. Raw logs and
+If the Rust bridge emits an ASGI exception block for that cancellation, the gate
+accepts only one traceback whose installed-source frames pass through the exact
+bridge, Uvicorn-shaped server, proxy middleware, FastAPI hold route and
+`asyncio.Event.wait`. Uvicorn's single intentional held-task timeout and its
+exact `CancelledError` traceback are likewise verified against installed
+sources. Required markers and official exit must pass first. Raw logs and
 `diagnostic_normalization_receipt` retain each accepted line or block; every
 other error, traceback, chain, unhandled task or panic fails. The exact policy
 is in `metadata.cancellation_diagnostic_normalization`.

@@ -17,8 +17,10 @@ from parity_identity import runtime_source_digest, runtime_source_hashes
 from run_parity import _python_api_server_log_events
 from windows_reference_hang import (
     CASE_IDS,
+    POLICY,
     SIGBREAK_POLICY,
     SIGBREAK_STALL_POLICY,
+    UVICORN_WORKERS_CASE_ID,
     diagnostic_input,
     eligible_input,
 )
@@ -267,6 +269,38 @@ INFO:     Stopping parent process [200]
     def test_exact_reviewed_input_selection(self):
         _, cases, _ = evidence.load_contract()
         self.assertEqual({c["case_id"] for c in cases if eligible_input(c)}, CASE_IDS)
+
+    def test_uvicorn_workers_environment_exception_is_exactly_scoped(self):
+        _, cases, _ = evidence.load_contract()
+        case = next(c for c in cases if c["case_id"] == UVICORN_WORKERS_CASE_ID)
+        self.assertTrue(eligible_input(case))
+        self.assertTrue(diagnostic_input(case))
+        for field, value in (("path", "/other"), ("timeout_seconds", 13),
+                             ("shutdown_signal", "SIGTERM")):
+            changed = deepcopy(case)
+            changed["api"]["run_http"][field] = value
+            self.assertFalse(diagnostic_input(changed), field)
+        changed = deepcopy(case)
+        changed["api"]["run_http"]["environment"]["UVICORN_WORKERS"] = "3"
+        self.assertFalse(diagnostic_input(changed), "UVICORN_WORKERS")
+
+    def test_uvicorn_workers_environment_hang_uses_the_existing_clean_candidate_policy(self):
+        _, cases, _ = evidence.load_contract()
+        case = next(c for c in cases if c["case_id"] == UVICORN_WORKERS_CASE_ID)
+        result, _ = fixture()
+        row = result["cases"][0]
+        row.update(case_id=case["case_id"], profile=case["profile"],
+                   operation=case["operation"], requirements=case["covers"])
+        result["run"]["command"] = [
+            "python", "scripts/run_parity.py", "--case-id", case["case_id"],
+        ]
+        checked = evidence.validate_parity(
+            result, expected_cases=[case], allow_windows_reference_hang=True,
+        )
+        self.assertEqual(checked["status"], "accepted_with_reference_exception")
+        self.assertEqual(checked["accepted_reference_defects"][0]["policy"], POLICY)
+        self.assertEqual(checked["raw_parity_status"], "failed")
+        self.assertIn(case["case_id"], checked["candidate_contract_cases"])
 
     def test_sigbreak_diagnostic_requires_recorded_input(self):
         _, cases, _ = evidence.load_contract()

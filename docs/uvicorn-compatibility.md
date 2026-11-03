@@ -90,6 +90,14 @@ different reference failure is rejected. This is not a claim that 759 raw
 parity comparisons passed, and the upstream hang's precise cause remains
 unverified.
 
+The current policy version `uvicorn-0.54.0-windows-two-worker-sigint-tcp-wakeup@2`
+adds one exact indexed input: `python-api.module-cli-two-workers-from-uvicorn-workers-environment`
+with `UVICORN_WORKERS=2`. It retains the raw failed comparison, requires the
+stock process to be released by exactly one post-timeout TCP connection, and
+requires the candidate to serve the same request and stop both workers within
+the original deadline. The [current acceptance code](https://github.com/appunni-m/uvicorn-rs/blob/main/scripts/windows_reference_hang.py)
+rejects every other reference or candidate failure.
+
 CI #637 instead captures a stock startup failure in
 `python-api.module-cli-two-workers-serve-request`: one worker raises
 `WinError 10022` in `sock.listen()` and the supervisor replaces it. The

@@ -14,14 +14,16 @@ import re
 from typing import Any
 
 
-POLICY = "uvicorn-0.54.0-windows-two-worker-sigint-tcp-wakeup@1"
+POLICY = "uvicorn-0.54.0-windows-two-worker-sigint-tcp-wakeup@2"
 SIGBREAK_POLICY = "uvicorn-0.54.0-windows-two-worker-sigbreak-tcp-wakeup@1"
 SIGBREAK_STALL_POLICY = "uvicorn-0.54.0-windows-two-worker-sigbreak-stall-candidate-clean@1"
 SIGBREAK_CASE_ID = "python-api.module-cli-two-workers-stop-on-sigterm"
+UVICORN_WORKERS_CASE_ID = "python-api.module-cli-two-workers-from-uvicorn-workers-environment"
 CASE_IDS = {
     "python-api.module-cli-two-workers-serve-request",
     "python-api.module-cli-web-concurrency-two-workers-serve-request",
     "python-api.module-cli-explicit-workers-overrides-web-concurrency",
+    UVICORN_WORKERS_CASE_ID,
     SIGBREAK_CASE_ID,
 }
 
@@ -55,6 +57,23 @@ def _eligible_worker_input(
 
 
 def eligible_input(case: dict[str, Any]) -> bool:
+    if case.get("case_id") == UVICORN_WORKERS_CASE_ID:
+        return (
+            case.get("profile") == "python-api"
+            and case.get("operation") == "python.api.run-http"
+            and case.get("verification", "oracle-parity") == "oracle-parity"
+            and case.get("api", {}).get("run_http") == {
+                "method": "GET",
+                "path": "/python-api-two-workers",
+                "shutdown_signal": "SIGINT",
+                "timeout_seconds": 12,
+                "lifespan": "auto",
+                "invocation": "module-cli",
+                "root_path": "",
+                "post_response_settle_seconds": 1,
+                "environment": {"UVICORN_WORKERS": "2"},
+            }
+        )
     if case.get("case_id") == SIGBREAK_CASE_ID:
         return _eligible_worker_input(case, {SIGBREAK_CASE_ID}, "SIGTERM") and (
             case["api"]["run_http"] == {

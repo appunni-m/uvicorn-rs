@@ -574,10 +574,12 @@ jobs:
           set -euo pipefail
           .venv/bin/python scripts/benchmark_host_preflight.py \
             --output target/benchmark-preparation/host-preflight.json
-      - name: Check bounded upload trace tooling without a performance workload
+      - name: Check lifecycle diagnostics and bounded upload trace tooling without a performance workload
         shell: bash
         run: |
           set -euo pipefail
+          .venv/bin/python scripts/test_lifecycle_bench.py \
+            > target/benchmark-preparation/lifecycle-diagnostic-contract.log 2>&1
           .venv/bin/python scripts/test_upload_trace.py \
             > target/benchmark-preparation/upload-trace-tooling.log 2>&1
           rustc --edition=2024 --test src/upload_trace.rs \
