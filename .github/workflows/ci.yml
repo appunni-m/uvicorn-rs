@@ -81,18 +81,26 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
-          python-version: "3.12.13"
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
       - name: Install only the stock server and minimal dependencies
-        run: python -m pip install uvicorn==0.54.0 click==8.5.0 h11==0.16.0 colorama==0.4.6
+        id: stock-install
+        shell: bash
+        run: |
+          uv venv --python "$PYTHON_VERSION" "$RUNNER_TEMP/stock-uvicorn"
+          uv pip install --python "$RUNNER_TEMP/stock-uvicorn/Scripts/python.exe" \
+            uvicorn==0.54.0 click==8.5.0 h11==0.16.0 colorama==0.4.6
       - name: Isolate one ready worker's terminate operation
+        shell: bash
         working-directory: tools/upstream/uvicorn-windows
-        run: python worker_terminate.py --output ../../../target/stock-windows/worker-terminate.json
+        run: '"$RUNNER_TEMP/stock-uvicorn/Scripts/python.exe" worker_terminate.py --output ../../../target/stock-windows/worker-terminate.json'
       - name: Reproduce the two-worker CLI Ctrl+C lifecycle at most three times
-        if: always() && !cancelled()
+        if: always() && !cancelled() && steps.stock-install.conclusion == 'success'
+        shell: bash
         working-directory: tools/upstream/uvicorn-windows
-        run: python cli_ctrl_c.py --output ../../../target/stock-windows/cli-ctrl-c --attempts 3
+        run: '"$RUNNER_TEMP/stock-uvicorn/Scripts/python.exe" cli_ctrl_c.py --output ../../../target/stock-windows/cli-ctrl-c --attempts 3'
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
