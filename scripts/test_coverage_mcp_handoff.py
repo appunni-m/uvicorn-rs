@@ -16,7 +16,7 @@ from typing import Any
 
 from coverage_contract import pending_coverage_mcp_request
 from check_ci_evidence import source_constant
-from project_coverage_mcp import uncovered_llvm_functions
+from project_coverage_mcp import ProjectionError, repository_llvm_paths, uncovered_llvm_functions
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -100,12 +100,13 @@ def make_fixture(root: Path) -> tuple[Path, Path, Path, Path]:
             } for _ in range(3)],
         },
     }
+    runner_source = "/home/runner/work/uvicorn-rs/uvicorn-rs/src/lib.rs"
     llvm_data = [{
-        "files": [{"filename": "src/lib.rs", "segments": [[1, 1, 1, True, True, False]]}],
+        "files": [{"filename": runner_source, "segments": [[1, 1, 1, True, True, False]]}],
         "functions": [
-            {"branches": [], "count": 1, "filenames": ["src/lib.rs"], "mcdc_records": [],
+            {"branches": [], "count": 1, "filenames": [runner_source], "mcdc_records": [],
              "name": "covered_function", "regions": [[1, 1, 1, 2, 1, 0, 0, 0]]},
-            {"branches": [], "count": 0, "filenames": ["src/lib.rs"], "mcdc_records": [],
+            {"branches": [], "count": 0, "filenames": [runner_source], "mcdc_records": [],
              "name": "uncovered_function", "regions": [[2, 1, 2, 2, 0, 0, 0, 0]]},
         ],
         "totals": {"functions": {"count": 2, "covered": 1, "notcovered": 1}},
@@ -164,6 +165,38 @@ def check_uncovered_function_projection() -> None:
         raise AssertionError("unmapped uncovered spans must retain the complete LLVM function inventory")
 
 
+def check_repository_path_projection() -> None:
+    sources = {"src/lib.rs", "crates/uvicorn-rs/src/lib.rs"}
+    for root in ("", "/home/runner/work/uvicorn-rs/uvicorn-rs/", "D:\\a\\uvicorn-rs\\uvicorn-rs\\"):
+        names = [root + path.replace("/", "\\") if "\\" in root else root + path
+                 for path in sorted(sources)]
+        data = [{"files": [{"filename": name, "segments": [[1, 1, 1, True]]} for name in names],
+                 "functions": [{"name": "shared", "filenames": names,
+                                "regions": [[1, 1, 2, 1, 0, 1, 0, 0]]}],
+                 "totals": {"regions": {"count": 1, "covered": 0}}}]
+        original = json.dumps(data, sort_keys=True)
+        projected = repository_llvm_paths(data, sources)
+        if ([file["filename"] for file in projected[0]["files"]] != sorted(sources)
+                or projected[0]["functions"][0]["filenames"] != sorted(sources)
+                or projected[0]["functions"][0]["regions"] != data[0]["functions"][0]["regions"]
+                or projected[0]["totals"] != data[0]["totals"]
+                or json.dumps(data, sort_keys=True) != original):
+            raise AssertionError("cross-host path projection must preserve coordinates, totals and raw data")
+
+    for names in (
+        ["/checkout/src/lib.rs", "/another/crates/uvicorn-rs/src/lib.rs"],
+        ["/checkout/unknown.rs"],
+        ["/checkout/../src/lib.rs"],
+    ):
+        try:
+            repository_llvm_paths([{"files": [{"filename": name} for name in names],
+                                    "functions": []}], sources)
+        except ProjectionError:
+            pass
+        else:
+            raise AssertionError("unbound or inconsistent LLVM source paths must be rejected")
+
+
 def main() -> int:
     # The installed-wheel exclusion audit must inspect this registry without
     # importing or executing the parity runner. A starred set expansion once
@@ -174,6 +207,7 @@ def main() -> int:
     if not isinstance(fault_points, set) or not set(tls_failures) <= fault_points:
         raise AssertionError("native fault registry must remain literal and include TLS initialization selectors")
     check_uncovered_function_projection()
+    check_repository_path_projection()
     (ROOT / "target").mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="uvicorn-rs-coverage-handoff-", dir=ROOT / "target") as temp:
         root = Path(temp)
@@ -188,6 +222,9 @@ def main() -> int:
             "--output", str(snapshot_path))
         projection = review_root / "coverage-mcp-projection.json"
         run(str(HANDOFF), "project", "--report", str(report), "--output", str(projection))
+        projected_data = json.loads(projection.read_text(encoding="utf-8"))["data"]
+        if [file["filename"] for file in projected_data[0]["files"]] != ["src/lib.rs"]:
+            raise AssertionError("handoff projection must bind runner paths to repository-relative receipts")
         projection_ref = projection.relative_to(ROOT).as_posix()
         pages = [page(projection_ref, digest_json({"tool": "fixture", "profile": "coverage"}), "regions"),
                  page(projection_ref, digest_json({"tool": "fixture", "profile": "coverage"}), "lines")]

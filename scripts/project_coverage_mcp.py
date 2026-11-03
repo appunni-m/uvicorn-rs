@@ -120,6 +120,60 @@ def uncovered_llvm_functions(data: Any, uncovered_regions: Any) -> list[dict[str
     return projected
 
 
+def repository_llvm_paths(data: list[dict[str, Any]], source_paths: set[str]) -> list[dict[str, Any]]:
+    """Map one recorded checkout root to the receipt's repository-relative paths.
+
+    LLVM exports use the producer's absolute paths. Keeping those paths makes a
+    downloaded report unverifiable against a different checkout, even though
+    its context already identifies every source file by relative path and hash.
+    Require one consistent root and a unique file mapping; never guess by
+    basename or discard a file that cannot be bound to the source inventory.
+    """
+    require(bool(source_paths) and all(
+        path and not Path(path).is_absolute() and "\\" not in path and ":" not in path
+        and all(part not in {"", ".", ".."} for part in path.split("/"))
+        for path in source_paths
+    ), "canonical source inventory contains an unsafe path")
+    paths: dict[str, str] = {}
+    roots: set[str] = set()
+    mapped: set[str] = set()
+    for unit in data:
+        require(isinstance(unit, dict) and isinstance(unit.get("files"), list),
+                "LLVM coverage data lacks file records")
+        for file in unit["files"]:
+            filename = file.get("filename") if isinstance(file, dict) else None
+            require(isinstance(filename, str) and bool(filename), "LLVM file record lacks a filename")
+            portable = filename.replace("\\", "/")
+            require(not any(part in {".", ".."} for part in portable.split("/")),
+                    "LLVM filename contains a traversal component")
+            matches = [path for path in source_paths
+                       if portable == path or portable.endswith("/" + path)]
+            require(bool(matches), f"LLVM filename is outside the canonical source inventory: {filename}")
+            # src/lib.rs is also a suffix of crates/uvicorn-rs/src/lib.rs.
+            relative = max(matches, key=len)
+            root = portable[:-len(relative)]
+            require(not roots or root in roots, "LLVM filenames contain inconsistent checkout roots")
+            roots.add(root)
+            require(relative not in mapped or paths.get(filename) == relative,
+                    f"multiple LLVM filenames map to the same source: {relative}")
+            mapped.add(relative)
+            paths[filename] = relative
+
+    result = []
+    for unit in data:
+        functions = []
+        for function in unit["functions"]:
+            filenames = function.get("filenames")
+            require(isinstance(filenames, list) and all(
+                isinstance(filename, str) and filename in paths for filename in filenames
+            ), "LLVM function references a file outside the canonical file inventory")
+            functions.append({**function, "filenames": [paths[filename] for filename in filenames]})
+        result.append({**unit,
+                       "files": [{**file, "filename": paths[file["filename"]]} for file in unit["files"]],
+                       "functions": functions})
+    return result
+
+
 def projection_document(
     report_path: Path, output_path: Path, ci_identity_path: Path, *, canonical_report_path: str | None = None,
 ) -> tuple[bytes, bytes]:
@@ -209,7 +263,10 @@ def projection_document(
         # Coverage-MCP gets every file/span plus all LLVM function records that
         # contain uncovered regions. Fully covered function records add size
         # without adding any gap locations; aggregate totals remain unchanged.
-        "data": uncovered_llvm_functions(report.get("data", []), coverage["uncovered_regions"]),
+        "data": repository_llvm_paths(
+            uncovered_llvm_functions(report.get("data", []), coverage["uncovered_regions"]),
+            set(source_hashes),
+        ),
         "uvicorn_rs_unified": projected_extension,
     }
     output_bytes = (json.dumps(projection, separators=(",", ":"), sort_keys=True) + "\n").encode()
