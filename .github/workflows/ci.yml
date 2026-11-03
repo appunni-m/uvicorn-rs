@@ -20,6 +20,11 @@ on:
         required: false
         type: string
         default: python-api.module-cli-two-workers-serve-request
+      trace_windows_signals:
+        description: Add signal diagnostics to a focused Windows run
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -860,9 +865,9 @@ jobs:
         shell: bash
         env:
           PARITY_CASE_IDS: ${{ inputs.parity_case_ids }}
-          UVICORN_RS_SHUTDOWN_TRACE: "1"
+          UVICORN_RS_SHUTDOWN_TRACE: ${{ inputs.trace_windows_signals && '1' || '0' }}
           UVICORN_RS_SHUTDOWN_TRACE_OUTPUT: target/focused-windows/shutdown-trace.log
-          UVICORN_RS_TRACE_ORACLE_SIGNAL: "1"
+          UVICORN_RS_TRACE_ORACLE_SIGNAL: ${{ inputs.trace_windows_signals && '1' || '0' }}
         run: |
           set -euo pipefail
           uv sync --python "$PYTHON_VERSION" --group benchmark --extra standard \
