@@ -90,14 +90,9 @@ WORKLOADS = {
         "app": FASTAPI_APP,
         "client": {
             "mode": "upload", "path": "/upload/1048576", "upload_bytes": 1_048_576,
-        },
-        # Hypercorn 0.18.0's aioquic H3 path did not return a response after a
-        # complete 64 KiB request body in the black-box probe. Keep the Rust
-        # loop comparison, but don't report a cross-server performance result.
-        "servers": ("uvicorn-rs-asyncio", "uvicorn-rs-uvloop"),
-        "excluded_servers": {
-            "hypercorn-asyncio": "H3 upload correctness probe timed out awaiting response headers after a complete 64 KiB body",
-            "hypercorn-uvloop": "H3 upload correctness probe timed out awaiting response headers after a complete 64 KiB body",
+            # Use the same optional-frame policy for both servers. With the
+            # pinned aioquic parser, GREASE followed by FIN can omit EndBody.
+            "h3_grease": False,
         },
     },
     "slow-reader-backpressure": {

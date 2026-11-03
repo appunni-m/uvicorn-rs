@@ -4464,3 +4464,32 @@ remained zero. Each Uvicorn WebSocket reference launch emitted the pinned
 correctness and lifecycle checks. Raw JSON, JSONL checkpoints, logs, and
 per-server artifacts remain under ignored `target/focused-overhead/2026-10-21-c7a5e335f/`
 and the Linux work folder; no raw result or coverage report is committed.
+
+## Restore the matched H3 upload workload (2026-11-03)
+
+Six single-request correctness probes on macOS ARM64 isolated the earlier
+Hypercorn upload exclusion. The client sent the same ordinary FastAPI POST with
+a 1 MiB body in sixteen 64 KiB DATA chunks. Hypercorn 0.18.0 / aioquic 1.3.0
+timed out awaiting response headers with optional GREASE enabled, then returned
+HTTP 200 and the exact body `bytes=1048576` with it disabled. With GREASE
+disabled, both Hypercorn and the installed normal uvicorn-rs wheel succeeded
+under asyncio and uvloop. The candidate also accepted GREASE enabled under
+asyncio. Its wheel is from [CI #637](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084),
+clean merge source `00f38c82dd869ba0dcc7068cbc5cc769cd0f6294`, with SHA-256
+`30ac1f324752ca1a01b2b7dc73855551299bc9c22925ddbd7caff29a868518ef`.
+
+The deterministic public-parser reproducer is
+`python tools/diagnostics/aioquic_fin.py`, using the locked benchmark dependency
+group. It observes a request-end event for DATA with FIN, no request-end event
+when an unknown frame carries FIN, and a request-end event when the same frame
+is followed by a separate empty FIN. This demonstrates the pinned parser's
+event-delivery defect; the live exchange's packet ordering was not captured.
+No installed reference package was changed.
+
+The maintained `request-upload` workload now disables GREASE for both servers
+and includes all four server/loop variants. Body, response validation and
+deadlines are unchanged. Failed and successful probe receipts, package RECORD
+checks, hashes and logs remain under ignored
+`benchmarks/results/h3-upload-interop-2026-11-03/`. These are correctness probes,
+not timing samples. Repeated benchmark-client correctness and the matched
+three-system measurements remain pending after parity and coverage acceptance.
