@@ -34,13 +34,14 @@ on:
   workflow_dispatch:
     inputs:
       run_mode:
-        description: Run the full comparison or one focused FastAPI timing/diagnostic, HTTP/2, or HTTP/3 diagnostic
+        description: Full matrix, focused FastAPI/H2/H3, or the fixed buffer on/off comparison
         default: full
         required: true
         type: choice
         options:
           - full
           - focused-fastapi-match
+          - peer-read-comparison
           - focused-fastapi-stage
           - focused-h2
           - focused-h3
@@ -614,10 +615,10 @@ jobs:
   focused-fastapi-match:
     # Push commits can select one Linux ARM64 upload case when the GitHub
     # workflow-dispatch UI is unavailable to the maintainer.
-    name: ${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }} · normal-build matched timing
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-fastapi-match') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-fastapi-match]')) }}
+    name: ${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.run_mode == 'peer-read-comparison' && 'buffer on/off comparison' || inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }} · normal-build matched timing
+    if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-match' || inputs.run_mode == 'peer-read-comparison')) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-fastapi-match]')) }}
     runs-on: ${{ (inputs.fastapi_system == 'linux-aarch64' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-system=linux-aarch64]'))) && 'ubuntu-24.04-arm' || inputs.fastapi_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -703,12 +704,14 @@ jobs:
           uv pip install --python .venv/bin/python --no-deps "$server_wheel" \
             2>&1 | tee target/benchmark-preparation/server-install.log
       - name: Capture read-only host preflight
+        if: inputs.run_mode != 'peer-read-comparison'
         shell: bash
         run: |
           set -euo pipefail
           .venv/bin/python scripts/benchmark_host_preflight.py \
             --output target/benchmark-preparation/host-preflight.json
       - name: Run one normal-build FastAPI workload against Uvicorn
+        if: inputs.run_mode != 'peer-read-comparison'
         shell: bash
         env:
           BENCHMARK_FASTAPI_WORKLOAD: ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}
@@ -730,7 +733,7 @@ jobs:
             --output "target/fastapi-match/http1.json" \
             2>&1 | tee target/fastapi-match/driver.log
       - name: Require three correctness-gated matching repetitions per loop
-        if: always()
+        if: always() && inputs.run_mode != 'peer-read-comparison'
         shell: bash
         env:
           BENCHMARK_FASTAPI_WORKLOAD: ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}
@@ -745,6 +748,17 @@ jobs:
             --workload "$BENCHMARK_FASTAPI_WORKLOAD" \
             --output-dir target/fastapi-match
           cat target/fastapi-match/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Compare normal buffer reuse and fresh allocation builds
+        if: inputs.run_mode == 'peer-read-comparison'
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python scripts/run_peer_read_comparison.py \
+            --oracle-python "$UVICORN_ORACLE_PYTHON" \
+            --output target/peer-read-comparison
+          .venv/bin/python scripts/analyze_peer_read_comparison.py \
+            target/peer-read-comparison/execution.json \
+            --output target/peer-read-comparison/analysis.json
       - name: Retain focused FastAPI matched timing evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -753,6 +767,11 @@ jobs:
           path: |
             target/benchmark-preparation/
             target/fastapi-match/
+            target/peer-read-comparison/*.json
+            target/peer-read-comparison/*.jsonl*
+            target/peer-read-comparison/*.log
+            target/peer-read-comparison/*.artifacts/
+            target/peer-read-comparison/control-wheels/
           if-no-files-found: warn
           retention-days: 90
 

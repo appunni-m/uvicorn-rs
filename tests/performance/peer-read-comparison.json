@@ -1,0 +1,438 @@
+{
+  "app": "examples.bench_fastapi:app",
+  "decision": "retain only a repeatable named-metric gain beyond matched control variation with no material guard regression; otherwise reject/remove; do not infer allocations from throughput",
+  "duration_seconds": 5,
+  "invalid_cells": "retain failures; do not refill or retry until passing; fewer than three valid pairs cannot support a descriptive comparison",
+  "pairs": [
+    {
+      "concurrency": 64,
+      "loop": "uvloop",
+      "repeat": 2,
+      "variant_order": [
+        "fresh",
+        "reuse"
+      ],
+      "workload": "fastapi-fixed"
+    },
+    {
+      "concurrency": 8,
+      "loop": "uvloop",
+      "repeat": 4,
+      "variant_order": [
+        "fresh",
+        "reuse"
+      ],
+      "workload": "fastapi-upload-1m-write-1k"
+    },
+    {
+      "concurrency": 64,
+      "loop": "asyncio",
+      "repeat": 3,
+      "variant_order": [
+        "fresh",
+        "reuse"
+      ],
+      "workload": "fastapi-request-upload"
+    },
+    {
+      "concurrency": 8,
+      "loop": "uvloop",
+      "repeat": 3,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-upload-1m-write-1k"
+    },
+    {
+      "concurrency": 64,
+      "loop": "uvloop",
+      "repeat": 4,
+      "variant_order": [
+        "fresh",
+        "reuse"
+      ],
+      "workload": "fastapi-request-upload"
+    },
+    {
+      "concurrency": 64,
+      "loop": "uvloop",
+      "repeat": 3,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-request-upload"
+    },
+    {
+      "concurrency": 64,
+      "loop": "asyncio",
+      "repeat": 5,
+      "variant_order": [
+        "fresh",
+        "reuse"
+      ],
+      "workload": "fastapi-request-upload"
+    },
+    {
+      "concurrency": 8,
+      "loop": "asyncio",
+      "repeat": 5,
+      "variant_order": [
+        "fresh",
+        "reuse"
+      ],
+      "workload": "fastapi-upload-1m-write-1k"
+    },
+    {
+      "concurrency": 64,
+      "loop": "asyncio",
+      "repeat": 5,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-upload-1m-write-16k"
+    },
+    {
+      "concurrency": 64,
+      "loop": "uvloop",
+      "repeat": 4,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-upload-1m-write-16k"
+    },
+    {
+      "concurrency": 8,
+      "loop": "uvloop",
+      "repeat": 2,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-upload-1m-write-1k"
+    },
+    {
+      "concurrency": 64,
+      "loop": "asyncio",
+      "repeat": 2,
+      "variant_order": [
+        "fresh",
+        "reuse"
+      ],
+      "workload": "fastapi-upload-1m-write-16k"
+    },
+    {
+      "concurrency": 64,
+      "loop": "uvloop",
+      "repeat": 1,
+      "variant_order": [
+        "fresh",
+        "reuse"
+      ],
+      "workload": "fastapi-request-upload"
+    },
+    {
+      "concurrency": 64,
+      "loop": "uvloop",
+      "repeat": 5,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-upload-1m-write-16k"
+    },
+    {
+      "concurrency": 64,
+      "loop": "uvloop",
+      "repeat": 5,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-request-upload"
+    },
+    {
+      "concurrency": 64,
+      "loop": "asyncio",
+      "repeat": 5,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-fixed"
+    },
+    {
+      "concurrency": 64,
+      "loop": "uvloop",
+      "repeat": 1,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-upload-1m-write-16k"
+    },
+    {
+      "concurrency": 64,
+      "loop": "uvloop",
+      "repeat": 2,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-request-upload"
+    },
+    {
+      "concurrency": 64,
+      "loop": "uvloop",
+      "repeat": 3,
+      "variant_order": [
+        "fresh",
+        "reuse"
+      ],
+      "workload": "fastapi-fixed"
+    },
+    {
+      "concurrency": 8,
+      "loop": "uvloop",
+      "repeat": 5,
+      "variant_order": [
+        "fresh",
+        "reuse"
+      ],
+      "workload": "fastapi-upload-1m-write-1k"
+    },
+    {
+      "concurrency": 64,
+      "loop": "uvloop",
+      "repeat": 1,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-fixed"
+    },
+    {
+      "concurrency": 64,
+      "loop": "asyncio",
+      "repeat": 1,
+      "variant_order": [
+        "fresh",
+        "reuse"
+      ],
+      "workload": "fastapi-fixed"
+    },
+    {
+      "concurrency": 64,
+      "loop": "asyncio",
+      "repeat": 1,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-request-upload"
+    },
+    {
+      "concurrency": 8,
+      "loop": "asyncio",
+      "repeat": 3,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-upload-1m-write-1k"
+    },
+    {
+      "concurrency": 64,
+      "loop": "uvloop",
+      "repeat": 5,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-fixed"
+    },
+    {
+      "concurrency": 64,
+      "loop": "asyncio",
+      "repeat": 4,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-upload-1m-write-16k"
+    },
+    {
+      "concurrency": 8,
+      "loop": "asyncio",
+      "repeat": 2,
+      "variant_order": [
+        "fresh",
+        "reuse"
+      ],
+      "workload": "fastapi-upload-1m-write-1k"
+    },
+    {
+      "concurrency": 64,
+      "loop": "asyncio",
+      "repeat": 1,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-upload-1m-write-16k"
+    },
+    {
+      "concurrency": 64,
+      "loop": "asyncio",
+      "repeat": 4,
+      "variant_order": [
+        "fresh",
+        "reuse"
+      ],
+      "workload": "fastapi-fixed"
+    },
+    {
+      "concurrency": 64,
+      "loop": "uvloop",
+      "repeat": 3,
+      "variant_order": [
+        "fresh",
+        "reuse"
+      ],
+      "workload": "fastapi-upload-1m-write-16k"
+    },
+    {
+      "concurrency": 64,
+      "loop": "asyncio",
+      "repeat": 2,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-fixed"
+    },
+    {
+      "concurrency": 64,
+      "loop": "asyncio",
+      "repeat": 2,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-request-upload"
+    },
+    {
+      "concurrency": 64,
+      "loop": "asyncio",
+      "repeat": 4,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-request-upload"
+    },
+    {
+      "concurrency": 64,
+      "loop": "asyncio",
+      "repeat": 3,
+      "variant_order": [
+        "fresh",
+        "reuse"
+      ],
+      "workload": "fastapi-upload-1m-write-16k"
+    },
+    {
+      "concurrency": 8,
+      "loop": "asyncio",
+      "repeat": 4,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-upload-1m-write-1k"
+    },
+    {
+      "concurrency": 64,
+      "loop": "uvloop",
+      "repeat": 2,
+      "variant_order": [
+        "fresh",
+        "reuse"
+      ],
+      "workload": "fastapi-upload-1m-write-16k"
+    },
+    {
+      "concurrency": 8,
+      "loop": "asyncio",
+      "repeat": 1,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-upload-1m-write-1k"
+    },
+    {
+      "concurrency": 64,
+      "loop": "asyncio",
+      "repeat": 3,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-fixed"
+    },
+    {
+      "concurrency": 64,
+      "loop": "uvloop",
+      "repeat": 4,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-fixed"
+    },
+    {
+      "concurrency": 8,
+      "loop": "uvloop",
+      "repeat": 1,
+      "variant_order": [
+        "reuse",
+        "fresh"
+      ],
+      "workload": "fastapi-upload-1m-write-1k"
+    }
+  ],
+  "planned_pairs": 40,
+  "request_timeout_seconds": 15,
+  "seed": 20261103,
+  "tokio_worker_threads": 1,
+  "warmup_seconds": 1,
+  "schema": "peer-read-hosted-comparison-plan@1",
+  "original_local_plan_sha256": "f1b0490b0d7b890228270475b2fe0d2a79434703eece8913509792ea62b18451",
+  "accepted_runtime_sha256": "7646e41b9dd9ca6b43b2f93d60f83e7ed712c69c1758d97053974bb2c5a09795",
+  "coverage_evidence": {
+    "producer": "00f38c82dd869ba0dcc7068cbc5cc769cd0f6294",
+    "strict_replay_run": 41629464593,
+    "strict_replay_artifact": 13227718896,
+    "strict_replay_zip_sha256": "7379fcf882c2ab804fc4328539ac97e8f9694d70f6db35b913c984b99b5f4584",
+    "mcp_receipt_sha256": "4f77ad641d4105dfa1f66ff757cf30dcf2d8957a5a466496b5a407ad92ee8330"
+  },
+  "case_ids": [
+    "python-api.run-websocket-over-unix-domain-socket",
+    "python-api.module-cli-serves-unix-domain-socket-request",
+    "python-api.config-server-serves-unix-domain-socket-request",
+    "python-api.module-cli-serves-tls-over-unix-domain-socket",
+    "http1.response-reset-after-first-streamed-chunk",
+    "http1.response-reset-cancels-held-application",
+    "http1.request-upload-stream",
+    "http1.request-streaming-progress-before-upload-complete",
+    "http1.request-trailers-after-streamed-upload",
+    "http1.response-before-upload-drained",
+    "http1.upload-remains-after-one-asgi-receive",
+    "http1.upload-remains-unread-after-early-response",
+    "http1.upload-one-mib-in-sixteen-64k-chunks"
+  ]
+}

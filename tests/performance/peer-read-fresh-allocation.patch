@@ -1,0 +1,20 @@
+diff --git a/crates/uvicorn-rs/src/peer_read.rs b/crates/uvicorn-rs/src/peer_read.rs
+index 288522f38..a921f9025 100644
+--- a/crates/uvicorn-rs/src/peer_read.rs
++++ b/crates/uvicorn-rs/src/peer_read.rs
+@@ -186,10 +186,11 @@ where
+         // Reserving before each read bounds queued plus in-flight chunks to
+         // READ_QUEUE_CAPACITY; the connection reader may hold one more partial
+         // chunk. Recycling therefore stays within those three allocations.
+-        let mut chunk = recycled
+-            .try_recv()
+-            .unwrap_or_else(|_| BytesMut::with_capacity(READ_CHUNK_SIZE));
+-        chunk.clear();
++        // Experimental control: retain the bounded queues and read pipeline,
++        // but release a returned buffer before allocating this read's storage.
++        // This branch is not a release candidate.
++        drop(recycled.try_recv());
++        let mut chunk = BytesMut::with_capacity(READ_CHUNK_SIZE);
+         let mut destination = (&mut chunk).limit(READ_CHUNK_SIZE);
+         match reader.read_buf(&mut destination).await {
+             Ok(0) => {
