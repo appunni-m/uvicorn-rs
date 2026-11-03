@@ -35,7 +35,34 @@ No original release gate is waived by this plan. Historical measurements remain
 historical. A task closes on its own deliverable; downstream publication gates
 belong to the release tasks rather than being copied into every prerequisite.
 
-### Release audit — 2026-11-03 (PR #21 / CI #629)
+### Release audit — 2026-11-03 (PR #21 / CI #637–638)
+
+Changes are pushed to `develop` at
+`68c063f623852bcfd0dfe937fe2a6eca189aeb65` through
+[PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21).
+[CI #637](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084)
+passes Linux and macOS public parity (786/786 each), their candidate checks,
+the Python 3.9 wheel consumer, Rust quality/MSRV and native composition. Its
+clean producer is `00f38c82dd869ba0dcc7068cbc5cc769cd0f6294`; its coverage
+job is still running at this snapshot. The Windows raw matrix is 758/759,
+with one stock-Uvicorn startup crash, so its package qualification stopped.
+
+[Focused CI #638](https://github.com/appunni-m/uvicorn-rs/actions/runs/41624376500)
+then exercises only the three affected Windows inputs on the pushed source.
+All three candidate lifecycle contracts pass. Raw parity retains the two
+stock-reference defects, accepted only through the separate startup and
+shutdown policies. It does not replace full final-source Windows packaging.
+See the [current compatibility record](../uvicorn-compatibility.md#current-status-2026-11-02)
+for artifact identities and the exact acceptance scope.
+
+The latest commit uses `[skip ci]` to preserve the in-flight coverage job while
+the affected Windows cases are qualified through manual dispatch. Required PR
+checks remain pending; this is not merge or release approval. Complete final
+source CI is still required. Coverage and its actual independent MCP receipt
+precede benchmark timing. The upload diagnostic, buffer-reuse decision,
+three-system measurements, final candidate, merge and publication remain open.
+
+### Earlier release audit — 2026-11-03 (PR #21 / CI #629)
 
 Implementation remains on `develop` and promotion remains
 [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21). CI

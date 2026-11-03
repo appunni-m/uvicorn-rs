@@ -1,9 +1,10 @@
 # Can I replace Uvicorn?
 
 The latest installed-wheel evidence passes the indexed Uvicorn 0.54.0
-comparisons on Linux x86-64 and macOS ARM64. Windows has one raw comparison
-failure for a stock-Uvicorn worker startup crash. Separate improvement
-acceptance passes local evidence replay and awaits hosted qualification.
+comparisons on Linux x86-64 and macOS ARM64. The focused Windows gate accepts
+the two precisely captured stock-Uvicorn worker defects and independently
+passes all three candidate lifecycle contracts. Full final-source Windows
+package qualification remains pending.
 The 0.3.0 PyPI distribution remains
 unpublished. Final-source coverage/review, benchmarks and candidate
 qualification are still release gates.
@@ -74,7 +75,19 @@ response, signal and deadline comparison remains required.
 Local replay against the clean CI #637 source passes that separate decision
 and all three candidate lifecycle checks. Raw parity remains 758/759 with one
 failure; this does not make the already-failed hosted job successful. The
-updated gate needs hosted qualification. See the
+updated gate was subsequently exercised in
+[focused CI #638](https://github.com/appunni-m/uvicorn-rs/actions/runs/41624376500/job/125877907532)
+on clean source `68c063f623852bcfd0dfe937fe2a6eca189aeb65`.
+That run retains one passing raw comparison and two failed comparisons:
+the exact startup defect and the SIGINT/TCP-wakeup shutdown defect. The
+separate receipt accepts each through its own policy and passes all three
+candidate lifecycle contracts. The installed normal wheel's native SHA-256 is
+`51ce6ec3f2d344afffd0f7fd49c4f0dab00d2cad45d70f170d56d2c547dc03e2`.
+The [retained artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/41624376500/artifacts/13224704148)
+includes the raw report, separate decision, logs and wheel. Offline replay
+reproduces the hosted decision, and wheel RECORD and native identities match.
+This focused run does not replace complete Windows package qualification.
+See the
 [versioned policies](maintainers/uvicorn-0.54.0-contract.md#acceptance-of-known-differences)
 and [original capture](https://github.com/appunni-m/uvicorn-rs/blob/develop/tools/upstream/uvicorn-windows/evidence/ci637-startup-worker-failure.json).
 

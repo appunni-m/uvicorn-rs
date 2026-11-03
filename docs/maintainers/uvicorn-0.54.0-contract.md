@@ -66,8 +66,13 @@ The candidate must satisfy the unchanged clean two-worker lifecycle contract.
 This does not identify the underlying cause or validate an upstream fix.
 The [captured row](https://github.com/appunni-m/uvicorn-rs/blob/develop/tools/upstream/uvicorn-windows/evidence/ci637-startup-worker-failure.json)
 retains the original source, native, report, artifact and run identities.
-Local retained-evidence replay accepts the identified improvement without
-rewriting raw parity; hosted qualification of this policy remains pending.
+Hosted [focused CI #638](https://github.com/appunni-m/uvicorn-rs/actions/runs/41624376500/job/125877907532)
+qualifies both policies on clean source
+`68c063f623852bcfd0dfe937fe2a6eca189aeb65`: the startup and shutdown defects
+both recur in the reference, while all three candidate lifecycle contracts
+pass. The raw report remains one pass and two failures. Offline replay
+reproduces the hosted decision and verifies the wheel's native identity.
+Full final-source Windows package qualification remains required.
 
 Raw parity remains `failed` when this defect occurs. The separate
 `compatibility-acceptance.json` receipt records
@@ -79,9 +84,14 @@ and every non-Windows lane retain their existing strict behavior.
 Both policies require explicit flags and a separate acceptance output. The
 receipt hashes each enabled policy and the validator as well as the raw report.
 
-At the 2026-11-03 audit, CI
+The [current platform status](../uvicorn-compatibility.md#current-status-2026-11-02)
+records CI #637's complete Linux/macOS matrices and CI #638's focused Windows
+acceptance. The following coverage record is historical evidence, rather than
+qualification of later source.
+
+Historical CI
 [#629](https://github.com/appunni-m/uvicorn-rs/actions/runs/41582985537)
-has passed Linux x86-64 installed-wheel public parity: 786/786 cases, with zero
+passed Linux x86-64 installed-wheel public parity: 786/786 cases, with zero
 behavioral failures, infrastructure failures or not-run cases. This report binds
 runtime batch `a2a02070fe573c61b84aed90f4f48bdb5f267131` to clean PR merge
 source `1c8f16c80e4ac5115c9282037b30473d0016c04a`. Linux, macOS and Windows
