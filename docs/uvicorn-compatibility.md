@@ -106,11 +106,15 @@ passes on CPython 3.9.25 using the exact Linux abi3 wheel. It verifies install,
 CLI/imports, live ASGI lifecycle, cancellation and caller-loop behavior; it is
 not the complete parity matrix on Python 3.9.
 
-CI #637 proves the macOS Bash 3.2 wrapper repair. Windows package/consumer
-qualification remains incomplete after the reference mismatch. CI #636
-measured 100% regions and lines, but failed afterward when the validator
-treated the TLS fixture directory as a file. CI #637 is qualifying that repair;
-its unified coverage job is still running at this update.
+CI #637 proves the macOS Bash 3.2 wrapper and TLS fixture-directory identity
+repairs. Windows package/consumer qualification remains incomplete after the
+reference mismatch. Unified coverage measures 14,809/14,809 regions and
+10,894/10,894 physical source lines, but strict validation fails because raw
+LLVM function-line totals are incorrectly equated with unique source lines.
+The validator repair independently replays LCOV line/hit sets while retaining
+raw JSON checks. Actual Coverage-MCP review of the captured producer returns
+zero gaps with matching source and passing tests across all 46 pages; attachment
+passes. Recorded Linux toolchain validation and
 Independent final-source Coverage-MCP handoff, matched
 three-system FastAPI measurements, complete final-source artifacts and
 publication remain open. Later wrapper, upload-diagnostic and

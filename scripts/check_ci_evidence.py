@@ -1056,6 +1056,74 @@ def export_llvm_profile(
     return llvm_report
 
 
+def parse_llvm_lcov_lines(text: str) -> dict[str, dict[int, int]]:
+    """Read unique physical-line counters, separately from function summaries."""
+    files: dict[str, dict[int, int]] = {}
+    current: str | None = None
+    for line in text.splitlines():
+        if line.startswith("SF:"):
+            current = llvm_source_name(Path(line[3:]))
+            if current is not None:
+                require(current not in files, f"LCOV repeats production source: {current}")
+                files[current] = {}
+        elif line == "end_of_record":
+            current = None
+        elif current is not None and line.startswith("DA:"):
+            fields = line[3:].split(",")
+            require(2 <= len(fields) <= 3, "invalid LCOV physical-line record")
+            try:
+                number, count = int(fields[0]), int(fields[1])
+            except ValueError as error:
+                raise EvidenceError("invalid LCOV physical-line counter") from error
+            require(number > 0 and count >= 0, "invalid LCOV physical-line counter")
+            require(number not in files[current], f"LCOV repeats line {number}: {current}")
+            files[current][number] = count
+    return files
+
+
+def validate_llvm_physical_lines(
+    files: dict[str, dict[int, int]], regions: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, int]]:
+    """Require replayed LCOV line/hit sets to equal the executable span union."""
+    evidence = {}
+    for path in NO_COUNTER_SOURCE_SET:
+        require(not files.get(path), f"no-counter source has LCOV lines: {path}")
+    for path in EXECUTABLE_SOURCE_SET:
+        require(path in files, f"LCOV omits executable production source: {path}")
+        span_lines: set[int] = set()
+        hit_lines: set[int] = set()
+        for region in regions.values():
+            if region["file"] == path:
+                lines = source_lines_for_region(region)
+                span_lines.update(lines)
+                if region["covered"]:
+                    hit_lines.update(lines)
+        records = files[path]
+        require(set(records) == span_lines, f"replayed LCOV physical-line set differs: {path}")
+        covered = {line for line, count in records.items() if count > 0}
+        require(covered == hit_lines, f"replayed LCOV covered-line set differs: {path}")
+        evidence[path] = {
+            "lcov_lines": len(records), "region_span_lines": len(span_lines),
+            "lcov_covered_lines": len(covered), "covered_region_span_lines": len(hit_lines),
+        }
+    return evidence
+
+
+def replay_llvm_physical_lines(
+    profile_data: Path, *, llvm_cov: Path, binaries: tuple[Path, Path],
+    regions: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, int]]:
+    command = [
+        str(llvm_cov), "export", "--format=lcov", "--check-binary-ids",
+        f"--instr-profile={profile_data}", "--ignore-filename-regex=.*/\\.cargo/registry/.*",
+        *(f"--object={binary}" for binary in binaries),
+    ]
+    exported = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=180, check=False)
+    require(exported.returncode == 0 and not exported.stderr.strip(),
+            f"cannot replay LLVM physical lines: {(exported.stderr or exported.stdout)[-3000:]}")
+    return validate_llvm_physical_lines(parse_llvm_lcov_lines(exported.stdout), regions)
+
+
 def case_profile_regions(
     profile_paths: list[Path], *, label: str, llvm_cov: Path, llvm_profdata: Path,
     binaries: tuple[Path, Path], source_digest: str,
@@ -1338,9 +1406,10 @@ def validate_coverage(
         require(row["summary"] == raw_summaries[path], f"per-file normalized summary differs: {path}")
         exact_keys(row.get("llvm_summary"), {"regions", "lines", "regions_total", "lines_total"},
                    f"raw LLVM summary {path}")
-        require(row["llvm_summary"]["lines"] == row["summary"]["lines"]
-                and row["llvm_summary"]["lines_total"] == row["summary"]["lines_total"],
-                f"raw and normalized LLVM physical-line summaries differ: {path}")
+        # Raw JSON summaries aggregate function/instantiation line counts;
+        # overlapping functions can count one physical line more than once.
+        # Preserve and verify those raw counters against the retained JSON
+        # export below. Validate physical lines through a separate LCOV replay.
         if path in NO_COUNTER_SOURCE_SET:
             require(not any(row["llvm_summary"].values()), f"no-counter file has raw LLVM counters: {path}")
             continue
@@ -1477,6 +1546,11 @@ def validate_coverage(
             and replayed_functions == canonical_functions
             and replayed_spans == canonical_spans,
             "embedded aggregate LLVM export differs from retained aggregate profile")
+    require(replay_llvm_physical_lines(
+                aggregate_profile, llvm_cov=llvm_cov, binaries=coverage_binaries,
+                regions=replayed_regions,
+            ) == expected_line_evidence,
+            "retained LCOV physical-line evidence differs from the unified report")
 
     asgi_by_id = {case["case_id"]: case for case in asgi_cases}
     native_by_id = {case["id"]: case for case in native_cases}

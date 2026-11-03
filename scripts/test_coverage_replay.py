@@ -32,6 +32,54 @@ def tools_fixture() -> dict[str, dict[str, str]]:
 
 
 class CoverageReplayTests(unittest.TestCase):
+    def test_physical_lines_union_overlapping_function_spans(self) -> None:
+        regions = {
+            "outer": {"file": "src/lib.rs", "start": {"line": 1, "column": 1},
+                      "end": {"line": 3, "column": 1}, "covered": True},
+            "closure": {"file": "src/lib.rs", "start": {"line": 2, "column": 1},
+                        "end": {"line": 4, "column": 1}, "covered": True},
+        }
+        # Two function spans each have two lines, but share physical line 2.
+        text = f"SF:{ROOT / 'src/lib.rs'}\nDA:1,1\nDA:2,2\nDA:3,1\nend_of_record\n"
+        with patch.object(evidence, "EXECUTABLE_SOURCE_SET", ("src/lib.rs",)):
+            actual = evidence.validate_llvm_physical_lines(evidence.parse_llvm_lcov_lines(text), regions)
+        self.assertEqual(actual['src/lib.rs'], {
+            'lcov_lines': 3, 'region_span_lines': 3,
+            'lcov_covered_lines': 3, 'covered_region_span_lines': 3,
+        })
+
+    def test_physical_line_replay_rejects_changed_sets_with_equal_totals(self) -> None:
+        regions = {
+            "covered": {"file": "src/lib.rs", "start": {"line": 1, "column": 1},
+                        "end": {"line": 3, "column": 1}, "covered": True},
+            "uncovered": {"file": "src/lib.rs", "start": {"line": 3, "column": 1},
+                          "end": {"line": 4, "column": 1}, "covered": False},
+        }
+        with patch.object(evidence, "EXECUTABLE_SOURCE_SET", ("src/lib.rs",)):
+            for records in ({1: 1, 2: 1, 4: 0}, {1: 1, 2: 0, 3: 1}, {}):
+                with self.subTest(records=records), self.assertRaises(evidence.EvidenceError):
+                    evidence.validate_llvm_physical_lines({"src/lib.rs": records}, regions)
+            with self.assertRaises(evidence.EvidenceError):
+                evidence.validate_llvm_physical_lines({}, regions)
+            with self.assertRaises(evidence.EvidenceError):
+                evidence.validate_llvm_physical_lines({"src/lib.rs": {1: 1, 2: 1, 3: 0},
+                                                      "src/upload_trace.rs": {1: 1}}, regions)
+
+    def test_physical_line_parser_rejects_duplicate_and_malformed_counters(self) -> None:
+        source = f"SF:{ROOT / 'src/lib.rs'}\n"
+        for suffix in ("DA:1,1\nDA:1,2\n", "DA:1,-1\n", "DA:0,1\n", "DA:a,1\n",
+                       "DA:1\n", f"DA:1,1\n{source}DA:2,1\n"):
+            with self.subTest(suffix=suffix), self.assertRaises(evidence.EvidenceError):
+                evidence.parse_llvm_lcov_lines(source + suffix)
+
+    def test_physical_line_replay_rejects_llvm_diagnostics(self) -> None:
+        for returncode, stderr in ((1, "profile mismatch"), (0, "warning: stale profile")):
+            result = subprocess.CompletedProcess([], returncode, stdout="", stderr=stderr)
+            with patch.object(evidence.subprocess, "run", return_value=result):
+                with self.assertRaises(evidence.EvidenceError):
+                    evidence.replay_llvm_physical_lines(Path("profile"), llvm_cov=Path("llvm-cov"),
+                                                        binaries=(Path("one"), Path("two")), regions={})
+
     def test_declared_native_tls_directory_binds_every_fixture_file(self) -> None:
         _, _, input_paths = evidence.load_contract()
         selected = evidence.expected_source_hashes(ROOT / "scripts/run_unified_coverage.py", input_paths)
@@ -166,7 +214,7 @@ def smoke() -> None:
                                                        ("native_runner", "native_core_contracts"))):
             source = root / f"fixture_{index}.rs"
             source.write_text(f'#[inline(never)] fn observed_{index}() -> u32 {{ {index + 1} }}\n'
-                              f'fn main() {{ println!("{{}}", observed_{index}()); }}\n')
+                              f'fn main() {{ let read = || observed_{index}(); println!("{{}}", read()); }}\n')
             binary = root / f"original_{index}" / retained_name
             binary.parent.mkdir()
             subprocess.run(["rustc", "--edition=2021", "-C", "instrument-coverage", str(source),
@@ -187,11 +235,24 @@ def smoke() -> None:
                             *(str(profile) for profile in profiles)], check=True, capture_output=True, timeout=30)
             exported = evidence.export_llvm_profile(merged, label="retained-object smoke", llvm_cov=llvm_cov,
                                                     binaries=binaries)
+            paths = tuple(f"fixture_{index}.rs" for index in range(2))
+            regions = {path: {"file": path, "start": {"line": 1, "column": 1},
+                              "end": {"line": 3, "column": 1}, "covered": True}
+                       for path in paths}
+            with patch.object(evidence, "PRODUCTION_SOURCE_SET", paths), \
+                 patch.object(evidence, "EXECUTABLE_SOURCE_SET", paths), \
+                 patch.object(evidence, "NO_COUNTER_SOURCE_SET", ()):
+                physical = evidence.replay_llvm_physical_lines(merged, llvm_cov=llvm_cov,
+                                                              binaries=binaries, regions=regions)
+        raw_lines = [row["summary"]["lines"]["count"] for row in exported["data"][0]["files"]]
+        if raw_lines != [3, 3] or any(row["lcov_lines"] != 2 for row in physical.values()):
+            raise AssertionError(f"overlapping function-line fixture differs: {raw_lines}, {physical}")
         totals = exported["data"][0]["totals"]["regions"]
         if totals["count"] <= 0 or totals["covered"] != totals["count"]:
             raise AssertionError(f"retained fixture regions were not fully measured: {totals}")
         print(json.dumps({"status": "passed", "scope": "tooling fixture, not server coverage",
-                          "objects": 2, "original_objects_removed": True, "regions": totals}, sort_keys=True))
+                          "objects": 2, "original_objects_removed": True, "regions": totals,
+                          "raw_function_lines": raw_lines, "physical_lines": physical}, sort_keys=True))
 
 
 if __name__ == "__main__":

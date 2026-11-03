@@ -37,14 +37,21 @@ belong to the release tasks rather than being copied into every prerequisite.
 
 ### Release audit — 2026-11-03 (PR #21 / CI #637–638)
 
-Changes are pushed to `develop` at
-`68c063f623852bcfd0dfe937fe2a6eca189aeb65` through
+Changes are developed on `develop` and promoted through
 [PR #21](https://github.com/appunni-m/uvicorn-rs/pull/21).
 [CI #637](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084)
 passes Linux and macOS public parity (786/786 each), their candidate checks,
 the Python 3.9 wheel consumer, Rust quality/MSRV and native composition. Its
-clean producer is `00f38c82dd869ba0dcc7068cbc5cc769cd0f6294`; its coverage
-job is still running at this snapshot. The Windows raw matrix is 758/759,
+clean producer is `00f38c82dd869ba0dcc7068cbc5cc769cd0f6294`. Its unified
+matrix passes all 1,451 cases and three full verification repeats, measuring
+14,809/14,809 regions and 10,894/10,894 physical source lines. The job fails
+after measurement because the validator incorrectly requires raw LLVM
+function-line totals to equal unique physical source-line totals. The repair
+independently replays LCOV line and hit sets from the retained objects/profile
+and preserves raw JSON counter checks. Twelve focused regression checks and
+an actual retained-object fixture pass; cross-host replay also reproduces
+the captured report's exact line sets and raw JSON. Recorded Linux toolchain
+acceptance remains required. The Windows raw matrix is 758/759,
 with one stock-Uvicorn startup crash, so its package qualification stopped.
 
 [Focused CI #638](https://github.com/appunni-m/uvicorn-rs/actions/runs/41624376500)
@@ -55,11 +62,16 @@ shutdown policies. It does not replace full final-source Windows packaging.
 See the [current compatibility record](../uvicorn-compatibility.md#current-status-2026-11-02)
 for artifact identities and the exact acceptance scope.
 
-The latest commit uses `[skip ci]` to preserve the in-flight coverage job while
-the affected Windows cases are qualified through manual dispatch. Required PR
-checks remain pending; this is not merge or release approval. Complete final
-source CI is still required. Coverage and its actual independent MCP receipt
-precede benchmark timing. The upload diagnostic, buffer-reuse decision,
+Actual Coverage-MCP review of CI #637 completes all 45 region pages and one
+line page with source `matches_receipt`, tests passed and zero gaps. Receipt
+SHA-256 is `4f77ad641d4105dfa1f66ff757cf30dcf2d8957a5a466496b5a407ad92ee8330`;
+attachment passes. This review is bound to the captured producer, not final
+main. Strict coverage acceptance and the hosted exact-main handoff remain open.
+
+Interim `[skip ci]` commits avoid broad unchanged reruns while focused tooling
+and Windows checks qualify their changes. Required PR checks remain pending;
+complete final-source CI is still required before merge and release. Coverage
+acceptance and independent review precede benchmark timing. The upload diagnostic, buffer-reuse decision,
 three-system measurements, final candidate, merge and publication remain open.
 
 ### Earlier release audit — 2026-11-03 (PR #21 / CI #629)
