@@ -33,7 +33,11 @@ from windows_reference_hang import (
     validate_candidate_lifecycle,
     validate_reference_hang,
 )
-from windows_reference_startup import validate_reference_startup, validate_reference_startup_and_hang
+from windows_reference_startup import (
+    diagnostic_input as windows_reference_startup_input,
+    validate_reference_startup,
+    validate_reference_startup_and_hang,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -807,12 +811,13 @@ def validate_parity(
     for row in rows:
         case = expected[row["case_id"]]
         accepted = allow_reference_exception and row.get("status") == "failed"
-        if allow_reference_exception and parity_platform == "windows" and eligible_input(case):
-            try:
-                validate_candidate_lifecycle(row, case)
-            except (ValueError, KeyError, TypeError) as error:
-                raise EvidenceError(f"independent candidate lifecycle rejected: {error}") from error
-            candidate_contract_cases.append(case["case_id"])
+        if allow_reference_exception and parity_platform == "windows":
+            if eligible_input(case):
+                try:
+                    validate_candidate_lifecycle(row, case)
+                except (ValueError, KeyError, TypeError) as error:
+                    raise EvidenceError(f"independent candidate lifecycle rejected: {error}") from error
+                candidate_contract_cases.append(case["case_id"])
         accepted_hang = accepted_startup = accepted_sigbreak_stall = False
         if accepted:
             failures = []
@@ -830,6 +835,9 @@ def validate_parity(
                     failures.append(str(error))
                     continue
                 accepted_reference_defects.append(decision)
+                if (windows_reference_startup_input(case)
+                        and case["case_id"] not in candidate_contract_cases):
+                    candidate_contract_cases.append(case["case_id"])
                 accepted_hang = validator in (validate_reference_hang, validate_reference_startup_and_hang)
                 accepted_startup = validator in (validate_reference_startup, validate_reference_startup_and_hang)
                 accepted_sigbreak_stall = decision.get("policy") == SIGBREAK_STALL_POLICY

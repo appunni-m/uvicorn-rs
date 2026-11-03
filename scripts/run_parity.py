@@ -62,6 +62,7 @@ from websockets.exceptions import ConnectionClosed, InvalidHandshake, InvalidSta
 from websockets.sync.client import connect as websocket_connect
 from parity_identity import runtime_source_digest, runtime_source_hashes
 from windows_reference_hang import diagnostic_input as windows_reference_hang_input
+from windows_reference_startup import diagnostic_input as windows_reference_startup_input
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15544,15 +15545,18 @@ def run_python_api_probe(
                 with trace_path.open("a", encoding="utf-8") as trace_file:
                     for line in trace_lines:
                         trace_file.write(f"{case['case_id']} {line}\n")
-        retain_reference_hang = (
+        retain_reference_diagnostic = (
             os.name == "nt"
             and server_id == "uvicorn"
-            and windows_reference_hang_input(case)
+            and (
+                windows_reference_hang_input(case)
+                or windows_reference_startup_input(case)
+            )
         )
-        # Preserve raw timeout observations for the exact reviewed worker
-        # inputs. The separate Windows acceptance check verifies the known
-        # stock hang signature and rejects any candidate lifecycle failure.
-        if run_http_observation.get("process_timed_out") and not retain_reference_hang:
+        # Preserve raw timeout observations only for exact reviewed Windows
+        # worker inputs. Their separate acceptance rules verify the complete
+        # stock signature and keep candidate lifecycle checks independent.
+        if run_http_observation.get("process_timed_out") and not retain_reference_diagnostic:
             diagnostic = server_stderr or server_stdout
             diagnostic_tail = "\n".join(diagnostic.splitlines()[-20:])[-3000:]
             raise ParityError(

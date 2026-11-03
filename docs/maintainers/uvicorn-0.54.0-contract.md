@@ -44,12 +44,12 @@ A separate
 `uvicorn-0.54.0-windows-two-worker-sigbreak-tcp-wakeup@1` policy covers the
 existing explicit two-worker SIGTERM input, which Windows delivers as
 `CTRL_BREAK_EVENT`. Its request and 12-second deadline are fixed, and it is
-bound to Windows x86-64 / CPython 3.12.13 / Uvicorn 0.54.0. Neither policy
-covers reload, intentional worker crashes, other reference versions, or generic
-timeouts. After the original timeout, the stock reference alone receives one
-diagnostic TCP connection. Acceptance requires the captured one-worker stall,
-the supervisor already joining that worker, and complete reference shutdown
-within three seconds of that connection. All other compared observations must
+bound to Windows x86-64 / CPython 3.12.13 / Uvicorn 0.54.0. Neither
+shutdown-hang policy covers reload, intentional worker crashes, other reference
+versions, or generic timeouts. After the original timeout, the stock reference
+alone receives one diagnostic TCP connection. Acceptance requires the captured
+one-worker stall, the supervisor already joining that worker, and complete
+reference shutdown within three seconds of that connection. All other compared observations must
 still match. The candidate must complete both worker lifespans and exit zero
 after the original single console signal within the deadline, without this diagnostic.
 The independent candidate checks run even when the raw comparison passes;
@@ -58,18 +58,33 @@ matching worker crashes or replacement cannot satisfy this contract.
 The separately captured startup failure in
 [CI #637](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084/job/125850961385)
 has its own policy,
-`uvicorn-0.54.0-windows-two-worker-listen-winerror10022@1`, implemented in
+`uvicorn-0.54.0-windows-two-worker-listen-winerror10022@2`, implemented in
 `scripts/windows_reference_startup.py`. It covers only the explicit
-`--workers 2` SIGINT and SIGTERM inputs on Windows x86-64, CPython 3.12.13 and stock Uvicorn
-0.54.0. The retained traceback must end in
+`--workers 2` SIGINT and SIGTERM inputs plus two indexed worker-crash inputs on
+Windows x86-64, CPython 3.12.13 and stock Uvicorn 0.54.0. The worker-crash
+cases are `python-api.module-cli-worker-crash-restarts` (one injected worker
+exit) and `python-api.module-cli-worker-restarts-after-two-crashes` (two
+injected exits). Their inputs, worker counts and original deadlines are exact.
+The retained reference traceback must end in
 `create_server → _start_serving → sock.listen` with `WinError 10022`.
-Exactly one original reference worker must fail and be replaced before
-the declared console signal; both surviving workers and the supervisor must then finish cleanly
-within the original deadline. Unknown errors, additional replacements,
-timeouts or wakeup connections are rejected. Raw and normalized logs must
-agree, and every response, signal and deadline comparison still applies.
-The candidate must satisfy the unchanged clean two-worker lifecycle contract.
-This does not identify the underlying cause or validate an upstream fix.
+For the simple request cases, exactly one original reference worker must fail
+and be replaced before the declared console signal; both surviving workers
+and the supervisor must then finish within the original deadline. In the
+one-crash case, the candidate must perform only the one declared crash and
+replacement, serve HTTP 200, and shut down its two surviving workers cleanly.
+In the two-crash case, the candidate must perform both declared crashes and
+replacements, serve HTTP 200, and shut down cleanly. The reference may have
+exactly one additional listen-failure worker and replacement. If that case
+also exceeds its shutdown deadline, acceptance additionally requires the
+separate SIGINT hang policy's retained one-worker join stall and successful
+release by one diagnostic TCP connection within three seconds. The diagnostic
+connection is never sent to the candidate. Raw and normalized logs must agree,
+and all response, signal, deadline, crash-count and candidate lifecycle
+requirements remain enforced. Unknown errors, counts, extra replacements,
+unrelated timeouts, or an unreviewed input remain failures. This policy does
+not identify the underlying cause or validate an upstream fix. The newer
+worker-crash cases still require a fresh exact-source Windows run with complete
+raw logs before they count toward release acceptance.
 
 [Focused CI #641](https://github.com/appunni-m/uvicorn-rs/actions/runs/41647390647/job/125956212708)
 captures both signatures together on the SIGTERM input: one startup listen

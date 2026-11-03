@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Policy regression fixtures, not new live Windows qualification evidence."""
 
+from __future__ import annotations
+
 import base64
 from copy import deepcopy
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -12,10 +15,185 @@ import unittest
 
 import check_ci_evidence as evidence
 from test_windows_reference_hang import encode, fixture
-from windows_reference_startup import POLICY, SIGBREAK_POLICY, _windows_log_events
+from windows_reference_startup import (
+    CRASH_RESTART_CASE_ID,
+    CRASH_RESTART_POLICY,
+    POLICY,
+    SIGINT_HANG_POLICY,
+    SIGBREAK_POLICY,
+    TWO_CRASH_RESTART_CASE_ID,
+    TWO_CRASH_RESTART_POLICY,
+    _windows_log_events,
+    diagnostic_input,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _listen_traceback():
+    frames = [
+        (r"C:\Python\Lib\multiprocessing\process.py", 314, "_bootstrap", "self.run()"),
+        (r"C:\Python\Lib\multiprocessing\process.py", 108, "run", "self._target(*self._args, **self._kwargs)"),
+        (
+            r"C:\agent\uvicorn_rs_upstream_oracle\Lib\site-packages\uvicorn\_subprocess.py",
+            80, "subprocess_started", "target(sockets=sockets)",
+        ),
+        (
+            r"C:\agent\uvicorn_rs_upstream_oracle\Lib\site-packages\uvicorn\supervisors\multiprocess.py",
+            77, "target", "self.server.run(sockets)",
+        ),
+        (
+            r"C:\agent\uvicorn_rs_upstream_oracle\Lib\site-packages\uvicorn\server.py",
+            86, "run", "return asyncio_run(self.serve(sockets=sockets), loop_factory=self.config.get_loop_factory())",
+        ),
+        (r"C:\Python\Lib\asyncio\runners.py", 195, "run", "return runner.run(main)"),
+        (r"C:\Python\Lib\asyncio\runners.py", 118, "run", "return self._loop.run_until_complete(task)"),
+        (r"C:\Python\Lib\asyncio\base_events.py", 691, "run_until_complete", "return future.result()"),
+        (
+            r"C:\agent\uvicorn_rs_upstream_oracle\Lib\site-packages\uvicorn\server.py",
+            90, "serve", "await self._serve(sockets)",
+        ),
+        (
+            r"C:\agent\uvicorn_rs_upstream_oracle\Lib\site-packages\uvicorn\server.py",
+            105, "_serve", "await self.startup(sockets=sockets)",
+        ),
+        (
+            r"C:\agent\uvicorn_rs_upstream_oracle\Lib\site-packages\uvicorn\server.py",
+            154, "startup",
+            "server = await loop.create_server(create_protocol, sock=sock, ssl=config.ssl, backlog=config.backlog)",
+        ),
+        (r"C:\Python\Lib\asyncio\base_events.py", 1609, "create_server", "server._start_serving()"),
+        (r"C:\Python\Lib\asyncio\base_events.py", 316, "_start_serving", "sock.listen(self._backlog)"),
+    ]
+    return (
+        "Process SpawnProcess-1:\nTraceback (most recent call last):\n"
+        + "".join(f'  File "{path}", line {line}, in {function}\n    {source}\n'
+                  for path, line, function, source in frames)
+        + "OSError: [WinError 10022] An invalid argument was supplied\n"
+    )
+
+
+def _worker_log(base: int, *, crash_count: int, listen_failure: bool, stalled: bool) -> tuple[str, str | None]:
+    next_pid = base
+    parent = next_pid + 99
+    next_pid += 1
+    starts = [next_pid, next_pid + 1]
+    active = list(starts)
+    next_pid += 2
+    lines = [
+        f"INFO:     Uvicorn running on http://127.0.0.1:{base + 5000} (Press CTRL+C to quit)",
+        f"INFO:     Started parent process [{parent}]",
+        *(f"INFO:     Started server process [{pid}]" for pid in starts),
+    ]
+    if listen_failure:
+        lines.append(_listen_traceback().rstrip("\n"))
+    failed_workers = crash_count + (1 if listen_failure else 0)
+    for _ in range(failed_workers):
+        failed = active.pop()
+        lines.extend((
+            f"INFO:     Waiting for child process [{failed}]",
+            f"INFO:     Child process [{failed}] died",
+        ))
+        replacement = next_pid
+        next_pid += 1
+        starts.append(replacement)
+        active.append(replacement)
+        lines.append(f"INFO:     Started server process [{replacement}]")
+    survivors = active
+    lines.extend((
+        "INFO:     Received SIGINT, exiting.",
+        "INFO:     Shutting down",
+        "INFO:     Shutting down",
+        *(f"INFO:     Terminated child process [{pid}]" for pid in survivors),
+        f"INFO:     Waiting for child process [{survivors[0]}]",
+        f"INFO:     Finished server process [{survivors[0]}]",
+        f"INFO:     Waiting for child process [{survivors[1]}]",
+    ))
+    before = "\n".join(lines) + "\n"
+    lines.append(f"INFO:     Finished server process [{survivors[1]}]")
+    lines.extend((f"INFO:     Waiting for child process [{pid}]" for pid in survivors))
+    lines.append(f"INFO:     Stopping parent process [{parent}]")
+    return "\n".join(lines) + "\n", before if stalled else None
+
+
+def _worker_crash_fixture(case_id: str, *, with_shutdown_hang: bool = False):
+    result, _ = fixture()
+    _, cases, _ = evidence.load_contract()
+    case = deepcopy(next(item for item in cases if item["case_id"] == case_id))
+    crash_count = 1 if case_id == CRASH_RESTART_CASE_ID else 2
+    reference_log, before = _worker_log(
+        3000, crash_count=crash_count, listen_failure=True, stalled=with_shutdown_hang,
+    )
+    candidate_log, _ = _worker_log(
+        4000, crash_count=crash_count, listen_failure=False, stalled=False,
+    )
+    response_body = b"python-api-worker-restarted"
+
+    def observation(log, *, timeout, side):
+        diagnostic = None
+        if side == "oracle" and with_shutdown_hang:
+            diagnostic = {
+                "stderr_before_connection_base64": encode(before),
+                "timeout_seconds": 20, "recovery_timeout_seconds": 3,
+                "connection_opened": True, "exit_code_after_connection": 0,
+                "error": None,
+            }
+        raw = {
+            "process_timed_out": timeout,
+            "process_exit_code": 0,
+            "shutdown_signal_sent": True,
+            "shutdown_signals_sent": ["SIGINT"],
+            "response_received": True,
+            "response_status": 200,
+            "response_content_type": "text/plain",
+            "response_body_base64": encode(response_body.decode()),
+            "listener_responses": [{"status": 200, "body_base64": encode(response_body.decode())}],
+            "idle_connection_closed": None,
+            "server_stdout_base64": "",
+            "server_stderr_base64": encode(log),
+            "reference_shutdown_diagnostic": diagnostic,
+        }
+        starts = re.findall(r"Started server process \[(\d+)\]", log)
+        deaths = re.findall(r"Child process \[(\d+)\] died", log)
+        manifest, _, _ = evidence.load_contract()
+        operation = next(item for item in manifest["operations"] if item["id"] == case["operation"])
+        output = {field: raw.get(field) for field in operation["observe"]}
+        output.update({
+            "exit_code": 0,
+            "stdout_base64": encode(json.dumps({"run_http": raw})),
+            "stderr_base64": "",
+            "server_log_events": _windows_log_events(raw),
+            "worker_replacement_observed": bool(deaths),
+            "worker_start_count": len(starts),
+            "worker_clean_shutdown_count": 2,
+        })
+        return output
+
+    oracle = observation(reference_log, timeout=with_shutdown_hang, side="oracle")
+    target = observation(candidate_log, timeout=False, side="target")
+    difference = "server_log_events"
+    if with_shutdown_hang:
+        difference = "process_timed_out, server_log_events"
+    row = {
+        "case_id": case["case_id"], "profile": case["profile"],
+        "operation": case["operation"], "requirements": case["covers"],
+        "verification": "oracle-parity", "fault": None, "status": "failed",
+        "difference": f"Python API observations differ: {difference}",
+        "oracle_observation": oracle, "target_observation": target,
+        "server_exit_codes": {"oracle": 0, "target": 0},
+    }
+    result["cases"] = [row]
+    result["status"] = "failed"
+    result["summary"] = {
+        "selected": 1, "executed": 1, "passed": 0, "failed": 1,
+        "not_run": 0, "infrastructure_failed": 0,
+    }
+    result["run"]["environment"].update(
+        python="3.12.13", platform="Windows-2022Server-10.0.20348-SP0", machine="AMD64"
+    )
+    result["run"]["command"] = ["python", "scripts/run_parity.py", "--case-id", case_id]
+    return result, case
 
 
 class ReferenceStartupPolicyTests(unittest.TestCase):
@@ -300,6 +478,88 @@ class CombinedReferenceDefectTests(unittest.TestCase):
         self.result["run"]["environment"]["dependencies"]["uvicorn"] = "0.55.0"
         with self.assertRaises(evidence.EvidenceError):
             self.check()
+
+
+class WorkerCrashReferencePolicyTests(unittest.TestCase):
+    def test_one_injected_crash_keeps_candidate_recovery_and_accepts_only_stock_listen_error(self):
+        result, case = _worker_crash_fixture(CRASH_RESTART_CASE_ID)
+        before = deepcopy(result)
+        decision = evidence.validate_parity(
+            result, expected_cases=[case], allow_windows_reference_startup=True,
+        )
+        self.assertEqual(decision["status"], "accepted_with_reference_exception")
+        self.assertEqual(decision["raw_parity_status"], "failed")
+        self.assertEqual(decision["accepted_reference_defects"][0]["policy"], CRASH_RESTART_POLICY)
+        self.assertEqual(decision["candidate_contract_cases"], [CRASH_RESTART_CASE_ID])
+        self.assertEqual(result, before)
+
+    def test_two_crash_timeout_needs_both_startup_and_hang_policies(self):
+        result, case = _worker_crash_fixture(TWO_CRASH_RESTART_CASE_ID, with_shutdown_hang=True)
+        decision = evidence.validate_parity(
+            result, expected_cases=[case], allow_windows_reference_startup=True,
+            allow_windows_reference_hang=True,
+        )
+        self.assertEqual(decision["accepted_reference_defects"][0]["policy"],
+                         f"{TWO_CRASH_RESTART_POLICY}+{SIGINT_HANG_POLICY}")
+        self.assertEqual(decision["raw_parity_summary"]["failed"], 1)
+        self.assertEqual(decision["candidate_contract_cases"], [TWO_CRASH_RESTART_CASE_ID])
+        for kwargs in ({}, {"allow_windows_reference_startup": True},
+                       {"allow_windows_reference_hang": True}):
+            with self.subTest(kwargs=kwargs), self.assertRaises(evidence.EvidenceError):
+                evidence.validate_parity(result, expected_cases=[case], **kwargs)
+
+    def test_two_crash_startup_error_without_timeout_needs_only_startup_policy(self):
+        result, case = _worker_crash_fixture(TWO_CRASH_RESTART_CASE_ID)
+        decision = evidence.validate_parity(
+            result, expected_cases=[case], allow_windows_reference_startup=True,
+        )
+        self.assertEqual(decision["accepted_reference_defects"][0]["policy"], TWO_CRASH_RESTART_POLICY)
+
+    def test_candidate_must_perform_the_declared_crashes_and_shutdown(self):
+        result, case = _worker_crash_fixture(CRASH_RESTART_CASE_ID)
+        result["cases"][0]["target_observation"]["worker_start_count"] = 2
+        with self.assertRaises(evidence.EvidenceError):
+            evidence.validate_parity(result, expected_cases=[case],
+                                     allow_windows_reference_startup=True)
+
+        result, case = _worker_crash_fixture(TWO_CRASH_RESTART_CASE_ID, with_shutdown_hang=True)
+        result["cases"][0]["target_observation"]["process_timed_out"] = True
+        with self.assertRaises(evidence.EvidenceError):
+            evidence.validate_parity(result, expected_cases=[case],
+                allow_windows_reference_startup=True, allow_windows_reference_hang=True)
+
+    def test_reference_wakeup_and_error_signature_are_exact(self):
+        result, case = _worker_crash_fixture(TWO_CRASH_RESTART_CASE_ID, with_shutdown_hang=True)
+        observation = result["cases"][0]["oracle_observation"]
+        raw = json.loads(base64.b64decode(observation["stdout_base64"]))["run_http"]
+        diagnostic = raw["reference_shutdown_diagnostic"]
+        diagnostic["connection_opened"] = False
+        observation["stdout_base64"] = encode(json.dumps({"run_http": raw}))
+        with self.assertRaises(evidence.EvidenceError):
+            evidence.validate_parity(result, expected_cases=[case],
+                allow_windows_reference_startup=True, allow_windows_reference_hang=True)
+
+        result, case = _worker_crash_fixture(CRASH_RESTART_CASE_ID)
+        observation = result["cases"][0]["oracle_observation"]
+        raw = json.loads(base64.b64decode(observation["stdout_base64"]))["run_http"]
+        raw["server_stderr_base64"] = encode(
+            base64.b64decode(raw["server_stderr_base64"]).decode().replace("WinError 10022", "WinError 10038")
+        )
+        observation["stdout_base64"] = encode(json.dumps({"run_http": raw}))
+        observation["server_log_events"] = _windows_log_events(raw)
+        with self.assertRaises(evidence.EvidenceError):
+            evidence.validate_parity(result, expected_cases=[case],
+                                     allow_windows_reference_startup=True)
+
+    def test_timeout_diagnostics_are_retained_only_for_exact_crash_inputs(self):
+        _, cases, _ = evidence.load_contract()
+        cases_by_id = {case["case_id"]: case for case in cases}
+        self.assertTrue(diagnostic_input(cases_by_id[CRASH_RESTART_CASE_ID]))
+        self.assertTrue(diagnostic_input(cases_by_id[TWO_CRASH_RESTART_CASE_ID]))
+        changed = deepcopy(cases_by_id[TWO_CRASH_RESTART_CASE_ID])
+        changed["api"]["run_http"]["timeout_seconds"] += 1
+        self.assertFalse(diagnostic_input(changed))
+        self.assertFalse(diagnostic_input(cases_by_id["python-api.module-cli-two-workers-serve-request"]))
 
 
 if __name__ == "__main__":
