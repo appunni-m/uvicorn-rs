@@ -73,9 +73,15 @@ registry: keep-alive deadline rescheduling, WebSocket extension header-value
 failure, Unix listener accept failure, and Unix admission closure. Their
 retained results report the intended fault consumed and match the recorded
 artifact hashes. The registry is repaired and a static preflight now checks
-all indexed native contracts before the expensive CI jobs begin. Strict
-evidence replay, independent Coverage-MCP review and final source qualification
-remain pending; later harness changes are not qualified by that historical run.
+all indexed native contracts before the expensive CI jobs begin. Coverage-MCP
+0.16.0 has now independently queried this historical measurement: all 45 region
+pages and one line page are retained, source hashes match, and receipt validation
+passes with zero missing source-span regions or lines. Its 898 per-instantiation
+diagnostic groups remain visible. Zero-gap projections retain the original LLVM
+function records so MCP can measure region detail rather than report it absent.
+The canonical report is unchanged. Strict full evidence replay and final
+exact-main CI/review handoff qualification remain pending; later harness changes
+are not qualified by that historical run.
 
 Historical Windows failures remain retained. CI
 [#627](https://github.com/appunni-m/uvicorn-rs/actions/runs/41560262953)

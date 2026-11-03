@@ -86,9 +86,14 @@ def validate_full_matrix(matrix: Any) -> None:
 
 
 def uncovered_llvm_functions(data: Any, uncovered_regions: Any) -> list[dict[str, Any]]:
-    """Keep LLVM symbols referenced by normalized gaps and preserve every file record."""
+    """Keep gap symbols, or full region detail when the report has no gaps."""
     require(isinstance(data, list), "canonical report lacks an LLVM coverage data array")
     require(isinstance(uncovered_regions, list), "canonical report lacks normalized uncovered regions")
+    # An empty function inventory means region detail is unavailable to MCP,
+    # even when summary totals report complete coverage. Retain the original
+    # region observations so the service can independently measure zero gaps.
+    if not uncovered_regions:
+        return data
     uncovered_symbols: set[str] = set()
     for region in uncovered_regions:
         require(isinstance(region, dict), "canonical uncovered region is malformed")
@@ -261,8 +266,8 @@ def projection_document(
         "type": report.get("type"),
         "version": report.get("version"),
         # Coverage-MCP gets every file/span plus all LLVM function records that
-        # contain uncovered regions. Fully covered function records add size
-        # without adding any gap locations; aggregate totals remain unchanged.
+        # contain uncovered regions. A zero-gap report retains the complete
+        # function inventory so independent region detail remains available.
         "data": repository_llvm_paths(
             uncovered_llvm_functions(report.get("data", []), coverage["uncovered_regions"]),
             set(source_hashes),

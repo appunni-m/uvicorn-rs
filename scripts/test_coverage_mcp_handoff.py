@@ -163,6 +163,10 @@ def check_uncovered_function_projection() -> None:
                                     {"files": files, "functions": functions, "totals": totals}
                                 ]:
         raise AssertionError("unmapped uncovered spans must retain the complete LLVM function inventory")
+    covered_data = [{"files": files, "functions": functions[:1],
+                     "totals": {"functions": {"count": 1, "covered": 1, "notcovered": 0}}}]
+    if uncovered_llvm_functions(covered_data, []) != covered_data:
+        raise AssertionError("zero-gap reports must retain measured LLVM region detail for MCP review")
 
 
 def check_repository_path_projection() -> None:
