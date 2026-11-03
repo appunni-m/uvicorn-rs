@@ -55,6 +55,32 @@ INFO:     Waiting for child process [6224]
 [Complete independent stock-only run and artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/41586707341/job/125753785308).
 The artifact includes all three attempts, including both successful controls.
 
+## Captured stack and controlled wakeup
+
+[A second stock-only reproduction](https://github.com/appunni-m/uvicorn-rs/actions/runs/41587452848/job/125756162041)
+captured the live processes after the 12-second timeout with external
+`py-spy dump`. The supervisor is in `BaseProcess.join()`; the remaining worker
+is in:
+
+```text
+socket.accept (socket.py:295)
+BaseSelectorEventLoop._accept_connection (asyncio\selector_events.py:178)
+Handle._run (asyncio\events.py:88)
+BaseEventLoop._run_once (asyncio\base_events.py:1999)
+BaseEventLoop.run_forever (asyncio\base_events.py:645)
+```
+
+[A controlled wakeup run](https://github.com/appunni-m/uvicorn-rs/actions/runs/41587817744/job/125757313584)
+reproduced the same stack. After retaining the timeout and stacks, the controller
+opened one additional TCP connection to the listener. The worker immediately
+logged graceful shutdown and the supervisor exited with code 0 within the
+three-second wakeup window. No second shutdown signal was sent. The original
+timeout remains recorded as a failure.
+
+This narrows the observed failure to a blocked listener accept, rather than an
+ASGI task delaying shutdown. The exact operation that makes the shared listener
+block still needs a causal fix and regression check.
+
 ## Scope and investigation
 
 This establishes a shutdown hang with a small standalone app. It does not
@@ -62,11 +88,13 @@ establish that every Windows launch fails or that the separate historical
 `WinError(10022)` startup crash has the same cause. A single-worker probe of
 the stock `Process.terminate()` path did not hang.
 
-One lead is the worker-directed `CTRL_BREAK_EVENT`: stock Uvicorn targets a
-spawned worker PID, while the documented Windows API expects a process-group
-ID for targeted delivery. Related history:
+The initial signal-delivery lead was the worker-directed `CTRL_BREAK_EVENT`.
+That remains a separate question: the captured worker is blocked in
+`socket.accept()`. Related signal history:
 [Uvicorn #2292](https://github.com/Kludex/uvicorn/discussions/2292) and
 [microsoft/terminal #335](https://github.com/microsoft/terminal/issues/335).
-This is an investigation lead, not yet a confirmed causal explanation.
+The current evidence does not establish that process-group targeting caused
+the blocked accept. The immediate investigation is Windows shared-listener
+initialization and its nonblocking state.
 
 No upstream issue or pull request has been submitted from this draft.

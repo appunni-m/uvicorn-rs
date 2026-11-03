@@ -1,0 +1,25 @@
+Process 7132: "D:\a\_temp\uv-python-dir\cpython-3.12.13-windows-x86_64-none\python.exe" -m uvicorn worker_terminate:app --host 127.0.0.1 --port 56510 --loop asyncio --http h11 --ws none --lifespan on --no-access-log
+Python v3.12.13 (D:\a\_temp\uv-python-dir\cpython-3.12.13-windows-x86_64-none\python.exe)
+
+Thread 7384 (idle): "MainThread"
+    Popen.wait (multiprocessing\popen_spawn_win32.py:112)
+    BaseProcess.join (multiprocessing\process.py:149)
+    Process.join (uvicorn\supervisors\multiprocess.py:124)
+    Multiprocess.join_all (uvicorn\supervisors\multiprocess.py:171)
+    Multiprocess.run (uvicorn\supervisors\multiprocess.py:208)
+    run (uvicorn\main.py:630)
+    main (uvicorn\main.py:448)
+    Context.invoke (click\core.py:910)
+    Command.invoke (click\core.py:1415)
+    Command.main (click\core.py:1552)
+    Command.__call__ (click\core.py:1631)
+    <module> (uvicorn\__main__.py:4)
+    _run_code (<frozen runpy>:88)
+    _run_module_as_main (<frozen runpy>:198)
+Thread 8060 (idle): "Thread-1 (_serve)"
+    PipeListener.accept (multiprocessing\connection.py:695)
+    Listener.accept (multiprocessing\connection.py:480)
+    _ResourceSharer._serve (multiprocessing\resource_sharer.py:138)
+    Thread.run (threading.py:1012)
+    Thread._bootstrap_inner (threading.py:1075)
+    Thread._bootstrap (threading.py:1032)

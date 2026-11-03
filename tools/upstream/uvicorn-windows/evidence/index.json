@@ -1,0 +1,35 @@
+{
+  "purpose": "Unmodified stock Uvicorn Windows shutdown diagnosis; not release acceptance",
+  "runs": [
+    {
+      "run_id": 41586707341,
+      "attempt": 1,
+      "artifact_id": 13208510909,
+      "archive_sha256": "1abc517a9d5668d9f255b02f7aca57d2bb25483a0eff309b66f29147fd00e666",
+      "observation": "CLI attempt 3 timed out after two successful controls"
+    },
+    {
+      "run_id": 41587452848,
+      "attempt": 1,
+      "artifact_id": 13208581960,
+      "archive_sha256": "2f7f9ec96c9ad637bad45ada48284440e5a3cd92a7f904334fea75d07e6e0e2e",
+      "observation": "CLI attempt 6 timed out; external live supervisor and worker stacks captured"
+    },
+    {
+      "run_id": 41587817744,
+      "attempt": 1,
+      "artifact_id": 13208422962,
+      "archive_sha256": "68b01184eff40ae60532c57446f42cf9a2fa7bc80c95360d72937309f7aa5458",
+      "observation": "CLI attempt 3 timed out; blocked accept stack captured; additional TCP connection released shutdown with exit code 0"
+    }
+  ],
+  "files": {
+    "ci632-failure.json": "8931684402aba898a968f4e4d8a83cba3cbd40b42c1e33a183a49827d2cf0b24",
+    "ci634-failure.json": "eeda081933d2684e950c7e270be9865f716f3374ec72d9de96d56efe8529c5f6",
+    "ci634-supervisor-stack.txt": "627e368ed1756b42b8e773132b8e35c7b563beecdb04b15387a2b64af04f21aa",
+    "ci634-worker-stack.txt": "f5ec9eab5f2f01d15fb1ab9358e5c185116fc9b48ce548bdafa94ce4269ca2ea",
+    "ci635-failure-and-wakeup.json": "f91ec521c09ac634ef5f01871028eb6e85d799e7dfc55aaa25e2f5e8ca4d3ddd",
+    "ci635-supervisor-stack.txt": "dde442d5caec00bae6ce0e1be26fa3774ec3be7bbb872f693ce849e66911d3dc",
+    "ci635-worker-stack.txt": "2c5f3202777b85229cd46266ec1cc45145e444dfbb599a9e712bc7be948c60dd"
+  }
+}
