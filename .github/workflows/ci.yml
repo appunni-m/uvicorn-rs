@@ -96,11 +96,11 @@ jobs:
         shell: bash
         working-directory: tools/upstream/uvicorn-windows
         run: '"$RUNNER_TEMP/stock-uvicorn/Scripts/python.exe" worker_terminate.py --output ../../../target/stock-windows/worker-terminate.json'
-      - name: Reproduce the two-worker CLI Ctrl+C lifecycle at most three times
+      - name: Capture the first two-worker CLI Ctrl+C failure within ten attempts
         if: always() && !cancelled() && steps.stock-install.conclusion == 'success'
         shell: bash
         working-directory: tools/upstream/uvicorn-windows
-        run: '"$RUNNER_TEMP/stock-uvicorn/Scripts/python.exe" cli_ctrl_c.py --output ../../../target/stock-windows/cli-ctrl-c --attempts 3 --dump-exe "$RUNNER_TEMP/stock-uvicorn/Scripts/py-spy.exe"'
+        run: '"$RUNNER_TEMP/stock-uvicorn/Scripts/python.exe" cli_ctrl_c.py --output ../../../target/stock-windows/cli-ctrl-c --attempts 10 --dump-exe "$RUNNER_TEMP/stock-uvicorn/Scripts/py-spy.exe"'
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:

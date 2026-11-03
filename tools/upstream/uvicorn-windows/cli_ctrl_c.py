@@ -90,7 +90,7 @@ def attempt(directory, dump_exe=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=Path("cli-ctrl-c"))
-    parser.add_argument("--attempts", type=int, choices=range(1, 4), default=3)
+    parser.add_argument("--attempts", type=int, choices=range(1, 11), default=3)
     parser.add_argument("--dump-exe", type=Path, help="optional py-spy executable; used only after a timeout")
     parser.add_argument("--in-console", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
