@@ -18,12 +18,19 @@ import json
 import math
 import os
 from pathlib import Path
+import platform
 import signal
 import subprocess
 import sys
 import tempfile
 import time
 import uuid
+
+from benchmark_reference_exceptions import (
+    active_reference_exclusions,
+    exclusions_by_workload,
+    installed_hypercorn_version,
+)
 
 
 CATEGORIES = (
@@ -152,7 +159,14 @@ def default_category_workloads(label, names):
     return list(names)
 
 
-def expected_rows(path, label, selected_servers, repetitions, selected_workloads=None):
+def expected_rows(
+    path,
+    label,
+    selected_servers,
+    repetitions,
+    selected_workloads=None,
+    excluded_servers_by_workload=None,
+):
     if label == "lifecycle":
         return {(label, name, number) for name in selected_servers
                 for number in range(1, repetitions + 1)}
@@ -172,12 +186,15 @@ def expected_rows(path, label, selected_servers, repetitions, selected_workloads
             if ast.literal_eval(field) == "servers":
                 permitted = ast.literal_eval(value)
                 servers = tuple(server for server in servers if server in permitted)
+        excluded = (excluded_servers_by_workload or {}).get(name, {})
+        excluded_servers = set(excluded) if isinstance(excluded, dict) else set()
         expected.update((name, server, number) for server in servers
+                        if server not in excluded_servers
                         for number in range(1, repetitions + 1))
     return expected
 
 
-def report_receipt(path, planned, label):
+def report_receipt(path, planned, label, reference_exclusions):
     report = json.loads(path.read_text())
     rows, metadata = report["rows"], report["metadata"]
     if not isinstance(rows, list) or not isinstance(metadata, dict):
@@ -196,6 +213,11 @@ def report_receipt(path, planned, label):
                  or not zero_counter(row, "unexpected_native_errors")
                  or not isinstance(row.get("repetition"), int) or isinstance(row.get("repetition"), bool)
                  or not isinstance(row.get("timing_valid"), bool)]
+    exclusion_map = exclusions_by_workload(reference_exclusions)
+    reference_exclusions_match = (
+        metadata.get("reference_exclusions", []) == reference_exclusions
+        and metadata.get("excluded_servers_by_workload", {}) == exclusion_map
+    )
     if label == "lifecycle":
         for number, row in enumerate(rows, 1):
             phases = row.get("phase_measurements", {})
@@ -213,6 +235,7 @@ def report_receipt(path, planned, label):
         "timing_valid_rows": sum(row.get("timing_valid") is True for row in rows),
         "performance_evidence_status": metadata.get("performance_evidence_status", "not_proven"),
         "category_identity_stable": metadata.get("identity_stable") is True,
+        "reference_exclusions_match": reference_exclusions_match,
     }
 
 
@@ -513,9 +536,23 @@ def main():
                 category_concurrency = args.h3_concurrency if label == "http3" else args.concurrency
                 command += ["--workloads", *workloads, "--duration", str(args.duration),
                             "--warmup", str(args.warmup), "--concurrency", str(category_concurrency)]
+            reference_exclusions = active_reference_exclusions(
+                label,
+                workloads,
+                servers=servers,
+                platform_system=platform.system(),
+                machine=platform.machine(),
+                hypercorn_version=installed_hypercorn_version(),
+            )
+            excluded_servers_by_workload = exclusions_by_workload(reference_exclusions)
+            all_planned = expected_rows(
+                script, label, servers, args.repetitions,
+                selected_workloads=workloads if label != "lifecycle" else None,
+            )
             planned = expected_rows(
                 script, label, servers, args.repetitions,
                 selected_workloads=workloads if label != "lifecycle" else None,
+                excluded_servers_by_workload=excluded_servers_by_workload,
             )
             entry = {"category": label, "command": command, "workloads": workloads,
                      "servers": list(servers),
@@ -523,7 +560,10 @@ def main():
                          {"loop": loop, "reference": reference, "candidate": candidate}
                          for loop, reference, candidate in comparisons
                      ],
-                     "expected_rows": len(planned), "started_at": utc_now(), "log": str(out / f"{label}.log")}
+                     "planned_rows": len(all_planned),
+                     "expected_rows": len(planned),
+                     "reference_exclusions": reference_exclusions,
+                     "started_at": utc_now(), "log": str(out / f"{label}.log")}
             record["category_runs"].append(entry)
             atomic_json(checkpoint, record)
             event({"event": "starting", **entry})
@@ -544,8 +584,10 @@ def main():
                             continue
                 entry["finished_at"] = utc_now()
                 if output.exists():
-                    entry.update(report_receipt(output, planned, label))
-                    if entry["correctness_failures"] or not entry["exact_planned_rows_present"] or not entry["category_identity_stable"]:
+                    entry.update(report_receipt(output, planned, label, reference_exclusions))
+                    if (entry["correctness_failures"] or not entry["exact_planned_rows_present"]
+                            or not entry["category_identity_stable"]
+                            or not entry["reference_exclusions_match"]):
                         failed = True
                 else:
                     entry["report_state"] = "incomplete; category JSONL/log/failure checkpoints retained"
@@ -570,6 +612,7 @@ def main():
                     or entry.get("correctness_failures", 0) > 0
                     or entry.get("exact_planned_rows_present") is False
                     or entry.get("category_identity_stable") is False
+                    or entry.get("reference_exclusions_match") is False
                     or str(entry.get("report_state", "")).startswith("incomplete")
                     or cleanup.get("forced") is True
                     or cleanup.get("returncode") not in (None, 0)

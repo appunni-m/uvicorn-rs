@@ -37,6 +37,11 @@ from benchmark_evidence import (
     workspace_rust_source_paths,
 )
 from benchmark_certificates import generate_server_certificate
+from benchmark_reference_exceptions import (
+    active_reference_exclusions,
+    exclusions_by_workload,
+    installed_hypercorn_version,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -316,6 +321,7 @@ def source_digest() -> str:
         "tools/http3-probe/src/bin/bench.rs",
         "scripts/trace_hypercorn_h3.py",
         "scripts/benchmark_evidence.py",
+        "scripts/benchmark_reference_exceptions.py",
         "src/lib.rs",
         "python/uvicorn_rs/server.py",
         "examples/bench_fastapi.py",
@@ -362,12 +368,36 @@ def main() -> None:
             "--servers hypercorn-asyncio --repetitions 1"
         )
     assert_clean_coverage_environment()
+    if not PYTHON.exists():
+        raise SystemExit("install the benchmark dependency group before running HTTP/3 cases")
+    if not CLIENT.exists():
+        raise SystemExit(f"prebuild the HTTP/3 benchmark client before identity capture: {CLIENT}")
+
+    hypercorn_version = installed_hypercorn_version()
+    if hypercorn_version is None:
+        raise SystemExit("the pinned Hypercorn benchmark reference is not installed")
+    reference_exclusions = active_reference_exclusions(
+        "http3",
+        args.workloads,
+        servers=args.servers,
+        platform_system=platform.system(),
+        machine=platform.machine(),
+        hypercorn_version=hypercorn_version,
+        enabled=not args.trace_hypercorn_h3_events,
+    )
+    excluded_by_workload = exclusions_by_workload(reference_exclusions)
     selected_servers = {name: SERVERS[name] for name in args.servers}
+
+    def workload_servers(workload: str) -> list[str]:
+        supported = WORKLOADS[workload].get("servers", SERVERS)
+        excluded = excluded_by_workload.get(workload, {})
+        return [name for name in supported if name not in excluded]
+
     for workload in args.workloads:
-        supported_servers = WORKLOADS[workload].get("servers", SERVERS)
+        supported_servers = workload_servers(workload)
         if any(name in supported_servers for name in selected_servers):
             continue
-        excluded = WORKLOADS[workload].get("excluded_servers", {})
+        excluded = excluded_by_workload.get(workload, {})
         details = "; ".join(
             f"{name}: {excluded[name]}" if name in excluded else f"{name}: not enabled for this workload"
             for name in args.servers
@@ -375,10 +405,6 @@ def main() -> None:
         raise SystemExit(
             f"no selected HTTP/3 server supports workload {workload!r}; {details}"
         )
-    if not PYTHON.exists():
-        raise SystemExit("install the benchmark dependency group before running HTTP/3 cases")
-    if not CLIENT.exists():
-        raise SystemExit(f"prebuild the HTTP/3 benchmark client before identity capture: {CLIENT}")
 
     host_preflight = None
     if args.trace_hypercorn_h3_events:
@@ -396,6 +422,7 @@ def main() -> None:
             "scripts/run_h3_category_bench.py",
             "scripts/benchmark_certificates.py",
             "scripts/benchmark_host_preflight.py",
+            "scripts/benchmark_reference_exceptions.py",
             "scripts/trace_hypercorn_h3.py",
             "tools/http3-probe/src/bin/bench.rs",
             "tools/http3-probe/Cargo.toml",
@@ -422,7 +449,7 @@ def main() -> None:
         for workload in args.workloads:
             for repetition in range(1, args.repetitions + 1):
                 names = [
-                    name for name in WORKLOADS[workload].get("servers", SERVERS)
+                    name for name in workload_servers(workload)
                     if name in selected_servers
                 ]
                 rng.shuffle(names)
@@ -455,7 +482,7 @@ def main() -> None:
     cpu_model = host_cpu_model()
     for workload in args.workloads:
         summaries[workload] = {}
-        for name in WORKLOADS[workload].get("servers", SERVERS):
+        for name in workload_servers(workload):
             if name not in selected_servers:
                 continue
             subset = [row for row in rows if row["workload"] == workload and row["server"] == name]
@@ -471,10 +498,11 @@ def main() -> None:
     report = {
         "metadata": {
             "date": date.today().isoformat(), "platform": platform.platform(),
-            "machine": platform.machine(), "logical_cpus": psutil.cpu_count(logical=True),
+            "platform_system": platform.system(), "machine": platform.machine(),
+            "logical_cpus": psutil.cpu_count(logical=True),
             "cpu_model": cpu_model, "python": platform.python_version(),
             "rustc": evidence.rustc_version,
-            "hypercorn": subprocess.check_output([str(PYTHON), "-c", "import importlib.metadata as m; print(m.version('hypercorn'))"], text=True).strip(),
+            "hypercorn": hypercorn_version,
             "readiness": "trusted TLS HTTP/1.1 HEAD /fixed with Connection: close, outside measured H2/H3 workload",
             "hypercorn_config": {"keep_alive_max_requests": 100000000, "include_server_header": False, "include_date_header": False, "accesslog": None},
             "response_header_policy": {"date": "disabled on both servers", "server": "disabled on both servers"},
@@ -515,10 +543,8 @@ def main() -> None:
                 "max_events": 512 if args.trace_hypercorn_h3_events else 0,
                 "host_preflight": host_preflight,
             },
-            "excluded_servers_by_workload": {
-                name: WORKLOADS[name].get("excluded_servers", {})
-                for name in args.workloads if WORKLOADS[name].get("excluded_servers")
-            },
+            "reference_exclusions": reference_exclusions,
+            "excluded_servers_by_workload": excluded_by_workload,
             "concurrency": args.concurrency, "duration_seconds": args.duration,
             "workload_concurrency": {
                 workload: WORKLOADS[workload].get("concurrency", args.concurrency)

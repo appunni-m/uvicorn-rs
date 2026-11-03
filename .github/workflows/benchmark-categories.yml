@@ -578,6 +578,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          .venv/bin/python scripts/test_benchmark_reference_exceptions.py \
+            > target/benchmark-preparation/h3-reference-exception-policy.log 2>&1
           .venv/bin/python scripts/test_lifecycle_bench.py \
             > target/benchmark-preparation/lifecycle-diagnostic-contract.log 2>&1
           .venv/bin/python scripts/test_upload_trace.py \

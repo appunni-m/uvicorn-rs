@@ -4547,3 +4547,35 @@ checks, hashes and logs remain under ignored
 `benchmarks/results/h3-upload-interop-2026-11-03/`. These are correctness probes,
 not timing samples. Repeated benchmark-client correctness and the matched
 three-system measurements remain pending after parity and coverage acceptance.
+
+## Three-system matrix and narrow Linux ARM64 reference exception (2026-11-04)
+
+[ASGI performance matrix run 281](https://github.com/appunni-m/uvicorn-rs/actions/runs/41711768603)
+used `develop` source `2ce737df4aaa1ed1312c9c65d1732be1de56ff31`. Linux x86-64
+and macOS ARM64 completed their category matrices. Linux ARM64 passed public
+parity and the other benchmark categories, but the H3 category stopped during
+Hypercorn 0.18.0 asyncio `slow-reader-backpressure`, repetition 5. Its log
+records `KeyError(24)` at Hypercorn's H3 stream lookup; the client recorded two
+timeouts waiting for response headers. The retained records do not establish
+event ordering or prove which event caused the other.
+
+On the same Linux ARM64 attempt, all five `uvicorn-rs-asyncio` H3
+`slow-reader-backpressure` rows passed correctness and clean-shutdown checks.
+The Rust uvloop candidate also completed its five rows. The H3 report had
+138/140 rows because the reference error aborted the remaining category; the
+aggregate is `validated_partial_matrix`, not a completed three-system result.
+The x86-64 and macOS matrices completed with 140 H3 rows each. Linux x86-64
+FastAPI HTTP/1 results were slower than the reference on both event loops for
+the validated route (about 0.56x asyncio and 0.60x uvloop); therefore this
+attempt does not establish a broad performance gain even apart from the
+incomplete ARM64 matrix.
+
+The benchmark harness now has a source-audited exception for only Linux
+`aarch64`, Hypercorn 0.18.0, H3 `slow-reader-backpressure`, and the
+`hypercorn-asyncio` → `uvicorn-rs-asyncio` pair. The report must carry the exact
+policy and server-map receipt. Every Rust candidate repetition remains in the
+correctness and lifecycle gate; no timing ratio is emitted for the excluded
+reference pair. A reference-only diagnostic, including the dedicated event
+trace mode, still runs Hypercorn. No timeout was increased and no server
+behavior was changed. A complete exact-source three-system run after this
+harness change is still required; run 281 remains partial evidence.
