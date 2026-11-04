@@ -109,15 +109,43 @@ not support the timer refactor as the timeout cause, though the small sample
 cannot rule out a rare schedule-sensitive race.
 
 The historical failure rows all reused their HTTP/1.1 connections
-(`new_connections=0`). The next focused discriminator is a matched
+(`new_connections=0`). The planned focused discriminator was a matched
 `Connection: close` workload against the existing persistent-connection case,
 keeping Linux ARM64, uvloop, 1 MiB body, 1 KiB writes, concurrency eight, and
 the 15 s timeout fixed. The diagnostic C client now reports completed
 transfer counts split into new and reused connections; a two-request loopback
 check confirmed that persistent and `Connection: close` modes produce the
-expected counts. Run at most three attempts for the changed input; do not
-launch a matrix. No runtime fix is claimed until a failing trace identifies
-the first stalled boundary and a focused regression passes.
+expected counts. The changed input was limited to three attempts; no matrix
+was run. No runtime fix is claimed until a failing trace identifies the first
+stalled boundary and a focused regression passes.
+
+The bounded comparison is complete on source `422c731fcf45cbd77c4a4ce2c1ecd20b8cedfbb5`.
+Run [#302](https://github.com/appunni-m/uvicorn-rs/actions/runs/41919147440)
+replayed the persistent-connection input for three Linux ARM64 / uvloop pairs
+with the request-level client, ASGI, and Rust traces enabled. All six rows had
+zero failures. Each candidate row opened eight connections and reused them for
+the remaining 14,685, 15,333, and 15,038 transfers. Across the retained slow
+candidate traces, 24–29 of 32 ASGI requests per repetition matched a libcurl
+trace; maximum body-frame, ASGI receive, and body-queue waits were 12.92 ms,
+14.42 ms, and 14.47 ms. Artifact `13367385136`, ZIP SHA-256
+`f09478e6c992bb8fcabf5de88a2e60244c4c4b13ebfd89c338743e0d739adf3d`.
+
+Run [#303](https://github.com/appunni-m/uvicorn-rs/actions/runs/41921247555)
+changed only the client connection policy to `Connection: close`, again for
+three matched Linux ARM64 / uvloop pairs. All six rows had zero failures. Every
+candidate request used a new connection; none were reused. The retained slow
+candidate traces matched 23–27 of 32 ASGI requests per repetition to libcurl.
+Artifact `13366034345`, ZIP SHA-256
+`c9d2fe4404cd562571b288ed79f30f159a06ba073b9e0929c500e631b2252259`.
+
+Neither workload reproduced the historical 15 s timeout, so neither supplies
+a failing request ID or a first-divergence boundary. The old failures being on
+reused connections makes connection reuse a lead, but current persistent
+connections also pass; reuse is not established as a cause. Both runs include
+runtime and ASGI instrumentation and have invalid timing for performance
+claims. Keep `nbmg` open and do not repeat these inputs without a new trigger
+or source-level lead. No server behavior or timeout change is justified by
+these results.
 
 ## Fixed contract and evidence
 
