@@ -178,9 +178,11 @@ class FailureReportTests(unittest.TestCase):
             "origin_unix_ns=1700000000001000000 origin_uncertainty_ns=5 "
             "expected_bytes=1024 emission_reason=slow "
             "read_bytes=0 offered_bytes=0 delivered_bytes=1024 "
-            "events_seen=2 events_retained=2 events_dropped=0",
+            "events_seen=3 events_retained=3 events_dropped=0",
             "uvicorn-rs-upload-event request=77-2-9 lane=asgi offset_ns=20 "
             "event=asgi-deliver bytes=1024 flag=true",
+            "uvicorn-rs-upload-event request=77-2-9 lane=asgi offset_ns=30 "
+            "event=asgi-response-start-queued bytes=0 flag=false value=200",
         ])
         metrics = {
             "upload_trace": {
@@ -205,9 +207,14 @@ class FailureReportTests(unittest.TestCase):
             trace["server_trace"]["trace_records"][0]["emission_reason"],
             "body-size-mismatch",
         )
+        response_start = next(
+            event for event in trace["server_trace"]["events"]
+            if event["event"] == "asgi-response-start-queued"
+        )
+        self.assertEqual(response_start["value"], 200)
         self.assertEqual(
             [event["source"] for event in trace["correlated_timeline"]],
-            ["uvicorn-rs", "libcurl", "uvicorn-rs", "uvicorn-rs"],
+            ["uvicorn-rs", "libcurl", "uvicorn-rs", "uvicorn-rs", "uvicorn-rs"],
         )
         pump_events = [
             event for event in trace["server_trace"]["events"]

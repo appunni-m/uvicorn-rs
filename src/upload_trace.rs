@@ -14,6 +14,7 @@ struct Event {
     kind: &'static str,
     bytes: usize,
     flag: bool,
+    value: Option<u64>,
 }
 
 #[derive(Default)]
@@ -75,6 +76,20 @@ impl RequestUploadTrace {
     }
 
     pub(crate) fn record(&self, kind: &'static str, bytes: usize, flag: bool) {
+        self.record_inner(kind, bytes, flag, None);
+    }
+
+    pub(crate) fn record_with_value(
+        &self,
+        kind: &'static str,
+        bytes: usize,
+        flag: bool,
+        value: u64,
+    ) {
+        self.record_inner(kind, bytes, flag, Some(value));
+    }
+
+    fn record_inner(&self, kind: &'static str, bytes: usize, flag: bool, value: Option<u64>) {
         let mut events = self
             .events
             .lock()
@@ -95,6 +110,7 @@ impl RequestUploadTrace {
             kind,
             bytes,
             flag,
+            value,
         });
     }
 
@@ -134,11 +150,15 @@ impl RequestUploadTrace {
             events.seen.saturating_sub(events.rows.len() as u64),
         );
         for event in &events.rows {
-            let _ = writeln!(
+            let _ = write!(
                 output,
                 "uvicorn-rs-upload-event request={} lane={} offset_ns={} event={} bytes={} flag={}",
                 self.request_id, self.lane, event.offset_ns, event.kind, event.bytes, event.flag,
             );
+            if let Some(value) = event.value {
+                let _ = write!(output, " value={value}");
+            }
+            output.push('\n');
         }
         output
     }
@@ -243,5 +263,16 @@ mod tests {
         assert!(!is_abnormal_event("request-cancelled", false));
         assert!(is_abnormal_event("pump-stop", true));
         assert!(!is_abnormal_event("queue-offer", true));
+    }
+
+    #[test]
+    fn retains_response_status_values_in_the_trace() {
+        let Some(trace) = RequestUploadTrace::new("1-0-1", "asgi", Some(1024)) else {
+            unreachable!();
+        };
+        trace.record_with_value("asgi-response-start-queued", 0, false, 200);
+
+        let snapshot = trace.snapshot("test");
+        assert!(snapshot.contains("event=asgi-response-start-queued bytes=0 flag=false value=200"));
     }
 }

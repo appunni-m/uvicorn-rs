@@ -1418,6 +1418,16 @@ impl RuntimeDiagnostics {
     }
 
     #[inline]
+    fn upload_event_with_value(&self, kind: &'static str, bytes: usize, flag: bool, value: u64) {
+        #[cfg(feature = "runtime-diagnostics")]
+        if let Some(trace) = &self.upload_trace {
+            trace.record_with_value(kind, bytes, flag, value);
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let _ = (kind, bytes, flag, value);
+    }
+
+    #[inline]
     fn upload_stop(
         &self,
         connection: &ConnectionClosed,
@@ -3984,6 +3994,12 @@ impl AsgiIo {
                     coverage_value!(HttpResponseStartStatusExtract, status_value.extract())?;
                 let status = StatusCode::from_u16(status)
                     .map_err(|_| PyRuntimeError::new_err("Invalid HTTP response status code."))?;
+                slf.diagnostics.upload_event_with_value(
+                    "asgi-response-start",
+                    0,
+                    false,
+                    u64::from(status.as_u16()),
+                );
                 let trailers = coverage_value!(
                     HttpResponseStartTrailersGetItem,
                     message.get_item("trailers")
@@ -4108,6 +4124,12 @@ impl AsgiIo {
                         "server response channel closed: {error}"
                     )));
                 }
+                slf.diagnostics.upload_event_with_value(
+                    "asgi-response-start-queued",
+                    0,
+                    false,
+                    u64::from(status.as_u16()),
+                );
                 Ok(py.None().into_bound(py))
             }
             AsgiEventType::HttpResponseBody => {
@@ -4155,6 +4177,9 @@ impl AsgiIo {
                     }
                     None => false,
                 };
+                let body_len = body.len();
+                slf.diagnostics
+                    .upload_event("asgi-response-body", body_len, more_body);
                 let body_completed = (!more_body).then(|| Arc::clone(&slf.response_body_completed));
                 let chunk = ResponseChunk::Body(BodyChunk { body, more_body });
                 slf.diagnostics.http_response_body();
@@ -4172,6 +4197,11 @@ impl AsgiIo {
                         if let Some(body_completed) = body_completed {
                             body_completed.store(true, Ordering::Release);
                         }
+                        slf.diagnostics.upload_event(
+                            "asgi-response-body-queued",
+                            body_len,
+                            more_body,
+                        );
                         Ok(py.None().into_bound(py))
                     }
                     Err(TrySendError::Closed(_)) => {
@@ -4189,6 +4219,11 @@ impl AsgiIo {
                             if let Some(body_completed) = body_completed {
                                 body_completed.store(true, Ordering::Release);
                             }
+                            diagnostics.upload_event(
+                                "asgi-response-body-queued",
+                                body_len,
+                                more_body,
+                            );
                             diagnostics.http_response_body_full_send_wait_finished(wait_started);
                             Python::attach(|py| Ok(py.None()))
                         })
@@ -6418,6 +6453,9 @@ impl AsgiBody {
         // A final ASGI body completes the transport, while the application may
         // still run background work. Transfer that work to the server now so
         // neither another body poll nor transport teardown delays completion.
+        #[cfg(feature = "runtime-diagnostics")]
+        self.response_timing_diagnostics
+            .upload_event("http-response-finished", 0, false);
         if let Some(task) = application.observe_completed() {
             self.app_task_tracker.spawn(async move {
                 observe_app_after_response(task.await);
@@ -6432,6 +6470,23 @@ impl AsgiBody {
         chunk: ResponseChunk,
     ) -> Poll<Option<Result<Frame<Bytes>, BoxError>>> {
         let response_complete = chunk.completes_response(self.trailers_expected);
+        #[cfg(feature = "runtime-diagnostics")]
+        match &chunk {
+            ResponseChunk::Body(body) => self.response_timing_diagnostics.upload_event(
+                "http-response-body-polled",
+                body.body.len(),
+                body.more_body,
+            ),
+            ResponseChunk::Trailers(_) => self.response_timing_diagnostics.upload_event(
+                "http-response-trailers-polled",
+                0,
+                false,
+            ),
+            ResponseChunk::End => {
+                self.response_timing_diagnostics
+                    .upload_event("http-response-end-polled", 0, false)
+            }
+        }
         match chunk {
             ResponseChunk::Body(chunk) => {
                 self.response_body_bytes = self
@@ -10517,6 +10572,12 @@ async fn handle_request_parts(
             (start, ResponseApplication::Completed(result))
         }
     };
+    response_timing_diagnostics.upload_event_with_value(
+        "http-response-start-ready",
+        0,
+        false,
+        u64::from(start.status.as_u16()),
+    );
     response_timing_diagnostics.http_response_start_latency_finished(response_latency_started);
     let defer_completed_app_result_once = matches!(application, ResponseApplication::Completed(_));
     let trailers_expected = start.trailers;

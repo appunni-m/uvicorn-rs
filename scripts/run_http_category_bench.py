@@ -567,7 +567,7 @@ def _server_upload_trace(server_output: str, request_id: str) -> dict:
                 continue
             try:
                 offset_ns = int(fields["offset_ns"])
-                current["events"].append({
+                event = {
                     "request_id": request_id,
                     "lane": fields["lane"],
                     "event": fields["event"],
@@ -575,7 +575,10 @@ def _server_upload_trace(server_output: str, request_id: str) -> dict:
                     "estimated_unix_ns": current["origin_unix_ns"] + offset_ns,
                     "bytes": int(fields["bytes"]),
                     "flag": fields["flag"] == "true",
-                })
+                }
+                if "value" in fields:
+                    event["value"] = int(fields["value"])
+                current["events"].append(event)
             except (KeyError, ValueError):
                 continue
 
