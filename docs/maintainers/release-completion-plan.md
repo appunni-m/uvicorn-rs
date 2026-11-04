@@ -148,15 +148,35 @@ reused connections makes connection reuse a lead, but current persistent
 connections also pass; reuse is not established as a cause. Both runs include
 runtime and ASGI instrumentation and have invalid timing for performance
 claims. Keep `nbmg` open and do not repeat these inputs without a new trigger
-or source-level lead. The original worker/attempt IDs are now a concrete trace
-target: focused upload-trace mode can emit Rust events only for `2:4` and
-`3:25`, at a 1 ms threshold, without the ASGI timing wrapper. The next bounded
-run keeps Linux ARM64, uvloop, the 5 s sample, 1 s warmup, 1 MiB body,
-1 KiB callbacks, concurrency 8, and 15 s client timeout; it uses the recreated
-body-batch timer to match the historical implementation and three pairs. This
-adds request-level evidence for the exact historical attempts while avoiding
-per-request trace overhead for the rest of the sample. No server behavior or
-timeout change is justified by the existing results.
+source-level lead.
+
+## Targeted historical request traces — 2026-11-05
+
+The original worker/attempt IDs were used as the selector for run
+[#304](https://github.com/appunni-m/uvicorn-rs/actions/runs/41926096472), on
+source `cc387d56da792057e9002dcd601a90232743fba9`. The focused trace-only run
+selected Linux ARM64, uvloop, `fastapi-upload-1m-write-1k`, three 5 s samples
+with 1 s warmup, concurrency 8, 1 MiB uploads in 1 KiB callbacks, the
+recreated body-batch timer, and the unchanged 15 s timeout. It traced only
+workers `2:4` and `3:25`, without the ASGI timing wrapper. Artifact
+`13370345234`, ZIP SHA-256
+`5e20189668deda55cd6749538d19b9f4d2b707fc885a62c690b27dd7a34a3eb8`.
+
+All six selected candidate transfers and all six matched Uvicorn transfers
+completed with zero failures. Each selected transfer reused its connection
+(`new_connections=0`); candidate client durations were 9.59–18.58 ms. For each
+candidate request, the Rust pump read and offered exactly 1 MiB, ASGI received
+1 MiB, and the response completed with status 200. Maximum selected ASGI
+receive wait was 6.65 ms and maximum body-queue send wait was 4.39 ms. No
+15-second stall occurred, including at the exact worker/attempt positions and
+with the timer behavior from the historical source. These diagnostics have
+invalid timing for performance evidence.
+
+This weakens the hypotheses that the observed attempt positions, connection
+reuse alone, or the timer refactor are sufficient triggers. The traces show a
+complete request path, not the first stalled boundary from the historical
+failure. No production behavior change is supported. Keep `nbmg` open pending
+a captured failure with a request ID or a new, concrete trigger.
 
 ## Fixed contract and evidence
 
