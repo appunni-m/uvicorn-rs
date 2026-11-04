@@ -29,7 +29,7 @@ use std::{
     ops::Deref,
     panic::AssertUnwindSafe,
     pin::Pin,
-    sync::Arc,
+    sync::{Arc, OnceLock},
     task::{Context, Poll},
     time::Duration,
 };
@@ -55,6 +55,20 @@ use crate::{
     ServerErrorObserver, ServerErrorPhase, ServiceErrorPolicy, ServiceErrorResponse, TlsInfo,
     TransportKind, observe_error,
 };
+
+fn trace_http3(event: fmt::Arguments<'_>) {
+    // Opt-in only; parity CI sets this for the single HTTP/3 case under diagnosis.
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    let enabled = ENABLED.get_or_init(|| {
+        std::env::var_os("UVICORN_RS_TRACE_HTTP3").as_deref() == Some(std::ffi::OsStr::new("1"))
+    });
+    if !enabled {
+        return;
+    }
+
+    let mut stderr = io::stderr().lock();
+    let _ = io::Write::write_fmt(&mut stderr, format_args!("uvicorn-rs h3-trace {event}\n"));
+}
 
 /// Error returned when reading an HTTP/3 request body.
 pub type Http3RequestBodyError = Box<dyn Error + Send + Sync + 'static>;
@@ -527,6 +541,8 @@ where
     B::Error: Into<super::BoxBodyError> + Send + Sync + 'static,
 {
     let peer_addr = connection_info.peer_addr();
+    let connection_id = connection.stable_id();
+    trace_http3(format_args!("connection={connection_id} opened"));
     let (connection_lifetime, _connection_lifetime_guard) = crate::ConnectionLifetimeGuard::new();
     let (transport, peer_stops) = transport::Connection::new(connection.clone());
     let created = h3::server::Connection::new(transport)
@@ -561,6 +577,7 @@ where
             // shutdown begins. A closed sender also means no more streams
             // should be accepted, so either result drains the H3 connection.
             _ = shutdown.changed() => {
+                trace_http3(format_args!("connection={connection_id} shutdown-started"));
                 h3_connection
                     .shutdown(0)
                     .await
@@ -573,6 +590,9 @@ where
             accepted = h3_connection.accept() => {
                 match accepted {
                     Ok(Some(resolver)) => {
+                        trace_http3(format_args!(
+                            "connection={connection_id} request-stream-accepted"
+                        ));
                         let application = application.clone();
                         let error_observer = connection_options.error_observer.cloned();
                         let peer_stops = peer_stops.clone();
@@ -590,8 +610,23 @@ where
                             }
                         });
                     }
-                    Ok(None) => break,
+                    Ok(None) => {
+                        trace_http3(format_args!(
+                            "connection={connection_id} accept-ended close_reason={:?}",
+                            connection.close_reason()
+                        ));
+                        break;
+                    }
+                    Err(error) if is_http3_peer_close_ignorable(&error, &connection) => {
+                        trace_http3(format_args!(
+                            "connection={connection_id} peer-close-accepted error={error}"
+                        ));
+                        break;
+                    }
                     Err(error) => {
+                        trace_http3(format_args!(
+                            "connection={connection_id} accept-error error={error}"
+                        ));
                         connection_error = Some(Http3ConnectionError::H3(error));
                         break;
                     }
@@ -601,6 +636,9 @@ where
     }
 
     if connection_error.is_some() {
+        trace_http3(format_args!(
+            "connection={connection_id} local-close code=0x102 reason=request-acceptance-failed"
+        ));
         connection.close(
             quinn::VarInt::from_u32(0x102),
             b"HTTP/3 request acceptance failed",
@@ -628,8 +666,46 @@ where
         return Err(error);
     }
 
+    trace_http3(format_args!(
+        "connection={connection_id} drained close_reason_before_local_close={:?}",
+        connection.close_reason()
+    ));
     connection.close(quinn::VarInt::from_u32(0), b"HTTP/3 connection drained");
+    trace_http3(format_args!(
+        "connection={connection_id} local-close-issued close_reason={:?}",
+        connection.close_reason()
+    ));
     Ok(())
+}
+
+fn is_http3_peer_close_ignorable(
+    error: &h3::error::ConnectionError,
+    connection: &quinn::Connection,
+) -> bool {
+    if error.is_h3_no_error() {
+        return true;
+    }
+
+    // h3 0.0.8 does not expose the fields of its remote application-close
+    // error. Its public display text identifies that variant; Quinn provides
+    // the typed numeric close code for RFC 9114 classification.
+    let is_peer_application_close = error
+        .to_string()
+        .starts_with("Remote error: ApplicationClose: ");
+    if !is_peer_application_close {
+        return false;
+    }
+
+    let Some(quinn::ConnectionError::ApplicationClosed(close)) = connection.close_reason() else {
+        return false;
+    };
+
+    // Preserve registered HTTP/3, QPACK, and WebTransport errors. Unknown
+    // application codes are treated as H3_NO_ERROR by RFC 9114 section 8.
+    !matches!(
+        close.error_code.into_inner(),
+        0x33 | 0x100..=0x110 | 0x200..=0x202
+    )
 }
 
 async fn handle_http3_request<S, B>(
@@ -655,9 +731,17 @@ where
         .map_err(Http3RequestStreamError::H3)?;
     *request.version_mut() = Version::HTTP_3;
     let (mut send_stream, receive_stream) = stream.split();
+    let stream_id = send_stream.send_id();
+    trace_http3(format_args!(
+        "stream={stream_id} request-resolved method={}",
+        request.method()
+    ));
     let (peer_stopped_tx, peer_stopped_rx) = watch::channel(false);
     let request = request.map(|()| Http3RequestBody::new(receive_stream, peer_stopped_rx));
     let Some(mut peer_stopped) = peer_stops.take(send_stream.send_id()) else {
+        trace_http3(format_args!(
+            "stream={stream_id} peer-stop-observer-unavailable"
+        ));
         #[cfg(coverage)]
         crate::observe_http3_peer_stop_observer_unavailable_fault();
         let error = Http3RequestStreamError::ObserverUnavailable(io::Error::other(
@@ -689,6 +773,9 @@ where
             biased;
             stopped = &mut peer_stopped => match stopped {
                 Ok(Some(code)) => {
+                    trace_http3(format_args!(
+                        "stream={stream_id} peer-stop-observed code={code:?}"
+                    ));
                     peer_stopped_tx.send_replace(true);
                     code
                 }
@@ -696,8 +783,21 @@ where
                 // fully retired. It is not evidence that the peer cancelled
                 // the application, and the completed observer must not be
                 // polled again.
-                Ok(None) => return work.await,
+                Ok(None) => {
+                    trace_http3(format_args!(
+                        "stream={stream_id} peer-stop-observer-local-retirement"
+                    ));
+                    let result = work.await;
+                    trace_http3(format_args!(
+                        "stream={stream_id} request-handler-completed ok={}",
+                        result.is_ok()
+                    ));
+                    return result;
+                }
                 Err(error) => {
+                    trace_http3(format_args!(
+                        "stream={stream_id} peer-stop-observer-error error={error}"
+                    ));
                     let error = Http3RequestStreamError::PeerStop(error);
                     observe_error(
                         error_observer.as_ref(),
@@ -708,14 +808,24 @@ where
                     return Err(error);
                 }
             },
-            result = &mut work => return result,
+            result = &mut work => {
+                trace_http3(format_args!(
+                    "stream={stream_id} request-handler-completed ok={}",
+                    result.is_ok()
+                ));
+                return result;
+            },
         }
     };
 
     // Leaving the block drops pending readiness, application, and body
     // futures before resetting just this request. The connection's accept
     // driver continues serving sibling streams.
-    send_stream.stop_stream(Code::from(stop_code.into_inner()));
+    let stop_code = stop_code.into_inner();
+    trace_http3(format_args!(
+        "stream={stream_id} response-stopped code={stop_code}"
+    ));
+    send_stream.stop_stream(Code::from(stop_code));
     Ok(())
 }
 
@@ -736,6 +846,8 @@ where
     B: Body<Data = Bytes> + Send + 'static,
     B::Error: Into<super::BoxBodyError> + Send + Sync + 'static,
 {
+    let stream_id = send_stream.send_id();
+    trace_http3(format_args!("stream={stream_id} service-call-started"));
     let response = match AssertUnwindSafe(futures_util::future::poll_fn(|context| {
         service.poll_ready(context)
     }))
@@ -779,11 +891,29 @@ where
             super::internal_server_error()
         }
     };
+    let body_size_hint = response.body().size_hint();
+    trace_http3(format_args!(
+        "stream={stream_id} service-response-ready status={} body_size_lower={} body_size_upper={:?}",
+        response.status(),
+        body_size_hint.lower(),
+        body_size_hint.upper()
+    ));
     let (mut parts, body) = response.into_parts();
     let mut body = Box::pin(body);
     parts.version = Version::HTTP_3;
+    let mut data_frame_count = 0usize;
+    let mut data_byte_count = 0usize;
+    let mut trailer_frame_count = 0usize;
     let send_result = async {
-        send_http3_response_start::<S::Error>(send_stream, Response::from_parts(parts, ())).await?;
+        trace_http3(format_args!("stream={stream_id} response-headers-send-start"));
+        let result =
+            send_http3_response_start::<S::Error>(send_stream, Response::from_parts(parts, ()))
+                .await;
+        trace_http3(format_args!(
+            "stream={stream_id} response-headers-send-completed ok={}",
+            result.is_ok()
+        ));
+        result?;
 
         loop {
             let frame = AssertUnwindSafe(body.frame())
@@ -799,14 +929,19 @@ where
             };
             let frame = frame.map_err(Http3RequestStreamError::Body)?;
             match frame.into_data() {
-                Ok(data) => send_stream
-                    .send_data(data)
-                    .await
-                    .map_err(Http3RequestStreamError::H3)?,
+                Ok(data) => {
+                    data_frame_count += 1;
+                    data_byte_count = data_byte_count.saturating_add(data.len());
+                    send_stream
+                        .send_data(data)
+                        .await
+                        .map_err(Http3RequestStreamError::H3)?;
+                }
                 Err(frame) => {
                     // `Frame` can contain only DATA or trailers. Since DATA
                     // extraction failed above, the remaining frame is trailers.
                     let trailers = frame.into_trailers().unwrap_or_default();
+                    trailer_frame_count += 1;
                     send_stream
                         .send_trailers(trailers)
                         .await
@@ -814,11 +949,23 @@ where
                 }
             }
         }
-        finish_http3_response::<S::Error>(send_stream).await
+        trace_http3(format_args!(
+            "stream={stream_id} response-body-eof data_frames={data_frame_count} data_bytes={data_byte_count} trailer_frames={trailer_frame_count}"
+        ));
+        trace_http3(format_args!("stream={stream_id} response-finish-start"));
+        let result = finish_http3_response::<S::Error>(send_stream).await;
+        trace_http3(format_args!(
+            "stream={stream_id} response-finish-completed ok={}",
+            result.is_ok()
+        ));
+        result
     }
     .await;
 
     if let Err(error) = &send_result {
+        trace_http3(format_args!(
+            "stream={stream_id} response-failed error={error}"
+        ));
         send_stream.stop_stream(Code::H3_INTERNAL_ERROR);
         observe_error(
             error_observer.as_ref(),
@@ -826,6 +973,8 @@ where
             Some(peer_addr),
             error,
         );
+    } else {
+        trace_http3(format_args!("stream={stream_id} response-complete"));
     }
     send_result
 }
