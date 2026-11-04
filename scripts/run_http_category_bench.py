@@ -578,6 +578,8 @@ def _server_upload_trace(server_output: str, request_id: str) -> dict:
                 }
                 if "value" in fields:
                     event["value"] = int(fields["value"])
+                if "duration_ns" in fields:
+                    event["duration_ns"] = int(fields["duration_ns"])
                 current["events"].append(event)
             except (KeyError, ValueError):
                 continue

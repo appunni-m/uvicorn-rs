@@ -1428,6 +1428,39 @@ impl RuntimeDiagnostics {
     }
 
     #[inline]
+    fn upload_event_with_duration(
+        &self,
+        kind: &'static str,
+        bytes: usize,
+        flag: bool,
+        duration: std::time::Duration,
+    ) {
+        #[cfg(feature = "runtime-diagnostics")]
+        if let Some(trace) = &self.upload_trace {
+            trace.record_with_duration(
+                kind,
+                bytes,
+                flag,
+                duration.as_nanos().min(u64::MAX as u128) as u64,
+            );
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let _ = (kind, bytes, flag, duration);
+    }
+
+    #[inline]
+    fn upload_trace_enabled(&self) -> bool {
+        #[cfg(feature = "runtime-diagnostics")]
+        {
+            self.upload_trace.is_some()
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        {
+            false
+        }
+    }
+
+    #[inline]
     fn upload_stop(
         &self,
         connection: &ConnectionClosed,
@@ -2622,6 +2655,27 @@ impl tower_service::Service<Request<Incoming>> for NativeAsgiService {
                 ))
             });
         }
+        #[cfg(feature = "runtime-diagnostics")]
+        let upload_dispatch_diagnostics = self
+            .server
+            .diagnostics
+            .for_upload_trace(request.headers(), "dispatch");
+        #[cfg(feature = "runtime-diagnostics")]
+        {
+            let version = match request.version() {
+                Version::HTTP_10 => 10,
+                Version::HTTP_11 => 11,
+                Version::HTTP_2 => 20,
+                Version::HTTP_3 => 30,
+                _ => 0,
+            };
+            upload_dispatch_diagnostics.upload_event_with_value("service-enter", 0, false, version);
+        }
+        #[cfg(feature = "runtime-diagnostics")]
+        let request_lifetime = request
+            .extensions()
+            .get::<uvicorn_rs::RequestLifetime>()
+            .cloned();
         let connection_info = request
             .extensions()
             .get::<uvicorn_rs::ConnectionInfo>()
@@ -2724,19 +2778,81 @@ impl tower_service::Service<Request<Incoming>> for NativeAsgiService {
         };
         let server = Arc::clone(&context.server);
         Box::pin(async move {
+            #[cfg(feature = "runtime-diagnostics")]
+            if upload_dispatch_diagnostics.upload_trace_enabled() {
+                if let Some(mut request_lifetime) = request_lifetime {
+                    let diagnostics = upload_dispatch_diagnostics.clone();
+                    tokio::spawn(async move {
+                        let event = match request_lifetime.wait_until_ended().await {
+                            Some(uvicorn_rs::RequestEndReason::ServiceFutureDropped) => {
+                                "protocol-request-ended-service-future-dropped"
+                            }
+                            Some(uvicorn_rs::RequestEndReason::ServiceFailed) => {
+                                "protocol-request-ended-service-failed"
+                            }
+                            Some(uvicorn_rs::RequestEndReason::ResponseBodyConsumed) => {
+                                "protocol-request-ended-response-body-consumed"
+                            }
+                            Some(uvicorn_rs::RequestEndReason::ResponseBodyFailed) => {
+                                "protocol-request-ended-response-body-failed"
+                            }
+                            Some(uvicorn_rs::RequestEndReason::ResponseBodyDropped) => {
+                                "protocol-request-ended-response-body-dropped"
+                            }
+                            None => "protocol-request-ended-without-reason",
+                        };
+                        let abnormal = matches!(
+                            event,
+                            "protocol-request-ended-without-reason"
+                                | "protocol-request-ended-service-failed"
+                                | "protocol-request-ended-response-body-failed"
+                                | "protocol-request-ended-response-body-dropped"
+                        );
+                        diagnostics.upload_event(event, 0, abnormal);
+                    });
+                } else {
+                    upload_dispatch_diagnostics.upload_event(
+                        "protocol-request-lifetime-missing",
+                        0,
+                        true,
+                    );
+                }
+            }
             let websocket_upgrade =
                 context.server.websocket_enabled && is_websocket_upgrade(&request);
-            let response = if websocket_upgrade {
+            let response = match if websocket_upgrade {
                 Ok(handle_websocket_request(request, context).await)
             } else {
                 handle_request(request, context).await
-            }?;
+            } {
+                Ok(response) => response,
+                Err(error) => {
+                    #[cfg(feature = "runtime-diagnostics")]
+                    upload_dispatch_diagnostics.upload_event("service-response-error", 0, true);
+                    return Err(error);
+                }
+            };
             let response = if websocket_upgrade {
                 response
             } else {
                 apply_request_limit(&server, response)
             };
-            apply_default_response_headers(&server, response)
+            let response = match apply_default_response_headers(&server, response) {
+                Ok(response) => response,
+                Err(error) => {
+                    #[cfg(feature = "runtime-diagnostics")]
+                    upload_dispatch_diagnostics.upload_event("service-response-error", 0, true);
+                    return Err(error);
+                }
+            };
+            #[cfg(feature = "runtime-diagnostics")]
+            upload_dispatch_diagnostics.upload_event_with_value(
+                "service-response-ready",
+                0,
+                false,
+                u64::from(response.status().as_u16()),
+            );
+            Ok(response)
         })
     }
 }
@@ -3870,6 +3986,8 @@ impl AsgiIo {
             slf.preserve_application_on_disconnect
                 .store(true, Ordering::Release);
             slf.diagnostics.http_receive_immediate();
+            slf.diagnostics
+                .upload_event("asgi-receive-disconnect", 0, true);
             #[cfg(coverage)]
             let request_message = if coverage_fault_is_armed(
                 CoverageFaultPoint::HttpReceiveImmediateDisconnectMessageError,
@@ -3885,6 +4003,12 @@ impl AsgiIo {
                 make_http_request_message(py, None, &slf.request_disconnected, &slf.diagnostics);
             return Ok(request_message?.into_bound(py));
         }
+
+        let receive_trace_started = slf
+            .diagnostics
+            .upload_trace_enabled()
+            .then(std::time::Instant::now);
+        slf.diagnostics.upload_event("asgi-receive-start", 0, false);
 
         #[cfg(coverage)]
         let receive_call = slf.receive_calls.fetch_add(1, Ordering::AcqRel);
@@ -3918,9 +4042,27 @@ impl AsgiIo {
         };
         if let Some(request) = immediate {
             slf.diagnostics.http_receive_immediate();
-            if request.as_ref().is_none_or(|request| request.disconnected) {
+            let disconnected = request.as_ref().is_none_or(|request| request.disconnected);
+            let body_bytes = request
+                .as_ref()
+                .filter(|request| !request.disconnected)
+                .map_or(0, |request| request.body.len());
+            let more_body = request.as_ref().is_some_and(|request| request.more_body);
+            if disconnected {
                 slf.preserve_application_on_disconnect
                     .store(true, Ordering::Release);
+            }
+            if let Some(started) = receive_trace_started {
+                slf.diagnostics.upload_event_with_duration(
+                    if disconnected {
+                        "asgi-receive-disconnect"
+                    } else {
+                        "asgi-receive-ready"
+                    },
+                    body_bytes,
+                    more_body,
+                    started.elapsed(),
+                );
             }
             return Ok(make_http_request_message(
                 py,
@@ -3941,6 +4083,7 @@ impl AsgiIo {
             Arc::clone(&request_disconnected),
         );
         slf.diagnostics.http_receive_bridge_future();
+        slf.diagnostics.upload_event("asgi-receive-wait", 0, false);
         let diagnostics = slf.diagnostics.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let _receive_guard = receive_guard;
@@ -3964,6 +4107,24 @@ impl AsgiIo {
                     }
                 }
             };
+            if let Some(started) = receive_trace_started {
+                let disconnected = request.as_ref().is_none_or(|request| request.disconnected);
+                let body_bytes = request
+                    .as_ref()
+                    .filter(|request| !request.disconnected)
+                    .map_or(0, |request| request.body.len());
+                let more_body = request.as_ref().is_some_and(|request| request.more_body);
+                diagnostics.upload_event_with_duration(
+                    if disconnected {
+                        "asgi-receive-disconnect"
+                    } else {
+                        "asgi-receive-ready"
+                    },
+                    body_bytes,
+                    more_body,
+                    started.elapsed(),
+                );
+            }
             Python::attach(|py| {
                 if request.as_ref().is_none_or(|request| request.disconnected) {
                     preserve_application_on_disconnect.store(true, Ordering::Release);
@@ -4224,6 +4385,14 @@ impl AsgiIo {
                                 body_len,
                                 more_body,
                             );
+                            if let Some(started) = wait_started {
+                                diagnostics.upload_event_with_duration(
+                                    "asgi-response-body-queue-wait-finished",
+                                    body_len,
+                                    more_body,
+                                    started.elapsed(),
+                                );
+                            }
                             diagnostics.http_response_body_full_send_wait_finished(wait_started);
                             Python::attach(|py| Ok(py.None()))
                         })
@@ -5694,6 +5863,8 @@ struct AsgiBody {
     response_timing_diagnostics: RuntimeDiagnostics,
     #[cfg(feature = "runtime-diagnostics")]
     response_latency_started: Option<std::time::Instant>,
+    #[cfg(feature = "runtime-diagnostics")]
+    response_pending_since: Option<std::time::Instant>,
     #[cfg(coverage)]
     body_consumer_pause: Option<Pin<Box<tokio::time::Sleep>>>,
     #[cfg(coverage)]
@@ -5706,6 +5877,15 @@ struct AsgiBody {
 
 impl Drop for AsgiBody {
     fn drop(&mut self) {
+        #[cfg(feature = "runtime-diagnostics")]
+        if let Some(started) = self.response_pending_since.take() {
+            self.response_timing_diagnostics.upload_event_with_duration(
+                "http-response-poll-abandoned",
+                0,
+                true,
+                started.elapsed(),
+            );
+        }
         let Some(application) = self.application.take() else {
             return;
         };
@@ -5878,6 +6058,12 @@ async fn pump_http_request_body(
                 diagnostics.http_body_frame_wait_finished(frame_wait_started);
                 diagnostics.http_body_batch_timeout_flush();
                 if let Some(started) = body_started {
+                    diagnostics.upload_event_with_duration(
+                        "read-batch-timeout-flush",
+                        body_len,
+                        false,
+                        started.elapsed(),
+                    );
                     diagnostics.http_request_body_batch_deadline_flush(started.elapsed());
                 }
                 body_started = None;
@@ -5885,6 +6071,14 @@ async fn pump_http_request_body(
             },
             frame = body.frame() => {
                 diagnostics.http_body_frame_wait_finished(frame_wait_started);
+                if let Some(started) = frame_wait_started {
+                    diagnostics.upload_event_with_duration(
+                        "read-frame-ready",
+                        0,
+                        false,
+                        started.elapsed(),
+                    );
+                }
                 Some(frame)
             },
         };
@@ -6159,12 +6353,27 @@ async fn send_http_request_message(
             wait_for_body_pump_stop(connection_closed, cancellation, request_cancellation).await;
         } => {
             diagnostics.http_body_channel_send_finished(send_wait_started, channel_was_full);
-            diagnostics.upload_event("queue-send-cancelled", 0, true);
+            if let Some(started) = send_wait_started {
+                diagnostics.upload_event_with_duration(
+                    "queue-send-cancelled",
+                    0,
+                    true,
+                    started.elapsed(),
+                );
+            }
             diagnostics.upload_stop(connection_closed, cancellation, request_cancellation);
             return false;
         },
         result = sender.send(message) => {
             diagnostics.http_body_channel_send_finished(send_wait_started, channel_was_full);
+            if let Some(started) = send_wait_started {
+                diagnostics.upload_event_with_duration(
+                    "queue-send-finished",
+                    0,
+                    result.is_err(),
+                    started.elapsed(),
+                );
+            }
             diagnostics.upload_event("queue-send-result", 0, result.is_err());
             result
         },
@@ -6443,6 +6652,27 @@ impl<I: AsyncWrite + Unpin> AsyncWrite for ConnectionIo<I> {
 }
 
 impl AsgiBody {
+    #[cfg(feature = "runtime-diagnostics")]
+    fn record_response_poll_resumed(&mut self) {
+        if let Some(started) = self.response_pending_since.take() {
+            self.response_timing_diagnostics.upload_event_with_duration(
+                "http-response-poll-resumed",
+                0,
+                false,
+                started.elapsed(),
+            );
+        }
+    }
+
+    #[cfg(feature = "runtime-diagnostics")]
+    fn record_response_poll_pending(&mut self) {
+        if self.response_pending_since.is_none()
+            && self.response_timing_diagnostics.upload_trace_enabled()
+        {
+            self.response_pending_since = Some(std::time::Instant::now());
+        }
+    }
+
     fn record_final_body_available(&mut self) {
         #[cfg(feature = "runtime-diagnostics")]
         self.response_timing_diagnostics
@@ -6595,58 +6825,67 @@ impl Body for AsgiBody {
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
         let this = self.get_mut();
-        #[cfg(coverage)]
-        if !this.body_consumer_pause_started
-            && coverage_fault_is_armed(CoverageFaultPoint::HttpResponseBodyConsumerPause)
-        {
-            // Test-only transport pressure: stop consuming the real body
-            // channel briefly so the ASGI producer reaches its bounded-send path.
-            this.body_consumer_pause_started = true;
-            this.body_consumer_pause = Some(Box::pin(tokio::time::sleep(
-                std::time::Duration::from_millis(100),
-            )));
-        }
-        #[cfg(coverage)]
-        if let Some(pause) = this.body_consumer_pause.as_mut() {
-            if pause.as_mut().poll(cx).is_pending() {
-                return Poll::Pending;
+        #[cfg(feature = "runtime-diagnostics")]
+        this.record_response_poll_resumed();
+        let result = (|| {
+            #[cfg(coverage)]
+            if !this.body_consumer_pause_started
+                && coverage_fault_is_armed(CoverageFaultPoint::HttpResponseBodyConsumerPause)
+            {
+                // Test-only transport pressure: stop consuming the real body
+                // channel briefly so the ASGI producer reaches its bounded-send path.
+                this.body_consumer_pause_started = true;
+                this.body_consumer_pause = Some(Box::pin(tokio::time::sleep(
+                    std::time::Duration::from_millis(100),
+                )));
             }
-            this.body_consumer_pause = None;
-        }
-        #[cfg(coverage)]
-        if this.receiver_pending_pause_active {
-            if this.receiver_pending_pause.as_mut().poll(cx).is_pending() {
-                return Poll::Pending;
-            }
-            this.receiver_pending_pause_active = false;
-            return this.poll_app_task(cx);
-        }
-        let Some(application) = this.application.take() else {
-            return this.poll_app_task(cx);
-        };
-
-        match this.receiver.poll_recv(cx) {
-            Poll::Ready(Some(chunk)) => this.poll_response_chunk(application, chunk),
-            Poll::Ready(None) => {
-                this.application = Some(application);
-                this.poll_app_task(cx)
-            }
-            Poll::Pending => {
-                this.application = Some(application);
-                #[cfg(coverage)]
-                if coverage_fault_take(CoverageFaultPoint::HttpResponseBodyPollPendingPause) {
-                    // Yield to the runtime after the receiver reports Pending,
-                    // then poll app completion before polling the receiver again.
-                    // This exercises queued-body recovery without blocking Tokio.
-                    this.receiver_pending_pause
-                        .as_mut()
-                        .reset(tokio::time::Instant::now() + std::time::Duration::from_millis(100));
-                    this.receiver_pending_pause_active = true;
+            #[cfg(coverage)]
+            if let Some(pause) = this.body_consumer_pause.as_mut() {
+                if pause.as_mut().poll(cx).is_pending() {
                     return Poll::Pending;
                 }
-                this.poll_app_task(cx)
+                this.body_consumer_pause = None;
             }
+            #[cfg(coverage)]
+            if this.receiver_pending_pause_active {
+                if this.receiver_pending_pause.as_mut().poll(cx).is_pending() {
+                    return Poll::Pending;
+                }
+                this.receiver_pending_pause_active = false;
+                return this.poll_app_task(cx);
+            }
+            let Some(application) = this.application.take() else {
+                return this.poll_app_task(cx);
+            };
+
+            match this.receiver.poll_recv(cx) {
+                Poll::Ready(Some(chunk)) => this.poll_response_chunk(application, chunk),
+                Poll::Ready(None) => {
+                    this.application = Some(application);
+                    this.poll_app_task(cx)
+                }
+                Poll::Pending => {
+                    this.application = Some(application);
+                    #[cfg(coverage)]
+                    if coverage_fault_take(CoverageFaultPoint::HttpResponseBodyPollPendingPause) {
+                        // Yield to the runtime after the receiver reports Pending,
+                        // then poll app completion before polling the receiver again.
+                        // This exercises queued-body recovery without blocking Tokio.
+                        this.receiver_pending_pause.as_mut().reset(
+                            tokio::time::Instant::now() + std::time::Duration::from_millis(100),
+                        );
+                        this.receiver_pending_pause_active = true;
+                        return Poll::Pending;
+                    }
+                    this.poll_app_task(cx)
+                }
+            }
+        })();
+        #[cfg(feature = "runtime-diagnostics")]
+        if result.is_pending() {
+            this.record_response_poll_pending();
         }
+        result
     }
 
     fn is_end_stream(&self) -> bool {
@@ -10598,6 +10837,8 @@ async fn handle_request_parts(
         response_timing_diagnostics,
         #[cfg(feature = "runtime-diagnostics")]
         response_latency_started,
+        #[cfg(feature = "runtime-diagnostics")]
+        response_pending_since: None,
         #[cfg(coverage)]
         body_consumer_pause: None,
         #[cfg(coverage)]

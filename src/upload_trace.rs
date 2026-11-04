@@ -15,6 +15,7 @@ struct Event {
     bytes: usize,
     flag: bool,
     value: Option<u64>,
+    duration_ns: Option<u64>,
 }
 
 #[derive(Default)]
@@ -76,7 +77,7 @@ impl RequestUploadTrace {
     }
 
     pub(crate) fn record(&self, kind: &'static str, bytes: usize, flag: bool) {
-        self.record_inner(kind, bytes, flag, None);
+        self.record_inner(kind, bytes, flag, None, None);
     }
 
     pub(crate) fn record_with_value(
@@ -86,10 +87,27 @@ impl RequestUploadTrace {
         flag: bool,
         value: u64,
     ) {
-        self.record_inner(kind, bytes, flag, Some(value));
+        self.record_inner(kind, bytes, flag, Some(value), None);
     }
 
-    fn record_inner(&self, kind: &'static str, bytes: usize, flag: bool, value: Option<u64>) {
+    pub(crate) fn record_with_duration(
+        &self,
+        kind: &'static str,
+        bytes: usize,
+        flag: bool,
+        duration_ns: u64,
+    ) {
+        self.record_inner(kind, bytes, flag, None, Some(duration_ns));
+    }
+
+    fn record_inner(
+        &self,
+        kind: &'static str,
+        bytes: usize,
+        flag: bool,
+        value: Option<u64>,
+        duration_ns: Option<u64>,
+    ) {
         let mut events = self
             .events
             .lock()
@@ -111,6 +129,7 @@ impl RequestUploadTrace {
             bytes,
             flag,
             value,
+            duration_ns,
         });
     }
 
@@ -158,6 +177,9 @@ impl RequestUploadTrace {
             if let Some(value) = event.value {
                 let _ = write!(output, " value={value}");
             }
+            if let Some(duration_ns) = event.duration_ns {
+                let _ = write!(output, " duration_ns={duration_ns}");
+            }
             output.push('\n');
         }
         output
@@ -197,11 +219,26 @@ fn trace_emission_reason(
 fn is_abnormal_event(kind: &str, flag: bool) -> bool {
     matches!(
         kind,
-        "read-error" | "read-cancelled" | "queue-closed" | "queue-send-cancelled" | "pump-stop"
+        "read-error"
+            | "read-cancelled"
+            | "queue-closed"
+            | "queue-send-cancelled"
+            | "pump-stop"
+            | "http-response-poll-abandoned"
     ) || (flag
         && matches!(
             kind,
-            "queue-send-result" | "connection-closed" | "server-cancelled" | "request-cancelled"
+            "queue-send-result"
+                | "connection-closed"
+                | "server-cancelled"
+                | "request-cancelled"
+                | "service-response-error"
+                | "protocol-request-lifetime-missing"
+                | "protocol-request-ended-without-reason"
+                | "protocol-request-ended-service-future-dropped"
+                | "protocol-request-ended-service-failed"
+                | "protocol-request-ended-response-body-failed"
+                | "protocol-request-ended-response-body-dropped"
         ))
 }
 
@@ -274,5 +311,16 @@ mod tests {
 
         let snapshot = trace.snapshot("test");
         assert!(snapshot.contains("event=asgi-response-start-queued bytes=0 flag=false value=200"));
+    }
+
+    #[test]
+    fn retains_stage_durations_as_nanoseconds() {
+        let Some(trace) = RequestUploadTrace::new("1-0-2", "pump", Some(1024)) else {
+            unreachable!();
+        };
+        trace.record_with_duration("queue-send-finished", 0, true, 12_345);
+
+        let snapshot = trace.snapshot("test");
+        assert!(snapshot.contains("event=queue-send-finished bytes=0 flag=true duration_ns=12345"));
     }
 }

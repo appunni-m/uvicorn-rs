@@ -174,6 +174,8 @@ class FailureReportTests(unittest.TestCase):
             "event=read-wait bytes=0 flag=false",
             "uvicorn-rs-upload-event request=77-2-9 lane=pump offset_ns=1000010 "
             "event=read-data bytes=1024 flag=false",
+            "uvicorn-rs-upload-event request=77-2-9 lane=pump offset_ns=1000020 "
+            "event=queue-send-finished bytes=0 flag=false duration_ns=2500000",
             "uvicorn-rs-upload-trace schema=1 request=77-2-9 lane=asgi "
             "origin_unix_ns=1700000000001000000 origin_uncertainty_ns=5 "
             "expected_bytes=1024 emission_reason=slow "
@@ -214,13 +216,21 @@ class FailureReportTests(unittest.TestCase):
         self.assertEqual(response_start["value"], 200)
         self.assertEqual(
             [event["source"] for event in trace["correlated_timeline"]],
-            ["uvicorn-rs", "libcurl", "uvicorn-rs", "uvicorn-rs", "uvicorn-rs"],
+            [
+                "uvicorn-rs",
+                "libcurl",
+                "uvicorn-rs",
+                "uvicorn-rs",
+                "uvicorn-rs",
+                "uvicorn-rs",
+            ],
         )
         pump_events = [
             event for event in trace["server_trace"]["events"]
             if event["lane"] == "pump"
         ]
         self.assertEqual(pump_events[1]["delta_from_previous_lane_event_ns"], 1_000_000)
+        self.assertEqual(pump_events[2]["duration_ns"], 2_500_000)
 
     def test_measured_failure_keeps_client_metrics_through_sample_cleanup(self):
         # Exercise the actual measured-sample error path without starting a
