@@ -281,6 +281,48 @@ class FailureReportTests(unittest.TestCase):
         self.assertEqual(pump_events[1]["delta_from_previous_lane_event_ns"], 1_000_000)
         self.assertEqual(pump_events[2]["duration_ns"], 2_500_000)
 
+    def test_slowest_asgi_trace_is_joined_to_matching_rust_request(self):
+        with patch.object(sys, "path", [str(ROOT / "scripts"), *sys.path]):
+            import run_http_category_bench as bench
+
+        server_output = "\n".join([
+            "uvicorn-rs-upload-trace schema=1 request=88-1-42 lane=asgi "
+            "origin_unix_ns=1700000000000000000 origin_uncertainty_ns=3 "
+            "expected_bytes=1024 emission_reason=slow "
+            "read_bytes=0 offered_bytes=0 delivered_bytes=1024 "
+            "events_seen=1 events_retained=1 events_dropped=0",
+            "uvicorn-rs-upload-event request=88-1-42 lane=asgi offset_ns=30 "
+            "event=asgi-deliver bytes=1024 flag=true",
+        ])
+        diagnostics = {
+            "paths": {
+                "/upload/1024": {
+                    "upload_trace": {
+                        "traces": [{
+                            "request_id": "88-1-42",
+                            "origin_unix_ns": 1_700_000_000_000_000_010,
+                            "origin_uncertainty_ns": 5,
+                            "events": [
+                                {"offset_ns": 10, "event": "app-start"},
+                                {"offset_ns": 40, "event": "receive-ready"},
+                            ],
+                        }],
+                    },
+                },
+            },
+        }
+
+        result = bench._correlate_asgi_upload_traces(diagnostics, server_output)
+        trace = diagnostics["paths"]["/upload/1024"]["upload_trace"]["traces"][0]
+        self.assertEqual(result["wrapper_slow_trace_count"], 1)
+        self.assertEqual(result["matched_request_count"], 1)
+        self.assertEqual(result["matched_rust_lane_trace_count"], 1)
+        self.assertEqual(trace["uvicorn_rs_server_trace"]["status"], "matched")
+        self.assertEqual(
+            [event["source"] for event in trace["correlated_timeline"]],
+            ["asgi-wrapper", "uvicorn-rs", "asgi-wrapper"],
+        )
+
     def test_measured_failure_keeps_client_metrics_through_sample_cleanup(self):
         # Exercise the actual measured-sample error path without starting a
         # server or load generator. The first failure must survive cleanup.

@@ -716,6 +716,82 @@ def _correlate_upload_trace(
     client_trace["correlated_timeline"] = timeline
 
 
+def _upload_trace_min_duration_ms() -> int:
+    """Return the bounded server-side trace threshold used by this process."""
+    try:
+        value = int(os.environ.get("UVICORN_RS_UPLOAD_TRACE_MIN_MS", "100"))
+    except ValueError:
+        return 100
+    return value if 1 <= value <= 1_000 else 100
+
+
+def _correlate_asgi_upload_traces(
+    asgi_diagnostics: dict,
+    server_output: str,
+) -> dict[str, int]:
+    """Join the wrapper's slow-request samples to Rust request-level traces."""
+    wrapper_trace_count = 0
+    matched_request_count = 0
+    matched_lane_trace_count = 0
+    for path, path_data in asgi_diagnostics.get("paths", {}).items():
+        if not isinstance(path_data, dict):
+            continue
+        upload_data = path_data.get("upload_trace")
+        if not isinstance(upload_data, dict):
+            continue
+        traces = upload_data.get("traces", [])
+        if not isinstance(traces, list):
+            continue
+        for wrapper_trace in traces:
+            if not isinstance(wrapper_trace, dict):
+                continue
+            request_id = wrapper_trace.get("request_id")
+            if not isinstance(request_id, str):
+                continue
+            wrapper_trace_count += 1
+            server_trace = _server_upload_trace(server_output, request_id)
+            if server_trace["status"] != "matched":
+                continue
+
+            wrapper_trace["uvicorn_rs_server_trace"] = server_trace
+            timeline = []
+            origin_unix_ns = wrapper_trace.get("origin_unix_ns")
+            uncertainty_ns = wrapper_trace.get("origin_uncertainty_ns", 0)
+            for event in wrapper_trace.get("events", []):
+                if not isinstance(event, dict) or not isinstance(origin_unix_ns, int):
+                    continue
+                timeline.append({
+                    "source": "asgi-wrapper",
+                    "path": path,
+                    **event,
+                    "estimated_unix_ns": origin_unix_ns + int(event.get("offset_ns", 0)),
+                    "clock_uncertainty_ns": uncertainty_ns,
+                })
+            for event in server_trace["events"]:
+                lane_trace = next(
+                    (trace for trace in server_trace["trace_records"]
+                     if trace["lane"] == event["lane"]),
+                    None,
+                )
+                timeline.append({
+                    "source": "uvicorn-rs",
+                    **event,
+                    "clock_uncertainty_ns": (
+                        lane_trace["origin_uncertainty_ns"] if lane_trace else None
+                    ),
+                })
+            timeline.sort(key=lambda event: event.get("estimated_unix_ns", 0))
+            wrapper_trace["correlated_timeline"] = timeline
+            matched_request_count += 1
+            matched_lane_trace_count += len(server_trace["trace_records"])
+
+    return {
+        "wrapper_slow_trace_count": wrapper_trace_count,
+        "matched_request_count": matched_request_count,
+        "matched_rust_lane_trace_count": matched_lane_trace_count,
+    }
+
+
 def _client(port: int, seconds: float, concurrency: int, case: dict, server) -> dict:
     result = run_bounded_client(
         _client_command(port, seconds, concurrency, case),
@@ -812,6 +888,23 @@ def _sample(
             metrics["asgi_stage_diagnostics"] = json.loads(
                 asgi_timings_path.read_text(encoding="utf-8")
             )
+            if (
+                server_name.startswith("uvicorn-rs-")
+                and os.environ.get("UVICORN_RS_UPLOAD_TRACE") == "1"
+            ):
+                log.flush()
+                server_output = Path(log.name).read_text(
+                    encoding="utf-8",
+                    errors="replace",
+                )
+                correlation = _correlate_asgi_upload_traces(
+                    metrics["asgi_stage_diagnostics"],
+                    server_output,
+                )
+                correlation["server_trace_min_duration_ms"] = (
+                    _upload_trace_min_duration_ms()
+                )
+                metrics["asgi_stage_diagnostics"]["rust_trace_correlation"] = correlation
             metrics["timing_valid"] = False
             metrics.setdefault("timing_invalid_reasons", []).append(
                 "instrumented_asgi_stage_diagnostics"

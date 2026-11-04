@@ -3,11 +3,14 @@
 use std::collections::VecDeque;
 use std::fmt::Write as _;
 use std::io::Write as _;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const RETAINED_EVENTS: usize = 128;
-const SLOW_REQUEST_TRACE_THRESHOLD: Duration = Duration::from_millis(100);
+const DEFAULT_SLOW_REQUEST_TRACE_THRESHOLD_MS: u64 = 100;
+const MIN_SLOW_REQUEST_TRACE_THRESHOLD_MS: u64 = 1;
+const MAX_SLOW_REQUEST_TRACE_THRESHOLD_MS: u64 = 1_000;
+static SLOW_REQUEST_TRACE_THRESHOLD: OnceLock<Duration> = OnceLock::new();
 
 struct Event {
     offset_ns: u128,
@@ -144,7 +147,12 @@ impl RequestUploadTrace {
             "asgi" => events.delivered_bytes != expected,
             _ => false,
         });
-        trace_emission_reason(elapsed, events.abnormal, body_mismatch)
+        trace_emission_reason(
+            elapsed,
+            events.abnormal,
+            body_mismatch,
+            slow_request_trace_threshold(),
+        )
     }
 
     fn snapshot(&self, reason: &str) -> String {
@@ -204,16 +212,34 @@ fn trace_emission_reason(
     elapsed: Duration,
     abnormal_event: bool,
     body_mismatch: bool,
+    slow_threshold: Duration,
 ) -> Option<&'static str> {
     if abnormal_event {
         Some("abnormal-event")
     } else if body_mismatch {
         Some("body-size-mismatch")
-    } else if elapsed >= SLOW_REQUEST_TRACE_THRESHOLD {
+    } else if elapsed >= slow_threshold {
         Some("slow")
     } else {
         None
     }
+}
+
+fn slow_request_trace_threshold() -> Duration {
+    *SLOW_REQUEST_TRACE_THRESHOLD.get_or_init(|| {
+        let configured = std::env::var("UVICORN_RS_UPLOAD_TRACE_MIN_MS").ok();
+        parse_slow_request_trace_threshold(configured.as_deref())
+    })
+}
+
+fn parse_slow_request_trace_threshold(value: Option<&str>) -> Duration {
+    let milliseconds = value
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|value| {
+            (MIN_SLOW_REQUEST_TRACE_THRESHOLD_MS..=MAX_SLOW_REQUEST_TRACE_THRESHOLD_MS)
+                .contains(value)
+        });
+    Duration::from_millis(milliseconds.unwrap_or(DEFAULT_SLOW_REQUEST_TRACE_THRESHOLD_MS))
 }
 
 fn is_abnormal_event(kind: &str, flag: bool) -> bool {
@@ -281,25 +307,74 @@ mod tests {
     #[test]
     fn emits_only_slow_abnormal_or_incomplete_request_traces() {
         assert_eq!(
-            trace_emission_reason(Duration::from_millis(30), false, false),
+            trace_emission_reason(
+                Duration::from_millis(30),
+                false,
+                false,
+                Duration::from_millis(100),
+            ),
             None
         );
         assert_eq!(
-            trace_emission_reason(Duration::from_millis(30), true, false),
+            trace_emission_reason(
+                Duration::from_millis(30),
+                true,
+                false,
+                Duration::from_millis(100),
+            ),
             Some("abnormal-event")
         );
         assert_eq!(
-            trace_emission_reason(Duration::from_millis(30), false, true),
+            trace_emission_reason(
+                Duration::from_millis(30),
+                false,
+                true,
+                Duration::from_millis(100),
+            ),
             Some("body-size-mismatch")
         );
         assert_eq!(
-            trace_emission_reason(Duration::from_millis(101), false, false),
+            trace_emission_reason(
+                Duration::from_millis(101),
+                false,
+                false,
+                Duration::from_millis(100),
+            ),
+            Some("slow")
+        );
+        assert_eq!(
+            trace_emission_reason(
+                Duration::from_millis(30),
+                false,
+                false,
+                Duration::from_millis(20),
+            ),
             Some("slow")
         );
         assert!(is_abnormal_event("request-cancelled", true));
         assert!(!is_abnormal_event("request-cancelled", false));
         assert!(is_abnormal_event("pump-stop", true));
         assert!(!is_abnormal_event("queue-offer", true));
+    }
+
+    #[test]
+    fn bounds_the_configurable_slow_trace_threshold() {
+        assert_eq!(
+            parse_slow_request_trace_threshold(Some("20")),
+            Duration::from_millis(20),
+        );
+        assert_eq!(
+            parse_slow_request_trace_threshold(Some("0")),
+            Duration::from_millis(DEFAULT_SLOW_REQUEST_TRACE_THRESHOLD_MS),
+        );
+        assert_eq!(
+            parse_slow_request_trace_threshold(Some("1001")),
+            Duration::from_millis(DEFAULT_SLOW_REQUEST_TRACE_THRESHOLD_MS),
+        );
+        assert_eq!(
+            parse_slow_request_trace_threshold(Some("invalid")),
+            Duration::from_millis(DEFAULT_SLOW_REQUEST_TRACE_THRESHOLD_MS),
+        );
     }
 
     #[test]
