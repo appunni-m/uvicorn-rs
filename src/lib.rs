@@ -453,6 +453,7 @@ enum CoverageFaultPoint {
     Http3PeerCloseUnexpectedError,
     Http3PeerCloseReasonUnavailable,
     Http3NativePeerCloseReasonUnavailable,
+    Http3NativeServeInvalidConfig,
     Http3RequestResolveError,
     Http3ResponseBuilderError,
     Http3ResponseSendError,
@@ -936,6 +937,7 @@ impl CoverageFaultPoint {
             Self::Http3NativePeerCloseReasonUnavailable => {
                 "http3.native-peer-close.close-reason-unavailable"
             }
+            Self::Http3NativeServeInvalidConfig => "http3.native-server.invalid-config",
             Self::Http3RequestResolveError => "http3.request.resolve-error",
             Self::Http3ResponseBuilderError => "http3.response.builder-error",
             Self::Http3ResponseSendError => "http3.response.send-error",
@@ -9320,6 +9322,15 @@ fn spawn_native_http3(
             service_error_policy: uvicorn_rs::ServiceErrorPolicy::Propagate,
             concurrency_limit_observer: server.concurrency_limit_observer.clone(),
             ..uvicorn_rs::ServerConfig::default()
+        };
+        #[cfg(coverage)]
+        let config = if coverage_fault_take(CoverageFaultPoint::Http3NativeServeInvalidConfig) {
+            uvicorn_rs::ServerConfig {
+                max_connections: 0,
+                ..config
+            }
+        } else {
+            config
         };
         let service = NativeHttp3AsgiService {
             server: Arc::clone(&server),

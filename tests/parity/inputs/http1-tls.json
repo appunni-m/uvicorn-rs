@@ -166,6 +166,25 @@
         "headers": [],
         "body_base64": ""
       }
+    },
+    {
+      "case_id": "fault.http3.native-server-error-is-reported",
+      "profile": "http1-tls",
+      "operation": "http.scope-and-body",
+      "covers": [
+        "http.scope-and-body"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.native-server.invalid-config",
+        "contract": "http3-native-server-error-reported"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/scope?coverage-fault=native-http3-server-error",
+        "headers": [],
+        "body_base64": ""
+      }
     }
   ]
 }

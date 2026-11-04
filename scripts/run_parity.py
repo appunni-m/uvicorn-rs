@@ -386,6 +386,7 @@ FAULT_POINTS = {
     "http3.peer-close.unexpected-error-kind",
     "http3.peer-close.close-reason-unavailable",
     "http3.native-peer-close.close-reason-unavailable",
+    "http3.native-server.invalid-config",
     "http3.request.resolve-error",
     "http3.response.builder-error",
     "http3.response.send-error",
@@ -599,6 +600,7 @@ FAULT_CONTRACTS = {
     "http3-legacy-handshake-recovery",
     "http3-connection-error-cancels-held-response-followup-200",
     "http3-peer-close-classification-defensive-error",
+    "http3-native-server-error-reported",
     "http3-legacy-peer-close-no-error",
     "http3-legacy-peer-close-unknown-code-ignored",
     "http3-legacy-peer-close-classification-error",
@@ -1340,6 +1342,20 @@ def load_contract(
                 ):
                     raise ParityError(
                         f"{case_id}: prebound receive WouldBlock requires the inherited-listener HTTP/1.1 retry probe"
+                    )
+            elif fault["contract"] == "http3-native-server-error-reported":
+                request = case.get("request", {})
+                if (
+                    case.get("profile") != "http1-tls"
+                    or case.get("operation") != "http.scope-and-body"
+                    or fault["point"] != "http3.native-server.invalid-config"
+                    or request.get("method") != "GET"
+                    or request.get("path") != "/scope?coverage-fault=native-http3-server-error"
+                    or request.get("headers") != []
+                    or request.get("body_base64") != ""
+                ):
+                    raise ParityError(
+                        f"{case_id}: native HTTP/3 server errors require a healthy HTTPS scope probe"
                     )
             elif fault["contract"] in {
                 "http-500-then-followup-200", "http-callback-error-followup-200",
@@ -12273,6 +12289,7 @@ def execute_case(
         if (
             fault_control_path is not None
             and fault["point"] != "http3.legacy-path.selection"
+            and fault["contract"] != "http3-native-server-error-reported"
             and fault["contract"]
             != "server-prebound-transfer-would-block-retries-and-serves"
         ):
@@ -12323,6 +12340,20 @@ def execute_case(
             observation = http1_request(
                 server["port"], case["request"], ssl_context=ssl_context
             )
+            if fault is not None and fault["contract"] == "http3-native-server-error-reported":
+                server_log = read_server_log(server)
+                deadline = time.monotonic() + 3
+                while (
+                    "uvicorn-rs: HTTP/3 server failed:" not in server_log
+                    and time.monotonic() < deadline
+                ):
+                    time.sleep(0.01)
+                    server_log = read_server_log(server)
+                observation["server_log"] = server_log
+                observation["fault_consumed"] = bool(
+                    fault_control_path is not None
+                    and fault_control_path.read_text(encoding="utf-8").strip() != fault["point"]
+                )
             if case["operation"] in {
                 "http.response-content-length-drain",
             }:
@@ -13950,6 +13981,14 @@ def fault_contract_matches(
                 observation.get("stream_reset") is True
                 or observation.get("connection_closed") is True
             )
+        )
+    if fault["contract"] == "http3-native-server-error-reported":
+        server_log = observation.get("server_log", "")
+        return (
+            observation.get("status") == 200
+            and observation.get("fault_consumed") is True
+            and "uvicorn-rs: HTTP/3 server failed:" in server_log
+            and "max_connections must be greater than zero" in server_log
         )
     if fault["contract"] == "http3-peer-close-classification-defensive-error":
         followup = observation.get("followup_response")
@@ -16313,6 +16352,8 @@ def start_profile_servers(
                 if case.get("verification") == "fault-contract"
                 and (
                     "startup_failure" in case or "startup_fallback" in case
+                    or case.get("fault", {}).get("contract")
+                    == "http3-native-server-error-reported"
                     or case.get("fault", {}).get("contract") in {
                         "server-eager-lifespan-registration-cleanup",
                         "server-eager-lifespan-registration-cleanup-timeout",
@@ -16328,7 +16369,11 @@ def start_profile_servers(
                     case["fault"]["point"]
                     for case in cases
                     if case.get("verification") == "fault-contract"
-                    and case["fault"]["point"] in LEGACY_HTTP3_FAULT_POINTS
+                    and (
+                        case["fault"]["point"] in LEGACY_HTTP3_FAULT_POINTS
+                        or case["fault"]["point"]
+                        == "http3.native-peer-close.close-reason-unavailable"
+                    )
                 ),
                 "",
             )
@@ -16456,6 +16501,12 @@ def execute_profile(
     startup_cases = [
         case for case in cases
         if "startup_failure" in case or "startup_fallback" in case
+        or case.get("fault", {}).get("contract") == "http3-native-server-error-reported"
+        or (
+            profile["id"] == "http3"
+            and case.get("fault", {}).get("point")
+            == "http3.native-peer-close.close-reason-unavailable"
+        )
         or case.get("fault", {}).get("contract") in {
             "server-eager-lifespan-registration-cleanup",
             "server-eager-lifespan-registration-cleanup-timeout",
@@ -16472,9 +16523,9 @@ def execute_profile(
         case["case_id"] for case in (*startup_cases, *legacy_http3_fault_cases)
     }
     if isolated_case_ids and (len(cases) != 1 or len(isolated_case_ids) != 1):
-        # Startup faults and legacy HTTP/3 route-selection faults must be
-        # armed before the target process starts. Isolate each so its
-        # process-wide fault cannot disable or reroute sibling cases.
+        # Startup faults and HTTP/3 dispatch-selection faults must be armed
+        # before the target process starts. Isolate each so its process-wide
+        # fault cannot disable or reroute sibling cases.
         case_groups = [
             [case for case in cases if case["case_id"] not in isolated_case_ids],
             *([case] for case in cases if case["case_id"] in isolated_case_ids),
@@ -16674,6 +16725,12 @@ def execute_profile(
                             fault_observation = {
                                 **target_result,
                                 "server_log": read_server_log(target),
+                                "fault_consumed": target_raw.get("fault_consumed"),
+                            }
+                        elif case["fault"]["contract"] == "http3-native-server-error-reported":
+                            fault_observation = {
+                                **target_result,
+                                "server_log": target_raw["server_log"],
                                 "fault_consumed": target_raw.get("fault_consumed"),
                             }
                         elif case["fault"]["contract"] == "server-prebound-transfer-would-block-retries-and-serves":
