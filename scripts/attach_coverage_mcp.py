@@ -12,7 +12,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 EXTENSION_KEY = "uvicorn_rs_unified"
-REPORT_SCHEMA = "uvicorn-rs-coverage/unified@9"
+REPORT_SCHEMAS = {"uvicorn-rs-coverage/unified@9", "uvicorn-rs-coverage/unified@10"}
 
 
 class ReceiptError(RuntimeError):
@@ -30,16 +30,21 @@ def digest_json(value: Any) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", type=Path, required=True)
+    parser.add_argument("--output", type=Path,
+                        help="write a derived reviewed report without changing the queried report")
     parser.add_argument("--receipt", type=Path, required=True, help="JSON array of Coverage-MCP structuredContent pages")
     args = parser.parse_args()
     report_path = args.report.resolve()
+    output_path = args.output.resolve() if args.output else report_path
     receipt_path = args.receipt.resolve()
     report = json.loads(report_path.read_text(encoding="utf-8"))
+    source_context_path = report_path.with_name(report_path.name + ".context.json")
+    source_context = json.loads(source_context_path.read_text(encoding="utf-8")) if source_context_path.exists() else {}
     pages = json.loads(receipt_path.read_text(encoding="utf-8"))
     if not isinstance(pages, list) or not pages:
         raise ReceiptError("receipt must be a non-empty array of Coverage-MCP page objects")
     extension = report.get(EXTENSION_KEY)
-    if not isinstance(extension, dict) or extension.get("schema") != REPORT_SCHEMA:
+    if not isinstance(extension, dict) or extension.get("schema") not in REPORT_SCHEMAS:
         raise ReceiptError("report does not contain the unified coverage extension")
     expected_reference = str(report_path.relative_to(ROOT))
 
@@ -235,42 +240,55 @@ def main() -> int:
     # saved artifact compact so Coverage-MCP can read it under its report-size
     # limit, while preserving the same JSON data and stable key ordering.
     output_bytes = (json.dumps(report, separators=(",", ":"), sort_keys=True) + "\n").encode()
-    report_path.write_bytes(output_bytes)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(output_bytes)
     source_hashes = {
         path: extension["run"]["source"]["file_sha256"][path]
         for path in extension["coverage"]["source_set"]
     }
     matrix = extension["matrix"]
-    verification_runs = matrix["verification_runs"]
-    native_verification_runs = matrix["native_verification_runs"]
-    complete_repeats = (
-        matrix.get("verification_runs_required") == 3
-        and len(verification_runs) == 3
-        and len(native_verification_runs) == 3
-        and all(
-            item.get("status") in {"complete", "completed"}
-            and item.get("runner_exit_code") == 0
-            and item.get("summary", {}).get("selected") == matrix["asgi_selected"]
-            and item.get("summary", {}).get("passed") == matrix["asgi_selected"]
-            and item.get("summary", {}).get("failed") == 0
-            and item.get("summary", {}).get("infrastructure_failed") == 0
-            and item.get("summary", {}).get("not_run") == 0
-            and item.get("transient_infrastructure_failures") == 0
-            and len(item.get("attempts", [])) == 1
-            for item in verification_runs
+    projection_binding = source_context.get("projection_binding") if isinstance(source_context, dict) else None
+    if isinstance(projection_binding, dict):
+        source = extension["run"]["source"]
+        complete_repeats = (
+            projection_binding.get("schema") == "uvicorn-rs-coverage-mcp-projection@1"
+            and projection_binding.get("scope") == "full"
+            and projection_binding.get("test_status") == "passed"
+            and projection_binding.get("recorded_revision") == source["revision"]
+            and projection_binding.get("build_id") == digest_json(extension["run"]["build"])
+            and projection_binding.get("projection_report_sha256") == source_context.get("report_sha256")
         )
-        and all(
-            item.get("status") == "completed"
-            and item.get("runner_exit_code") == 0
-            and item.get("selected") == matrix["native_selected"]
-            and item.get("passed") == matrix["native_selected"]
-            and item.get("failed") == 0
-            and item.get("not_run") == 0
-            and item.get("transient_infrastructure_failures") == 0
-            and len(item.get("attempts", [])) == 1
-            for item in native_verification_runs
+    else:
+        verification_runs = matrix["verification_runs"]
+        native_verification_runs = matrix["native_verification_runs"]
+        complete_repeats = (
+            matrix.get("verification_runs_required") == 3
+            and len(verification_runs) == 3
+            and len(native_verification_runs) == 3
+            and all(
+                item.get("status") in {"complete", "completed"}
+                and item.get("runner_exit_code") == 0
+                and item.get("summary", {}).get("selected") == matrix["asgi_selected"]
+                and item.get("summary", {}).get("passed") == matrix["asgi_selected"]
+                and item.get("summary", {}).get("failed") == 0
+                and item.get("summary", {}).get("infrastructure_failed") == 0
+                and item.get("summary", {}).get("not_run") == 0
+                and item.get("transient_infrastructure_failures") == 0
+                and len(item.get("attempts", [])) == 1
+                for item in verification_runs
+            )
+            and all(
+                item.get("status") == "completed"
+                and item.get("runner_exit_code") == 0
+                and item.get("selected") == matrix["native_selected"]
+                and item.get("passed") == matrix["native_selected"]
+                and item.get("failed") == 0
+                and item.get("not_run") == 0
+                and item.get("transient_infrastructure_failures") == 0
+                and len(item.get("attempts", [])) == 1
+                for item in native_verification_runs
+            )
         )
-    )
     passed = (
         matrix["passed"] == matrix["selected"]
         and matrix["failed"] == 0
@@ -293,11 +311,13 @@ def main() -> int:
         "test_status": "passed" if passed else "failed",
         "recorded_revision": extension["run"]["source"]["revision"],
     }
-    report_path.with_name(report_path.name + ".context.json").write_text(
+    if isinstance(source_context, dict) and isinstance(source_context.get("projection_binding"), dict):
+        context["projection_binding"] = source_context["projection_binding"]
+    output_path.with_name(output_path.name + ".context.json").write_text(
         json.dumps(context, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     print(json.dumps({
-        "report": str(report_path),
+        "report": str(output_path),
         "coverage_mcp": extension["coverage"]["coverage_mcp"],
         "receipt": str(report_path.with_name(report_path.name + ".context.json")),
     }, indent=2))

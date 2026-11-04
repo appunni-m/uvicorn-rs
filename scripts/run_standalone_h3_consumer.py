@@ -8,7 +8,6 @@ import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
-import re
 import selectors
 import shutil
 import signal
@@ -16,13 +15,12 @@ import subprocess
 import tarfile
 import tempfile
 import time
+import tomllib
 
 
 ROOT = Path(__file__).resolve().parents[1]
 CRATES = (
-    "native-app-contract",
-    "uvicorn-rs-h3",
-    "uvicorn-rs-h3-quinn",
+    "asgi-lifespan-protocol-rs",
     "uvicorn-rs",
 )
 EXPECTED_CASE = "http3.truncated-data-frame-recovery-after-protocol-error"
@@ -64,6 +62,11 @@ def sha256(path: Path) -> str:
         for block in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def consumer_target_root() -> Path:
+    configured = os.environ.get("UVICORN_RS_STANDALONE_H3_TARGET_ROOT")
+    return Path(configured).resolve() if configured else ROOT / "target"
 
 
 def run(command: list[str], *, cwd: Path, timeout: int = 600) -> subprocess.CompletedProcess[str]:
@@ -130,18 +133,19 @@ def ensure_clean_source(commit: str, *, allow_dirty: bool) -> bool:
 
 def build_consumer(version: str, extracted: dict[str, Path], scratch: Path) -> Path:
     consumer = ROOT / "tools/standalone-h3-consumer/Cargo.toml"
-    manifest = consumer.read_text(encoding="utf-8")
-    dependency = re.search(r'(?m)^\s*uvicorn-rs\s*=\s*"([^"]+)"\s*$', manifest)
+    parsed_manifest = tomllib.loads(consumer.read_text(encoding="utf-8"))
+    dependency = parsed_manifest.get("dependencies", {}).get("uvicorn-rs")
     if (
-        dependency is None
-        or dependency.group(1) != version
-        or re.search(r"(?m)^\s*\[patch(?:\.|\])", manifest)
-        or re.search(r"(?m)^\s*path\s*=", manifest)
+        not isinstance(dependency, dict)
+        or dependency.get("version") != version
+        or dependency.get("features") != ["http3"]
+        or "path" in dependency
+        or "patch" in parsed_manifest
     ):
         raise ConsumerError(
-            "standalone consumer must use the versioned registry dependency without a manifest patch"
+            "standalone consumer must use the versioned registry dependency with http3 and no manifest patch"
         )
-    target = ROOT / "target/standalone-h3-consumer"
+    target = consumer_target_root() / "standalone-h3-consumer"
     command = [
         "cargo",
         "build",
@@ -168,7 +172,7 @@ def build_consumer(version: str, extracted: dict[str, Path], scratch: Path) -> P
 
 
 def build_probe(scratch: Path) -> Path:
-    target = ROOT / "target/standalone-h3-probe"
+    target = consumer_target_root() / "standalone-h3-probe"
     run(
         [
             "cargo",
@@ -392,9 +396,7 @@ def execute(
         "archive_sha256s": hashes,
         "input_case_id": EXPECTED_CASE,
         "registry_dependencies": [
-            "native-app-contract",
-            "uvicorn-rs-h3",
-            "uvicorn-rs-h3-quinn",
+            "asgi-lifespan-protocol-rs",
         ],
         "dependency_source": "exact-candidate-crate-archives",
         "workspace_h3_patch": False,
@@ -407,7 +409,7 @@ def execute(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("packages", type=Path, help="directory containing the four exact .crate archives")
+    parser.add_argument("packages", type=Path, help="directory containing the two exact .crate archives")
     parser.add_argument("version")
     parser.add_argument("commit")
     parser.add_argument("output", type=Path)

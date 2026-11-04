@@ -34,6 +34,24 @@ FASTAPI_PAIRS = {
     ("fastapi-python-cpu", "uvicorn-asyncio-httptools", "uvicorn-rs-asyncio"),
     ("fastapi-python-cpu", "uvicorn-uvloop-httptools", "uvicorn-rs-uvloop"),
 }
+FASTAPI_PROTOCOL_WORKLOADS = {
+    "fastapi-validated-route": "fastapi-validated-route",
+    "fastapi-python-cpu": "fastapi-python-cpu",
+    "fastapi-request-upload": "request-upload",
+    "fastapi-large-response": "large-response",
+    "fastapi-many-response-chunks": "many-response-chunks",
+    "fastapi-slow-reader-backpressure": "slow-reader-backpressure",
+}
+FASTAPI_PROTOCOL_CATEGORIES = ("http2", "http3")
+FASTAPI_PROTOCOL_PAIRS = {
+    (category, workload, reference, candidate)
+    for category in FASTAPI_PROTOCOL_CATEGORIES
+    for workload in FASTAPI_PROTOCOL_WORKLOADS.values()
+    for reference, candidate in (
+        ("hypercorn-asyncio", "uvicorn-rs-asyncio"),
+        ("hypercorn-uvloop", "uvicorn-rs-uvloop"),
+    )
+}
 
 
 def read_json(path: Path) -> dict:
@@ -209,6 +227,55 @@ def load_system(artifact: Path, system_id: str, expected_commit: str) -> dict:
         raise ValueError(f"{artifact.name}: logical CPU count is missing")
     if not isinstance(system["qualified_pairs"], int):
         raise ValueError(f"{artifact.name}: missing qualified-pair count")
+
+    observed_fastapi_protocol_pairs = {
+        (category, pair.get("workload"), pair.get("reference"), pair.get("candidate"))
+        for category in FASTAPI_PROTOCOL_CATEGORIES
+        for pair in by_name[category].get("pairs", [])
+        if isinstance(pair, dict) and pair.get("workload") in FASTAPI_PROTOCOL_WORKLOADS.values()
+    }
+    if observed_fastapi_protocol_pairs != FASTAPI_PROTOCOL_PAIRS:
+        raise ValueError(
+            f"{artifact.name}: stock-FastAPI HTTP/2 and HTTP/3 workload pairs differ from the maintained plan"
+        )
+    workload_aliases = {source: alias for alias, source in FASTAPI_PROTOCOL_WORKLOADS.items()}
+    protocol_names = {"http2": "HTTP/2", "http3": "HTTP/3"}
+    fastapi_protocol_pairs = [
+        {
+            **pair,
+            "category": category,
+            "protocol": protocol_names[category],
+            "category_workload": pair["workload"],
+            "workload": workload_aliases[pair["workload"]],
+        }
+        for category in FASTAPI_PROTOCOL_CATEGORIES
+        for pair in by_name[category]["pairs"]
+        if isinstance(pair, dict) and pair.get("workload") in workload_aliases
+    ]
+    fastapi_http1_pairs = [
+        {**pair, "category": "http1", "protocol": "HTTP/1.1"}
+        for pair in fastapi_http1["pairs"]
+    ]
+    fastapi_all_pairs = fastapi_http1_pairs + fastapi_protocol_pairs
+    fastapi_protocol_qualified_pairs = sum(
+        pair.get("qualified") is True for pair in fastapi_protocol_pairs
+    )
+
+    system["fastapi_only"].update({
+        "http2_status": by_name["http2"].get("status"),
+        "http3_status": by_name["http3"].get("status"),
+        "protocol_status": (
+            "qualified_local_pairs"
+            if fastapi_protocol_qualified_pairs == len(FASTAPI_PROTOCOL_PAIRS)
+            else "partial_or_unqualified"
+        ),
+        "protocol_workloads": list(FASTAPI_PROTOCOL_WORKLOADS),
+        "protocol_expected_pairs": len(FASTAPI_PROTOCOL_PAIRS),
+        "qualified_http1_pairs": fastapi_qualified_pairs,
+        "qualified_protocol_pairs": fastapi_protocol_qualified_pairs,
+        "qualified_pairs": fastapi_qualified_pairs + fastapi_protocol_qualified_pairs,
+        "pairs": fastapi_all_pairs,
+    })
     return system
 
 
@@ -261,8 +328,12 @@ def workload_rows(system: dict, *, resources: bool = False) -> list[str]:
                     f"| {category} | {workload} | {profile} | "
                     f"{metric(pair, 'server_cpu_percent_elapsed', 'reference')} / "
                     f"{metric(pair, 'server_cpu_percent_elapsed', 'rust')} | "
+                    f"{metric(pair, 'server_cpu_microseconds_per_operation', 'reference')} / "
+                    f"{metric(pair, 'server_cpu_microseconds_per_operation', 'rust')} | "
                     f"{metric(pair, 'client_cpu_percent_elapsed_complete', 'reference')} / "
                     f"{metric(pair, 'client_cpu_percent_elapsed_complete', 'rust')} | "
+                    f"{metric(pair, 'client_cpu_microseconds_per_operation_complete', 'reference')} / "
+                    f"{metric(pair, 'client_cpu_microseconds_per_operation_complete', 'rust')} | "
                     f"{metric(pair, 'server_rss_sampled_peak_mib', 'reference')} / "
                     f"{metric(pair, 'server_rss_sampled_peak_mib', 'rust')} | "
                     f"{metric(pair, 'client_rss_sampled_peak_mib', 'reference')} / "
@@ -292,11 +363,15 @@ def fastapi_rows(system: dict, *, resources: bool = False) -> list[str]:
         matched = len(pair.get("matched_repetitions", []))
         if resources:
             lines.append(
-                f"| {workload} | {profile} | {matched} | "
+                f"| {workload} | {pair.get('protocol', 'unknown')} | {profile} | {matched} | "
                 f"{metric(pair, 'server_cpu_percent_elapsed', 'reference')} / "
                 f"{metric(pair, 'server_cpu_percent_elapsed', 'rust')} | "
+                f"{metric(pair, 'server_cpu_microseconds_per_operation', 'reference')} / "
+                f"{metric(pair, 'server_cpu_microseconds_per_operation', 'rust')} | "
                 f"{metric(pair, 'client_cpu_percent_elapsed_complete', 'reference')} / "
                 f"{metric(pair, 'client_cpu_percent_elapsed_complete', 'rust')} | "
+                f"{metric(pair, 'client_cpu_microseconds_per_operation_complete', 'reference')} / "
+                f"{metric(pair, 'client_cpu_microseconds_per_operation_complete', 'rust')} | "
                 f"{metric(pair, 'server_rss_sampled_peak_mib', 'reference')} / "
                 f"{metric(pair, 'server_rss_sampled_peak_mib', 'rust')} | "
                 f"{metric(pair, 'client_rss_sampled_peak_mib', 'reference')} / "
@@ -306,7 +381,7 @@ def fastapi_rows(system: dict, *, resources: bool = False) -> list[str]:
             ratio = pair.get("throughput_ratio", {}).get("rust_over_reference")
             ratio_text = "—" if not isinstance(ratio, (int, float)) else f"{ratio:.3f}×"
             lines.append(
-                f"| {workload} | {profile} | {matched} | "
+                f"| {workload} | {pair.get('protocol', 'unknown')} | {profile} | {matched} | "
                 f"{'yes' if pair.get('qualified') is True else 'no'} | "
                 f"{metric(pair, 'operations_per_second', 'reference')} / "
                 f"{metric(pair, 'operations_per_second', 'rust')} | "
@@ -379,7 +454,8 @@ def render_markdown(report: dict) -> str:
             f"| {system['system_id']} ({system['architecture']}) | {system['runner']} | "
             f"{cpu} | {memory_gib:.1f} GiB | {system['python']} | "
             f"{concurrency_text} | {system['matrix_status']} / {system['driver_status']} / {system['qualified_pairs']} | "
-            f"{system['fastapi_only']['http1_status']} / {system['fastapi_only']['qualified_pairs']} | "
+            f"{system['fastapi_only']['http1_status']} / H2 {system['fastapi_only']['http2_status']} / "
+            f"H3 {system['fastapi_only']['http3_status']} / {system['fastapi_only']['qualified_pairs']} | "
             f"`{artifact}` |"
         )
     for system in report["systems"]:
@@ -392,22 +468,22 @@ def render_markdown(report: dict) -> str:
             f"memory: {system['memory_total_bytes'] / 1024**3:.1f} GiB; platform: `{system['platform']}`.",
             f"Load parameters: {system['benchmark_parameters']}.",
             "",
-            "FastAPI-only comparison (upstream FastAPI, Starlette, and Pydantic):",
+            "Stock FastAPI comparison (upstream FastAPI, Starlette, and Pydantic):",
             "",
-            "| Workload | Loop | Valid matches | Qualified | Ops/s ref / Rust | p50 ms ref / Rust | p95 ms ref / Rust | p99 ms ref / Rust | Rate ratio |",
-            "|---|---|---:|---|---:|---:|---:|---:|---:|",
+            "| Workload | Protocol | Loop | Valid matches | Qualified | Ops/s ref / Rust | p50 ms ref / Rust | p95 ms ref / Rust | p99 ms ref / Rust | Rate ratio |",
+            "|---|---|---|---:|---|---:|---:|---:|---:|---:|",
         ]
         fastapi_rate_rows = fastapi_rows(system)
-        lines.extend(fastapi_rate_rows or ["| No qualified FastAPI pairs | — | — | — | — | — | — | — | — |"])
+        lines.extend(fastapi_rate_rows or ["| No qualified FastAPI pairs | — | — | — | — | — | — | — | — | — |"])
         lines += [
             "",
-            "FastAPI resource measurements:",
+            "Stock FastAPI resource measurements:",
             "",
-            "| Workload | Loop | Valid matches | Server CPU % ref / Rust | Client CPU % ref / Rust | Server RSS MiB ref / Rust | Client RSS MiB ref / Rust |",
-            "|---|---|---:|---:|---:|---:|---:|",
+            "| Workload | Protocol | Loop | Valid matches | Server CPU % ref / Rust | Server CPU µs/op ref / Rust | Client CPU % ref / Rust | Client CPU µs/op ref / Rust | Server RSS MiB ref / Rust | Client RSS MiB ref / Rust |",
+            "|---|---|---|---:|---:|---:|---:|---:|---:|---:|",
         ]
         fastapi_resource_rows = fastapi_rows(system, resources=True)
-        lines.extend(fastapi_resource_rows or ["| No qualified FastAPI pairs | — | — | — | — | — | — |"])
+        lines.extend(fastapi_resource_rows or ["| No qualified FastAPI pairs | — | — | — | — | — | — | — | — | — |"])
         lines += [
             "",
             "Throughput and latency:",
@@ -421,11 +497,11 @@ def render_markdown(report: dict) -> str:
             "",
             "Resource measurements:",
             "",
-            "| Category | Workload | Loop | Server CPU % ref / Rust | Client CPU % ref / Rust | Server RSS MiB ref / Rust | Client RSS MiB ref / Rust |",
-            "|---|---|---:|---:|---:|---:|---:|",
+            "| Category | Workload | Loop | Server CPU % ref / Rust | Server CPU µs/op ref / Rust | Client CPU % ref / Rust | Client CPU µs/op ref / Rust | Server RSS MiB ref / Rust | Client RSS MiB ref / Rust |",
+            "|---|---|---:|---:|---:|---:|---:|---:|---:|",
         ]
         resource_rows = workload_rows(system, resources=True)
-        lines.extend(resource_rows or ["| No qualified pairs | — | — | — | — | — | — |"])
+        lines.extend(resource_rows or ["| No qualified pairs | — | — | — | — | — | — | — | — |"])
         lines += [
             "",
             "Category qualification counts:",
@@ -548,6 +624,7 @@ def render_markdown(report: dict) -> str:
         "- A rate above 1× is a measured Rust/reference ratio for that workload and runner only; it does not establish a universal speedup or statistical significance.",
         "- HTTP/2 and HTTP/3 compare against Hypercorn because Uvicorn does not provide those protocol servers.",
         "- FastAPI-only rows compare the same upstream FastAPI/Starlette/Pydantic stack; they do not use FastAPI-RS or Starlette-RS.",
+        "- CPU percentage and CPU per operation are process totals, not per-thread measurements. The uvicorn-rs adapter uses one Tokio worker; per-thread CPU attribution is not collected.",
         "- This report identifies each platform's hosted runner image and CPU. Hosted hardware and neighboring load can change between runs; inspect the raw environment and timing-valid rows before comparing revisions.",
         "- The Rust server still invokes Python for ASGI callables, event-loop tasks, and ASGI message construction/dispatch. These end-to-end results include that integration boundary.",
         "",
@@ -588,7 +665,7 @@ def main() -> int:
     )
 
     report = {
-        "schema": "uvicorn-rs-benchmark-matrix@1",
+        "schema": "uvicorn-rs-benchmark-matrix@2",
         "status": matrix_status,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "commit": args.commit,

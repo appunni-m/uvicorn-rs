@@ -1,0 +1,16 @@
+{
+  "schema": "uvicorn-rs-parity/input@47",
+  "cases": [
+    {
+      "case_id": "startup-client-ca-invalid-utf8-prefix-valid-pem.rejects-key",
+      "profile": "startup-client-ca-invalid-utf8-prefix-valid-pem",
+      "operation": "lifespan.startup-failure",
+      "covers": [
+        "lifespan.startup-failure"
+      ],
+      "startup_failure": {
+        "expect_failed": true
+      }
+    }
+  ]
+}

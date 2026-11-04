@@ -4,7 +4,7 @@
 use std::{
     convert::Infallible,
     error::Error,
-    future::{ready, Ready},
+    future::{Ready, ready},
     task::{Context, Poll},
 };
 
@@ -14,7 +14,7 @@ use http_body_util::Full;
 use hyper::body::Incoming;
 use tokio::{net::TcpListener, sync::oneshot};
 use tower_service::Service;
-use uvicorn_rs::{serve_tcp, ServerConfig};
+use uvicorn_rs::{ServerConfig, serve_tcp};
 
 #[derive(Clone)]
 struct App;

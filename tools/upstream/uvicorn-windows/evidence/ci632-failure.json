@@ -1,0 +1,31 @@
+{
+  "command": [
+    "D:\\a\\_temp\\stock-uvicorn\\Scripts\\python.exe",
+    "-m",
+    "uvicorn",
+    "worker_terminate:app",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "64554",
+    "--loop",
+    "asyncio",
+    "--http",
+    "h11",
+    "--ws",
+    "none",
+    "--lifespan",
+    "on",
+    "--no-access-log"
+  ],
+  "web_concurrency": 2,
+  "python": "3.12.13",
+  "platform": "Windows-2022Server-10.0.20348-SP0",
+  "uvicorn": "0.54.0",
+  "http_status": 200,
+  "http_body": "ok",
+  "ctrl_c_sent": true,
+  "exit_code": null,
+  "shutdown_timed_out": true,
+  "server_log": "INFO:     Uvicorn running on http://127.0.0.1:64554 (Press CTRL+C to quit)\nINFO:     Started parent process [6788]\nINFO:     Started server process [3504]\nINFO:     Waiting for application startup.\nINFO:     Application startup complete.\nINFO:     Started server process [6224]\nINFO:     Waiting for application startup.\nINFO:     Application startup complete.\nINFO:     Shutting down\nINFO:     Waiting for application shutdown.\nINFO:     Application shutdown complete.\nINFO:     Finished server process [3504]\nINFO:     Received SIGINT, exiting.\nINFO:     Terminated child process [6224]\nINFO:     Waiting for child process [3504]\nINFO:     Waiting for child process [6224]\n"
+}

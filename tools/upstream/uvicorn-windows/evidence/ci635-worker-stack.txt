@@ -1,0 +1,28 @@
+Process 2460: "D:\a\_temp\uv-python-dir\cpython-3.12.13-windows-x86_64-none\python.exe" "-c" "from multiprocessing.spawn import spawn_main; spawn_main(parent_pid=7132, pipe_handle=708)" "--multiprocessing-fork"
+Python v3.12.13 (D:\a\_temp\uv-python-dir\cpython-3.12.13-windows-x86_64-none\python.exe)
+
+Thread 1640 (idle): "MainThread"
+    socket.accept (socket.py:295)
+    BaseSelectorEventLoop._accept_connection (asyncio\selector_events.py:178)
+    Handle._run (asyncio\events.py:88)
+    BaseEventLoop._run_once (asyncio\base_events.py:1999)
+    BaseEventLoop.run_forever (asyncio\base_events.py:645)
+    BaseEventLoop.run_until_complete (asyncio\base_events.py:678)
+    Runner.run (asyncio\runners.py:118)
+    run (asyncio\runners.py:195)
+    Server.run (uvicorn\server.py:86)
+    Process.target (uvicorn\supervisors\multiprocess.py:77)
+    subprocess_started (uvicorn\_subprocess.py:80)
+    BaseProcess.run (multiprocessing\process.py:108)
+    BaseProcess._bootstrap (multiprocessing\process.py:314)
+    _main (multiprocessing\spawn.py:135)
+    spawn_main (multiprocessing\spawn.py:122)
+    <module> (<string>:1)
+Thread 1432 (idle): "Thread-1 (always_pong)"
+    PipeConnection._recv_bytes (multiprocessing\connection.py:321)
+    _ConnectionBase.recv (multiprocessing\connection.py:250)
+    Process.pong (uvicorn\supervisors\multiprocess.py:59)
+    Process.always_pong (uvicorn\supervisors\multiprocess.py:64)
+    Thread.run (threading.py:1012)
+    Thread._bootstrap_inner (threading.py:1075)
+    Thread._bootstrap (threading.py:1032)

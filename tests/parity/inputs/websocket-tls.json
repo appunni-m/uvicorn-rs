@@ -1,6 +1,27 @@
 {
-  "schema": "uvicorn-rs-parity/input@33",
+  "schema": "uvicorn-rs-parity/input@47",
   "cases": [
+    {
+      "case_id": "websocket-tls.custom-protocol-class-retains-tls-context-and-lifespan-state",
+      "profile": "websocket-tls",
+      "operation": "websocket.message-exchange",
+      "covers": [
+        "websocket.message-exchange"
+      ],
+      "server_options": {
+        "ws": "custom_websocket:ParityCustomWebSocketProtocol"
+      },
+      "websocket": {
+        "path": "/ws",
+        "subprotocols": [],
+        "messages": [
+          {
+            "kind": "text",
+            "value": "custom-protocol-tls"
+          }
+        ]
+      }
+    },
     {
       "case_id": "websocket-tls.scope-headers-path-query-and-subprotocols",
       "profile": "websocket-tls",

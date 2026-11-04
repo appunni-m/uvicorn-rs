@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@33",
+  "schema": "uvicorn-rs-parity/input@47",
   "cases": [
     {
       "case_id": "lifespan.tls-shutdown-cancels-held-request",
@@ -17,14 +17,13 @@
     {
       "case_id": "lifespan.active-response-stream-drains-on-tls-shutdown",
       "profile": "lifecycle-tls",
-      "operation": "lifespan.active-stream-graceful-drain",
+      "operation": "lifespan.active-stream-tls-graceful-drain",
       "covers": [
-        "lifespan.active-stream-graceful-drain"
+        "lifespan.active-stream-tls-graceful-drain"
       ],
       "lifecycle": {
         "stream_path": "/stream-shutdown-hold",
-        "graceful_timeout_seconds": 3,
-        "idle_transport_prefix_base64": "UFJJIA=="
+        "graceful_timeout_seconds": 3
       }
     },
     {

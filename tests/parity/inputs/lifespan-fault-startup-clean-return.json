@@ -1,0 +1,20 @@
+{
+  "schema": "uvicorn-rs-parity/input@47",
+  "cases": [
+    {
+      "case_id": "fault.lifespan.startup-send-closed-clean-return-auto-fallback",
+      "profile": "lifespan-fault-startup-clean-return",
+      "operation": "lifespan.startup-auto-fallback",
+      "covers": ["lifespan.startup-auto-fallback"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.startup.send-closed",
+        "contract": "server-lifespan-startup-auto-fallback"
+      },
+      "startup_fallback": {
+        "followup_path": "/state",
+        "expect_startup_error_observed": false
+      }
+    }
+  ]
+}

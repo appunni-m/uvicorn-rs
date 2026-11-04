@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@33",
+  "schema": "uvicorn-rs-parity/input@47",
   "cases": [
     {
       "case_id": "lifespan.auto-app-does-not-support-lifespan",
@@ -14,6 +14,44 @@
         "headers": [],
         "body_base64": ""
       }
+    },
+    {
+      "case_id": "fault.lifespan.without-lifespan-application-error-auto-fallback",
+      "profile": "lifespan-no-support",
+      "operation": "lifespan.startup-auto-fallback",
+      "covers": ["lifespan.startup-auto-fallback"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.without-lifespan.application-error",
+        "contract": "server-lifespan-startup-auto-fallback"
+      },
+      "startup_fallback": {"followup_path": "/state"}
+    },
+    {
+      "case_id": "fault.lifespan.without-lifespan-application-error-strict-on",
+      "profile": "lifespan-no-support",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.without-lifespan.application-error",
+        "contract": "server-startup-failure"
+      },
+      "server_options": {"lifespan": "on"},
+      "startup_failure": {"expect_failed": true}
+    },
+    {
+      "case_id": "fault.lifespan.without-lifespan-preserves-task-error",
+      "profile": "lifespan-no-support",
+      "operation": "lifespan.startup-failure",
+      "covers": ["lifespan.startup-failure"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.without-lifespan.preserve-task-error",
+        "contract": "server-startup-failure"
+      },
+      "server_options": {"lifespan": "on"},
+      "startup_failure": {"expect_failed": true}
     }
   ]
 }

@@ -15,7 +15,8 @@ from multiprocessing import Pipe
 from socket import socket
 
 from uvicorn._ansi import style
-from uvicorn._subprocess import get_subprocess
+from uvicorn._shutdown_trace import write_shutdown_trace
+from uvicorn._subprocess import get_subprocess, spawn
 from uvicorn.config import STARTUP_FAILURE, Config
 from uvicorn.server import Server
 
@@ -27,6 +28,9 @@ SIGNALS = {
 
 logger = logging.getLogger("uvicorn.error")
 
+WINDOWS_SHUTDOWN_SIGNAL_ACK_TIMEOUT_SECONDS = 1.0
+WINDOWS_SHUTDOWN_SIGNAL_MAX_ATTEMPTS = 2
+
 
 class Process:
     def __init__(
@@ -36,9 +40,17 @@ class Process:
     ) -> None:
         self.config = config
         self._server: Server | None = None
+        self._windows_shutdown_signal_ack = (
+            spawn.Event() if os.name == "nt" else None
+        )
 
         self.parent_conn, self.child_conn = Pipe()
-        self.process = get_subprocess(config, self.target, sockets)
+        self.process = get_subprocess(
+            config,
+            self.target,
+            sockets,
+            windows_process_group=os.name == "nt",
+        )
 
     def _healthcheck(self, timeout: float) -> bool | None:
         """Receives a timeout and returns the worker's startup flag, or None if it does not answer in time."""
@@ -73,10 +85,16 @@ class Process:
             # Windows doesn't support SIGTERM, so we use SIGBREAK instead.
             # And then we raise SIGTERM when SIGBREAK is received.
             # https://learn.microsoft.com/zh-cn/cpp/c-runtime-library/reference/signal?view=msvc-170
-            signal.signal(
-                signal.SIGBREAK,  # type: ignore[attr-defined]
-                lambda sig, frame: signal.raise_signal(signal.SIGTERM),
+            def handle_sigbreak(sig: int, _frame) -> None:
+                write_shutdown_trace(f"worker-sigbreak.received signal={sig}")
+                if self._windows_shutdown_signal_ack is not None:
+                    self._windows_shutdown_signal_ack.set()
+                signal.raise_signal(signal.SIGTERM)
+
+            signal.signal(  # type: ignore[attr-defined]
+                signal.SIGBREAK, handle_sigbreak
             )
+            write_shutdown_trace("worker-sigbreak.handler-installed")
 
         # Each spawned process runs the native server as an ordinary
         # single-worker instance. The parent owns worker supervision.
@@ -84,6 +102,7 @@ class Process:
         self.config._worker_mode = True
         threading.Thread(target=self.always_pong, daemon=True).start()
         self.server.run(sockets)
+        write_shutdown_trace("worker.server-run.returned")
 
     def is_alive(self, timeout: float = 5) -> bool:
         if not self.process.is_alive():
@@ -107,19 +126,59 @@ class Process:
     def start(self) -> None:
         self.process.start()
 
-    def terminate(self) -> None:
+    def _begin_termination(self) -> bool:
         if self.process.exitcode is None:  # Process is still running
             assert self.process.pid is not None
             if os.name == "nt":  # pragma: py-not-win32
-                # Windows doesn't support SIGTERM.
-                # So send SIGBREAK, and then in process raise SIGTERM.
-                os.kill(self.process.pid, signal.CTRL_BREAK_EVENT)  # type: ignore[attr-defined]
+                signal_ack = self._windows_shutdown_signal_ack
+                if signal_ack is not None:
+                    signal_ack.clear()
+                self._send_windows_shutdown_signal(attempt=1)
             else:
                 os.kill(self.process.pid, signal.SIGTERM)
-            logger.info(f"Terminated child process [{self.process.pid}]")
+            return True
+        return False
 
-            self.parent_conn.close()
-            self.child_conn.close()
+    def _send_windows_shutdown_signal(self, *, attempt: int) -> None:
+        assert self.process.pid is not None
+        write_shutdown_trace(
+            f"worker-shutdown.signal-send pid={self.process.pid} attempt={attempt}"
+        )
+        os.kill(  # type: ignore[attr-defined]
+            self.process.pid, signal.CTRL_BREAK_EVENT
+        )
+
+    def _wait_for_windows_shutdown_signal(self) -> None:
+        signal_ack = self._windows_shutdown_signal_ack
+        if os.name != "nt" or signal_ack is None:  # pragma: py-not-win32
+            return
+
+        for attempt in range(1, WINDOWS_SHUTDOWN_SIGNAL_MAX_ATTEMPTS + 1):
+            if signal_ack.wait(WINDOWS_SHUTDOWN_SIGNAL_ACK_TIMEOUT_SECONDS):
+                write_shutdown_trace(
+                    f"worker-shutdown.signal-acknowledged "
+                    f"pid={self.process.pid} attempt={attempt}"
+                )
+                return
+            if not self.process.is_alive() or signal_ack.is_set():
+                return
+            write_shutdown_trace(
+                f"worker-shutdown.signal-ack-timeout "
+                f"pid={self.process.pid} attempt={attempt}"
+            )
+            if attempt < WINDOWS_SHUTDOWN_SIGNAL_MAX_ATTEMPTS:
+                self._send_windows_shutdown_signal(attempt=attempt + 1)
+
+    def _finish_termination(self) -> None:
+        logger.info(f"Terminated child process [{self.process.pid}]")
+        self.parent_conn.close()
+        self.child_conn.close()
+
+    def terminate(self) -> None:
+        if self._begin_termination():
+            self._wait_for_windows_shutdown_signal()
+            self._finish_termination()
+
 
     def kill(self) -> None:
         # In Windows, the method will call `TerminateProcess` to kill the process.
@@ -130,7 +189,11 @@ class Process:
 
     def join(self) -> None:
         logger.info(f"Waiting for child process [{self.process.pid}]")
+        write_shutdown_trace(f"worker-join.wait pid={self.process.pid}")
         self.process.join()
+        write_shutdown_trace(
+            f"worker-join.complete pid={self.process.pid} exitcode={self.process.exitcode}"
+        )
 
     @property
     def server(self) -> Server:
@@ -172,7 +235,28 @@ class Multiprocess:
             self.processes.append(process)
 
     def terminate_all(self) -> None:
+        write_shutdown_trace("supervisor-terminate-all.start")
+        if os.name == "nt":  # pragma: py-not-win32
+            pending: list[Process] = []
+            # CTRL_BREAK delivery is asynchronous. Signal every process group
+            # before waiting for any one worker so a delayed acknowledgement
+            # cannot postpone delivery to the remaining workers.
+            for process in self.processes:
+                write_shutdown_trace(
+                    f"supervisor-terminate-all.worker pid={process.pid} "
+                    f"exitcode={process.exitcode}"
+                )
+                if process._begin_termination():
+                    pending.append(process)
+            for process in pending:
+                process._wait_for_windows_shutdown_signal()
+                process._finish_termination()
+            return
+
         for process in self.processes:
+            write_shutdown_trace(
+                f"supervisor-terminate-all.worker pid={process.pid} exitcode={process.exitcode}"
+            )
             process.terminate()
 
     def join_all(self) -> None:
@@ -219,6 +303,7 @@ class Multiprocess:
         message = f"Stopping parent process [{os.getpid()}]"
         color_message = "Stopping parent process [{}]".format(style(str(os.getpid()), fg="cyan", bold=True))
         logger.info(message, extra={"color_message": color_message})
+        write_shutdown_trace("supervisor.run.returned")
 
     def keep_subprocess_alive(self) -> None:
         if self.should_exit.is_set():
@@ -258,6 +343,7 @@ class Multiprocess:
                 logger.debug(f"Received signal {sig_name}, but no handler is defined for it.")
 
     def handle_int(self) -> None:
+        write_shutdown_trace("supervisor-signal.handled signal=SIGINT")
         logger.info("Received SIGINT, exiting.")
         self.should_exit.set()
 
@@ -266,6 +352,7 @@ class Multiprocess:
         self.should_exit.set()
 
     def handle_break(self) -> None:  # pragma: py-not-win32
+        write_shutdown_trace("supervisor-signal.handled signal=SIGBREAK")
         logger.info("Received SIGBREAK, exiting.")
         self.should_exit.set()
 

@@ -80,11 +80,11 @@ def verify_external_evidence(directory: Path, version: str, commit: str, linux: 
     if public["run"]["target"]["revision"] != commit or public["run"]["target"].get("dirty") is not False:
         raise ValueError("normal public parity is not from the clean expected commit")
     expected_cases = ["http1.scope-query-header-and-body",
-                      "support.http1.response-header-capacity-error-recovers",
-                      "support.websocket.accept-header-capacity-error-recovers"]
+                      "websocket.accept-response-header-capacity-delivery",
+                      "support.http1.response-header-overflow-delivers"]
     if (normal.get("parity_case_ids") != expected_cases
             or normal.get("parity") != {"selected": 3, "executed": 3, "passed": 3, "failed": 0, "infrastructure_failed": 0, "not_run": 0}):
-        raise ValueError("normal audit did not pass the exact three exclusion cases")
+        raise ValueError("normal audit did not pass the exact selected exclusion cases")
     selected_path = normal_path.parent / "parity-result.json"
     if normal.get("parity_result_sha256") != file_sha256(selected_path):
         raise ValueError("normal audit selected-case report checksum differs")
@@ -114,10 +114,10 @@ def verify(root: Path, version: str, commit: str, evidence: Path) -> dict:
     wheels = [path for path in paths if path.suffix == ".whl"]
     sdists = [path for path in paths if path.name.endswith(".tar.gz")]
     crates = [path for path in paths if path.suffix == ".crate"]
-    if len(wheels) != 3 or len(sdists) != 1 or len(crates) != 4 or len(paths) != 16:
-        raise ValueError(f"expected three wheels, one sdist, four Rust crates and eight evidence files; found {len(wheels)} wheels, {len(sdists)} sdists, {len(crates)} crates, {len(paths)} files")
-    expected = {path.name for path in wheels} | {f"uvicorn_rs_py-{version}.tar.gz", "consumer-sdist.json", "parity-linux-x86_64.json"}
-    rust_crate_names = ("native-app-contract", "uvicorn-rs-h3", "uvicorn-rs-h3-quinn", "uvicorn-rs")
+    if len(wheels) != 3 or len(sdists) != 1 or len(crates) != 2 or len(paths) != 14:
+        raise ValueError(f"expected three wheels, one sdist, two Rust crates and eight evidence files; found {len(wheels)} wheels, {len(sdists)} sdists, {len(crates)} crates, {len(paths)} files")
+    expected = {path.name for path in wheels} | {f"uvicorn_rs-{version}.tar.gz", "consumer-sdist.json", "parity-linux-x86_64.json"}
+    rust_crate_names = ("asgi-lifespan-protocol-rs", "uvicorn-rs")
     expected |= {f"{package}-{version}.crate" for package in rust_crate_names}
     expected |= {f"build-manifest-{platform}.json" for platform in PLATFORMS}
     expected |= {f"consumer-{platform}.json" for platform in PLATFORMS}
@@ -186,10 +186,8 @@ def verify(root: Path, version: str, commit: str, evidence: Path) -> dict:
                 or any(value != "" for value in build["environment"].values())):
             raise ValueError("build manifest does not record the normal locked release build")
         native_commands = [
-            "cargo package -p native-app-contract --no-verify --locked --offline",
-            "cargo package -p uvicorn-rs-h3 --no-verify --locked --offline",
-            "cargo package -p uvicorn-rs-h3-quinn --no-verify --locked --offline --config 'patch.crates-io.uvicorn-rs-h3.path=\"crates/uvicorn-rs-h3\"'",
-            "cargo package -p uvicorn-rs --no-verify --locked --offline --config 'patch.crates-io.native-app-contract.path=\"crates/native-app-contract\"' --config 'patch.crates-io.uvicorn-rs-h3.path=\"crates/uvicorn-rs-h3\"' --config 'patch.crates-io.uvicorn-rs-h3-quinn.path=\"crates/uvicorn-rs-h3-quinn\"'",
+            "cargo package -p asgi-lifespan-protocol-rs --no-verify --locked --offline",
+            "cargo package -p uvicorn-rs --no-verify --locked",
             "copy target/native-package/package/*.crate to dist/",
         ]
         if platform == "linux-x86_64":
@@ -205,10 +203,9 @@ def verify(root: Path, version: str, commit: str, evidence: Path) -> dict:
                     for package in native_crates
                 },
                 "commands": [
-                    "cargo check --offline --locked --manifest-path <native-app-contract>/Cargo.toml",
-                    "cargo check --offline --locked --manifest-path <uvicorn-rs-h3>/Cargo.toml",
-                    "cargo check --offline --locked --manifest-path <uvicorn-rs-h3-quinn>/Cargo.toml --config patch.crates-io.uvicorn-rs-h3.path=<uvicorn-rs-h3>",
-                    "cargo check --offline --locked --manifest-path <uvicorn-rs>/Cargo.toml --config patches for native-app-contract, uvicorn-rs-h3 and uvicorn-rs-h3-quinn",
+                    "cargo check --locked --manifest-path <asgi-lifespan-protocol-rs>/Cargo.toml",
+                    "cargo check --locked --manifest-path <uvicorn-rs>/Cargo.toml --config patch.crates-io.asgi-lifespan-protocol-rs.path=<asgi-lifespan-protocol-rs>",
+                    "cargo check --locked --manifest-path <uvicorn-rs>/Cargo.toml --features http3 --config patch.crates-io.asgi-lifespan-protocol-rs.path=<asgi-lifespan-protocol-rs>",
                 ],
             }
             if build.get("native_crate_consumer_check") != expected_consumer_check:

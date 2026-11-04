@@ -26,13 +26,19 @@ from check_ci_evidence import (
 
 PRIMARY_CASE = "http1.scope-query-header-and-body"
 SUPPORT_CASES = {
-    "support.http1.response-header-capacity-error-recovers": "public.http-response-header-capacity",
-    "support.websocket.accept-header-capacity-error-recovers": "public.websocket-accept-header-capacity",
+    "support.http1.response-header-overflow-delivers": "public.http-response-header-capacity",
 }
-CASE_IDS = (PRIMARY_CASE, *SUPPORT_CASES)
+LIVE_PARITY_CASES = (
+    PRIMARY_CASE,
+    "websocket.accept-response-header-capacity-delivery",
+)
+CASE_IDS = (*LIVE_PARITY_CASES, *SUPPORT_CASES)
 ARMED_POINT = "native.runtime.build.error"
 SOURCE_PATHS = ("src/lib.rs", "Cargo.toml", "Cargo.lock", "pyproject.toml", "uv.lock",
                 "scripts/run_parity.py", "tests/parity/manifest.json", "tests/parity/app.py",
+                "tests/parity/inputs/websocket.json", "crates/uvicorn-rs/src/websocket.rs",
+                "crates/uvicorn-rs/third-party/h2/Cargo.toml",
+                "crates/uvicorn-rs/third-party/hyper/Cargo.toml",
                 "tools/http3-probe/Cargo.toml",
                 "scripts/audit_normal_build.py", "scripts/check_ci_evidence.py")
 
@@ -43,6 +49,14 @@ def write_json(path: Path, value: object) -> None:
 
 def source_identity() -> dict[str, str]:
     paths = [*SOURCE_PATHS, *(str(path.relative_to(ROOT)) for path in load_contract()[2])]
+    paths.extend(
+        str(path.relative_to(ROOT))
+        for path in (ROOT / "crates/uvicorn-rs/third-party/h2/src").rglob("*.rs")
+    )
+    paths.extend(
+        str(path.relative_to(ROOT))
+        for path in (ROOT / "crates/uvicorn-rs/third-party/hyper/src").rglob("*.rs")
+    )
     return {relative: sha256(ROOT / relative) for relative in paths}
 
 
@@ -150,7 +164,9 @@ def audit(output: Path, oracle_python: Path) -> int:
         "armed_fault_file_ignored": armed.read_text(encoding="utf-8") == ARMED_POINT,
         "parity_passed": parity_process.returncode == 0,
         "exact_case_selection": {case["case_id"] for case in parity["cases"]} == set(CASE_IDS),
-        "primary_case_is_live_oracle_parity": case_index[PRIMARY_CASE].get("verification", "oracle-parity") == "oracle-parity",
+        "live_cases_are_oracle_parity": all(
+            case_index[case_id].get("verification", "oracle-parity") == "oracle-parity"
+            for case_id in LIVE_PARITY_CASES),
         "support_cases_are_public_inputs_without_native_injection": all(
             case_index[case_id].get("verification") == "fault-contract"
             and case_index[case_id].get("fault", {}).get("point") == point and point not in points
@@ -190,13 +206,13 @@ def audit(output: Path, oracle_python: Path) -> int:
         "armed_fault_point": ARMED_POINT, "removed_environment_variable_names": removed,
         "parity_case_id": PRIMARY_CASE, "parity_case_ids": list(CASE_IDS),
         "public_support_contract_case_ids": list(SUPPORT_CASES),
-        "verification_groups": {"live_oracle_parity": 1, "public_target_support_contracts": 2,
+        "verification_groups": {"live_oracle_parity": len(LIVE_PARITY_CASES), "public_target_support_contracts": len(SUPPORT_CASES),
                                 "native_injection_fault_contracts": 0},
         "case_verification_envelopes": {case["case_id"]: case["verification"] for case in parity["cases"]},
         "parity": parity["summary"], "parity_exit_code": parity_process.returncode,
         "parity_result_sha256": sha256(result_path), "command": command,
         "oracle_python": str(oracle_python),
-        "scope": "Normal installed binary fault exclusion, one live oracle comparison and two public target support contracts; "
+        "scope": "Normal installed binary fault exclusion, selected live oracle comparisons and one public target support contract; "
                  "no native fault injection, unit tests, publication, or complete-matrix claim.",
     }
     write_json(output / "receipt.json", receipt)

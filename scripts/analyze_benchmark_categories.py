@@ -17,6 +17,8 @@ import math
 from pathlib import Path
 import statistics
 
+from benchmark_reference_exceptions import reference_exclusion_metadata_errors
+
 
 MINIMUM_MATCHES = 3
 CATEGORIES = {
@@ -44,7 +46,8 @@ CATEGORIES = {
             {"loop": "uvloop", "reference": "hypercorn-uvloop", "candidate": "uvicorn-rs-uvloop"},
         ],
         "workloads": [
-            "protocol-scope", "fixed", "large-response", "many-response-chunks",
+            "protocol-scope", "fastapi-validated-route", "fastapi-python-cpu",
+            "fixed", "large-response", "many-response-chunks",
             "request-upload", "request-upload-small-chunks", "slow-reader-backpressure",
         ],
     },
@@ -54,7 +57,9 @@ CATEGORIES = {
             {"loop": "uvloop", "reference": "hypercorn-uvloop", "candidate": "uvicorn-rs-uvloop"},
         ],
         "workloads": [
-            "protocol-scope-consumed-request", "protocol-scope", "fixed", "large-response", "many-response-chunks",
+            "protocol-scope-consumed-request", "protocol-scope",
+            "fastapi-validated-route", "fastapi-python-cpu",
+            "fixed", "large-response", "many-response-chunks",
             "request-upload", "slow-reader-backpressure",
         ],
     },
@@ -246,7 +251,7 @@ def measurement_reasons(row, metadata, lifecycle):
     return reasons
 
 
-def metadata_reasons(metadata, driver):
+def metadata_reasons(category, metadata, driver):
     reasons = []
     if metadata.get("modified_or_unrecorded_dependencies"):
         reasons.append("modified_or_unrecorded_dependency_prevents_stock_reference_pair")
@@ -260,6 +265,7 @@ def metadata_reasons(metadata, driver):
         reasons.append("recorded_dependency_identities_differ_or_missing")
     if not metadata.get("finished_at"):
         reasons.append("category_completion_metadata_missing")
+    reasons.extend(reference_exclusion_metadata_errors(category, metadata))
     if driver is not None:
         driver_before, driver_after = driver.get("identity_before"), driver.get("identity_after")
         if not isinstance(driver_before, dict) or not driver_before or driver_before != driver_after:
@@ -295,6 +301,12 @@ def driver_category_reasons(loaded, driver):
         return ["driver_category_receipt_missing_or_duplicate"]
     entry = matches[0]
     reasons = []
+    driver_exclusions = entry.get("reference_exclusions", [])
+    report_exclusions = loaded["metadata"].get("reference_exclusions", [])
+    if driver_exclusions != report_exclusions:
+        reasons.append("driver_reference_exclusion_receipt_differs_or_missing")
+    if (driver_exclusions or report_exclusions) and entry.get("reference_exclusions_match") is not True:
+        reasons.append("driver_reference_exclusion_plan_not_verified")
     if loaded["category"] != "lifecycle":
         driver_workloads = entry.get("workloads")
         report_workloads = loaded["metadata"].get("workloads")
@@ -369,6 +381,8 @@ def driver_execution_receipt(loaded, driver):
         "exact_planned_rows_present": entry.get("exact_planned_rows_present"),
         "category_identity_stable": entry.get("category_identity_stable"),
         "report_state": entry.get("report_state"),
+        "planned_rows": entry.get("planned_rows"),
+        "reference_exclusions": entry.get("reference_exclusions", []),
         "error": entry.get("error"),
         "cleanup_error": entry.get("cleanup_error"),
         "process_cleanup": cleanup_summary,
@@ -458,7 +472,6 @@ def analyze_category(loaded, driver):
     if not repetition(planned_repetitions):
         planned_repetitions = MINIMUM_MATCHES
     exclusions = metadata.get("excluded_servers_by_workload", {})
-    target_only = {"request-upload"} if category == "http3" else set()
     identities = Counter(key for row in rows if (key := row_key(row)) is not None)
     missing = []
     for workload in workloads:
@@ -472,7 +485,7 @@ def analyze_category(loaded, driver):
                     missing.append({"workload": workload, "server": server, "repetition": number,
                                     "row_count": identities[(workload, server, number)]})
     complete = loaded["complete_report_present"] and not loaded["input_errors"] and not missing
-    gate_reasons = metadata_reasons(metadata, driver)
+    gate_reasons = metadata_reasons(category, metadata, driver)
     gate_reasons.extend(driver_category_reasons(loaded, driver))
     if not complete:
         gate_reasons.append("category_incomplete")
@@ -499,14 +512,24 @@ def analyze_category(loaded, driver):
                                      "raw_failures": row.get("failures") if isinstance(row, dict) else None})
         elif key is not None:
             eligible[key] = row
-        if (isinstance(row, dict) and row.get("workload") in target_only
-                and row.get("server") in {pair["candidate"] for pair in pair_specs}):
-            exclusions_counts["target_only_no_live_reference_pair"] += 1
+        if isinstance(row, dict) and row.get("server") in {pair["candidate"] for pair in pair_specs}:
+            workload = row.get("workload")
+            excluded_for_workload = exclusions.get(workload, {}) if isinstance(exclusions, dict) else {}
+            candidate_pair = next(
+                (pair for pair in pair_specs if pair["candidate"] == row.get("server")),
+                None,
+            )
+            if (
+                candidate_pair is not None
+                and candidate_pair["reference"] in excluded_for_workload
+            ):
+                exclusions_counts["target_only_no_live_reference_pair"] += 1
     gates = metadata.get("paired_timing_repetitions", [])
     pairs = []
     for workload in workloads:
         for pair_spec in pair_specs:
             reference, candidate = pair_spec["reference"], pair_spec["candidate"]
+            excluded_for_workload = exclusions.get(workload, {}) if isinstance(exclusions, dict) else {}
             reference_rows = {number: row for (name, server, number), row in eligible.items() if name == workload and server == reference}
             candidate_rows = {number: row for (name, server, number), row in eligible.items() if name == workload and server == candidate}
             reasons = list(gate_reasons)
@@ -530,7 +553,7 @@ def analyze_category(loaded, driver):
                           gate.get("required", MINIMUM_MATCHES) if gate and repetition(gate.get("required")) else MINIMUM_MATCHES)
             if len(matching) < minimum:
                 reasons.append("fewer_than_required_matching_valid_repetitions")
-            if workload in target_only:
+            if reference in excluded_for_workload:
                 reasons.append("target_only_no_live_reference_pair")
             if workload == "exception-to-500":
                 reasons.append("unequal_exception_diagnostic_policy")
@@ -700,7 +723,10 @@ def markdown(report):
             lines.append(f"- {category['category']} target-only exclusions: {category['pair_exclusion_row_counts']}.")
         for pair in category["pairs"]:
             if not pair["qualified"]:
-                lines.append(f"- {category['category']}/{escape(pair['workload'])}/{pair['loop']}: {len(pair['matched_repetitions'])} matching valid repetitions; " + "; ".join(escape(reason) for reason in pair["exclusion_reasons"]) + ".")
+                detail = pair.get("excluded_reference_details", {})
+                reference_detail = detail.get(pair["reference"]) if isinstance(detail, dict) else None
+                suffix = f"; reference excluded: {escape(str(reference_detail))}" if reference_detail else ""
+                lines.append(f"- {category['category']}/{escape(pair['workload'])}/{pair['loop']}: {len(pair['matched_repetitions'])} matching valid repetitions; " + "; ".join(escape(reason) for reason in pair["exclusion_reasons"]) + suffix + ".")
     lines += ["", "## Interpretation limits", ""]
     lines += [f"- {value}" for value in report["limitations"]]
     return "\n".join(lines) + "\n"

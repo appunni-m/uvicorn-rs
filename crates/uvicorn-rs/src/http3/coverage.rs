@@ -5,13 +5,12 @@
 
 use std::{error::Error, io};
 
+use super::{h3, h3_quinn, transport};
 use bytes::{Buf, Bytes};
 use h3::error::Code;
 use h3::quic::{ConnectionErrorIncoming, StreamErrorIncoming};
 use h3_quinn::quinn;
 use http::{Request, StatusCode};
-
-use super::transport;
 
 pub(crate) struct CoverageClient {
     driver: tokio::task::JoinHandle<()>,

@@ -1,5 +1,14 @@
-//! HTTP/3 serving over a caller-configured Quinn endpoint.
+//! HTTP/3 serving over a native Quinn endpoint.
 
+// These modules are vendored MIT-licensed sources. Keep their upstream
+// implementation intact while retaining Clippy's correctness checks and the
+// crate-wide unsafe-code prohibition.
+#[allow(clippy::all, clippy::panic, clippy::unwrap_used, clippy::expect_used)]
+#[deny(clippy::correctness)]
+pub mod h3;
+#[allow(clippy::all, clippy::panic, clippy::unwrap_used, clippy::expect_used)]
+#[deny(clippy::correctness)]
+pub mod h3_quinn;
 mod transport;
 
 #[cfg(coverage)]
@@ -7,8 +16,8 @@ pub(crate) mod coverage;
 
 #[cfg(coverage)]
 pub(crate) use coverage::{
-    coverage_accept_bidi_error, coverage_exercise_client_adapter_methods,
-    coverage_finish_after_reset, coverage_open_bidi_application_close_code, CoverageClient,
+    CoverageClient, coverage_accept_bidi_error, coverage_exercise_client_adapter_methods,
+    coverage_finish_after_reset, coverage_open_bidi_application_close_code,
 };
 
 use std::{
@@ -16,35 +25,128 @@ use std::{
     fmt,
     future::Future,
     io,
+    net::SocketAddr,
+    ops::Deref,
     panic::AssertUnwindSafe,
     pin::Pin,
-    sync::Arc,
+    sync::{Arc, OnceLock},
     task::{Context, Poll},
     time::Duration,
 };
 
+use self::{
+    h3::error::Code,
+    h3_quinn::quinn::{self, crypto::rustls::QuicServerConfig},
+};
 use bytes::{Buf, Bytes};
 use futures_util::FutureExt;
-use h3::error::Code;
-use h3_quinn::quinn;
 use http::{Request, Response, StatusCode, Version};
 use http_body::{Body, Frame, SizeHint};
 use http_body_util::BodyExt;
 use pin_project_lite::pin_project;
 use tokio::{
-    sync::{watch, Semaphore},
+    sync::{Semaphore, watch},
     task::JoinSet,
 };
 use tower_service::Service;
 
 use crate::{
-    observe_error, ConcurrencyLimitObserver, ConnectionInfo, ConnectionInfoService, ServeError,
-    ServerConfig, ServerErrorObserver, ServerErrorPhase, ServiceErrorPolicy, ServiceErrorResponse,
-    TlsInfo, TransportKind,
+    ConcurrencyLimitObserver, ConnectionInfo, ConnectionInfoService, ServeError, ServerConfig,
+    ServerErrorObserver, ServerErrorPhase, ServiceErrorPolicy, ServiceErrorResponse, TlsInfo,
+    TransportKind, observe_error,
 };
+
+fn trace_http3(event: fmt::Arguments<'_>) {
+    // Opt-in only; parity CI sets this for the single HTTP/3 case under diagnosis.
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    let enabled = ENABLED.get_or_init(|| {
+        std::env::var_os("UVICORN_RS_TRACE_HTTP3").as_deref() == Some(std::ffi::OsStr::new("1"))
+    });
+    if !enabled {
+        return;
+    }
+
+    let mut stderr = io::stderr().lock();
+    let _ = io::Write::write_fmt(&mut stderr, format_args!("uvicorn-rs h3-trace {event}\n"));
+}
 
 /// Error returned when reading an HTTP/3 request body.
 pub type Http3RequestBodyError = Box<dyn Error + Send + Sync + 'static>;
+
+/// TLS and QUIC settings used to bind an HTTP/3 endpoint.
+///
+/// HTTP/3 requires TLS 1.3. The supplied Rustls configuration is converted to
+/// Quinn's Rustls crypto provider, its ALPN list is set to `h3`, and 0-RTT is
+/// disabled before the endpoint is created.
+pub struct Http3ServerConfig {
+    quinn: quinn::ServerConfig,
+}
+
+impl Http3ServerConfig {
+    /// Converts a Rustls server configuration into HTTP/3 QUIC settings.
+    ///
+    /// The input must already contain a server certificate and private key.
+    /// This method sets the HTTP/3 ALPN and disables early data.
+    ///
+    /// # Errors
+    ///
+    /// Returns an `InvalidInput` I/O error when Quinn cannot use the supplied
+    /// Rustls configuration.
+    pub fn from_rustls_config(mut tls: tokio_rustls::rustls::ServerConfig) -> io::Result<Self> {
+        tls.alpn_protocols = vec![b"h3".to_vec()];
+        tls.max_early_data_size = 0;
+        let crypto = QuicServerConfig::try_from(tls).map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("invalid HTTP/3 TLS configuration: {error}"),
+            )
+        })?;
+        Ok(Self {
+            quinn: quinn::ServerConfig::with_crypto(Arc::new(crypto)),
+        })
+    }
+}
+
+/// A Quinn endpoint bound and configured by the Python-free server crate.
+///
+/// Use [`Http3Endpoint::bind`] to create an endpoint from [`Http3ServerConfig`]
+/// and pass it to [`serve_http3`]. The wrapper dereferences to Quinn's endpoint
+/// for advanced transport configuration and interoperability.
+pub struct Http3Endpoint(quinn::Endpoint);
+
+impl Http3Endpoint {
+    /// Binds a QUIC endpoint with HTTP/3 TLS settings.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying socket bind error.
+    pub fn bind(address: SocketAddr, config: Http3ServerConfig) -> io::Result<Self> {
+        quinn::Endpoint::server(config.quinn, address).map(Self)
+    }
+
+    /// Returns the socket address assigned to this endpoint.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if Quinn cannot inspect the bound socket address.
+    pub fn local_addr(&self) -> io::Result<SocketAddr> {
+        self.0.local_addr()
+    }
+}
+
+impl Deref for Http3Endpoint {
+    type Target = quinn::Endpoint;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<quinn::Endpoint> for Http3Endpoint {
+    fn from(endpoint: quinn::Endpoint) -> Self {
+        Self(endpoint)
+    }
+}
 
 pin_project! {
     /// A streaming HTTP/3 request body backed directly by its QUIC receive stream.
@@ -78,7 +180,7 @@ impl Http3RequestBody {
     /// handler retires without observing a peer stop. Adapters can use this
     /// notification to deliver their protocol-level disconnect event while
     /// preserving the request body stream API.
-    pub fn peer_stop_notification(&self) -> impl Future<Output = bool> + Send + 'static {
+    pub fn peer_stop_notification(&self) -> impl Future<Output = bool> + Send + 'static + use<> {
         let mut peer_stopped = self.peer_stopped.clone();
         async move { peer_stopped.wait_for(|stopped| *stopped).await.is_ok() }
     }
@@ -154,14 +256,14 @@ impl Body for Http3RequestBody {
     }
 }
 
-/// Serves an HTTP/3 application over a caller-configured Quinn endpoint.
+/// Serves an HTTP/3 application over a Quinn endpoint.
 ///
-/// The endpoint must have a server TLS configuration whose ALPN list includes
-/// `h3`. This function owns no certificate policy: callers create and bind the
-/// [`quinn::Endpoint`] and remain responsible for its TLS configuration. The
-/// accepted request uses HTTP version `HTTP_3`, and its body is the streaming
-/// [`Http3RequestBody`] type. Each request receives [`ConnectionInfo`] with its
-/// QUIC peer address, `TransportKind::Quic`, and negotiated ALPN bytes.
+/// Prefer [`Http3Endpoint::bind`] and [`Http3ServerConfig::from_rustls_config`]
+/// so this crate owns QUIC TLS conversion and endpoint binding. A caller-bound
+/// [`quinn::Endpoint`] is also accepted for applications with custom Quinn
+/// setup. The accepted request uses HTTP version `HTTP_3`, and its body is the
+/// streaming [`Http3RequestBody`] type. Each request receives [`ConnectionInfo`]
+/// with its QUIC peer address, `TransportKind::Quic`, and negotiated ALPN bytes.
 ///
 /// Response bodies are polled one frame at a time. Sending each frame awaits
 /// QUIC/H3 flow control before the next body frame is polled. Request DATA and
@@ -186,13 +288,14 @@ impl Body for Http3RequestBody {
 /// optional error observer and do not terminate the listener. When lifecycle
 /// hooks are configured, startup must also succeed before endpoint acceptance;
 /// shutdown runs after active connections are drained or cancelled.
-pub async fn serve_http3<S, B, Shutdown>(
-    endpoint: quinn::Endpoint,
+pub async fn serve_http3<E, S, B, Shutdown>(
+    endpoint: E,
     service: S,
     shutdown: Shutdown,
     config: ServerConfig,
 ) -> Result<(), ServeError>
 where
+    E: Into<Http3Endpoint>,
     S: Service<Request<Http3RequestBody>, Response = Response<B>> + Clone + Send + 'static,
     S::Future: Send + 'static,
     S::Error: Error + fmt::Display + Send + Sync + 'static,
@@ -200,6 +303,7 @@ where
     B::Error: Into<super::BoxBodyError> + Send + Sync + 'static,
     Shutdown: Future<Output = ()>,
 {
+    let endpoint = endpoint.into();
     let lifecycle_config = config.clone();
     super::run_with_application_lifecycle(lifecycle_config, async move {
         let connection_slots = Arc::new(Semaphore::new(config.max_connections));
@@ -283,7 +387,7 @@ struct Http3ConnectionOptions<'a> {
 }
 
 async fn finish_http3_shutdown(
-    endpoint: quinn::Endpoint,
+    endpoint: Http3Endpoint,
     shutdown_sender: watch::Sender<bool>,
     connections: &mut JoinSet<()>,
     graceful_shutdown_timeout: Option<Duration>,
@@ -437,6 +541,8 @@ where
     B::Error: Into<super::BoxBodyError> + Send + Sync + 'static,
 {
     let peer_addr = connection_info.peer_addr();
+    let connection_id = connection.stable_id();
+    trace_http3(format_args!("connection={connection_id} opened"));
     let (connection_lifetime, _connection_lifetime_guard) = crate::ConnectionLifetimeGuard::new();
     let (transport, peer_stops) = transport::Connection::new(connection.clone());
     let created = h3::server::Connection::new(transport)
@@ -454,6 +560,7 @@ where
             info_service,
             connection_options.error_observer.cloned(),
             connection_options.concurrency_limit_observer.cloned(),
+            true, // HTTP/3 does not use HTTP/1 request-target forms.
             peer_addr,
             connection_options.service_error_policy,
             connection_options.request_concurrency.clone(),
@@ -470,6 +577,7 @@ where
             // shutdown begins. A closed sender also means no more streams
             // should be accepted, so either result drains the H3 connection.
             _ = shutdown.changed() => {
+                trace_http3(format_args!("connection={connection_id} shutdown-started"));
                 h3_connection
                     .shutdown(0)
                     .await
@@ -482,6 +590,9 @@ where
             accepted = h3_connection.accept() => {
                 match accepted {
                     Ok(Some(resolver)) => {
+                        trace_http3(format_args!(
+                            "connection={connection_id} request-stream-accepted"
+                        ));
                         let application = application.clone();
                         let error_observer = connection_options.error_observer.cloned();
                         let peer_stops = peer_stops.clone();
@@ -499,8 +610,23 @@ where
                             }
                         });
                     }
-                    Ok(None) => break,
+                    Ok(None) => {
+                        trace_http3(format_args!(
+                            "connection={connection_id} accept-ended close_reason={:?}",
+                            connection.close_reason()
+                        ));
+                        break;
+                    }
+                    Err(error) if is_http3_peer_close_ignorable(&error, &connection) => {
+                        trace_http3(format_args!(
+                            "connection={connection_id} peer-close-accepted error={error}"
+                        ));
+                        break;
+                    }
                     Err(error) => {
+                        trace_http3(format_args!(
+                            "connection={connection_id} accept-error error={error}"
+                        ));
                         connection_error = Some(Http3ConnectionError::H3(error));
                         break;
                     }
@@ -510,6 +636,9 @@ where
     }
 
     if connection_error.is_some() {
+        trace_http3(format_args!(
+            "connection={connection_id} local-close code=0x102 reason=request-acceptance-failed"
+        ));
         connection.close(
             quinn::VarInt::from_u32(0x102),
             b"HTTP/3 request acceptance failed",
@@ -537,8 +666,67 @@ where
         return Err(error);
     }
 
+    trace_http3(format_args!(
+        "connection={connection_id} drained close_reason_before_local_close={:?}",
+        connection.close_reason()
+    ));
     connection.close(quinn::VarInt::from_u32(0), b"HTTP/3 connection drained");
+    trace_http3(format_args!(
+        "connection={connection_id} local-close-issued close_reason={:?}",
+        connection.close_reason()
+    ));
     Ok(())
+}
+
+fn is_http3_peer_close_ignorable(
+    error: &h3::error::ConnectionError,
+    connection: &quinn::Connection,
+) -> bool {
+    if error.is_h3_no_error() {
+        return true;
+    }
+
+    // h3 0.0.8 does not expose the fields of its remote application-close
+    // error. Its public display text identifies that variant; Quinn provides
+    // the typed numeric close code for RFC 9114 classification.
+    let is_peer_application_close = error
+        .to_string()
+        .starts_with("Remote error: ApplicationClose: ");
+    if !is_peer_application_close {
+        return false;
+    }
+
+    #[cfg(coverage)]
+    let close_reason = {
+        const FAULT_POINT: &str = "http3.native-peer-close.close-reason-unavailable";
+        match std::env::var_os("UVICORN_RS_COVERAGE_FAULT_FILE") {
+            Some(path) => {
+                let path = std::path::PathBuf::from(path);
+                let armed =
+                    std::fs::read_to_string(&path).is_ok_and(|value| value.trim() == FAULT_POINT);
+                if armed {
+                    let _ = std::fs::write(path, "");
+                    None
+                } else {
+                    connection.close_reason()
+                }
+            }
+            None => connection.close_reason(),
+        }
+    };
+    #[cfg(not(coverage))]
+    let close_reason = connection.close_reason();
+
+    let Some(quinn::ConnectionError::ApplicationClosed(close)) = close_reason else {
+        return false;
+    };
+
+    // Preserve registered HTTP/3, QPACK, and WebTransport errors. Unknown
+    // application codes are treated as H3_NO_ERROR by RFC 9114 section 8.
+    !matches!(
+        close.error_code.into_inner(),
+        0x33 | 0x100..=0x110 | 0x200..=0x202
+    )
 }
 
 async fn handle_http3_request<S, B>(
@@ -564,9 +752,17 @@ where
         .map_err(Http3RequestStreamError::H3)?;
     *request.version_mut() = Version::HTTP_3;
     let (mut send_stream, receive_stream) = stream.split();
+    let stream_id = send_stream.send_id();
+    trace_http3(format_args!(
+        "stream={stream_id} request-resolved method={}",
+        request.method()
+    ));
     let (peer_stopped_tx, peer_stopped_rx) = watch::channel(false);
     let request = request.map(|()| Http3RequestBody::new(receive_stream, peer_stopped_rx));
     let Some(mut peer_stopped) = peer_stops.take(send_stream.send_id()) else {
+        trace_http3(format_args!(
+            "stream={stream_id} peer-stop-observer-unavailable"
+        ));
         #[cfg(coverage)]
         crate::observe_http3_peer_stop_observer_unavailable_fault();
         let error = Http3RequestStreamError::ObserverUnavailable(io::Error::other(
@@ -598,6 +794,9 @@ where
             biased;
             stopped = &mut peer_stopped => match stopped {
                 Ok(Some(code)) => {
+                    trace_http3(format_args!(
+                        "stream={stream_id} peer-stop-observed code={code:?}"
+                    ));
                     peer_stopped_tx.send_replace(true);
                     code
                 }
@@ -605,8 +804,21 @@ where
                 // fully retired. It is not evidence that the peer cancelled
                 // the application, and the completed observer must not be
                 // polled again.
-                Ok(None) => return work.await,
+                Ok(None) => {
+                    trace_http3(format_args!(
+                        "stream={stream_id} peer-stop-observer-local-retirement"
+                    ));
+                    let result = work.await;
+                    trace_http3(format_args!(
+                        "stream={stream_id} request-handler-completed ok={}",
+                        result.is_ok()
+                    ));
+                    return result;
+                }
                 Err(error) => {
+                    trace_http3(format_args!(
+                        "stream={stream_id} peer-stop-observer-error error={error}"
+                    ));
                     let error = Http3RequestStreamError::PeerStop(error);
                     observe_error(
                         error_observer.as_ref(),
@@ -617,14 +829,24 @@ where
                     return Err(error);
                 }
             },
-            result = &mut work => return result,
+            result = &mut work => {
+                trace_http3(format_args!(
+                    "stream={stream_id} request-handler-completed ok={}",
+                    result.is_ok()
+                ));
+                return result;
+            },
         }
     };
 
     // Leaving the block drops pending readiness, application, and body
     // futures before resetting just this request. The connection's accept
     // driver continues serving sibling streams.
-    send_stream.stop_stream(Code::from(stop_code.into_inner()));
+    let stop_code = stop_code.into_inner();
+    trace_http3(format_args!(
+        "stream={stream_id} response-stopped code={stop_code}"
+    ));
+    send_stream.stop_stream(Code::from(stop_code));
     Ok(())
 }
 
@@ -645,6 +867,8 @@ where
     B: Body<Data = Bytes> + Send + 'static,
     B::Error: Into<super::BoxBodyError> + Send + Sync + 'static,
 {
+    let stream_id = send_stream.send_id();
+    trace_http3(format_args!("stream={stream_id} service-call-started"));
     let response = match AssertUnwindSafe(futures_util::future::poll_fn(|context| {
         service.poll_ready(context)
     }))
@@ -688,11 +912,29 @@ where
             super::internal_server_error()
         }
     };
+    let body_size_hint = response.body().size_hint();
+    trace_http3(format_args!(
+        "stream={stream_id} service-response-ready status={} body_size_lower={} body_size_upper={:?}",
+        response.status(),
+        body_size_hint.lower(),
+        body_size_hint.upper()
+    ));
     let (mut parts, body) = response.into_parts();
     let mut body = Box::pin(body);
     parts.version = Version::HTTP_3;
+    let mut data_frame_count = 0usize;
+    let mut data_byte_count = 0usize;
+    let mut trailer_frame_count = 0usize;
     let send_result = async {
-        send_http3_response_start::<S::Error>(send_stream, Response::from_parts(parts, ())).await?;
+        trace_http3(format_args!("stream={stream_id} response-headers-send-start"));
+        let result =
+            send_http3_response_start::<S::Error>(send_stream, Response::from_parts(parts, ()))
+                .await;
+        trace_http3(format_args!(
+            "stream={stream_id} response-headers-send-completed ok={}",
+            result.is_ok()
+        ));
+        result?;
 
         loop {
             let frame = AssertUnwindSafe(body.frame())
@@ -708,14 +950,19 @@ where
             };
             let frame = frame.map_err(Http3RequestStreamError::Body)?;
             match frame.into_data() {
-                Ok(data) => send_stream
-                    .send_data(data)
-                    .await
-                    .map_err(Http3RequestStreamError::H3)?,
+                Ok(data) => {
+                    data_frame_count += 1;
+                    data_byte_count = data_byte_count.saturating_add(data.len());
+                    send_stream
+                        .send_data(data)
+                        .await
+                        .map_err(Http3RequestStreamError::H3)?;
+                }
                 Err(frame) => {
                     // `Frame` can contain only DATA or trailers. Since DATA
                     // extraction failed above, the remaining frame is trailers.
                     let trailers = frame.into_trailers().unwrap_or_default();
+                    trailer_frame_count += 1;
                     send_stream
                         .send_trailers(trailers)
                         .await
@@ -723,11 +970,23 @@ where
                 }
             }
         }
-        finish_http3_response::<S::Error>(send_stream).await
+        trace_http3(format_args!(
+            "stream={stream_id} response-body-eof data_frames={data_frame_count} data_bytes={data_byte_count} trailer_frames={trailer_frame_count}"
+        ));
+        trace_http3(format_args!("stream={stream_id} response-finish-start"));
+        let result = finish_http3_response::<S::Error>(send_stream).await;
+        trace_http3(format_args!(
+            "stream={stream_id} response-finish-completed ok={}",
+            result.is_ok()
+        ));
+        result
     }
     .await;
 
     if let Err(error) = &send_result {
+        trace_http3(format_args!(
+            "stream={stream_id} response-failed error={error}"
+        ));
         send_stream.stop_stream(Code::H3_INTERNAL_ERROR);
         observe_error(
             error_observer.as_ref(),
@@ -735,6 +994,8 @@ where
             Some(peer_addr),
             error,
         );
+    } else {
+        trace_http3(format_args!("stream={stream_id} response-complete"));
     }
     send_result
 }

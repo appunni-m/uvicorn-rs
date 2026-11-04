@@ -13,9 +13,9 @@ import json
 import math
 import os
 from array import array
-from collections import Counter
+from collections import Counter, deque
 from pathlib import Path
-from time import perf_counter_ns
+from time import perf_counter_ns, time_ns
 
 from examples.bench_fastapi import app as fastapi_app
 
@@ -39,6 +39,10 @@ _REQUEST_IDS: dict[str, int] = Counter()
 _TOTALS: dict[str, Counter] = {}
 _SAMPLES: dict[str, dict[str, array]] = {}
 _SLOW_RECEIVES: dict[str, list[dict[str, int | str | bool | None]]] = {}
+_UPLOAD_TRACES: dict[str, list[dict]] = {}
+_UPLOAD_TRACES_SEEN: Counter = Counter()
+_MAX_UPLOAD_TRACES_PER_PATH = 32
+_MAX_UPLOAD_EVENTS_PER_REQUEST = 128
 
 
 def _path_stats(path: str) -> tuple[Counter, dict[str, array]]:
@@ -61,6 +65,28 @@ async def app(scope, receive, send):
     request_id = _REQUEST_IDS[path] + 1
     _REQUEST_IDS[path] = request_id
     totals, samples = _path_stats(path)
+    trace_id = next(
+        (value.decode("ascii", errors="replace") for name, value in scope.get("headers", [])
+         if name.lower() == b"x-uvicorn-rs-upload-trace"),
+        None,
+    ) if os.environ.get("UVICORN_RS_UPLOAD_TRACE") == "1" else None
+    trace_enabled = bool(trace_id and len(trace_id) <= 64 and all(
+        char in "0123456789-" for char in trace_id
+    ))
+    trace_events: deque = deque(maxlen=_MAX_UPLOAD_EVENTS_PER_REQUEST)
+    trace_seen = 0
+    trace_origin_mono = perf_counter_ns() if trace_enabled else 0
+    trace_origin_unix = time_ns() if trace_enabled else 0
+    trace_origin_uncertainty = perf_counter_ns() - trace_origin_mono if trace_enabled else 0
+
+    def trace(event: str, **values) -> None:
+        nonlocal trace_seen
+        if trace_enabled:
+            trace_seen += 1
+            trace_events.append({"offset_ns": perf_counter_ns() - trace_origin_mono,
+                                 "event": event, **values})
+
+    trace("app-start")
     request = {
         "receive_calls": 0,
         "send_calls": 0,
@@ -73,8 +99,12 @@ async def app(scope, receive, send):
 
     async def timed_receive():
         started = perf_counter_ns()
+        trace("receive-wait")
         try:
             message = await receive()
+        except BaseException as error:
+            trace("receive-error", error_class=type(error).__name__)
+            raise
         finally:
             elapsed_ns = perf_counter_ns() - started
             request["receive_await_ns"] += elapsed_ns
@@ -93,6 +123,9 @@ async def app(scope, receive, send):
                     request["request_body_bytes"] += len(message.get("text", "").encode("utf-8"))
         else:
             message_type = None
+        trace("receive-ready", message_type=message_type,
+              body_bytes=len(message.get("body", b"")) if isinstance(message, dict) else 0,
+              more_body=message.get("more_body") if isinstance(message, dict) else None)
 
         if elapsed_ns >= _SLOW_RECEIVE_THRESHOLD_NS:
             slow_receives = _SLOW_RECEIVES.setdefault(path, [])
@@ -134,8 +167,14 @@ async def app(scope, receive, send):
                 else:
                     request["response_body_bytes"] += len(message.get("text", "").encode("utf-8"))
         started = perf_counter_ns()
+        trace("send-wait", message_type=message.get("type") if isinstance(message, dict) else None)
         try:
             await send(message)
+        except BaseException as error:
+            trace("send-error", error_class=type(error).__name__)
+            raise
+        else:
+            trace("send-ready")
         finally:
             request["send_await_ns"] += perf_counter_ns() - started
 
@@ -165,6 +204,25 @@ async def app(scope, receive, send):
             retained = samples[key]
             if len(retained) < _MAX_RETAINED_PER_PATH:
                 retained.append(value)
+        if trace_enabled:
+            trace("app-end")
+            _UPLOAD_TRACES_SEEN[path] += 1
+            traces = _UPLOAD_TRACES.setdefault(path, [])
+            traces.append({
+                "request_id": trace_id,
+                "origin_unix_ns": trace_origin_unix,
+                "origin_monotonic_ns": trace_origin_mono,
+                "origin_uncertainty_ns": trace_origin_uncertainty,
+                "wall_ns": app_wall_ns,
+                "request_body_bytes": request["request_body_bytes"],
+                "events_seen": trace_seen,
+                "events_dropped": trace_seen - len(trace_events),
+                "events": list(trace_events),
+            })
+            # Keep the slowest requests, so fast peers do not evict a stalled
+            # request once its disconnect/cancellation has been observed.
+            traces.sort(key=lambda item: item["wall_ns"], reverse=True)
+            del traces[_MAX_UPLOAD_TRACES_PER_PATH:]
 
 
 def _percentile(sorted_values: list[int], quantile: float) -> int | None:
@@ -215,6 +273,13 @@ def _write_timings() -> None:
             "p99_ns": app_wall["p99"],
             "mean_ns": app_wall["mean"],
             "totals": dict(sorted(totals.items())),
+            "upload_trace": {
+                "schema": 1,
+                "diagnostic_only": True,
+                "requests_seen": _UPLOAD_TRACES_SEEN[path],
+                "retention_policy": "slowest 32 requests; last 128 events per request",
+                "traces": _UPLOAD_TRACES.get(path, []),
+            } if os.environ.get("UVICORN_RS_UPLOAD_TRACE") == "1" else None,
         }
 
     target = Path(destination)

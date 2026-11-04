@@ -4,11 +4,14 @@
 
 Each dated result is bound to the source and normal extension recorded in its
 receipt. “Current source” in an older benchmark entry means current for that
-measurement, not necessarily the present worktree. The latest exact-source
-three-system attempt ended with a partial matrix after the Linux ARM64 HTTP/2
-category exited early. A later focused Linux x86-64 slice measured one workload
-from each maintained protocol category and the lifecycle scenario; it is useful
-single-host evidence, not a completed multi-system report. See
+measurement, not necessarily the present worktree. The latest exact-main
+three-system attempt, [run 39689988939](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939),
+produced a partial matrix: Linux ARM64 failed the Hypercorn HTTP/3
+`slow-reader-backpressure` correctness gate with `KeyError: 52`. The failed
+cell is not a performance result, and the attempt does not qualify as a
+complete multi-system comparison. A focused Linux x86-64 slice measured one
+workload from each maintained protocol category and the lifecycle scenario;
+it is useful single-host evidence, not a completed multi-system report. See
 [current benchmark status](benchmark-status.md) for the focused results, limits,
 the partial hosted run, and retained artifacts. Coverage results are correctness
 evidence and do not add performance samples.

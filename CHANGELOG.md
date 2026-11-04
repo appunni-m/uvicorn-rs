@@ -4,12 +4,28 @@ Notable user-facing changes are listed here. An `Unreleased` entry describes
 work in progress; it does not mean a candidate has passed the release gates or
 that a package has been published.
 
-## 0.1.0 (Unreleased)
+## 0.3.0 (Unreleased)
 
 ### Added
 
-- Candidate packaging for the Python-free `uvicorn-rs` server library and the
-  runtime-neutral `native-app-contract` crate, alongside the optional
+- Consolidated the Python-free Rust server as the `uvicorn-rs` crate. HTTP/3
+  protocol and Quinn transport support are included behind the optional
+  `http3` feature.
+- Added the `uvicorn-rs` PyPI distribution with the `uvicorn` command and
+  import namespace. The optional internal PyO3 adapter remains named
+  `uvicorn-rs-py`.
+- Kept the lifecycle contract as the separate `asgi-lifespan-protocol-rs`
+  crate; HTTP/3 and Quinn are no longer separate project crates.
+
+## 0.2.1
+
+### Added
+
+- HTTP/3 protocol and Quinn adapter source moved into `uvicorn-rs` behind its
+  `http3` Cargo feature; separate `uvicorn-rs-h3` packages are no longer built.
+- Renamed the shared lifecycle contract package to
+  `asgi-lifespan-protocol-rs`.
+- Prepared release artifacts for the Rust server, lifecycle contract, and
   `uvicorn-rs-py` compatibility client.
 - Commit-bound Rust crate archive inspection and clean extracted-archive
   consumer builds in release evidence.

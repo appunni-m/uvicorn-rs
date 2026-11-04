@@ -1,12 +1,50 @@
 //! Coverage-only contracts for Rust paths that cannot be reached through
 //! valid network input.
 
-use std::{error::Error, future::Future, io, pin::Pin, time::Duration};
+use std::{
+    error::Error,
+    future::Future,
+    io,
+    pin::Pin,
+    sync::atomic::{AtomicU8, Ordering},
+    time::Duration,
+};
 
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::watch;
 
-use super::{wait_for_connection_or_response_after_peer_read_error, ConnectionError};
+use super::{ConnectionError, wait_for_connection_or_response_after_peer_read_error};
+
+static HTTP1_UNIX_PEER_READ_ON_READ_ERROR_FAULT: AtomicU8 = AtomicU8::new(0);
+
+/// Arms a coverage-only Unix OnRead error for the peer-read adapter contract.
+#[doc(hidden)]
+pub fn arm_http1_unix_peer_read_on_read_error_fault() -> bool {
+    HTTP1_UNIX_PEER_READ_ON_READ_ERROR_FAULT
+        .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+/// Finishes the coverage-only Unix OnRead peer-read error contract.
+#[doc(hidden)]
+pub fn finish_http1_unix_peer_read_on_read_error_fault() -> bool {
+    HTTP1_UNIX_PEER_READ_ON_READ_ERROR_FAULT.swap(0, Ordering::AcqRel) == 3
+}
+
+pub(super) fn take_http1_unix_peer_read_on_read_error_fault() -> bool {
+    HTTP1_UNIX_PEER_READ_ON_READ_ERROR_FAULT
+        .compare_exchange(1, 2, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+pub(super) fn observe_http1_unix_peer_read_on_read_error_fault() {
+    let _ = HTTP1_UNIX_PEER_READ_ON_READ_ERROR_FAULT.compare_exchange(
+        2,
+        3,
+        Ordering::AcqRel,
+        Ordering::Acquire,
+    );
+}
 
 /// Checks the source-chain contract for each private HTTP connection error.
 pub fn connection_error_source_variants() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
@@ -60,10 +98,52 @@ pub fn http1_on_read_peer_read(
     }
 }
 
+/// Builds an OnRead Unix-domain socket peer adapter for the native adapter
+/// contract. This entry point is absent from normal builds.
+#[cfg(unix)]
+pub fn http1_on_read_unix_peer_read(
+    stream: tokio::net::UnixStream,
+) -> super::CoveragePeerReadAdapter<impl AsyncRead + AsyncWrite + Unpin + Send> {
+    let (io, observer, failed_observer, pump, _) =
+        super::peer_read::observe_peer_read_unix(stream, super::PeerReadHalfCloseMode::OnRead);
+    let pump = pump.map(|pump| {
+        Box::pin(async move {
+            let _ = pump.await;
+        }) as Pin<Box<dyn Future<Output = ()> + Send>>
+    });
+    super::CoveragePeerReadAdapter {
+        io,
+        observer,
+        failed_observer,
+        pump,
+    }
+}
+
+/// Builds a Proactive Unix-domain socket peer adapter for the native adapter
+/// contract. This entry point is absent from normal builds.
+#[cfg(unix)]
+pub fn http1_proactive_unix_peer_read(
+    stream: tokio::net::UnixStream,
+) -> super::CoveragePeerReadAdapter<impl AsyncRead + AsyncWrite + Unpin + Send> {
+    let (io, observer, failed_observer, pump, _) =
+        super::peer_read::observe_peer_read_unix(stream, super::PeerReadHalfCloseMode::Proactive);
+    let pump = pump.map(|pump| {
+        Box::pin(async move {
+            let _ = pump.await;
+        }) as Pin<Box<dyn Future<Output = ()> + Send>>
+    });
+    super::CoveragePeerReadAdapter {
+        io,
+        observer,
+        failed_observer,
+        pump,
+    }
+}
+
 /// Exercises active-response, inactive-change, and closed-channel outcomes
 /// for the HTTP/1 peer-read supervisor's response-body activity watch.
-pub async fn http1_response_activity_watch_outcomes(
-) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
+pub async fn http1_response_activity_watch_outcomes()
+-> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     let (closed_sender, mut closed_receiver) = watch::channel(0usize);
     drop(closed_sender);
 

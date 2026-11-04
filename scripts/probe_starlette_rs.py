@@ -133,7 +133,7 @@ def _identity(
                 "imported uvicorn-rs extension does not match --server-wheel"
             )
 
-    server_distribution = importlib.metadata.distribution("uvicorn-rs-py")
+    server_distribution = importlib.metadata.distribution("uvicorn-rs")
     requirements = list(server_distribution.requires or [])
     framework_dependencies = {
         "starlette",
@@ -149,7 +149,7 @@ def _identity(
     ]
     if unexpected_requirements:
         raise RuntimeError(
-            "uvicorn-rs-py declares framework runtime dependencies: "
+            "uvicorn-rs declares framework runtime dependencies: "
             + ", ".join(unexpected_requirements)
         )
     installed_files = [str(path) for path in (server_distribution.files or [])]
@@ -610,7 +610,7 @@ def main() -> None:
         "--oracle-python",
         type=Path,
         default=Path(sys.executable),
-        help="Python environment containing genuine upstream Uvicorn, isolated from uvicorn-rs-py",
+        help="Python environment containing genuine upstream Uvicorn, isolated from uvicorn-rs",
     )
     parser.add_argument(
         "--output", type=Path, help="write the full JSON receipt to this path"

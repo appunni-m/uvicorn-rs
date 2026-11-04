@@ -26,11 +26,24 @@ from typing import Any
 
 from coverage_contract import pending_coverage_mcp_request
 from coverage_toolchain import ToolchainError, validate_coverage_tools
+from parity_identity import runtime_source_digest, runtime_source_hashes
+from windows_reference_hang import (
+    SIGBREAK_STALL_POLICY,
+    eligible_input,
+    validate_candidate_lifecycle,
+    validate_reference_hang,
+)
+from windows_reference_startup import (
+    diagnostic_input as windows_reference_startup_input,
+    validate_reference_crash_restart_hang,
+    validate_reference_startup,
+    validate_reference_startup_and_hang,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "tests/parity/manifest.json"
-UNIFIED_SCHEMA = "uvicorn-rs-coverage/unified@9"
+UNIFIED_SCHEMA = "uvicorn-rs-coverage/unified@10"
 PRODUCTION_SOURCE_SET = (
     "src/lib.rs",
     "crates/uvicorn-rs/src/lib.rs",
@@ -38,22 +51,100 @@ PRODUCTION_SOURCE_SET = (
     "crates/uvicorn-rs/src/http3/transport.rs",
     "crates/uvicorn-rs/src/websocket.rs",
     "crates/uvicorn-rs/src/peer_read.rs",
-    "crates/native-app-contract/src/lib.rs",
+    "crates/asgi-lifespan-protocol-rs/src/lib.rs",
+    "src/upload_trace.rs",
 )
-EXECUTABLE_SOURCE_SET = PRODUCTION_SOURCE_SET[:-1]
-NO_COUNTER_SOURCE_SET = (PRODUCTION_SOURCE_SET[-1],)
+EXECUTABLE_SOURCE_SET = PRODUCTION_SOURCE_SET[:-2]
+# Match the measured feature configuration, without dropping either source
+# file from identity checks. Unexpected counters in these files are rejected.
+NO_COUNTER_SOURCE_SET = PRODUCTION_SOURCE_SET[-2:]
 COVERAGE_SUPPORT_SOURCE_SET = (
     "crates/uvicorn-rs/src/coverage.rs",
     "crates/uvicorn-rs/src/http3/coverage.rs",
 )
+THIRD_PARTY_SOURCE_SET = (
+    "crates/uvicorn-rs/src/http3/h3/buf.rs",
+    "crates/uvicorn-rs/src/http3/h3/client/builder.rs",
+    "crates/uvicorn-rs/src/http3/h3/client/connection.rs",
+    "crates/uvicorn-rs/src/http3/h3/client/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/client/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/config.rs",
+    "crates/uvicorn-rs/src/http3/h3/connection.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/codes.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/connection_error_creators.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/error.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/internal_error.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/ext.rs",
+    "crates/uvicorn-rs/src/http3/h3/frame.rs",
+    "crates/uvicorn-rs/src/http3/h3/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/coding.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/frame.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/headers.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/push.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/varint.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/block.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/decoder.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/dynamic.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/encoder.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/field.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/parse_error.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_int.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_string/bitwin.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_string/decode.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_string/encode.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_string/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/static_.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/tests.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/vas.rs",
+    "crates/uvicorn-rs/src/http3/h3/quic.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/builder.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/connection.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/request.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/shared_state.rs",
+    "crates/uvicorn-rs/src/http3/h3/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/webtransport/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/webtransport/session_id.rs",
+    "crates/uvicorn-rs/src/http3/h3_quinn.rs",
+)
 NATIVE_FAULT_CONTRACTS = {
+    "http1.keep-alive.active-request-drain": {
+        "operation": "native-http1-keepalive-active-request-drain",
+        "scenario": "two-active-requests",
+    },
+    "http1.keep-alive.deadline-channel-closed": {
+        "operation": "native-http1-keepalive-deadline-channel-closed",
+        "scenario": "deadline-channel-closed",
+    },
+    "http1.keep-alive.deadline-rescheduled-before-expiry": {
+        "operation": "native-http1-keepalive-deadline-rescheduled",
+        "scenario": "deadline-rescheduled-before-expiry",
+    },
     "http1.upgrade.receiver-closed": {
-        "operation": "native-http1-upgrade-session",
-        "scenario": "receiver-closed",
+        "contracts": [
+            {
+                "operation": "native-http1-upgrade-session",
+                "scenario": "receiver-closed",
+            },
+            {
+                "operation": "native-https-upgrade-session-error",
+                "scenario": "receiver-closed",
+            },
+        ],
     },
     "http1.peer-read.receiver-closed": {
         "operation": "native-http1-peer-read-receiver-closed",
         "scenario": "receiver-closed",
+    },
+    "http1.unix-peer-read.on-read-error": {
+        "operation": "native-http1-unix-peer-read-on-read-error",
+        "scenario": "on-read-error",
     },
     "http1.peer-read.failure-after-data": {
         "operation": "native-http1-peer-read-error-response-cancel",
@@ -127,6 +218,22 @@ NATIVE_FAULT_CONTRACTS = {
         "operation": "native-http1-websocket",
         "scenario": "accept-key-header-value-error",
     },
+    "websocket.handshake.extension-negotiation": {
+        "operation": "native-http1-websocket",
+        "scenario": "extension-negotiation-error",
+    },
+    "websocket.session.construction-error": {
+        "operation": "native-http1-websocket",
+        "scenario": "accepted-session-construction-error",
+    },
+    "websocket.session.extension-to-str-error": {
+        "operation": "native-http1-websocket",
+        "scenario": "accepted-session-extension-header-error",
+    },
+    "websocket.session.extension-header-value-error": {
+        "operation": "native-http1-websocket",
+        "scenario": "accepted-session-extension-header-value-error",
+    },
     "websocket.receive.close-reply.flush": {
         "operation": "native-http1-websocket",
         "scenario": "close-reply-flush-failure",
@@ -140,12 +247,36 @@ NATIVE_FAULT_CONTRACTS = {
         "scenario": "deadline-overflow",
     },
     "server.listener.accept-error": {
-        "operation": "native-server-listener-accept-error",
-        "scenario": "accept-error",
+        "contracts": [
+            {
+                "operation": "native-server-listener-accept-error",
+                "scenario": "accept-error",
+            },
+            {
+                "operation": "native-tcp-multi-listener-accept-error",
+                "scenario": "multi-listener-accept-error",
+            },
+            {
+                "operation": "native-server-listener-accept-error",
+                "scenario": "unix-accept-error",
+            },
+        ],
+    },
+    "server.listener.unexpected-clean-exit": {
+        "operation": "native-tcp-multi-listener-clean-exit",
+        "scenario": "unexpected-clean-exit",
     },
     "server.listener.admission-closed": {
-        "operation": "native-server-listener-admission-closed",
-        "scenario": "admission-closed",
+        "contracts": [
+            {
+                "operation": "native-server-listener-admission-closed",
+                "scenario": "admission-closed",
+            },
+            {
+                "operation": "native-unix-listener-admission-closed",
+                "scenario": "unix-admission-closed",
+            },
+        ],
     },
     "server.http3.admission-closed": {
         "operation": "native-server-http3-admission-closed",
@@ -301,13 +432,15 @@ def require_summary(summary: dict[str, Any], count: int) -> None:
             and summary == expected, f"incomplete or failing result summary: {summary}")
 
 
-def validate_case_metadata(row: dict[str, Any], case: dict[str, Any]) -> None:
+def validate_case_metadata(
+    row: dict[str, Any], case: dict[str, Any], *, expected_status: str = "passed"
+) -> None:
     for field, source_field in (("profile", "profile"), ("operation", "operation"),
                                 ("requirements", "covers"), ("fault", "fault")):
         require(row.get(field) == case.get(source_field), f"case contract differs: {case['case_id']} ({field})")
     require(row.get("verification") == case.get("verification", "oracle-parity"),
             f"case verification policy differs: {case['case_id']}")
-    require(row.get("status") == "passed", f"case did not pass: {case['case_id']}")
+    require(row.get("status") == expected_status, f"case did not pass: {case['case_id']}")
 
 
 def normalize_comparison_observation(value: Any, profile_id: str) -> Any:
@@ -347,14 +480,66 @@ def normalize_operation_comparison_observation(
     for field, policy in operation.get("comparison_normalization", {}).items():
         require(field in normalized, f"comparison normalization field is absent: {field}")
         require(
-            policy == "python-traceback-exception-chain",
+            (operation.get("id"), policy) in {
+                ("cli.process", "python-process-diagnostics"),
+                (
+                    "python.api.server-lifespan-auto-fallback",
+                    "uvicorn-rs-shutdown-trace",
+                ),
+            },
             f"unsupported comparison normalization policy: {policy}",
         )
+        if policy == "uvicorn-rs-shutdown-trace":
+            stderr = base64.b64decode(normalized[field], validate=True)
+            normalized[field] = (
+                "uvicorn-rs-shutdown-trace",
+                tuple(
+                    line
+                    for line in stderr.splitlines()
+                    if not line.startswith(b"uvicorn-rs: shutdown-trace ")
+                ),
+            )
+            continue
         stderr = base64.b64decode(normalized[field], validate=True)
         lines = stderr.splitlines()
         traceback_header = b"Traceback (most recent call last):"
         if traceback_header not in lines:
-            normalized[field] = ("raw", stderr)
+            warning_separator = b": RuntimeWarning:"
+            if not any(
+                b"uvicorn/" in line.replace(b"\\", b"/")
+                and warning_separator in line
+                for line in lines
+            ):
+                normalized[field] = ("raw", stderr)
+                continue
+            normalized_warning: list[bytes] = []
+            skip_source_line = False
+            for line in lines:
+                if skip_source_line and line.startswith(b"  "):
+                    normalized_warning.append(b"  <source line>")
+                    skip_source_line = False
+                    continue
+                normalized_line = line.replace(b"\\", b"/")
+                if (
+                    b"uvicorn/" in normalized_line
+                    and warning_separator in normalized_line
+                ):
+                    prefix, _, message = normalized_line.partition(warning_separator)
+                    source_path = prefix.rsplit(b"uvicorn/", 1)[1]
+                    source_name, separator, line_number = source_path.rpartition(b":")
+                    if (
+                        separator
+                        and line_number.isdigit()
+                        and source_name.endswith(b".py")
+                    ):
+                        normalized_warning.append(b"RuntimeWarning:" + message)
+                        skip_source_line = True
+                        continue
+                normalized_warning.append(line)
+            normalized[field] = (
+                "python-runtime-warning-source",
+                tuple(normalized_warning),
+            )
             continue
 
         chain_markers = {
@@ -390,7 +575,31 @@ def normalize_operation_comparison_observation(
     return normalized
 
 
-def validate_observations(row: dict[str, Any], case: dict[str, Any], manifest: dict[str, Any]) -> None:
+def required_observations_for_case(
+    case: dict[str, Any], operation: dict[str, Any]
+) -> dict[str, Any]:
+    """Apply input-case requirements over operation defaults.
+
+    Keep offline evidence validation aligned with the live parity runner. Some
+    run_http inputs intentionally expect no response (for example, an invalid
+    default header), so the operation-wide success defaults do not apply to
+    those cases. Python API cases may also override operation requirements at
+    the case level when the expected behavior is specific to one input.
+    """
+    if "required_observations" in case:
+        return case["required_observations"]
+    run_http = case.get("api", {}).get("run_http", {})
+    return run_http.get(
+        "required_observations", operation.get("required_observations", {})
+    )
+
+
+def validate_observations(
+    row: dict[str, Any], case: dict[str, Any], manifest: dict[str, Any], *,
+    accepted_reference_hang: bool = False,
+    accepted_reference_startup: bool = False,
+    accepted_reference_sigbreak_stall: bool = False,
+) -> None:
     exact_keys(row, {"case_id", "profile", "operation", "requirements", "verification", "fault", "status",
                      "oracle_observation", "target_observation", "server_exit_codes", "difference"},
                f"case {case['case_id']}")
@@ -400,10 +609,31 @@ def validate_observations(row: dict[str, Any], case: dict[str, Any], manifest: d
     oracle = row.get("oracle_observation")
     require(isinstance(target, dict) and set(target) == set(operation["observe"]),
             f"target observation envelope differs: {case['case_id']}")
-    require(row.get("difference") is None, f"passing case carries a difference: {case['case_id']}")
+    if accepted_reference_hang or accepted_reference_startup:
+        require(isinstance(row.get("difference"), str) and bool(row["difference"]),
+                f"reference exception must retain its failed comparison: {case['case_id']}")
+    else:
+        require(row.get("difference") is None, f"passing case carries a difference: {case['case_id']}")
     if case.get("verification", "oracle-parity") == "oracle-parity":
         require(isinstance(oracle, dict), f"oracle observation is missing: {case['case_id']}")
-        compare = operation.get("compare", operation["observe"])
+        compare = case.get("compare", operation.get("compare", operation["observe"]))
+        if accepted_reference_hang:
+            # This is compatibility acceptance, never a passing parity result.
+            # Every observation other than this diagnosed timeout must match.
+            compare = [field for field in compare if field != "process_timed_out"]
+        if accepted_reference_sigbreak_stall:
+            # The retained stock process has already been terminated after
+            # the deadline. Keep request and signal parity; validate the exact
+            # one-worker stall and clean candidate logs in the exception rule.
+            compare = [field for field in compare if field not in {
+                "process_exit_code", "process_timed_out", "server_log_events",
+            }]
+        if accepted_reference_startup:
+            # The separate startup policy has checked the exact raw traceback,
+            # worker identities and clean candidate. Keep every response and
+            # deadline comparison; only its diagnosed reference events differ.
+            compare = [field for field in compare
+                       if field not in {"server_log_events", "worker_replacement_observed"}]
         require(isinstance(compare, list) and bool(compare)
                 and len(compare) == len(set(compare))
                 and set(compare).issubset(operation["observe"]),
@@ -422,9 +652,12 @@ def validate_observations(row: dict[str, Any], case: dict[str, Any], manifest: d
         )
         require(target_comparison == oracle_comparison,
                 f"live observations differ on declared comparison fields: {case['case_id']}")
-        for field, expected in operation.get("required_observations", {}).items():
+        for field, expected in required_observations_for_case(case, operation).items():
             require(target.get(field) == expected, f"required observation differs: {case['case_id']} ({field})")
-        for field, expected in operation.get("target_requirements", {}).items():
+        target_requirements = case.get(
+            "target_requirements", operation.get("target_requirements", {})
+        )
+        for field, expected in target_requirements.items():
             require(target.get(field) == expected, f"target requirement differs: {case['case_id']} ({field})")
     else:
         require(oracle is None, f"target-only contract contains oracle observations: {case['case_id']}")
@@ -433,24 +666,70 @@ def validate_observations(row: dict[str, Any], case: dict[str, Any], manifest: d
 def validate_parity(
     result: dict[str, Any], *, expected_cases: list[dict[str, Any]] | None = None,
     expected_native_sha256: str | None = None, offline: bool = True,
+    expected_excluded_case_ids: set[str] | None = None,
     _current_revision: str | None = None, expected_coverage_profile_dir: Path | None = None,
+    allow_windows_reference_hang: bool = False,
+    allow_windows_reference_startup: bool = False,
 ) -> dict[str, Any]:
     """Check exact indexed cases; callers may bind evidence to a shipping native hash."""
     manifest, all_cases, input_paths = load_contract()
+    excluded = expected_excluded_case_ids or set()
+    if excluded:
+        public_ids = {
+            case["case_id"] for case in all_cases
+            if case.get("verification", "oracle-parity") == "oracle-parity"
+        }
+        unknown_exclusions = sorted(excluded - public_ids)
+        require(
+            not unknown_exclusions,
+            f"parity exclusions are not public oracle cases: {', '.join(unknown_exclusions)}",
+        )
     if expected_cases is None:
-        expected_cases = [case for case in all_cases if case.get("verification", "oracle-parity") == "oracle-parity"]
+        expected_cases = [
+            case for case in all_cases
+            if case.get("verification", "oracle-parity") == "oracle-parity"
+            and case["case_id"] not in excluded
+        ]
+    else:
+        require(not excluded, "explicit case exclusions cannot be combined with a preselected case batch")
     expected = {case["case_id"]: case for case in expected_cases}
     require(len(expected) == len(expected_cases) and bool(expected), "expected parity case selection is empty or duplicated")
     exact_keys(result, {"schema", "status", "run", "summary", "cases", "infrastructure_errors"}, "parity report")
     require(result.get("schema") == manifest["result_schema"], "parity report uses a predecessor or unsupported schema")
-    require(result.get("status") == "completed" and result.get("infrastructure_errors") == [], "parity did not complete cleanly")
-    require_summary(result.get("summary"), len(expected))
+    require(result.get("infrastructure_errors") == [], "parity contains infrastructure failures")
+    allow_reference_exception = allow_windows_reference_hang or allow_windows_reference_startup
+    if not allow_reference_exception:
+        require(result.get("status") == "completed", "parity did not complete cleanly")
+        require_summary(result.get("summary"), len(expected))
+    else:
+        counts = Counter(row.get("status") for row in result.get("cases", []))
+        require(set(counts) <= {"passed", "failed"}, "reference exception cannot waive missing or infrastructure-failed cases")
+        require(isinstance(result.get("summary"), dict)
+                and all(type(value) is int for value in result["summary"].values()),
+                "reference exception summary counts must be integers")
+        require(result.get("summary") == {
+            "selected": len(expected), "executed": len(expected),
+            "passed": counts["passed"], "failed": counts["failed"],
+            "infrastructure_failed": 0, "not_run": 0,
+        }, "reference exception summary differs from raw case evidence")
+        require(result.get("status") == ("failed" if counts["failed"] else "completed"),
+                "reference exception cannot relabel the raw parity status")
     run = result["run"]
     exact_keys(run, {"run_id", "started_at", "finished_at", "manifest", "inputs", "environment", "target", "harness", "command"},
                "parity run")
     require(isinstance(run.get("run_id"), str) and bool(run["run_id"]), "parity run identity is empty")
     require(isinstance(run.get("command"), list) and bool(run["command"])
             and all(isinstance(part, str) for part in run["command"]), "parity command identity is invalid")
+    if expected_excluded_case_ids is not None:
+        command = run["command"]
+        recorded_exclusions = [
+            command[index + 1]
+            for index, value in enumerate(command[:-1])
+            if value == "--exclude-case-id"
+        ]
+        require(len(recorded_exclusions) == len(set(recorded_exclusions))
+                and set(recorded_exclusions) == expected_excluded_case_ids,
+                "parity command exclusions differ from the declared platform exclusions")
     if expected_coverage_profile_dir is not None:
         command = run["command"]
         expected_profile_dir = str(expected_coverage_profile_dir.resolve())
@@ -460,30 +739,60 @@ def validate_parity(
     require(run["manifest"] == {"path": "tests/parity/manifest.json", "schema": manifest["schema"],
                                 "sha256": sha256(MANIFEST_PATH)}, "parity manifest identity differs from checkout")
     input_schema = source_constant(ROOT / "scripts/run_parity.py", "INPUT_SCHEMA")
-    require(run["inputs"] == [{"path": str(path.relative_to(ROOT)), "schema": input_schema, "sha256": sha256(path)}
+    require(run["inputs"] == [{"path": path.relative_to(ROOT).as_posix(), "schema": input_schema, "sha256": sha256(path)}
                                for path in input_paths], "parity input identities differ from checkout")
     target = run["target"]
-    exact_keys(target, {"source_sha256", "cargo_lock_sha256", "revision", "dirty", "native_extension"}, "parity target")
+    exact_keys(target, {"source_sha256", "source_files", "cargo_lock_sha256", "revision", "dirty", "native_extension"}, "parity target")
     exact_keys(target["native_extension"], {"path", "sha256"}, "parity native")
-    require(target.get("source_sha256") == sha256(ROOT / "src/lib.rs"), "parity native source identity differs from checkout")
+    current_source_files = runtime_source_hashes(ROOT)
+    require(target.get("source_files") == current_source_files, "parity runtime source inventory differs from checkout")
+    require(target.get("source_sha256") == runtime_source_digest(current_source_files), "parity runtime source identity differs from checkout")
     require(target.get("cargo_lock_sha256") == sha256(ROOT / "Cargo.lock"), "parity Cargo.lock identity differs")
     require(target.get("revision") == (_current_revision or git_commit()), "parity commit differs from checkout")
     require(type(target.get("dirty")) is bool, "parity has no explicit source-state flag")
     harness = run["harness"]
-    exact_keys(harness, {"runner", "runner_sha256", "fixture_app", "fixture_app_sha256", "http3_client"}, "parity harness")
+    exact_keys(
+        harness,
+        {
+            "runner", "runner_sha256", "identity_helper", "fixture_app", "fixture_app_sha256",
+            "python_api_probe", "http3_client",
+        },
+        "parity harness",
+    )
+    exact_keys(harness["identity_helper"], {"path", "sha256"}, "parity source identity helper")
+    exact_keys(harness["python_api_probe"], {"path", "sha256"}, "Python API probe")
     if harness["http3_client"] is not None:
         exact_keys(harness["http3_client"], {"path", "sha256"}, "HTTP/3 client")
         valid_digest(harness["http3_client"]["sha256"], "HTTP/3 client")
     require(harness.get("runner") == "scripts/run_parity.py" and
             harness.get("runner_sha256") == sha256(ROOT / "scripts/run_parity.py"), "parity runner identity differs")
+    require(harness["identity_helper"].get("path") == "scripts/parity_identity.py" and
+            harness["identity_helper"].get("sha256") == sha256(ROOT / "scripts/parity_identity.py"),
+            "parity source identity helper differs")
     require(harness.get("fixture_app") == "tests/parity/app.py" and
             harness.get("fixture_app_sha256") == sha256(ROOT / "tests/parity/app.py"), "parity application identity differs")
+    require(harness["python_api_probe"].get("path") == "tests/parity/python_api_probe.py" and
+            harness["python_api_probe"].get("sha256") == sha256(ROOT / "tests/parity/python_api_probe.py"),
+            "parity Python API probe identity differs")
     exact_keys(run["environment"], {"python", "platform", "machine", "rustc", "dependencies"}, "parity environment")
     dependencies = run["environment"]["dependencies"]
     require(isinstance(dependencies, dict), "parity dependency identity is invalid")
+    platform_name = run["environment"]["platform"].lower()
+    if platform_name.startswith(("windows", "win32")):
+        parity_platform = "windows"
+    elif platform_name.startswith(("macos", "darwin")):
+        parity_platform = "macos"
+    elif platform_name.startswith("linux"):
+        parity_platform = "linux"
+    else:
+        raise EvidenceError(f"unsupported parity environment platform: {run['environment']['platform']}")
     for oracle in manifest["oracles"]:
+        components = [
+            item for item in oracle["components"]
+            if "platforms" not in item or parity_platform in item["platforms"]
+        ]
         for distribution, version in [(oracle["id"], oracle["version"]),
-                                      *((item["id"], item["version"]) for item in oracle["components"])]:
+                                      *((item["id"], item["version"]) for item in components)]:
             require(dependencies.get(distribution) == version, f"parity reference version differs: {distribution}")
     native_sha = valid_digest(target["native_extension"].get("sha256"), "parity native")
     if expected_native_sha256 is not None:
@@ -498,13 +807,65 @@ def validate_parity(
     require(isinstance(rows, list), "parity has no case rows")
     ids = [row.get("case_id") for row in rows]
     require(len(ids) == len(set(ids)) and set(ids) == set(expected), "parity omitted, added, or duplicated indexed cases")
+    accepted_reference_defects = []
+    candidate_contract_cases = []
     for row in rows:
         case = expected[row["case_id"]]
-        validate_case_metadata(row, case)
-        validate_observations(row, case, manifest)
-    return {"status": "passed", "cases": len(expected), "source_sha256": target["source_sha256"],
+        accepted = allow_reference_exception and row.get("status") == "failed"
+        if allow_reference_exception and parity_platform == "windows":
+            if eligible_input(case):
+                try:
+                    validate_candidate_lifecycle(row, case)
+                except (ValueError, KeyError, TypeError) as error:
+                    raise EvidenceError(f"independent candidate lifecycle rejected: {error}") from error
+                candidate_contract_cases.append(case["case_id"])
+        accepted_hang = accepted_startup = accepted_sigbreak_stall = False
+        if accepted:
+            failures = []
+            for enabled, validator in (
+                (allow_windows_reference_hang, validate_reference_hang),
+                (allow_windows_reference_hang, validate_reference_crash_restart_hang),
+                (allow_windows_reference_startup, validate_reference_startup),
+                (allow_windows_reference_hang and allow_windows_reference_startup,
+                 validate_reference_startup_and_hang),
+            ):
+                if not enabled:
+                    continue
+                try:
+                    decision = validator(row, case, run["environment"])
+                except (ValueError, KeyError, TypeError) as error:
+                    failures.append(str(error))
+                    continue
+                accepted_reference_defects.append(decision)
+                if (windows_reference_startup_input(case)
+                        and case["case_id"] not in candidate_contract_cases):
+                    candidate_contract_cases.append(case["case_id"])
+                accepted_hang = validator in (
+                    validate_reference_hang,
+                    validate_reference_crash_restart_hang,
+                    validate_reference_startup_and_hang,
+                )
+                accepted_startup = (
+                    validator in (validate_reference_startup, validate_reference_startup_and_hang)
+                    and decision.get("startup_exception", True)
+                )
+                accepted_sigbreak_stall = decision.get("policy") == SIGBREAK_STALL_POLICY
+                break
+            require(accepted_hang or accepted_startup,
+                    "reference exception rejected: " + "; ".join(failures))
+        validate_case_metadata(row, case, expected_status="failed" if accepted else "passed")
+        validate_observations(row, case, manifest, accepted_reference_hang=accepted_hang,
+                              accepted_reference_startup=accepted_startup,
+                              accepted_reference_sigbreak_stall=accepted_sigbreak_stall)
+    checked = {"status": "accepted_with_reference_exception" if accepted_reference_defects else "passed",
+            "cases": len(expected), "source_sha256": target["source_sha256"],
             "native_sha256": native_sha, "commit": target["revision"], "recorded_dirty": target["dirty"],
             "scope": "retained current evidence; this check does not publish or establish a clean release"}
+    if allow_reference_exception:
+        checked.update({"raw_parity_status": result["status"], "raw_parity_summary": result["summary"],
+                        "accepted_reference_defects": accepted_reference_defects,
+                        "candidate_contract_cases": candidate_contract_cases})
+    return checked
 
 
 def llvm_source_name(path: Path) -> str | None:
@@ -521,11 +882,14 @@ def llvm_source_name(path: Path) -> str | None:
 def llvm_production_regions(
     report: dict[str, Any], source_digest: str,
     *, canonical_functions: dict[tuple[str, int, int], str] | None = None,
+    canonical_spans: dict[tuple[str, int, int], set[tuple[int, int, int, int, int]]] | None = None,
     require_normalized_summaries: bool = True,
 ) -> tuple[
     dict[str, dict[str, Any]],
     dict[str, dict[str, int]],
     dict[tuple[str, int, int], str],
+    dict[tuple[str, int, int], set[tuple[int, int, int, int, int]]],
+    dict[str, dict[str, int]],
 ]:
     """Reconstruct source-span regions and validate normalized file summaries."""
     data = report.get("data")
@@ -570,6 +934,7 @@ def llvm_production_regions(
         summaries[relative] = values
     for relative in NO_COUNTER_SOURCE_SET:
         require(not any(summaries[relative].values()), f"no-counter file has LLVM counters: {relative}")
+    raw_file_summaries = {relative: values.copy() for relative, values in summaries.items()}
 
     groups: dict[tuple[str, int, int], list[tuple[str, list[list[int]]]]] = {}
     for function in functions:
@@ -599,9 +964,15 @@ def llvm_production_regions(
     require(bool(groups), "LLVM export has no executable production function regions")
     if canonical_functions is not None:
         require(set(groups) == set(canonical_functions), "case LLVM function groups differ from aggregate")
+    if (canonical_functions is None) != (canonical_spans is None):
+        raise EvidenceError("canonical LLVM representatives and spans must be supplied together")
+    if canonical_spans is not None:
+        require(set(groups) == set(canonical_spans), "case LLVM source-span groups differ from aggregate")
     regions: dict[str, dict[str, Any]] = {}
     reconstructed = {relative: {"regions": 0, "regions_total": 0} for relative in selected}
     selected_functions: dict[tuple[str, int, int], str] = {}
+    selected_spans: dict[tuple[str, int, int], set[tuple[int, int, int, int, int]]] = {}
+    normalized_region_totals = {relative: 0 for relative in selected}
     for group_key, instantiations in groups.items():
         relative, group_line, group_column = group_key
         symbols = [symbol for symbol, _ in instantiations]
@@ -631,23 +1002,27 @@ def llvm_production_regions(
             require(symbol in totals,
                     f"case profile is missing aggregate-selected function representative: {group_key}")
         selected_functions[group_key] = symbol
-        selected_regions = next(raws for candidate, raws in instantiations if candidate == symbol)
-        representative_spans = {
-            (raw[0], raw[1], raw[2], raw[3], raw[7]) for raw in selected_regions
+        observed_spans = {
+            (raw[0], raw[1], raw[2], raw[3], raw[7])
+            for _, candidate_regions in instantiations
+            for raw in candidate_regions
         }
         covered_source_spans: set[tuple[int, int, int, int, int]] = set()
         for _, candidate_regions in instantiations:
             candidate_spans = {
                 (raw[0], raw[1], raw[2], raw[3], raw[7]) for raw in candidate_regions
             }
-            require(candidate_spans <= representative_spans,
-                    f"LLVM instantiation has source regions outside its representative: {group_key}")
+            if canonical_spans is not None:
+                require(candidate_spans <= canonical_spans[group_key],
+                        f"case LLVM instantiation has source regions outside aggregate union: {group_key}")
             covered_source_spans.update(
                 (raw[0], raw[1], raw[2], raw[3], raw[7])
                 for raw in candidate_regions if raw[4] > 0
             )
-        for raw in selected_regions:
-            start_line, start_col, end_line, end_col, _, _, _, kind = raw
+        group_spans = canonical_spans[group_key] if canonical_spans is not None else observed_spans
+        selected_spans[group_key] = group_spans
+        normalized_region_totals[relative] += len(group_spans)
+        for start_line, start_col, end_line, end_col, kind in sorted(group_spans):
             source_span = (start_line, start_col, end_line, end_col, kind)
             identity = [source_digest, relative, group_line, group_column, symbol,
                         start_line, start_col, end_line, end_col, kind]
@@ -673,23 +1048,25 @@ def llvm_production_regions(
                         and summaries[relative]["regions_total"] == source_summary["regions_total"],
                         f"normalized source-span region summary differs for {relative}")
             else:
-                # A fresh llvm-cov export carries LLVM's maximum-instantiation
-                # file summary. Normalize its region totals to the same
-                # source-span union used by the embedded report before the
-                # replay comparison. Physical lines are validated from the
-                # aggregate LCOV export in the unified runner.
+                # A fresh llvm-cov export retains maximum-instantiation file
+                # counters. Validate those raw counters, then return the
+                # source-span union used by the embedded report.
+                require(raw_file_summaries[relative]["regions"] == reconstructed[relative]["regions"]
+                        and raw_file_summaries[relative]["regions_total"]
+                        == reconstructed[relative]["regions_total"],
+                        f"raw LLVM instantiation counters differ for {relative}")
                 summaries[relative]["regions"] = source_summary["regions"]
                 summaries[relative]["regions_total"] = source_summary["regions_total"]
-            require(reconstructed[relative]["regions_total"] == source_summary["regions_total"]
+            require(source_summary["regions_total"] == normalized_region_totals[relative]
                     and reconstructed[relative]["regions"] <= source_summary["regions"],
-                    f"raw LLVM instantiation counters disagree with normalized source spans for {relative}")
+                    f"raw LLVM counters disagree with source-span union for {relative}")
     require(bool(regions), "LLVM export has no executable production regions")
-    return regions, summaries, selected_functions
+    return regions, summaries, selected_functions, selected_spans, raw_file_summaries
 
 
-def resolve_llvm_tools(expected: dict[str, Any]) -> tuple[Path, Path]:
+def resolve_llvm_tools(expected: dict[str, Any], *, replay: bool = False) -> tuple[Path, Path]:
     try:
-        return validate_coverage_tools(expected)
+        return validate_coverage_tools(expected, replay=replay)
     except ToolchainError as error:
         raise EvidenceError(str(error)) from error
 
@@ -716,10 +1093,79 @@ def export_llvm_profile(
     return llvm_report
 
 
+def parse_llvm_lcov_lines(text: str) -> dict[str, dict[int, int]]:
+    """Read unique physical-line counters, separately from function summaries."""
+    files: dict[str, dict[int, int]] = {}
+    current: str | None = None
+    for line in text.splitlines():
+        if line.startswith("SF:"):
+            current = llvm_source_name(Path(line[3:]))
+            if current is not None:
+                require(current not in files, f"LCOV repeats production source: {current}")
+                files[current] = {}
+        elif line == "end_of_record":
+            current = None
+        elif current is not None and line.startswith("DA:"):
+            fields = line[3:].split(",")
+            require(2 <= len(fields) <= 3, "invalid LCOV physical-line record")
+            try:
+                number, count = int(fields[0]), int(fields[1])
+            except ValueError as error:
+                raise EvidenceError("invalid LCOV physical-line counter") from error
+            require(number > 0 and count >= 0, "invalid LCOV physical-line counter")
+            require(number not in files[current], f"LCOV repeats line {number}: {current}")
+            files[current][number] = count
+    return files
+
+
+def validate_llvm_physical_lines(
+    files: dict[str, dict[int, int]], regions: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, int]]:
+    """Require replayed LCOV line/hit sets to equal the executable span union."""
+    evidence = {}
+    for path in NO_COUNTER_SOURCE_SET:
+        require(not files.get(path), f"no-counter source has LCOV lines: {path}")
+    for path in EXECUTABLE_SOURCE_SET:
+        require(path in files, f"LCOV omits executable production source: {path}")
+        span_lines: set[int] = set()
+        hit_lines: set[int] = set()
+        for region in regions.values():
+            if region["file"] == path:
+                lines = source_lines_for_region(region)
+                span_lines.update(lines)
+                if region["covered"]:
+                    hit_lines.update(lines)
+        records = files[path]
+        require(set(records) == span_lines, f"replayed LCOV physical-line set differs: {path}")
+        covered = {line for line, count in records.items() if count > 0}
+        require(covered == hit_lines, f"replayed LCOV covered-line set differs: {path}")
+        evidence[path] = {
+            "lcov_lines": len(records), "region_span_lines": len(span_lines),
+            "lcov_covered_lines": len(covered), "covered_region_span_lines": len(hit_lines),
+        }
+    return evidence
+
+
+def replay_llvm_physical_lines(
+    profile_data: Path, *, llvm_cov: Path, binaries: tuple[Path, Path],
+    regions: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, int]]:
+    command = [
+        str(llvm_cov), "export", "--format=lcov", "--check-binary-ids",
+        f"--instr-profile={profile_data}", "--ignore-filename-regex=.*/\\.cargo/registry/.*",
+        *(f"--object={binary}" for binary in binaries),
+    ]
+    exported = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=180, check=False)
+    require(exported.returncode == 0 and not exported.stderr.strip(),
+            f"cannot replay LLVM physical lines: {(exported.stderr or exported.stdout)[-3000:]}")
+    return validate_llvm_physical_lines(parse_llvm_lcov_lines(exported.stdout), regions)
+
+
 def case_profile_regions(
     profile_paths: list[Path], *, label: str, llvm_cov: Path, llvm_profdata: Path,
     binaries: tuple[Path, Path], source_digest: str,
     canonical_functions: dict[tuple[str, int, int], str],
+    canonical_spans: dict[tuple[str, int, int], set[tuple[int, int, int, int, int]]],
     aggregate_region_ids: set[str],
 ) -> set[str]:
     """Re-export one retained case profile and independently derive its hit set."""
@@ -733,8 +1179,9 @@ def case_profile_regions(
         require(merge.returncode == 0 and merged.is_file() and merged.stat().st_size > 0,
                 f"cannot merge retained LLVM profiles for {label}: {(merge.stderr or merge.stdout)[-3000:]}")
         llvm_report = export_llvm_profile(merged, label=label, llvm_cov=llvm_cov, binaries=binaries)
-        regions, _, _ = llvm_production_regions(
+        regions, _, _, _, _ = llvm_production_regions(
             llvm_report, source_digest, canonical_functions=canonical_functions,
+            canonical_spans=canonical_spans,
             require_normalized_summaries=False,
         )
         require(set(regions) == aggregate_region_ids,
@@ -747,31 +1194,40 @@ def expected_source_hashes(coverage_runner: Path, input_paths: list[Path]) -> di
             and tuple(source_constant(coverage_runner, "EXECUTABLE_SOURCE_SET")) == EXECUTABLE_SOURCE_SET
             and tuple(source_constant(coverage_runner, "NO_COUNTER_SOURCE_SET")) == NO_COUNTER_SOURCE_SET
             and tuple(source_constant(coverage_runner, "COVERAGE_SUPPORT_SOURCE_SET")) == COVERAGE_SUPPORT_SOURCE_SET
+            and tuple(source_constant(coverage_runner, "THIRD_PARTY_SOURCE_SET")) == THIRD_PARTY_SOURCE_SET
             and tuple(source_constant(coverage_runner, "PYTHON_SOURCE_SET")) == PYTHON_SOURCE_SET,
             "coverage runner production-source classification differs from validator contract")
     selected: dict[str, str] = {}
     for relative in source_constant(coverage_runner, "SOURCE_PATHS"):
         path = repo_path(relative)
         if path.is_dir():
-            selected.update({str(item.relative_to(ROOT)): sha256(item) for item in sorted(path.rglob("*.rs"))})
+            selected.update({item.relative_to(ROOT).as_posix(): sha256(item) for item in sorted(path.rglob("*.rs"))})
         else:
             require(path.is_file(), f"missing declared source input: {relative}")
             selected[relative] = sha256(path)
     discovered = {
-        str(item.relative_to(ROOT))
-        for directory in (ROOT / "src", ROOT / "crates/uvicorn-rs/src", ROOT / "crates/native-app-contract/src")
+        item.relative_to(ROOT).as_posix()
+        for directory in (ROOT / "src", ROOT / "crates/uvicorn-rs/src", ROOT / "crates/asgi-lifespan-protocol-rs/src")
         for item in directory.rglob("*.rs")
     }
-    require(discovered == set(PRODUCTION_SOURCE_SET) | set(COVERAGE_SUPPORT_SOURCE_SET),
+    require(discovered == (set(PRODUCTION_SOURCE_SET) | set(COVERAGE_SUPPORT_SOURCE_SET)
+                           | set(THIRD_PARTY_SOURCE_SET)),
             "Rust source inventory is incomplete or unclassified")
     python_sources = {
-        str(item.relative_to(ROOT)) for item in (ROOT / "python/uvicorn_rs").rglob("*.py")
+        item.relative_to(ROOT).as_posix() for item in (ROOT / "python/uvicorn_rs").rglob("*.py")
     }
     require(python_sources == set(PYTHON_SOURCE_SET), "Python adapter source inventory is incomplete or unclassified")
     selected.update({relative: sha256(repo_path(relative)) for relative in PYTHON_SOURCE_SET})
     for relative in source_constant(coverage_runner, "REPORT_INPUT_PATHS"):
-        selected[relative] = sha256(repo_path(relative))
-    selected.update({str(path.relative_to(ROOT)): sha256(path) for path in input_paths})
+        path = repo_path(relative)
+        if path.is_dir():
+            for artifact in sorted(path.rglob("*")):
+                if artifact.is_file():
+                    selected[artifact.relative_to(ROOT).as_posix()] = sha256(artifact)
+        else:
+            require(path.is_file(), f"missing declared report input: {relative}")
+            selected[relative] = sha256(path)
+    selected.update({path.relative_to(ROOT).as_posix(): sha256(path) for path in input_paths})
     require(set(PRODUCTION_SOURCE_SET) <= set(selected), "source hash receipt omits production files")
     return selected
 
@@ -806,13 +1262,8 @@ def source_lines_for_region(region: dict[str, Any]) -> set[int]:
     return set(range(start_line, last_line + 1))
 
 
-def validate_coverage(
-    report: dict[str, Any], report_path: Path, *, allow_pending_mcp: bool = False,
-) -> dict[str, Any]:
-    manifest, asgi_cases, input_paths = load_contract()
-    native_manifest_path = ROOT / "tests/native-core/manifest.json"
-    native_manifest = read_json(native_manifest_path)
-    native_cases = native_manifest.get("cases")
+def validate_native_case_contracts(native_cases: Any) -> list[str]:
+    """Check the native registry before measuring or replaying coverage."""
     require(isinstance(native_cases, list) and bool(native_cases), "native manifest has no cases")
     native_ids = [case.get("id") for case in native_cases if isinstance(case, dict)]
     require(len(native_ids) == len(native_cases) and all(isinstance(item, str) and item.strip() for item in native_ids)
@@ -826,11 +1277,43 @@ def validate_coverage(
             require(isinstance(fault, dict) and set(fault) == {"point"}
                     and isinstance(fault.get("point"), str)
                     and fault.get("point") in NATIVE_FAULT_CONTRACTS
-                    and case.get("operation") == NATIVE_FAULT_CONTRACTS[fault["point"]]["operation"]
-                    and case.get("scenario") == NATIVE_FAULT_CONTRACTS[fault["point"]]["scenario"],
+                    and any(
+                        case.get("operation") == contract["operation"]
+                        and case.get("scenario") == contract["scenario"]
+                        for contract in NATIVE_FAULT_CONTRACTS[fault["point"]].get(
+                            "contracts", [NATIVE_FAULT_CONTRACTS[fault["point"]]]
+                        )
+                    ),
                     f"invalid native fault contract: {case['id']}")
         else:
             require(fault is None, f"native target contract cannot declare a fault: {case['id']}")
+    return native_ids
+
+
+def resolve_coverage_binaries(build: dict[str, Any], artifacts_root: str, *, offline: bool) -> tuple[Path, Path]:
+    """Check exact object hashes before LLVM reads local or retained binaries."""
+    if offline:
+        objects = repo_path(artifacts_root) / "coverage-objects"
+        extension = objects / "native-extension"
+        native_runner = objects / Path(build["native_runner"]).name
+    else:
+        extension = repo_path(build["native_extension"])
+        native_runner = repo_path(build["native_runner"])
+    require(extension.resolve().is_relative_to(ROOT) and native_runner.resolve().is_relative_to(ROOT)
+            and extension.is_file() and sha256(extension) == build["native_extension_sha256"]
+            and native_runner.is_file() and sha256(native_runner) == build["native_runner_sha256"],
+            "coverage binaries are missing or differ from the recorded build")
+    return extension, native_runner
+
+
+def validate_coverage(
+    report: dict[str, Any], report_path: Path, *, allow_pending_mcp: bool = False, offline: bool = False,
+) -> dict[str, Any]:
+    manifest, asgi_cases, input_paths = load_contract()
+    native_manifest_path = ROOT / "tests/native-core/manifest.json"
+    native_manifest = read_json(native_manifest_path)
+    native_cases = native_manifest.get("cases")
+    native_ids = validate_native_case_contracts(native_cases)
 
     ext = report.get("uvicorn_rs_unified")
     require(report.get("type") == "llvm.coverage.json.export" and isinstance(ext, dict)
@@ -853,7 +1336,7 @@ def validate_coverage(
     # This validator runs after measurement and is not an input to the ASGI or
     # native cases. Keep its recorded hash in the immutable receipt, but do not
     # invalidate captured test evidence when the validator itself is repaired.
-    validator_path = str(Path(__file__).resolve().relative_to(ROOT))
+    validator_path = Path(__file__).resolve().relative_to(ROOT).as_posix()
     recorded_measurement_files = {
         path: digest for path, digest in recorded_files.items() if path != validator_path
     }
@@ -864,7 +1347,7 @@ def validate_coverage(
             "coverage revision/source-state differs")
     require(source.get("manifest_sha256") == sha256(MANIFEST_PATH)
             and source.get("manifest_schema") == manifest["schema"]
-            and source.get("input_manifest_order") == [str(path.relative_to(ROOT)) for path in input_paths]
+            and source.get("input_manifest_order") == [path.relative_to(ROOT).as_posix() for path in input_paths]
             and source.get("native_manifest_sha256") == sha256(native_manifest_path)
             and source.get("native_manifest_schema") == native_manifest["schema_version"]
             and source.get("native_manifest_case_order") == native_ids,
@@ -894,13 +1377,8 @@ def validate_coverage(
             "coverage build inputs/tool version differ")
     require(all(isinstance(build.get(key), str) and build[key] for key in ("machine", "platform", "python")),
             "coverage environment identity is incomplete")
-    llvm_cov, llvm_profdata = resolve_llvm_tools(build.get("tools"))
-    extension = repo_path(build["native_extension"])
-    native_runner = repo_path(build["native_runner"])
-    require(extension.is_file() and sha256(extension) == native_sha
-            and native_runner.is_file() and sha256(native_runner) == build["native_runner_sha256"],
-            "coverage binaries are missing or differ from the recorded build")
-    coverage_binaries = (extension, native_runner)
+    llvm_cov, llvm_profdata = resolve_llvm_tools(build.get("tools"), replay=offline)
+    coverage_binaries = resolve_coverage_binaries(build, run["artifacts_root"], offline=offline)
 
     matrix = ext["matrix"]
     exact_keys(matrix, {"scope", "manifest_case_count", "asgi_manifest_case_count", "native_manifest_case_count",
@@ -927,11 +1405,13 @@ def validate_coverage(
 
     coverage = ext["coverage"]
     exact_keys(coverage, {"gate", "source_set", "executable_source_set", "coverage_support_source_set",
+                         "third_party_source_set",
                          "source_files", "llvm_normalization", "line_validation", "summary", "llvm_summary",
                          "regions", "uncovered_regions", "attribution", "coverage_mcp"}, "coverage")
     require(tuple(coverage.get("source_set", [])) == PRODUCTION_SOURCE_SET
             and tuple(coverage.get("executable_source_set", [])) == EXECUTABLE_SOURCE_SET
-            and tuple(coverage.get("coverage_support_source_set", [])) == COVERAGE_SUPPORT_SOURCE_SET,
+            and tuple(coverage.get("coverage_support_source_set", [])) == COVERAGE_SUPPORT_SOURCE_SET
+            and tuple(coverage.get("third_party_source_set", [])) == THIRD_PARTY_SOURCE_SET,
             "coverage source inventory differs from the declared production sources")
     source_rows = coverage.get("source_files")
     require(isinstance(source_rows, list) and len(source_rows) == len(PRODUCTION_SOURCE_SET),
@@ -950,7 +1430,9 @@ def validate_coverage(
             and line_validation.get("physical_line_sets_match") is True
             and line_validation.get("covered_line_sets_match") is True,
             "physical-line validation method or result differs")
-    raw_regions, raw_summaries, canonical_functions = llvm_production_regions(report, source["sha256"])
+    raw_regions, raw_summaries, canonical_functions, canonical_spans, _ = llvm_production_regions(
+        report, source["sha256"]
+    )
     expected_line_evidence: dict[str, dict[str, int]] = {}
     for path, row in zip(PRODUCTION_SOURCE_SET, source_rows, strict=True):
         exact_keys(row, {"path", "classification", "summary", "llvm_summary"}, f"source summary {path}")
@@ -961,6 +1443,10 @@ def validate_coverage(
         require(row["summary"] == raw_summaries[path], f"per-file normalized summary differs: {path}")
         exact_keys(row.get("llvm_summary"), {"regions", "lines", "regions_total", "lines_total"},
                    f"raw LLVM summary {path}")
+        # Raw JSON summaries aggregate function/instantiation line counts;
+        # overlapping functions can count one physical line more than once.
+        # Preserve and verify those raw counters against the retained JSON
+        # export below. Validate physical lines through a separate LCOV replay.
         if path in NO_COUNTER_SOURCE_SET:
             require(not any(row["llvm_summary"].values()), f"no-counter file has raw LLVM counters: {path}")
             continue
@@ -1025,7 +1511,7 @@ def validate_coverage(
 
     producer_report = Path(coverage["coverage_mcp"].get("measurement_path", ""))
     require(not producer_report.is_absolute() and ".." not in producer_report.parts
-            and str(report_path.relative_to(ROOT)) == str(producer_report), "invalid Coverage-MCP report path")
+            and report_path.relative_to(ROOT).as_posix() == producer_report.as_posix(), "invalid Coverage-MCP report path")
     root = Path(run["artifacts_root"])
     require(not root.is_absolute() and ".." not in root.parts and root.is_relative_to(producer_report.parent),
             "invalid run artifact root")
@@ -1078,9 +1564,12 @@ def validate_coverage(
     replayed_llvm = export_llvm_profile(
         aggregate_profile, label="aggregate", llvm_cov=llvm_cov, binaries=coverage_binaries,
     )
-    replayed_regions, replayed_summaries, replayed_functions = llvm_production_regions(
+    replayed_regions, replayed_summaries, replayed_functions, replayed_spans, replayed_raw_summaries = llvm_production_regions(
         replayed_llvm, source["sha256"], require_normalized_summaries=False,
     )
+    declared_llvm_summaries = {row["path"]: row["llvm_summary"] for row in source_rows}
+    require(replayed_raw_summaries == declared_llvm_summaries,
+            "retained raw LLVM summaries differ from the unified report")
     replayed_region_summaries = {
         path: {key: summary[key] for key in ("regions", "regions_total")}
         for path, summary in replayed_summaries.items()
@@ -1091,8 +1580,14 @@ def validate_coverage(
     }
     require(replayed_regions == raw_regions
             and replayed_region_summaries == embedded_region_summaries
-            and replayed_functions == canonical_functions,
+            and replayed_functions == canonical_functions
+            and replayed_spans == canonical_spans,
             "embedded aggregate LLVM export differs from retained aggregate profile")
+    require(replay_llvm_physical_lines(
+                aggregate_profile, llvm_cov=llvm_cov, binaries=coverage_binaries,
+                regions=replayed_regions,
+            ) == expected_line_evidence,
+            "retained LCOV physical-line evidence differs from the unified report")
 
     asgi_by_id = {case["case_id"]: case for case in asgi_cases}
     native_by_id = {case["id"]: case for case in native_cases}
@@ -1126,8 +1621,9 @@ def validate_coverage(
             and case_index == sorted(all_keys)
             and len(case_index) == len(set(case_index))
             and attribution.get("algorithm") == (
-                "LLVM instantiation groups use a deterministic maximum-summary representative for the denominator; "
-                "hits are unioned by exact source span across monomorphizations; region IDs include source hash, "
+                "LLVM instantiation groups use the union of exact source spans for the denominator and a "
+                "deterministic maximum-summary representative for region identity; hits are unioned across "
+                "monomorphizations; region IDs include source hash, "
                 "file, group start, representative function symbol, source span, and kind"
             )
             and attribution.get("case_region_lookup") == (
@@ -1326,7 +1822,8 @@ def validate_coverage(
             verified_hits = case_profile_regions(
                 profiles, label=f"asgi:{cid}", llvm_cov=llvm_cov, llvm_profdata=llvm_profdata,
                 binaries=coverage_binaries, source_digest=source["sha256"],
-                canonical_functions=canonical_functions, aggregate_region_ids=region_ids,
+                canonical_functions=canonical_functions, canonical_spans=canonical_spans,
+                aggregate_region_ids=region_ids,
             )
             require(verified_hits == case_regions[f"asgi:{cid}"],
                     f"ASGI case-to-region attribution differs from retained profile: {cid}")
@@ -1396,7 +1893,8 @@ def validate_coverage(
         verified_hits = case_profile_regions(
             profiles, label=key, llvm_cov=llvm_cov, llvm_profdata=llvm_profdata,
             binaries=coverage_binaries, source_digest=source["sha256"],
-            canonical_functions=canonical_functions, aggregate_region_ids=region_ids,
+            canonical_functions=canonical_functions, canonical_spans=canonical_spans,
+            aggregate_region_ids=region_ids,
         )
         require(verified_hits == case_regions[key],
                 f"native case-to-region attribution differs from retained profile: {cid}")
@@ -1500,11 +1998,11 @@ def validate_coverage(
     if allow_pending_mcp and mcp_pending:
         exact_keys(mcp_receipt, {"status", "measurement_path", "metric", "required_follow_up"},
                    "pending Coverage-MCP request")
-        require(mcp_receipt == pending_coverage_mcp_request(str(report_path.relative_to(ROOT))),
+        require(mcp_receipt == pending_coverage_mcp_request(report_path.relative_to(ROOT).as_posix()),
                 "pending Coverage-MCP request differs from the producer contract")
     else:
         validate_coverage_mcp(
-            mcp_receipt, report_path=report_path, report_relative=str(report_path.relative_to(ROOT)),
+            mcp_receipt, report_path=report_path, report_relative=report_path.relative_to(ROOT).as_posix(),
             build=build, source=source, summary=expected_summary, artifact=artifact,
         )
     return {
@@ -1639,6 +2137,20 @@ def main() -> int:
     parser.add_argument("report", type=Path)
     parser.add_argument("--offline", action="store_true", help="validate retained evidence without importing the installed native")
     parser.add_argument("--require-clean", action="store_true", help="require evidence produced from a clean source checkout")
+    parser.add_argument("--accept-windows-reference-hang", action="store_true",
+                        help="accept only recorded stock two-worker console-signal/TCP-wakeup defects; preserve failed parity")
+    parser.add_argument("--accept-windows-reference-startup", action="store_true",
+                        help="accept only the captured stock two-worker listen WinError 10022; preserve failed parity")
+    parser.add_argument("--acceptance-output", type=Path,
+                        help="write the separate, source-bound compatibility decision")
+    parser.add_argument("--case-id", action="append", default=[],
+                        help="validate an exact focused parity selection; repeat for each case")
+    parser.add_argument(
+        "--exclude-case-id",
+        action="append",
+        default=[],
+        help="declare a platform-inapplicable public input excluded from a parity report; repeat for each case",
+    )
     parser.add_argument(
         "--allow-pending-mcp",
         action="store_true",
@@ -1648,12 +2160,35 @@ def main() -> int:
     args = parser.parse_args()
     if args.kind != "coverage" and args.allow_pending_mcp:
         parser.error("--allow-pending-mcp is valid only for coverage reports")
+    if args.kind != "parity" and args.exclude_case_id:
+        parser.error("--exclude-case-id is valid only for parity reports")
+    if args.case_id and (args.kind != "parity" or args.exclude_case_id):
+        parser.error("--case-id requires parity and cannot be combined with exclusions")
+    accept_reference_exception = args.accept_windows_reference_hang or args.accept_windows_reference_startup
+    if accept_reference_exception and (args.kind != "parity" or args.acceptance_output is None):
+        parser.error("Windows reference acceptance requires parity and --acceptance-output")
+    if args.acceptance_output and not accept_reference_exception:
+        parser.error("--acceptance-output requires an explicit Windows reference policy")
     path = args.report.resolve()
     result = read_json(path)
+    selected_cases = None
+    if args.case_id:
+        _, indexed_cases, _ = load_contract()
+        requested = set(args.case_id)
+        require(len(requested) == len(args.case_id), "duplicate focused case IDs")
+        selected_cases = [case for case in indexed_cases if case["case_id"] in requested]
+        require({case["case_id"] for case in selected_cases} == requested, "unknown focused case IDs")
     checked = (
-        validate_parity(result, offline=args.offline)
+        validate_parity(
+            result,
+            expected_cases=selected_cases,
+            offline=args.offline,
+            expected_excluded_case_ids=set(args.exclude_case_id) if args.exclude_case_id else None,
+            allow_windows_reference_hang=args.accept_windows_reference_hang,
+            allow_windows_reference_startup=args.accept_windows_reference_startup,
+        )
         if args.kind == "parity"
-        else validate_coverage(result, path, allow_pending_mcp=args.allow_pending_mcp)
+        else validate_coverage(result, path, allow_pending_mcp=args.allow_pending_mcp, offline=args.offline)
     )
     if args.kind == "coverage" and not args.offline:
         imported = Path(importlib.import_module("uvicorn_rs._native").__file__).resolve()
@@ -1661,6 +2196,19 @@ def main() -> int:
                 "coverage did not execute the currently imported instrumented native")
     if args.require_clean:
         require(checked["recorded_dirty"] is False, "release evidence was produced from a dirty source checkout")
+    if args.acceptance_output:
+        require(args.acceptance_output.resolve() != path, "acceptance must not overwrite raw parity")
+        receipt = {
+            "schema": "uvicorn-rs-compatibility-acceptance@1",
+            "parity_report": {"path": str(path), "sha256": sha256(path), "run_id": result["run"]["run_id"]},
+            "validator_sha256": sha256(Path(__file__)),
+            "policy_sha256": sha256(ROOT / "scripts/windows_reference_hang.py"),
+            "startup_policy_sha256": (sha256(ROOT / "scripts/windows_reference_startup.py")
+                                      if args.accept_windows_reference_startup else None),
+            "decision": checked,
+        }
+        args.acceptance_output.parent.mkdir(parents=True, exist_ok=True)
+        args.acceptance_output.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({"kind": args.kind, "report": str(path), **checked}, sort_keys=True))
     return 0
 

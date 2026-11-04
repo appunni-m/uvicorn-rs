@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@33",
+  "schema": "uvicorn-rs-parity/input@47",
   "cases": [
     {
       "case_id": "fault.lifespan.scope-asgi-version-set-item",

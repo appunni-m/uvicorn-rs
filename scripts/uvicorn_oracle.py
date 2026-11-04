@@ -19,7 +19,7 @@ def inspect_uvicorn_oracle(
 ) -> dict:
     """Require a genuine, isolated Uvicorn install and return its identity.
 
-    The oracle must not contain uvicorn-rs-py because both distributions own
+    The oracle must not contain uvicorn-rs because both distributions own
     the ``uvicorn`` import namespace. Keep the venv executable path as given:
     resolving it can follow a venv symlink to a base interpreter and lose the
     environment's site-packages.
@@ -41,11 +41,11 @@ import sys
 import uvicorn
 
 try:
-    metadata.distribution("uvicorn-rs-py")
+    metadata.distribution("uvicorn-rs")
 except metadata.PackageNotFoundError:
     pass
 else:
-    raise SystemExit("oracle environment contains uvicorn-rs-py")
+    raise SystemExit("oracle environment contains uvicorn-rs")
 
 if importlib.util.find_spec("uvicorn_rs") is not None:
     raise SystemExit("oracle environment can import uvicorn_rs")

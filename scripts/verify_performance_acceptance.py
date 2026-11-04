@@ -178,7 +178,7 @@ def verify_source_identity(identity: dict, expected_commit: str, expected_native
     dependencies = identity.get("dependencies")
     require(isinstance(dependencies, dict) and dependencies,
             "benchmark dependency identity is missing")
-    required = {"fastapi", "starlette", "uvicorn", "uvicorn-rs-py", "uvloop", "httptools"}
+    required = {"fastapi", "starlette", "uvicorn", "uvicorn-rs", "uvloop", "httptools"}
     require(required <= set(dependencies), "benchmark omitted a required upstream dependency identity")
     forbidden_references = {"fastapi-rs", "starlette-rs"}
     require(not (forbidden_references & {
@@ -201,7 +201,7 @@ def verify_source_identity(identity: dict, expected_commit: str, expected_native
 
 def verify_complete_matrix(matrix: dict, arguments: argparse.Namespace,
                            artifact_hashes: dict[str, str], work: Path) -> dict:
-    require(matrix.get("schema") == "uvicorn-rs-benchmark-matrix@1",
+    require(matrix.get("schema") == "uvicorn-rs-benchmark-matrix@2",
             "unsupported benchmark matrix schema")
     require(matrix.get("status") == "validated_complete_matrix",
             f"benchmark matrix is not complete: {matrix.get('status')!r}")
@@ -293,7 +293,7 @@ def validate_pair(pair: dict, *, system_id: str, workload: str, loop: str) -> li
     expected_reference = "uvicorn-asyncio-httptools" if loop == "asyncio" else "uvicorn-uvloop-httptools"
     expected_candidate = "uvicorn-rs-asyncio" if loop == "asyncio" else "uvicorn-rs-uvloop"
     require(pair.get("reference") == expected_reference and pair.get("candidate") == expected_candidate,
-            f"{system_id}/{workload}/{loop}: comparison is not stock Uvicorn vs uvicorn-rs-py")
+            f"{system_id}/{workload}/{loop}: comparison is not stock Uvicorn vs the uvicorn-rs PyPI distribution")
     matches = pair.get("matched_repetitions")
     minimum = pair.get("minimum_required")
     require(isinstance(matches, list) and len(matches) >= MINIMUM_MATCHED_REPETITIONS
@@ -323,7 +323,7 @@ def validate_review(review: dict, pair_indexes: dict[str, dict[tuple[str, str], 
     require(review.get("schema") == SCHEMA, "unsupported performance review schema")
     scope = review.get("scope")
     require(isinstance(scope, dict), "performance review scope is missing")
-    require(scope.get("comparison") == "stock FastAPI and Starlette under uvicorn-rs-py versus Uvicorn",
+    require(scope.get("comparison") == "stock FastAPI and Starlette under the uvicorn-rs PyPI distribution versus Uvicorn",
             "performance review does not declare the maintained stock-FastAPI comparison")
     require(scope.get("systems") == list(SYSTEMS)
             and scope.get("loops") == list(LOOPS)
@@ -373,7 +373,7 @@ def validate_review(review: dict, pair_indexes: dict[str, dict[tuple[str, str], 
                 "p99_ms": "lower p99 latency",
             }
             expected_statement = (
-                f"uvicorn-rs-py showed {metric_phrases[metric_name]} than stock Uvicorn for "
+                f"The uvicorn-rs PyPI distribution showed {metric_phrases[metric_name]} than stock Uvicorn for "
                 f"{', '.join(claim_workloads)} on every maintained system and both asyncio and "
                 "uvloop profiles, with at least three matched valid repetitions per comparison."
             )

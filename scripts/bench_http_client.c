@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 typedef struct {
     const char *url;
@@ -16,6 +17,7 @@ typedef struct {
     const char *upload_body;
     size_t upload_bytes;
     size_t upload_chunk_bytes;
+    int upload_trace;
     unsigned long long max_requests;
     const char *expected_body;
     size_t expected_bytes;
@@ -38,6 +40,8 @@ typedef struct {
     size_t latency_count;
     size_t latency_capacity;
     double last_transfer_completed_at;
+    unsigned long long trace_callback_calls;
+    unsigned long long trace_callback_bytes;
 } Worker;
 
 typedef struct FirstFailure {
@@ -54,6 +58,12 @@ typedef struct FirstFailure {
     double connect_time_seconds;
     double starttransfer_time_seconds;
     double total_time_seconds;
+    int upload_trace;
+    unsigned long long callback_calls;
+    double request_started_monotonic;
+    double first_callback_monotonic;
+    double last_callback_monotonic;
+    double completed_monotonic;
 } FirstFailure;
 
 typedef struct {
@@ -68,6 +78,11 @@ typedef struct {
     size_t bytes;
     size_t chunk_bytes;
     size_t offset;
+    int trace_enabled;
+    unsigned long long callback_calls;
+    double started_monotonic;
+    double first_callback_monotonic;
+    double last_callback_monotonic;
 } UploadCursor;
 
 static double now_seconds(void) {
@@ -90,6 +105,12 @@ static size_t check_response(char *data, size_t size, size_t count, void *user_d
 
 static size_t read_upload(char *buffer, size_t size, size_t count, void *user_data) {
     UploadCursor *upload = (UploadCursor *)user_data;
+    if (upload->trace_enabled) {
+        double now = now_seconds();
+        if (upload->callback_calls == 0) upload->first_callback_monotonic = now;
+        upload->last_callback_monotonic = now;
+        upload->callback_calls++;
+    }
     size_t capacity = size * count;
     if (upload->offset >= upload->bytes || capacity == 0) return 0;
     size_t length = upload->bytes - upload->offset;
@@ -141,6 +162,12 @@ static void set_transfer_failure(
         failure->connect_time_seconds = -1.0;
         failure->starttransfer_time_seconds = -1.0;
         failure->total_time_seconds = -1.0;
+        failure->upload_trace = upload->trace_enabled;
+        failure->callback_calls = upload->callback_calls;
+        failure->request_started_monotonic = upload->started_monotonic;
+        failure->first_callback_monotonic = upload->first_callback_monotonic;
+        failure->last_callback_monotonic = upload->last_callback_monotonic;
+        failure->completed_monotonic = now_seconds();
 #if LIBCURL_VERSION_NUM >= 0x073700
         (void)curl_easy_getinfo(curl, CURLINFO_SIZE_UPLOAD_T, &failure->curl_uploaded_bytes);
         (void)curl_easy_getinfo(curl, CURLINFO_SIZE_DOWNLOAD_T, &failure->curl_downloaded_bytes);
@@ -192,6 +219,7 @@ static void *run_worker(void *argument) {
         .bytes = shared->upload_bytes,
         .chunk_bytes = shared->upload_chunk_bytes,
         .offset = 0,
+        .trace_enabled = shared->upload_trace,
     };
     if (strcmp(shared->method, "POST") == 0) {
         curl_easy_setopt(curl, CURLOPT_POST, 1L);
@@ -212,12 +240,29 @@ static void *run_worker(void *argument) {
             .valid = 1,
         };
         upload.offset = 0;
+        upload.callback_calls = 0;
+        upload.first_callback_monotonic = 0;
+        upload.last_callback_monotonic = 0;
+        // libcurl borrows this list only during the synchronous transfer. The
+        // stack node prepends one diagnostic header without copying base headers.
+        char trace_header[128];
+        struct curl_slist trace_node = {.data = trace_header, .next = shared->headers};
+        if (shared->upload_trace) {
+            snprintf(trace_header, sizeof(trace_header),
+                "X-Uvicorn-Rs-Upload-Trace: %ld-%u-%llu", (long)getpid(),
+                worker->worker_index, worker_attempt);
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, &trace_node);
+        }
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &check);
         double started = now_seconds();
+        upload.started_monotonic = started;
         CURLcode result = curl_easy_perform(curl);
+        if (shared->upload_trace) curl_easy_setopt(curl, CURLOPT_HTTPHEADER, shared->headers);
         double completed_at = now_seconds();
         worker->last_transfer_completed_at = completed_at;
         double elapsed = completed_at - started;
+        worker->trace_callback_calls += upload.callback_calls;
+        if (shared->upload_trace) worker->trace_callback_bytes += upload.offset;
         if (result != CURLE_OK) {
             char reason[256];
             snprintf(reason, sizeof(reason), "libcurl: %s", curl_easy_strerror(result));
@@ -344,6 +389,8 @@ int main(int argc, char **argv) {
         .upload_body = upload_body,
         .upload_bytes = upload_bytes,
         .upload_chunk_bytes = upload_chunk_bytes,
+        .upload_trace = getenv("UVICORN_RS_UPLOAD_TRACE") != NULL
+            && strcmp(getenv("UVICORN_RS_UPLOAD_TRACE"), "1") == 0,
         .max_requests = max_requests,
         .expected_body = expected_body,
         .expected_bytes = expected_bytes,
@@ -439,8 +486,37 @@ int main(int argc, char **argv) {
                 first_failure.connect_time_seconds,
                 first_failure.starttransfer_time_seconds,
                 first_failure.total_time_seconds);
+            if (first_failure.upload_trace) {
+                printf(
+                    ",\"upload_trace\":{\"request_id\":\"%ld-%u-%llu\","
+                    "\"callback_calls\":%llu,\"clock\":\"CLOCK_MONOTONIC seconds\","
+                    "\"started\":%.9f,\"first_callback\":%.9f,"
+                    "\"last_callback\":%.9f,\"completed\":%.9f}",
+                    (long)getpid(), first_failure.worker_index, first_failure.worker_attempt,
+                    first_failure.callback_calls, first_failure.request_started_monotonic,
+                    first_failure.first_callback_monotonic, first_failure.last_callback_monotonic,
+                    first_failure.completed_monotonic);
+            }
         }
         printf("}");
+    }
+    if (shared.upload_trace) {
+        unsigned long long calls = 0, bytes = 0;
+        for (int index = 0; index < created; index++) {
+            calls += workers[index].trace_callback_calls;
+            bytes += workers[index].trace_callback_bytes;
+        }
+        struct timespec wall;
+        double calibration_before = now_seconds();
+        clock_gettime(CLOCK_REALTIME, &wall);
+        double calibration_after = now_seconds();
+        printf(
+            ",\"upload_trace\":{\"schema\":1,\"diagnostic_only\":true,"
+            "\"callback_calls\":%llu,\"callback_bytes\":%llu,\"timeout_ms\":15000,"
+            "\"calibration_monotonic_before\":%.9f,\"calibration_monotonic_after\":%.9f,"
+            "\"calibration_unix\":%.9f}",
+            calls, bytes, calibration_before, calibration_after,
+            (double)wall.tv_sec + (double)wall.tv_nsec / 1e9);
     }
     printf("}\n");
 

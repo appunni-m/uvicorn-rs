@@ -34,13 +34,14 @@ on:
   workflow_dispatch:
     inputs:
       run_mode:
-        description: Run the full comparison or one focused FastAPI timing/diagnostic, HTTP/2, or HTTP/3 diagnostic
+        description: Full matrix, focused FastAPI/H2/H3, or the fixed buffer on/off comparison
         default: full
         required: true
         type: choice
         options:
           - full
           - focused-fastapi-match
+          - peer-read-comparison
           - focused-fastapi-stage
           - focused-h2
           - focused-h3
@@ -74,6 +75,14 @@ on:
           - fastapi-slow-reader-backpressure
           - fastapi-scope-32-headers
           - fastapi-contextvars
+      fastapi_stage_repetitions:
+        description: Candidate attempts, each paired with stock Uvicorn asyncio (diagnostic only)
+        default: "1"
+        required: true
+        type: choice
+        options:
+          - "1"
+          - "3"
       h2_system:
         description: Runner for the focused HTTP/2 diagnostic
         default: linux-x86_64
@@ -100,6 +109,8 @@ on:
         type: choice
         options:
           - protocol-scope
+          - fastapi-validated-route
+          - fastapi-python-cpu
           - fixed
           - large-response
           - many-response-chunks
@@ -140,11 +151,18 @@ on:
         options:
           - protocol-scope-consumed-request
           - protocol-scope
+          - fastapi-validated-route
+          - fastapi-python-cpu
           - fixed
           - large-response
           - many-response-chunks
           - request-upload
           - slow-reader-backpressure
+      h3_trace_hypercorn_events:
+        description: Trace H3 stream event/removal ordering; timing is invalid and this requires Linux ARM64, Hypercorn asyncio, slow-reader-backpressure, and one repetition
+        default: false
+        required: true
+        type: boolean
       duration:
         description: Seconds of sustained load per sample
         default: "5"
@@ -197,7 +215,7 @@ env:
 jobs:
   categories:
     name: ${{ matrix.system.id }} · parity and sequential categories
-    if: ${{ !((github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-match' || inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-h2' || inputs.run_mode == 'focused-h3')) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-match]') || contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) }}
+    if: ${{ !((github.event_name == 'workflow_dispatch' && inputs.run_mode != 'full') || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-match]') || contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) }}
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -545,36 +563,45 @@ jobs:
           uname -a > target/benchmark-preparation/uname.txt
       - name: Build Rust runtime diagnostics extension
         shell: bash
-        env:
-          FASTAPI_STAGE_NO_NATIVE_TCP: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-no-native-tcp]') }}
         run: |
           set -euo pipefail
-          if [[ "$FASTAPI_STAGE_NO_NATIVE_TCP" == "true" ]]; then
-            uv run --with maturin==1.14.1 --no-sync maturin develop --release \
-              --no-default-features --features runtime-diagnostics
-          else
-            uv run --with maturin==1.14.1 --no-sync maturin develop --release \
-              --features runtime-diagnostics
-          fi 2>&1 | tee target/benchmark-preparation/runtime-diagnostics-build.log
+          uv run --with maturin==1.14.1 --no-sync maturin develop --release \
+            --features runtime-diagnostics \
+            2>&1 | tee target/benchmark-preparation/runtime-diagnostics-build.log
       - name: Capture read-only host preflight
         shell: bash
         run: |
           set -euo pipefail
           .venv/bin/python scripts/benchmark_host_preflight.py \
             --output target/benchmark-preparation/host-preflight.json
+      - name: Check lifecycle diagnostics and bounded upload trace tooling without a performance workload
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python scripts/test_benchmark_reference_exceptions.py \
+            > target/benchmark-preparation/h3-reference-exception-policy.log 2>&1
+          .venv/bin/python scripts/test_lifecycle_bench.py \
+            > target/benchmark-preparation/lifecycle-diagnostic-contract.log 2>&1
+          .venv/bin/python scripts/test_upload_trace.py \
+            > target/benchmark-preparation/upload-trace-tooling.log 2>&1
+          rustc --edition=2024 --test src/upload_trace.rs \
+            -o "$RUNNER_TEMP/uvicorn-rs-upload-trace-tests"
+          "$RUNNER_TEMP/uvicorn-rs-upload-trace-tests" \
+            >> target/benchmark-preparation/upload-trace-tooling.log 2>&1
       - name: Run one FastAPI workload with matched ASGI stage diagnostics
         shell: bash
         env:
           BENCHMARK_FASTAPI_WORKLOAD: ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}
           UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-peer-read=on-read]') && 'on-read' || '' }}
+          UVICORN_RS_UPLOAD_TRACE: "1"
         run: |
           set -euo pipefail
           .venv/bin/python scripts/run_http_category_bench.py \
             --uvicorn-python "$UVICORN_ORACLE_PYTHON" \
             --workloads "$BENCHMARK_FASTAPI_WORKLOAD" \
             --servers uvicorn-rs-asyncio uvicorn-asyncio-httptools \
-              uvicorn-rs-uvloop uvicorn-uvloop-httptools \
-            --duration 5 --warmup 1 --concurrency 64 --repetitions 10 --seed 20261019 \
+            --duration 5 --warmup 1 --concurrency 64 \
+            --repetitions "${{ inputs.fastapi_stage_repetitions || '1' }}" --seed 20261019 \
             --require-runtime-diagnostics --asgi-stage-diagnostics \
             --output "target/fastapi-stage/${BENCHMARK_FASTAPI_WORKLOAD}.json" \
             2>&1 | tee "target/fastapi-stage/${BENCHMARK_FASTAPI_WORKLOAD}.log"
@@ -592,10 +619,10 @@ jobs:
   focused-fastapi-match:
     # Push commits can select one Linux ARM64 upload case when the GitHub
     # workflow-dispatch UI is unavailable to the maintainer.
-    name: ${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }} · normal-build matched timing
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-fastapi-match') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-fastapi-match]')) }}
+    name: ${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.run_mode == 'peer-read-comparison' && 'buffer on/off comparison' || inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }} · normal-build matched timing
+    if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-match' || inputs.run_mode == 'peer-read-comparison')) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-fastapi-match]')) }}
     runs-on: ${{ (inputs.fastapi_system == 'linux-aarch64' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-system=linux-aarch64]'))) && 'ubuntu-24.04-arm' || inputs.fastapi_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -681,12 +708,14 @@ jobs:
           uv pip install --python .venv/bin/python --no-deps "$server_wheel" \
             2>&1 | tee target/benchmark-preparation/server-install.log
       - name: Capture read-only host preflight
+        if: inputs.run_mode != 'peer-read-comparison'
         shell: bash
         run: |
           set -euo pipefail
           .venv/bin/python scripts/benchmark_host_preflight.py \
             --output target/benchmark-preparation/host-preflight.json
       - name: Run one normal-build FastAPI workload against Uvicorn
+        if: inputs.run_mode != 'peer-read-comparison'
         shell: bash
         env:
           BENCHMARK_FASTAPI_WORKLOAD: ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}
@@ -708,7 +737,7 @@ jobs:
             --output "target/fastapi-match/http1.json" \
             2>&1 | tee target/fastapi-match/driver.log
       - name: Require three correctness-gated matching repetitions per loop
-        if: always()
+        if: always() && inputs.run_mode != 'peer-read-comparison'
         shell: bash
         env:
           BENCHMARK_FASTAPI_WORKLOAD: ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}
@@ -723,6 +752,17 @@ jobs:
             --workload "$BENCHMARK_FASTAPI_WORKLOAD" \
             --output-dir target/fastapi-match
           cat target/fastapi-match/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Compare normal buffer reuse and fresh allocation builds
+        if: inputs.run_mode == 'peer-read-comparison'
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python scripts/run_peer_read_comparison.py \
+            --oracle-python "$UVICORN_ORACLE_PYTHON" \
+            --output target/peer-read-comparison
+          .venv/bin/python scripts/analyze_peer_read_comparison.py \
+            target/peer-read-comparison/execution.json \
+            --output target/peer-read-comparison/analysis.json
       - name: Retain focused FastAPI matched timing evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -731,6 +771,11 @@ jobs:
           path: |
             target/benchmark-preparation/
             target/fastapi-match/
+            target/peer-read-comparison/*.json
+            target/peer-read-comparison/*.jsonl*
+            target/peer-read-comparison/*.log
+            target/peer-read-comparison/*.artifacts/
+            target/peer-read-comparison/control-wheels/
           if-no-files-found: warn
           retention-days: 90
 
@@ -897,6 +942,7 @@ jobs:
           BENCHMARK_H3_CONCURRENCY: ${{ inputs.h3_concurrency || '1' }}
           BENCHMARK_REPETITIONS: ${{ inputs.repetitions || '5' }}
           BENCHMARK_SEED: ${{ inputs.seed || '20261005' }}
+          BENCHMARK_H3_TRACE: ${{ inputs.h3_trace_hypercorn_events || false }}
           BENCHMARK_H3_SERVERS: ${{ (inputs.h3_server == 'asyncio-pair' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=asyncio-pair]'))) && 'hypercorn-asyncio uvicorn-rs-asyncio' || (inputs.h3_server == 'uvloop-pair' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=uvloop-pair]'))) && 'hypercorn-uvloop uvicorn-rs-uvloop' || inputs.h3_server || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=hypercorn-uvloop]') && 'hypercorn-uvloop') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=uvicorn-rs-uvloop]') && 'uvicorn-rs-uvloop') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-server=uvicorn-rs-asyncio]') && 'uvicorn-rs-asyncio') || 'hypercorn-asyncio' }}
           BENCHMARK_H3_WORKLOAD: ${{ inputs.h3_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=protocol-scope-consumed-request]') && 'protocol-scope-consumed-request') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=protocol-scope]') && 'protocol-scope') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=fixed]') && 'fixed') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=many-response-chunks]') && 'many-response-chunks') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=request-upload]') && 'request-upload') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[h3-workload=slow-reader-backpressure]') && 'slow-reader-backpressure') || 'large-response' }}
           RUST_BACKTRACE: "1"
@@ -904,6 +950,17 @@ jobs:
         run: |
           set -euo pipefail
           read -r -a h3_servers <<<"$BENCHMARK_H3_SERVERS"
+          trace_args=()
+          if [[ "$BENCHMARK_H3_TRACE" == "true" ]]; then
+            if [[ "$RUNNER_OS" != "Linux" || "$RUNNER_ARCH" != "ARM64" \
+              || "${#h3_servers[@]}" != "1" || "${h3_servers[0]}" != "hypercorn-asyncio" \
+              || "$BENCHMARK_H3_WORKLOAD" != "slow-reader-backpressure" \
+              || "$BENCHMARK_REPETITIONS" != "1" ]]; then
+              echo "H3 event tracing requires Linux ARM64, Hypercorn asyncio, slow-reader-backpressure, and one repetition" >&2
+              exit 2
+            fi
+            trace_args+=(--trace-hypercorn-h3-events)
+          fi
           .venv/bin/python scripts/run_h3_category_bench.py \
             --servers "${h3_servers[@]}" \
             --repetitions "$BENCHMARK_REPETITIONS" --seed "$BENCHMARK_SEED" \
@@ -911,6 +968,7 @@ jobs:
             --workloads "$BENCHMARK_H3_WORKLOAD" \
             --duration "$BENCHMARK_DURATION" --warmup "$BENCHMARK_WARMUP" \
             --concurrency "$BENCHMARK_H3_CONCURRENCY" \
+            "${trace_args[@]}" \
             2>&1 | tee target/benchmark-preparation/h3-focused-driver.log
       - name: Retain focused diagnostic evidence
         if: always()
@@ -926,7 +984,7 @@ jobs:
   aggregate:
     name: Validate and render the multi-system evidence
     needs: categories
-    if: always() && !((github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-match' || inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-h2' || inputs.run_mode == 'focused-h3')) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-match]') || contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) && needs.categories.result != 'cancelled'
+    if: always() && !((github.event_name == 'workflow_dispatch' && inputs.run_mode != 'full') || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-match]') || contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) && needs.categories.result != 'cancelled'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
@@ -967,19 +1025,19 @@ jobs:
           retention-days: 90
 
   update-docs:
-    name: Record benchmark status and update documentation
+    name: Prepare benchmark documentation for review
     needs: [categories, aggregate]
-    if: always() && !((github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-match' || inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-h2' || inputs.run_mode == 'focused-h3')) || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-match]') || contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) && github.ref == 'refs/heads/main' && github.repository == 'appunni-m/uvicorn-rs'
+    if: always() && !((github.event_name == 'workflow_dispatch' && inputs.run_mode != 'full') || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[focused-fastapi-match]') || contains(github.event.head_commit.message, '[focused-fastapi-stage]') || contains(github.event.head_commit.message, '[focused-h2]') || contains(github.event.head_commit.message, '[focused-h3]')))) && github.ref == 'refs/heads/main' && github.repository == 'appunni-m/uvicorn-rs'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       actions: read
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
-          persist-credentials: true
+          persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         if: needs.aggregate.result == 'success'
         with:
@@ -1041,37 +1099,18 @@ jobs:
               encoding="utf-8",
           )
           PY
-      - name: Propose the updated results documentation
-        env:
-          AGGREGATE_RESULT: ${{ needs.aggregate.result }}
-          MATRIX_STATUS: ${{ needs.aggregate.outputs.matrix_status }}
+      - name: Retain the documentation changes for develop or main
         shell: bash
         run: |
           set -euo pipefail
-          branch="automation/benchmark-results"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin "+refs/heads/$branch:refs/remotes/origin/$branch" || true
-          git checkout -B "$branch" "$GITHUB_SHA"
-          git add docs/benchmark-status.md
-          if [[ "$AGGREGATE_RESULT" == "success" ]]; then
-            if [[ "$MATRIX_STATUS" == "validated_complete_matrix" ]]; then
-              git add docs/benchmark-results.md
-              commit_message="docs: refresh hosted benchmark results"
-            else
-              commit_message="docs: record partial benchmark status"
-            fi
-          else
-            commit_message="docs: record hosted benchmark attempt"
-          fi
-          git commit -m "$commit_message"
-          if git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
-            previous="$(git rev-parse "refs/remotes/origin/$branch")"
-            git push --force-with-lease="refs/heads/$branch:$previous" origin "HEAD:refs/heads/$branch"
-          else
-            git push origin "HEAD:refs/heads/$branch"
-          fi
-          compare_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/main...${branch}"
+          git diff --binary -- docs/benchmark-status.md docs/benchmark-results.md \
+            > target/benchmark-status/docs-update.patch
           cat >> "$GITHUB_STEP_SUMMARY" <<EOF
-          Documentation changes were pushed to [`${branch}`](${compare_url}) for review. This repository's Actions token cannot create pull requests, so the compare link is provided for manual review. The branch contains only maintained documentation; generated benchmark logs, raw reports, and coverage outputs remain in workflow artifacts or ignored local paths.
+          The benchmark documentation patch is retained in this run's artifact for review and application on develop or main. Raw results and hashed receipts remain in the benchmark artifacts. This job does not push a branch.
           EOF
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: asgi-benchmark-docs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: target/benchmark-status/
+          if-no-files-found: error
+          retention-days: 90

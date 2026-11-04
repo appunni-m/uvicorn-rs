@@ -20,6 +20,7 @@ import uuid
 
 from coverage_contract import pending_coverage_mcp_request
 from coverage_toolchain import ToolchainError, capture_coverage_tools
+from summarize_unified_coverage import MAX_CASE_DIAGNOSTICS, case_message, failing_cases
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON_SOURCE = ROOT / "python"
@@ -37,16 +38,20 @@ run_parity = importlib.import_module("run_parity")
 
 RUNNER = ROOT / "scripts" / "run_parity.py"
 BUILD_SCRIPT = ROOT / "scripts" / "build_coverage_extension.py"
-RESULT_SCHEMA = "uvicorn-rs-coverage/unified@9"
+RESULT_SCHEMA = "uvicorn-rs-coverage/unified@10"
 LLVM_EXTENSION_KEY = "uvicorn_rs_unified"
 SOURCE_PATHS = (
     "src",
     "crates/uvicorn-rs/src",
-    "crates/native-app-contract/src",
+    "crates/uvicorn-rs/third-party/h2/src",
+    "crates/uvicorn-rs/third-party/hyper/src",
+    "crates/asgi-lifespan-protocol-rs/src",
     "Cargo.toml",
     "Cargo.lock",
     "crates/uvicorn-rs/Cargo.toml",
-    "crates/native-app-contract/Cargo.toml",
+    "crates/uvicorn-rs/third-party/h2/Cargo.toml",
+    "crates/uvicorn-rs/third-party/hyper/Cargo.toml",
+    "crates/asgi-lifespan-protocol-rs/Cargo.toml",
 )
 PRODUCTION_SOURCE_SET = (
     "src/lib.rs",
@@ -55,15 +60,73 @@ PRODUCTION_SOURCE_SET = (
     "crates/uvicorn-rs/src/http3/transport.rs",
     "crates/uvicorn-rs/src/websocket.rs",
     "crates/uvicorn-rs/src/peer_read.rs",
-    "crates/native-app-contract/src/lib.rs",
+    "crates/asgi-lifespan-protocol-rs/src/lib.rs",
+    "src/upload_trace.rs",
 )
 # Sources compiled only to drive coverage contracts, not production code.
 COVERAGE_SUPPORT_SOURCE_SET = (
     "crates/uvicorn-rs/src/coverage.rs",
     "crates/uvicorn-rs/src/http3/coverage.rs",
 )
-EXECUTABLE_SOURCE_SET = PRODUCTION_SOURCE_SET[:-1]
-NO_COUNTER_SOURCE_SET = ("crates/native-app-contract/src/lib.rs",)
+# Vendored upstream HTTP/3 protocol and Quinn adapter sources are bound into
+# the source identity and checked as an explicit inventory, but the unified
+# first-party coverage gate does not attribute these third-party files.
+THIRD_PARTY_SOURCE_SET = (
+    "crates/uvicorn-rs/src/http3/h3/buf.rs",
+    "crates/uvicorn-rs/src/http3/h3/client/builder.rs",
+    "crates/uvicorn-rs/src/http3/h3/client/connection.rs",
+    "crates/uvicorn-rs/src/http3/h3/client/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/client/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/config.rs",
+    "crates/uvicorn-rs/src/http3/h3/connection.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/codes.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/connection_error_creators.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/error.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/internal_error.rs",
+    "crates/uvicorn-rs/src/http3/h3/error/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/ext.rs",
+    "crates/uvicorn-rs/src/http3/h3/frame.rs",
+    "crates/uvicorn-rs/src/http3/h3/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/coding.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/frame.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/headers.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/push.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/proto/varint.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/block.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/decoder.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/dynamic.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/encoder.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/field.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/parse_error.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_int.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_string/bitwin.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_string/decode.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_string/encode.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/prefix_string/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/static_.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/tests.rs",
+    "crates/uvicorn-rs/src/http3/h3/qpack/vas.rs",
+    "crates/uvicorn-rs/src/http3/h3/quic.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/builder.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/connection.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/request.rs",
+    "crates/uvicorn-rs/src/http3/h3/server/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/shared_state.rs",
+    "crates/uvicorn-rs/src/http3/h3/stream.rs",
+    "crates/uvicorn-rs/src/http3/h3/webtransport/mod.rs",
+    "crates/uvicorn-rs/src/http3/h3/webtransport/session_id.rs",
+    "crates/uvicorn-rs/src/http3/h3_quinn.rs",
+)
+EXECUTABLE_SOURCE_SET = PRODUCTION_SOURCE_SET[:-2]
+# The lifecycle contract contains types only; upload tracing is compiled only
+# with runtime-diagnostics, which is disabled in the measured configuration.
+# Both files remain source-bound, and any LLVM counters here fail validation.
+NO_COUNTER_SOURCE_SET = PRODUCTION_SOURCE_SET[-2:]
 PYTHON_SOURCE_SET = (
     "python/uvicorn_rs/__init__.py",
     "python/uvicorn_rs/__main__.py",
@@ -72,19 +135,52 @@ PYTHON_SOURCE_SET = (
     "python/uvicorn_rs/server.py",
 )
 NATIVE_MANIFEST = ROOT / "tests" / "native-core" / "manifest.json"
-NATIVE_RUNNER = ROOT / "target" / "asgi-native-coverage" / "release" / "examples" / "native_core_contracts"
+COVERAGE_TARGET_ROOT = Path(
+    os.environ.get("UVICORN_RS_COVERAGE_TARGET_ROOT", ROOT / "target")
+).resolve()
+NATIVE_RUNNER = (
+    COVERAGE_TARGET_ROOT
+    / "asgi-native-coverage"
+    / "release"
+    / "examples"
+    / "native_core_contracts"
+)
 NATIVE_FAULT_CONTRACTS = {
+    "http1.keep-alive.active-request-drain": {
+        "operation": "native-http1-keepalive-active-request-drain",
+        "scenario": "two-active-requests",
+    },
+    "http1.keep-alive.deadline-channel-closed": {
+        "operation": "native-http1-keepalive-deadline-channel-closed",
+        "scenario": "deadline-channel-closed",
+    },
+    "http1.keep-alive.deadline-rescheduled-before-expiry": {
+        "operation": "native-http1-keepalive-deadline-rescheduled",
+        "scenario": "deadline-rescheduled-before-expiry",
+    },
     "native.request-lifetime.body-missing-guard": {
         "operation": "native-request-lifetime-body-missing-guard",
         "scenario": "guard-missing",
     },
     "http1.upgrade.receiver-closed": {
-        "operation": "native-http1-upgrade-session",
-        "scenario": "receiver-closed",
+        "contracts": [
+            {
+                "operation": "native-http1-upgrade-session",
+                "scenario": "receiver-closed",
+            },
+            {
+                "operation": "native-https-upgrade-session-error",
+                "scenario": "receiver-closed",
+            },
+        ],
     },
     "http1.peer-read.receiver-closed": {
         "operation": "native-http1-peer-read-receiver-closed",
         "scenario": "receiver-closed",
+    },
+    "http1.unix-peer-read.on-read-error": {
+        "operation": "native-http1-unix-peer-read-on-read-error",
+        "scenario": "on-read-error",
     },
     "http1.peer-read.failure-after-data": {
         "operation": "native-http1-peer-read-error-response-cancel",
@@ -154,6 +250,22 @@ NATIVE_FAULT_CONTRACTS = {
         "operation": "native-http1-websocket",
         "scenario": "accept-key-header-value-error",
     },
+    "websocket.handshake.extension-negotiation": {
+        "operation": "native-http1-websocket",
+        "scenario": "extension-negotiation-error",
+    },
+    "websocket.session.construction-error": {
+        "operation": "native-http1-websocket",
+        "scenario": "accepted-session-construction-error",
+    },
+    "websocket.session.extension-to-str-error": {
+        "operation": "native-http1-websocket",
+        "scenario": "accepted-session-extension-header-error",
+    },
+    "websocket.session.extension-header-value-error": {
+        "operation": "native-http1-websocket",
+        "scenario": "accepted-session-extension-header-value-error",
+    },
     "websocket.receive.close-reply.flush": {
         "operation": "native-http1-websocket",
         "scenario": "close-reply-flush-failure",
@@ -167,12 +279,36 @@ NATIVE_FAULT_CONTRACTS = {
         "scenario": "deadline-overflow",
     },
     "server.listener.accept-error": {
-        "operation": "native-server-listener-accept-error",
-        "scenario": "accept-error",
+        "contracts": [
+            {
+                "operation": "native-server-listener-accept-error",
+                "scenario": "accept-error",
+            },
+            {
+                "operation": "native-tcp-multi-listener-accept-error",
+                "scenario": "multi-listener-accept-error",
+            },
+            {
+                "operation": "native-server-listener-accept-error",
+                "scenario": "unix-accept-error",
+            },
+        ],
+    },
+    "server.listener.unexpected-clean-exit": {
+        "operation": "native-tcp-multi-listener-clean-exit",
+        "scenario": "unexpected-clean-exit",
     },
     "server.listener.admission-closed": {
-        "operation": "native-server-listener-admission-closed",
-        "scenario": "admission-closed",
+        "contracts": [
+            {
+                "operation": "native-server-listener-admission-closed",
+                "scenario": "admission-closed",
+            },
+            {
+                "operation": "native-unix-listener-admission-closed",
+                "scenario": "unix-admission-closed",
+            },
+        ],
     },
     "server.http3.admission-closed": {
         "operation": "native-server-http3-admission-closed",
@@ -186,8 +322,7 @@ REPORT_INPUT_PATHS = (
     "tests/parity/server_api_probe.py",
     "tests/native-core/manifest.json",
     "crates/uvicorn-rs/examples/native_core_contracts.rs",
-    "tests/native-core/tls/localhost-cert.pem",
-    "tests/native-core/tls/localhost-key.pem",
+    "tests/native-core/tls",
     "tools/http3-probe/Cargo.toml",
     "Cargo.lock",
     "tools/http3-probe/src/bin/parity-http3.rs",
@@ -324,8 +459,13 @@ def load_native_contract() -> tuple[dict[str, Any], list[dict[str, Any]]]:
                 or set(fault) != {"point"}
                 or not isinstance(fault.get("point"), str)
                 or fault.get("point") not in NATIVE_FAULT_CONTRACTS
-                or case.get("operation") != NATIVE_FAULT_CONTRACTS[fault["point"]]["operation"]
-                or case.get("scenario") != NATIVE_FAULT_CONTRACTS[fault["point"]]["scenario"]
+                or not any(
+                    case.get("operation") == contract["operation"]
+                    and case.get("scenario") == contract["scenario"]
+                    for contract in NATIVE_FAULT_CONTRACTS[fault["point"]].get(
+                        "contracts", [NATIVE_FAULT_CONTRACTS[fault["point"]]]
+                    )
+                )
             ):
                 raise CoverageError(f"native-core case {case['id']} has an invalid fault contract")
         elif fault is not None:
@@ -338,10 +478,14 @@ def source_identity(
 ) -> dict[str, Any]:
     discovered_sources = {
         str(source.relative_to(ROOT))
-        for directory in (ROOT / "src", ROOT / "crates" / "uvicorn-rs" / "src", ROOT / "crates" / "native-app-contract" / "src")
+        for directory in (ROOT / "src", ROOT / "crates" / "uvicorn-rs" / "src", ROOT / "crates" / "asgi-lifespan-protocol-rs" / "src")
         for source in directory.rglob("*.rs")
     }
-    expected_rust_sources = set(PRODUCTION_SOURCE_SET) | set(COVERAGE_SUPPORT_SOURCE_SET)
+    expected_rust_sources = (
+        set(PRODUCTION_SOURCE_SET)
+        | set(COVERAGE_SUPPORT_SOURCE_SET)
+        | set(THIRD_PARTY_SOURCE_SET)
+    )
     if discovered_sources != expected_rust_sources:
         raise CoverageError(
             "Rust source inventory changed: "
@@ -367,7 +511,14 @@ def source_identity(
         selected[relative] = digest_file(ROOT / relative)
     for relative in REPORT_INPUT_PATHS:
         path = ROOT / relative
-        selected[relative] = digest_file(path)
+        if path.is_dir():
+            for artifact in sorted(path.rglob("*")):
+                if artifact.is_file():
+                    selected[str(artifact.relative_to(ROOT))] = digest_file(artifact)
+        elif path.is_file():
+            selected[relative] = digest_file(path)
+        else:
+            raise CoverageError(f"report input is missing: {relative}")
     for path in input_paths:
         selected[str(path.relative_to(ROOT))] = digest_file(path)
     return {
@@ -598,20 +749,20 @@ def source_region_map(
     allowed_sources: set[str],
     *,
     canonical_functions: dict[tuple[str, int, int], str] | None = None,
+    canonical_spans: dict[tuple[str, int, int], set[tuple[int, int, int, int, int]]] | None = None,
 ) -> tuple[
     dict[str, dict[str, Any]],
     dict[str, dict[str, int]],
     dict[tuple[str, int, int], str],
+    dict[tuple[str, int, int], set[tuple[int, int, int, int, int]]],
 ]:
-    """Map LLVM function-instantiation groups to source-span regions.
+    """Map LLVM function-instantiation groups to canonical source-span regions.
 
-    LLVM's file summary counts regions per instantiation group and merges each
-    group's instantiations by taking the maximum covered and total counts. Use
-    that same deterministic representative to preserve LLVM's denominator and
-    raw summary, but attribute a source region as hit when any monomorphization
-    executes the exact source span. Generic instantiations share the source
-    region even when their branch outcomes differ. Reuse the aggregate-selected
-    representative's source spans when attributing isolated case profiles.
+    Keep LLVM's maximum-instantiation file counters as raw evidence. Define the
+    unified region denominator as the exact source-span union across all
+    instantiations, and mark a span covered when any instantiation executes it.
+    A deterministic LLVM representative remains part of each region identity;
+    isolated case profiles reuse both the aggregate representative and span set.
     """
     data = llvm_report["data"][0]
     root = ROOT.resolve()
@@ -691,8 +842,14 @@ def source_region_map(
         raise CoverageError("LLVM export has no executable production function regions")
     if canonical_functions is not None and set(function_groups) != set(canonical_functions):
         raise CoverageError("case LLVM function groups differ from aggregate function groups")
+    if (canonical_functions is None) != (canonical_spans is None):
+        raise CoverageError("canonical LLVM representatives and spans must be supplied together")
+    if canonical_spans is not None and set(function_groups) != set(canonical_spans):
+        raise CoverageError("case LLVM source-span groups differ from aggregate function groups")
 
     selected_functions: dict[tuple[str, int, int], str] = {}
+    selected_spans: dict[tuple[str, int, int], set[tuple[int, int, int, int, int]]] = {}
+    normalized_region_totals = {path: 0 for path in file_summaries}
     summary_reconstructed: dict[str, dict[str, int]] = {
         path: {"regions": 0, "regions_total": 0}
         for path in file_summaries
@@ -726,22 +883,19 @@ def source_region_map(
             if symbol not in totals:
                 raise CoverageError(f"aggregate LLVM representative is missing for {group_key}")
         selected_functions[group_key] = symbol
-        selected_regions = next(
-            code_regions for candidate, code_regions in instantiations if candidate == symbol
-        )
-        representative_spans = {
+        observed_spans = {
             (region[0], region[1], region[2], region[3], region[7])
-            for region in selected_regions
+            for _, code_regions in instantiations
+            for region in code_regions
         }
         covered_source_spans: set[tuple[int, int, int, int, int]] = set()
-        for candidate, code_regions in instantiations:
+        for _, code_regions in instantiations:
             candidate_spans = {
-                (region[0], region[1], region[2], region[3], region[7])
-                for region in code_regions
+                (region[0], region[1], region[2], region[3], region[7]) for region in code_regions
             }
-            if not candidate_spans <= representative_spans:
+            if canonical_spans is not None and not candidate_spans <= canonical_spans[group_key]:
                 raise CoverageError(
-                    f"LLVM instantiation has source regions outside its representative: {group_key}"
+                    f"case LLVM instantiation has source regions outside aggregate union: {group_key}"
                 )
             covered_source_spans.update(
                 (region[0], region[1], region[2], region[3], region[7])
@@ -749,8 +903,10 @@ def source_region_map(
                 if region[4] > 0
             )
 
-        for raw_region in selected_regions:
-            start_line, start_column, end_line, end_column, _, _, _, kind = raw_region
+        group_spans = canonical_spans[group_key] if canonical_spans is not None else observed_spans
+        selected_spans[group_key] = group_spans
+        normalized_region_totals[relative_path] += len(group_spans)
+        for start_line, start_column, end_line, end_column, kind in sorted(group_spans):
             source_span = (start_line, start_column, end_line, end_column, kind)
             identity = [
                 source_digest,
@@ -791,7 +947,7 @@ def source_region_map(
                 )
 
     for relative_path, summary in file_summaries.items():
-        expected_regions = summary["regions_total"]
+        expected_regions = normalized_region_totals[relative_path]
         actual_regions = sum(region["file"] == relative_path for region in regions.values())
         if actual_regions != expected_regions:
             raise CoverageError(
@@ -811,7 +967,7 @@ def source_region_map(
             relative_path,
             {"regions": 0, "lines": 0, "regions_total": 0, "lines_total": 0},
         )
-    return regions, file_summaries, selected_functions
+    return regions, file_summaries, selected_functions, selected_spans
 
 
 def filter_llvm_export_sources(
@@ -975,6 +1131,11 @@ def main() -> int:
         action="append",
         help="attribute a case ID; use native:<id> for native contracts, asgi:<id> for parity cases, or an unprefixed ASGI ID",
     )
+    parser.add_argument(
+        "--profile",
+        action="append",
+        help="select ASGI parity cases by manifest profile; repeat to select multiple profiles",
+    )
     parser.add_argument("--matrix-repeats", type=int, default=3, help="complete matrix repeats; use 0 to skip")
     parser.add_argument(
         "--matrix-infra-retries",
@@ -1000,48 +1161,14 @@ def main() -> int:
     run_parity.ORACLE_PYTHON = oracle_python
     if args.matrix_repeats not in {0, 3}:
         parser.error("--matrix-repeats must be 0 for a selected subset or exactly 3 for full matrices")
+    if (args.case_id or args.profile) and args.matrix_repeats:
+        parser.error("selected cases or profiles require --matrix-repeats 0")
     if args.case_timeout < 30:
         parser.error("--case-timeout must be at least 30 seconds")
     if args.case_infra_retries < 0:
         parser.error("--case-infra-retries cannot be negative")
     if args.matrix_infra_retries < 0:
         parser.error("--matrix-infra-retries cannot be negative")
-
-    started_at = utc_now()
-    run_id = uuid.uuid4().hex
-    output = args.output.resolve()
-    artifacts_root = args.artifacts_dir.resolve() / run_id
-    case_results_root = artifacts_root / "cases"
-    profile_root = artifacts_root / "profiles"
-    repeat_root = artifacts_root / "matrix-runs"
-    native_case_results_root = artifacts_root / "native-cases"
-    native_profile_root = artifacts_root / "native-profiles"
-    native_input_root = artifacts_root / "native-inputs"
-    native_repeat_root = artifacts_root / "native-matrix-runs"
-    for path in (
-        case_results_root,
-        profile_root,
-        repeat_root,
-        native_case_results_root,
-        native_profile_root,
-        native_input_root,
-        native_repeat_root,
-    ):
-        path.mkdir(parents=True, exist_ok=False)
-
-    if not args.skip_build:
-        build_log = artifacts_root / "instrumented-build.log"
-        build = subprocess.run(
-            [sys.executable, str(BUILD_SCRIPT)],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            timeout=900,
-            check=False,
-        )
-        build_log.write_text(build.stdout + build.stderr, encoding="utf-8")
-        if build.returncode:
-            raise CoverageError(f"instrumented build failed; see {build_log}")
 
     manifest, input_document, input_paths = run_parity.load_contract()
     all_cases = input_document["cases"]
@@ -1086,12 +1213,59 @@ def main() -> int:
         cases = [case for case in all_cases if case["case_id"] in requested_asgi]
         native_cases = [case for case in all_native_cases if case["id"] in requested_native]
     else:
-        cases = all_cases
-        native_cases = all_native_cases
+        cases = list(all_cases)
+        native_cases = list(all_native_cases)
+    if args.profile:
+        known_profiles = {profile["id"] for profile in manifest["profiles"]}
+        unknown_profiles = sorted(set(args.profile) - known_profiles)
+        if unknown_profiles:
+            parser.error(f"unknown profile(s): {', '.join(unknown_profiles)}")
+        selected_profiles = set(args.profile)
+        cases = [case for case in cases if case["profile"] in selected_profiles]
+        if not cases:
+            parser.error("the selected profile and case filters matched no ASGI cases")
+        if not args.case_id:
+            # A profile is an ASGI parity group. Native contracts are selected
+            # explicitly by --case-id native:<id> so a profile run stays scoped.
+            native_cases = []
     if not cases and not native_cases:
         parser.error("at least one case must be selected")
-    if args.case_id and args.matrix_repeats:
-        parser.error("--matrix-repeats requires both complete input matrices; set it to 0 for selected cases")
+
+    started_at = utc_now()
+    run_id = uuid.uuid4().hex
+    output = args.output.resolve()
+    artifacts_root = args.artifacts_dir.resolve() / run_id
+    case_results_root = artifacts_root / "cases"
+    profile_root = artifacts_root / "profiles"
+    repeat_root = artifacts_root / "matrix-runs"
+    native_case_results_root = artifacts_root / "native-cases"
+    native_profile_root = artifacts_root / "native-profiles"
+    native_input_root = artifacts_root / "native-inputs"
+    native_repeat_root = artifacts_root / "native-matrix-runs"
+    for path in (
+        case_results_root,
+        profile_root,
+        repeat_root,
+        native_case_results_root,
+        native_profile_root,
+        native_input_root,
+        native_repeat_root,
+    ):
+        path.mkdir(parents=True, exist_ok=False)
+
+    if not args.skip_build:
+        build_log = artifacts_root / "instrumented-build.log"
+        build = subprocess.run(
+            [sys.executable, str(BUILD_SCRIPT)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=900,
+            check=False,
+        )
+        build_log.write_text(build.stdout + build.stderr, encoding="utf-8")
+        if build.returncode:
+            raise CoverageError(f"instrumented build failed; see {build_log}")
 
     source = source_identity(manifest, input_paths, native_manifest)
     llvm_cov, llvm_profdata, tool_versions = llvm_tools()
@@ -1130,6 +1304,10 @@ def main() -> int:
     shutil.copy2(native_runner, native_runner_snapshot)
     if digest_file(native_runner_snapshot) != build_identity["native_runner_sha256"]:
         raise CoverageError("native coverage runner snapshot differs from the recorded build")
+    extension_snapshot = native_runner_snapshot.parent / "native-extension"
+    shutil.copy2(extension, extension_snapshot)
+    if digest_file(extension_snapshot) != build_identity["native_extension_sha256"]:
+        raise CoverageError("native extension snapshot differs from the recorded build")
 
     case_receipts: list[dict[str, Any]] = []
     native_case_receipts: list[dict[str, Any]] = []
@@ -1719,6 +1897,19 @@ def main() -> int:
             f"(transient infrastructure failures: {matrix_runs[-1]['transient_infrastructure_failures']})",
             flush=True,
         )
+        if not final_passed:
+            # LLVM attribution can take much longer than a repeat. Surface the
+            # failed inputs now while retaining the original result and logs.
+            prefix = f"[matrix {repeat}/{args.matrix_repeats} failure]"
+            print(f"{prefix} result={matrix_runs[-1]['artifact']} "
+                  f"stdout={attempts[-1]['stdout_artifact']} "
+                  f"stderr={attempts[-1]['stderr_artifact']}", flush=True)
+            failures = failing_cases(final_result or {})
+            for row in failures[:MAX_CASE_DIAGNOSTICS]:
+                print(f"{prefix} {case_message(row)}", flush=True)
+            if len(failures) > MAX_CASE_DIAGNOSTICS:
+                print(f"{prefix} {len(failures) - MAX_CASE_DIAGNOSTICS} additional "
+                      "failures retained in the result", flush=True)
 
     native_matrix_runs: list[dict[str, Any]] = []
     for repeat in range(1, args.matrix_repeats + 1):
@@ -1827,7 +2018,7 @@ def main() -> int:
     aggregate_llvm = llvm_export(
         llvm_cov, [extension, native_runner_snapshot], combined_profdata, timeout=180
     )
-    aggregate_regions, aggregate_summaries, canonical_functions = source_region_map(
+    aggregate_regions, aggregate_summaries, canonical_functions, canonical_spans = source_region_map(
         aggregate_llvm, source["sha256"], set(PRODUCTION_SOURCE_SET)
     )
     aggregate_lcov_lines = llvm_export_lcov(
@@ -1870,11 +2061,12 @@ def main() -> int:
 
     for attribution_index, (namespace, receipt, profile_data) in enumerate(attribution_cases, 1):
         case_llvm = llvm_export(llvm_cov, [extension, native_runner_snapshot], profile_data)
-        case_regions, _, _ = source_region_map(
+        case_regions, _, _, _ = source_region_map(
             case_llvm,
             source["sha256"],
             set(PRODUCTION_SOURCE_SET),
             canonical_functions=canonical_functions,
+            canonical_spans=canonical_spans,
         )
         if set(case_regions) != set(aggregate_regions):
             raise CoverageError(f"case LLVM region identities differ: {receipt['case_key']}")
@@ -2120,6 +2312,7 @@ def main() -> int:
             "source_set": all_source_paths,
             "executable_source_set": list(EXECUTABLE_SOURCE_SET),
             "coverage_support_source_set": list(COVERAGE_SUPPORT_SOURCE_SET),
+            "third_party_source_set": list(THIRD_PARTY_SOURCE_SET),
             "source_files": source_file_rows,
             "llvm_normalization": {
                 "regions": "source-span union across Rust function instantiations",
@@ -2163,8 +2356,9 @@ def main() -> int:
             "uncovered_regions": uncovered,
             "attribution": {
                 "algorithm": (
-                    "LLVM instantiation groups use a deterministic maximum-summary representative for the denominator; "
-                    "hits are unioned by exact source span across monomorphizations; region IDs include source hash, "
+                    "LLVM instantiation groups use the union of exact source spans for the denominator and a "
+                    "deterministic maximum-summary representative for region identity; hits are unioned across "
+                    "monomorphizations; region IDs include source hash, "
                     "file, group start, representative function symbol, source span, and kind"
                 ),
                 "aggregate_profile_data_sha256": digest_file(combined_profdata),
@@ -2190,7 +2384,7 @@ def main() -> int:
     if source_identity(manifest, input_paths, native_manifest)["sha256"] != source["sha256"]:
         raise CoverageError("source or parity inputs changed while the coverage run was in progress")
     restore_native_runner(native_runner, native_runner_snapshot, build_identity["native_runner_sha256"])
-    native_runner_snapshot.unlink(missing_ok=True)
+    # Retain both exact objects for fresh-runner profile replay, without rebuilding.
     aggregate_llvm = filter_llvm_export_sources(aggregate_llvm, set(PRODUCTION_SOURCE_SET))
     normalize_llvm_source_summaries(
         aggregate_llvm,

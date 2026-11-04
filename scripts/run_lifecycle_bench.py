@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import http.client
 import io
+import importlib
 import json
 import os
 import platform
@@ -299,6 +300,110 @@ def uvicorn_cancellation_block(lines: list[str], server: dict, evidence,
     }
 
 
+def rust_cancellation_block(lines: list[str]) -> tuple[set[int], dict | None]:
+    """Recognize only the source-verified traceback for the deliberately held task."""
+    headers = {
+        "ERROR:    Exception in ASGI application",
+        "ERROR: Exception in ASGI application",
+    }
+    header_indices = [index for index, line in enumerate(lines) if line in headers]
+    traceback_indices = [
+        index for index, line in enumerate(lines)
+        if line == "Traceback (most recent call last):"
+    ]
+    terminal = "asyncio.exceptions.CancelledError"
+    terminal_indices = [index for index, line in enumerate(lines) if line == terminal]
+    if not header_indices and not traceback_indices and not terminal_indices:
+        return set(), None
+    if len(header_indices) != 1 or len(traceback_indices) != 1 or len(terminal_indices) != 1:
+        raise RuntimeError("Rust held-task cancellation has an incomplete or repeated ASGI traceback")
+
+    start_index = header_indices[0]
+    end_index = terminal_indices[0]
+    held_index = lines.index("APP_HOLD_STARTED")
+    cancelled_index = lines.index("APP_CANCELLED_BY_SHUTDOWN")
+    lifespan_index = lines.index("LIFESPAN_SHUTDOWN_COMPLETE")
+    if not held_index < cancelled_index < start_index < end_index < lifespan_index:
+        raise RuntimeError("Rust cancellation traceback did not follow held-task cancellation before lifespan completion")
+    cursor = start_index + 1
+    if cursor < end_index and lines[cursor] == "":
+        cursor += 1
+    if cursor != traceback_indices[0]:
+        raise RuntimeError("Rust cancellation diagnostic has an unexpected line before its traceback")
+    cursor += 1
+
+    def module_path(name: str) -> Path:
+        module = importlib.import_module(name)
+        module_file = getattr(module, "__file__", None)
+        if not module_file:
+            raise RuntimeError(f"cannot locate installed source for {name}")
+        return Path(module_file).resolve()
+
+    bridge_path = module_path("uvicorn_rs._bridge")
+    server_path = module_path("uvicorn.server")
+    proxy_path = module_path("uvicorn.middleware.proxy_headers")
+    asyncio_path = module_path("asyncio")
+    asyncio_locks_path = module_path("asyncio.locks")
+    allowed_roots = [asyncio_path.parent]
+    for package in ("fastapi", "starlette"):
+        try:
+            allowed_roots.append(module_path(package).parent)
+        except ModuleNotFoundError as error:
+            if error.name != package:
+                raise
+    app_path = (ROOT / "examples/bench_fastapi_lifecycle.py").resolve()
+    expected_prefix = (
+        (bridge_path, "invoke", "await app(scope, receive, send)"),
+        (server_path, "tracked_app", "await app(scope, receive, tracked_send)"),
+        (proxy_path, "__call__", "return await self.app(scope, receive, send)"),
+    )
+    parsed_frames = []
+    while cursor < end_index:
+        match = re.fullmatch(r'  File "([^"\n]+)", line ([0-9]+), in ([A-Za-z0-9_]+)', lines[cursor])
+        if match is None or cursor + 1 >= end_index:
+            raise RuntimeError("Rust cancellation traceback contains an unrecognized frame or diagnostic")
+        path = Path(match[1]).resolve()
+        number = int(match[2])
+        function = match[3]
+        source_lines = path.read_text().splitlines()
+        if not 1 <= number <= len(source_lines):
+            raise RuntimeError("Rust cancellation traceback points outside a live source file")
+        displayed_source = lines[cursor + 1]
+        if not displayed_source.startswith("    "):
+            raise RuntimeError("Rust cancellation traceback has no source line after a frame")
+        statement = displayed_source[4:].strip()
+        if source_lines[number - 1].strip() != statement:
+            raise RuntimeError("Rust cancellation traceback source differs from the live installed source")
+        parsed_frames.append({"path": path, "line": number, "function": function, "source": statement})
+        cursor += 2
+        if cursor < end_index and re.fullmatch(r"    [ ~^]*[~^][ ~^]*", lines[cursor]):
+            cursor += 1
+    if len(parsed_frames) < 5:
+        raise RuntimeError("Rust FastAPI cancellation traceback is unexpectedly short")
+    for observed, (path, function, statement) in zip(parsed_frames[:3], expected_prefix):
+        if observed["path"] != path or observed["function"] != function or observed["source"] != statement:
+            raise RuntimeError("Rust cancellation traceback has an unexpected server entry frame")
+    endpoint_frames = [frame for frame in parsed_frames if frame["path"] == app_path]
+    if (len(endpoint_frames) != 1 or endpoint_frames[0]["function"] != "hold"
+            or endpoint_frames[0]["source"] != "await asyncio.Event().wait()"):
+        raise RuntimeError("Rust cancellation traceback does not pass through the exact FastAPI hold route")
+    final = parsed_frames[-1]
+    if (final["path"] != asyncio_locks_path or final["function"] != "wait"
+            or final["source"] != "await fut"):
+        raise RuntimeError("Rust cancellation traceback does not terminate at the held asyncio event wait")
+    for frame in parsed_frames[3:-1]:
+        if frame["path"] != app_path and not any(frame["path"].is_relative_to(root) for root in allowed_roots):
+            raise RuntimeError("Rust FastAPI cancellation traceback contains a frame outside the known framework/asyncio stack")
+    observed_frames = [{**frame, "path": str(frame["path"])} for frame in parsed_frames]
+    block = "\n".join(lines[start_index:end_index + 1])
+    return set(range(start_index, end_index + 1)), {
+        "kind": "single deliberately held Rust task cancellation traceback",
+        "header": lines[start_index], "terminal_exception": terminal,
+        "frames": observed_frames, "traceback_sha256": hashlib.sha256(block.encode()).hexdigest(),
+        "raw_line_numbers": list(range(start_index + 1, end_index + 2)),
+    }
+
+
 def diagnostic_gate(output: str, server: dict, phase: str, returncode: int, evidence,
                     uvicorn_identity: dict | None) -> dict:
     lines = output.splitlines()
@@ -326,6 +431,11 @@ def diagnostic_gate(output: str, server: dict, phase: str, returncode: int, evid
             lines, server, evidence, uvicorn_identity
         )
         normalization_receipt.append(receipt)
+    if phase == "active" and server["kind"] == "rust":
+        rust_indices, receipt = rust_cancellation_block(lines)
+        normalized_indices.update(rust_indices)
+        if receipt is not None:
+            normalization_receipt.append(receipt)
     # The native listener reports its configured grace deadline when it
     # aborts the one deliberately held connection. This is the Rust-side
     # equivalent of Uvicorn's expected graceful-timeout cancellation. Accept
@@ -637,13 +747,14 @@ def main() -> None:
                 "phase": "active", "maximum_occurrences": 1,
                 "rust_exact_line": "uvicorn-rs: ASGI request failed: CancelledError:",
                 "rust_optional_suffix": "one trailing space from PyErr's empty-message display",
+                "rust_traceback": "if emitted, one source-verified Exception in ASGI application block for the exact held FastAPI route, through the installed uvicorn-rs bridge, Uvicorn-shaped server and proxy middleware, and ending at asyncio.Event.wait CancelledError",
                 "rust_listener_timeout_exact_line": "uvicorn-rs: listener shutdown exceeded the graceful timeout",
                 "rust_listener_timeout_condition": "only for the active held request, at most once and before APP_CANCELLED_BY_SHUTDOWN",
                 "uvicorn_log_level": "publicERROR without colors; unexpected logger errors remain visible",
                 "uvicorn_timeout_line": "ERROR:    Cancel 1 running task(s), timeout graceful shutdown exceeded",
                 "uvicorn_terminal_exception": "asyncio.exceptions.CancelledError: Task cancelled, timeout graceful shutdown exceeded",
                 "uvicorn_traceback_frames": "exact installed protocol run_asgi, proxy_headers.__call__, lifespan_asgi.app Event.wait, stdlib asyncio.locks.Event.wait; file/function/source text and observed line verified, optional caret display only",
-                "requirements": "exact held-entry/cancellation/lifespan markers in order, expected official exit, no other error, traceback, exception chain, task diagnostic, or panic; per-phase normalization receipt and full raw logs retained",
+                "requirements": "exact held-entry/cancellation/lifespan markers in order, expected official exit, no other error, traceback, exception chain, task diagnostic, or panic; only the exact installed-source Rust and Uvicorn cancellation blocks are normalized; per-phase receipts and full raw logs retained",
                 "uvicorn_exit_normalization": "0 or -SIGTERM only after the same ASGI completion checks; Uvicorn intentionally re-raises the captured SIGTERM",
             },
             "observer_startup_limitations": "shared observer initializes after server spawn and before the first readiness request; its reported CPU and elapsed work can affect cold-start observations",

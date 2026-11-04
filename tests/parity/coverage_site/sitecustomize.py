@@ -6,7 +6,19 @@ import atexit
 import json
 import os
 from pathlib import Path
+import signal
 import sys
+
+
+if (
+    os.name == "nt"
+    and os.environ.get("ASGI_PARITY_WINDOWS_CTRL_BREAK_AS_SIGINT") == "1"
+    and hasattr(signal, "SIGBREAK")
+):
+    def _forward_ctrl_break_as_sigint(signum, frame):
+        signal.raise_signal(signal.SIGINT)
+
+    signal.signal(signal.SIGBREAK, _forward_ctrl_break_as_sigint)
 
 
 if os.environ.get("ASGI_PARITY_COVERAGE_CAPTURE_SHUTDOWN") == "1":

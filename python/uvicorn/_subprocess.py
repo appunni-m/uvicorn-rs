@@ -27,6 +27,8 @@ def get_subprocess(
     config: Config,
     target: Callable[..., None],
     sockets: list[socket],
+    *,
+    windows_process_group: bool = False,
 ) -> SpawnProcess:
     """
     Called in the parent process, to instantiate a new child process instance.
@@ -37,6 +39,8 @@ def get_subprocess(
                be the `Server.run()` method.
     * sockets - A list of sockets to pass to the server. Sockets are bound once
                 by the parent process, and then passed to the child processes.
+    * windows_process_group - create a dedicated Windows process group for a
+                              worker that must receive a targeted Ctrl+Break.
     """
     # We pass across the stdin fileno, and reopen it in the child process.
     # This is required for some debugging environments.
@@ -53,7 +57,13 @@ def get_subprocess(
         "stdin_fileno": stdin_fileno,
     }
 
-    return spawn.Process(target=subprocess_started, kwargs=kwargs)
+    if os.name == "nt" and windows_process_group:
+        from uvicorn._windows_spawn import WindowsSpawnProcess
+
+        process_class = WindowsSpawnProcess
+    else:
+        process_class = spawn.Process
+    return process_class(target=subprocess_started, kwargs=kwargs)
 
 
 def subprocess_started(

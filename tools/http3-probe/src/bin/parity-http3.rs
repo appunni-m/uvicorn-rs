@@ -5,8 +5,9 @@ use std::sync::Arc;
 
 use bytes::{Buf, Bytes};
 use h3_quinn::quinn::{self, rustls};
-use http::{header::HeaderName, HeaderMap, HeaderValue, Request};
-use serde_json::{json, Value};
+use http::{HeaderMap, HeaderValue, Request, header::HeaderName};
+use serde_json::{Value, json};
+use uvicorn_rs::{h3, h3_quinn};
 
 async fn send_truncated_data_frame(
     connection: &quinn::Connection,
@@ -42,9 +43,9 @@ async fn send_truncated_data_frame(
     wire.push(u8::try_from(field_section.len())?);
     wire.extend_from_slice(&field_section);
     wire.extend_from_slice(&[0x00, 0x01]); // DATA frame declares one byte
-                                           // Deliberately omit the declared DATA byte, then cleanly FIN the request
-                                           // stream. This is the minimal input that distinguishes empty DATA from a
-                                           // truncated DATA frame in h3 0.0.8.
+    // Deliberately omit the declared DATA byte, then cleanly FIN the request
+    // stream. This is the minimal input that distinguishes empty DATA from a
+    // truncated DATA frame in h3 0.0.8.
     send.write_all(&wire).await?;
     send.finish()?;
     Ok(receive)
@@ -954,6 +955,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         writeln!(std::io::stdout().lock(), "{observation}")?;
         return Ok(());
     }
+    let _ = writeln!(
+        std::io::stderr().lock(),
+        "HTTP/3 probe: awaiting response headers"
+    );
     let response_result =
         tokio::time::timeout(std::time::Duration::from_secs(2), stream.recv_response()).await;
     let response = match response_result {
@@ -974,6 +979,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Err(error) => return Err(error.into()),
     };
     let status = response.status().as_u16();
+    let _ = writeln!(
+        std::io::stderr().lock(),
+        "HTTP/3 probe: response headers received status={status}"
+    );
     if abort_response_after_headers {
         stream.stop_sending(h3::error::Code::H3_REQUEST_CANCELLED);
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
@@ -1131,7 +1140,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             error => {
                 return Err(
                     format!("held response requires a remote application close: {error}").into(),
-                )
+                );
             }
         };
         let response_incomplete = loop {
@@ -1220,6 +1229,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         }
     }
+    let _ = writeln!(
+        std::io::stderr().lock(),
+        "HTTP/3 probe: response body finished bytes={}",
+        body.len()
+    );
     let body_hex = body
         .iter()
         .map(|byte| format!("{byte:02x}"))
@@ -1319,10 +1333,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
     writeln!(std::io::stdout().lock(), "{}", observation)?;
+    let _ = writeln!(
+        std::io::stderr().lock(),
+        "HTTP/3 probe: closing endpoint after response"
+    );
     endpoint.close(close_error_code, b"parity request complete");
     drop(stream);
     drop(sender);
+    let _ = writeln!(
+        std::io::stderr().lock(),
+        "HTTP/3 probe: waiting for endpoint idle"
+    );
     endpoint.wait_idle().await;
+    let _ = writeln!(std::io::stderr().lock(), "HTTP/3 probe: endpoint idle");
     Ok(())
 }
 

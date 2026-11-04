@@ -1,9 +1,21 @@
 # Deployment guidance
 
-The current `uvicorn-rs-py` server is an unpublished prototype, not a
-supported Uvicorn replacement. Keep upstream Uvicorn for deployments that
-need its full CLI, worker, reload, proxy, or process-management behavior. This
-guide is for evaluating the current checkout in a controlled environment.
+The `uvicorn-rs` 0.3.0 PyPI release is still being qualified and is not
+published. The CI
+[#637](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084)
+installed-wheel matrix passed 786/786 on Linux x86-64 and macOS ARM64. Windows
+passed 758/759 raw comparisons, with one captured stock-Uvicorn startup
+defect. Focused CI #638 qualifies narrow startup and shutdown reference-defect
+policies while independently requiring clean candidate lifecycles.
+Linux/macOS artifact consumers and the separate Python 3.9 floor consumer
+pass. Full Windows packaging remains pending. Coverage measures 100%, but
+strict validation fails on raw function-line versus unique source-line totals;
+the validator repair still needs Linux acceptance. Actual independent review
+of that captured source finds zero gaps; final-main review handoff, matched
+FastAPI benchmarks and final-source qualification remain release gates. See the
+[source-bound receipts](uvicorn-compatibility.md), then use the
+[support matrix](support-matrix.md) to check the tested surface, then evaluate
+the released candidate with your application before deploying it.
 
 ## Bind and run
 
@@ -24,9 +36,16 @@ only the options listed in the [configuration guide](configuration.md).
 For experiments, run the server under a process manager so it can capture
 logs, restart the process, and request shutdown. Run it as a dedicated
 unprivileged user and set the working directory and `PYTHONPATH` explicitly.
-The server does not provide a health endpoint, worker supervisor, or restart
-policy; add health and readiness routes in the application and configure the
-process manager separately.
+
+The Python CLI includes Uvicorn-style worker and reload controls. The
+maintained parity matrix checks process startup, request serving, shutdown,
+worker replacement, reload, signal handling, and socket cases against Uvicorn
+0.54.0 on every platform-applicable input. Windows excludes 27 inputs that
+require Unix-domain sockets, inherited POSIX descriptors, a Unix-only listener
+transfer, or POSIX-only worker signals and health checks. See the
+[compatibility evidence](uvicorn-compatibility.md) for the exact run and the
+[support matrix](support-matrix.md) for remaining untested combinations. Keep
+an upstream rollback environment available during your application trial.
 
 The current prototype handles Ctrl-C and SIGTERM and has a configurable
 `--timeout-graceful-shutdown`. Allow additional process-manager shutdown time for
@@ -44,7 +63,8 @@ for protocol limits.
 
 ## Frameworks
 
-Frameworks that expose a standard ASGI 3 application can be tried through the
-prototype. Selected integration cases have been exercised, but this is not a
-claim of full compatibility with every Starlette, FastAPI, or ASGI feature.
-See [ASGI support](support-matrix.md) and [Uvicorn replacement status](uvicorn-compatibility.md).
+Frameworks that expose a standard ASGI 3 application can be tried with the
+candidate. The maintained parity matrix uses Uvicorn 0.54.0 as its reference;
+it does not replace an application-specific trial or the official ASGI
+conformance suite. Follow the [FastAPI evaluation guide](fastapi-evaluation.md)
+and consult [ASGI support](support-matrix.md) before deployment.

@@ -1,5 +1,5 @@
 {
-  "schema": "uvicorn-rs-parity/input@33",
+  "schema": "uvicorn-rs-parity/input@47",
   "cases": [
     {
       "case_id": "fault.lifespan-fault-asgi-shutdown-send-type-get-item",
@@ -11,6 +11,36 @@
       "verification": "fault-contract",
       "fault": {
         "point": "lifespan.asgi.send.type.get-item",
+        "contract": "server-shutdown-application-exception-clean-exit"
+      },
+      "lifecycle": {
+        "state_path": "/state",
+        "graceful_timeout_seconds": 1
+      }
+    },
+    {
+      "case_id": "fault.lifespan-fault-asgi-shutdown-event-channel-closed",
+      "profile": "lifespan-fault-asgi-shutdown-send-type-get-item",
+      "operation": "server.shutdown-failure",
+      "covers": ["server.shutdown-failure"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.send.event-channel-closed",
+        "contract": "server-shutdown-application-exception-clean-exit"
+      },
+      "lifecycle": {
+        "state_path": "/state",
+        "graceful_timeout_seconds": 1
+      }
+    },
+    {
+      "case_id": "fault.lifespan.shutdown-result-application-error",
+      "profile": "lifespan-fault-asgi-shutdown-send-type-get-item",
+      "operation": "server.shutdown-failure",
+      "covers": ["server.shutdown-failure"],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "lifespan.shutdown-result.application-error",
         "contract": "server-shutdown-failure"
       },
       "lifecycle": {

@@ -8,12 +8,12 @@ use std::time::{Duration, Instant};
 use bytes::Bytes;
 use h2::client::SendRequest;
 use http::{Request, Uri};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
-use tokio::time::{sleep, timeout, timeout_at, Instant as TokioInstant};
-use tokio_rustls::rustls::{self, pki_types::ServerName};
+use tokio::time::{Instant as TokioInstant, sleep, timeout, timeout_at};
 use tokio_rustls::TlsConnector;
+use tokio_rustls::rustls::{self, pki_types::ServerName};
 
 type BenchError = Box<dyn Error + Send + Sync>;
 
@@ -63,7 +63,7 @@ async fn request_once(
     deadline: TokioInstant,
 ) -> Result<(u16, usize, usize), BenchError> {
     macro_rules! await_phase {
-        ($future:expr, $phase:literal, $sent:expr, $total:expr, $received:expr, $frames:expr) => {{
+        ($future:expr_2021, $phase:literal, $sent:expr_2021, $total:expr_2021, $received:expr_2021, $frames:expr_2021) => {{
             if diagnostic_progress {
                 timeout_at(deadline, $future)
                     .await

@@ -2,8 +2,9 @@
 
 import asyncio
 import os
-import tempfile
 import sys
+import tempfile
+import threading
 
 from . import _bridge, _native
 
@@ -40,6 +41,17 @@ class Server:
         limit_max_requests_jitter=0,
         http2=True,
         _reset_contextvars=False,
+        _defer_startup_acceptance=False,
+        ws_per_message_deflate=True,
+        _http1_max_buffer_size=None,
+        _http1_allow_authority_form=True,
+        ssl_ca_certs=None,
+        ssl_cert_reqs=0,
+        _tls12_only=False,
+        _tls_cipher_suites=None,
+        ssl_keyfile_password=None,
+        ws_max_queue=None,
+        websocket_enabled=True,
     ):
         """Store the application and listener options for a server run.
 
@@ -50,8 +62,9 @@ class Server:
             uds: Optional Unix domain socket path. When set, the Rust runtime
                 binds this stream socket and does not create a QUIC listener.
             sockets: Optional non-empty list of pre-bound IPv4 or IPv6 TCP
-                listeners. Their descriptors are transferred to Rust during
-                startup.
+                listeners. Their handles are duplicated for the Rust runtime
+                during startup; Unix uses descriptor passing and Windows uses
+                Winsock socket duplication.
             backlog: Maximum pending TCP connections; negative values are
                 clamped to zero as in Uvicorn's socket-listen path.
             timeout_keep_alive: Idle timeout for persistent HTTP/1 connections
@@ -59,6 +72,13 @@ class Server:
             certfile: Optional PEM certificate chain. Pair with ``keyfile`` to
                 enable HTTPS and HTTP/3.
             keyfile: Optional PEM private key paired with ``certfile``.
+            ssl_keyfile_password: Optional password for a PKCS#8 encrypted PEM
+                private key.
+            ssl_ca_certs: Optional PEM CA bundle used to verify TLS client certificates.
+            ssl_cert_reqs: Client certificate policy: 0 disables requests, 1
+                requests and validates when present, and 2 requires a trusted certificate.
+            _tls12_only: Internal flag selecting TLS 1.2 only. The Uvicorn
+                compatibility layer supplies this from validated SSL settings.
             graceful_timeout: Non-negative shutdown grace period in seconds;
                 ``None`` waits for shutdown to finish without a deadline.
             lifespan: A boolean enabling automatic lifespan detection, or one
@@ -73,9 +93,17 @@ class Server:
             date_header: Whether to add the standard HTTP ``Date`` header.
             http2: Whether TCP listeners accept HTTP/2 and prior-knowledge h2c.
             ws_ping_interval: Seconds between server-initiated WebSocket pings;
-                ``None`` or a non-positive value disables keepalive pings.
+                ``None`` or a non-positive value disables keepalive pings. An
+                infinite positive interval or one beyond Rust's ``Duration``
+                range is treated as never firing. NaN is treated as unset.
             ws_ping_timeout: Seconds to wait for the matching pong before
                 closing with code 1011; ``None`` disables the pong deadline.
+                Positive infinity or a finite value beyond Rust's ``Duration``
+                range is unbounded. NaN is treated as unbounded.
+            ws_max_queue: Optional bound for pending incoming WebSocket messages.
+                ``None`` preserves the native adapter's default capacity.
+            websocket_enabled: Whether HTTP/1.1 WebSocket upgrade requests are
+                dispatched to the ASGI WebSocket interface.
             limit_concurrency: Maximum active connections or request tasks
                 before the Rust runtime returns HTTP 503.
             limit_max_requests: Maximum number of completed HTTP responses
@@ -96,6 +124,13 @@ class Server:
         self.timeout_keep_alive = timeout_keep_alive
         self.certfile = certfile
         self.keyfile = keyfile
+        self.ssl_keyfile_password = ssl_keyfile_password
+        self.ws_max_queue = ws_max_queue
+        self.websocket_enabled = websocket_enabled
+        self.ssl_ca_certs = ssl_ca_certs
+        self.ssl_cert_reqs = ssl_cert_reqs
+        self._tls12_only = _tls12_only
+        self._tls_cipher_suites = _tls_cipher_suites
         self.graceful_timeout = graceful_timeout
         self.lifespan = lifespan
         self.root_path = root_path
@@ -105,6 +140,9 @@ class Server:
         self.date_header = date_header
         self.http2 = http2
         self.ws_max_size = ws_max_size
+        self.ws_per_message_deflate = ws_per_message_deflate
+        self.http1_max_buffer_size = _http1_max_buffer_size
+        self._http1_allow_authority_form = _http1_allow_authority_form
         self.limit_concurrency = limit_concurrency
         self.ws_ping_interval = ws_ping_interval
         self.ws_ping_timeout = ws_ping_timeout
@@ -112,6 +150,7 @@ class Server:
         self.limit_max_requests_jitter = limit_max_requests_jitter
         self._defer_startup_failure = _defer_startup_failure
         self._reset_contextvars = _reset_contextvars
+        self._defer_startup_acceptance = _defer_startup_acceptance
         self.startup_failed = False
         self._control = None
 
@@ -124,6 +163,18 @@ class Server:
         if control is not None:
             control.shutdown()
 
+    def force_shutdown(self):
+        """Cancel active ASGI work as part of a forced server shutdown."""
+        control = self._control
+        if control is not None:
+            control.force_shutdown()
+
+    def cancel_startup(self):
+        """Prevent listener startup when the public serve task is cancelled."""
+        control = self._control
+        if control is not None:
+            control.cancel_startup()
+
     async def wait_started(self):
         """Wait until bind and lifespan startup finish, or startup terminates."""
         control = self._control
@@ -132,11 +183,17 @@ class Server:
         return await control.wait_started()
 
     async def wait_startup_failed(self):
-        """Wait for startup to finish and report a fatal lifespan failure."""
+        """Wait for startup to finish and report a Uvicorn startup-status failure."""
         control = self._control
         if control is None:
             return self.startup_failed
         return await control.wait_startup_failed()
+
+    def _acknowledge_startup(self):
+        """Allow request acceptance after the compatibility facade is ready."""
+        control = self._control
+        if control is not None:
+            control.acknowledge_startup()
 
     async def serve(self):
         """Run the server until shutdown or task cancellation.
@@ -151,12 +208,20 @@ class Server:
             raise ValueError("at least one pre-bound TCP listener is required")
         transfer_directory = None
         transfer_path = None
-        if self.sockets is not None:
+        prebound_sockets = None
+        if self.sockets is not None and os.name == "nt":
+            # Windows does not support SCM_RIGHTS. Pass the socket objects to
+            # the extension, which duplicates and owns their Winsock handles.
+            prebound_sockets = self.sockets
+        elif self.sockets is not None:
             transfer_directory = tempfile.TemporaryDirectory(
                 prefix="uvrs-", dir="/tmp" if os.path.isdir("/tmp") else None
             )
             transfer_path = os.path.join(transfer_directory.name, "listener.sock")
-        control = _native.ServerControl()
+        listener_transfer_stopped = (
+            threading.Event() if transfer_path is not None else None
+        )
+        control = _native.ServerControl(self._defer_startup_acceptance)
         self._control = control
         limit_concurrency = self.limit_concurrency
         if limit_concurrency is not None:
@@ -195,6 +260,7 @@ class Server:
                     self.date_header,
                     self.http2,
                     self.ws_max_size,
+                    self.ws_per_message_deflate,
                     self.ws_ping_interval,
                     self.ws_ping_timeout,
                     limit_concurrency,
@@ -202,14 +268,35 @@ class Server:
                     limit_max_requests_jitter,
                     control,
                     _bridge.log_concurrency_limit_rejection,
+                    self.http1_max_buffer_size,
+                    os.fspath(self.ssl_ca_certs)
+                    if self.ssl_ca_certs is not None
+                    else None,
+                    int(self.ssl_cert_reqs),
+                    self._tls12_only,
+                    self._tls_cipher_suites,
+                    self.ssl_keyfile_password,
+                    self.ws_max_queue,
+                    self.websocket_enabled,
+                    prebound_sockets,
+                    self._http1_allow_authority_form,
                 )
             )
+            if listener_transfer_stopped is not None:
+                native_task.add_done_callback(
+                    lambda _: listener_transfer_stopped.set()
+                )
             if transfer_path is not None:
                 await asyncio.to_thread(
-                    _bridge.send_listener_fds, transfer_path, self.sockets
+                    _bridge.send_listener_fds,
+                    transfer_path,
+                    self.sockets,
+                    listener_transfer_stopped,
                 )
             await asyncio.shield(native_task)
         except asyncio.CancelledError:
+            if listener_transfer_stopped is not None:
+                listener_transfer_stopped.set()
             control.shutdown()
             if native_task is not None:
                 await asyncio.shield(native_task)

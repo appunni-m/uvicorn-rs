@@ -1,0 +1,33 @@
+{
+  "command": [
+    "D:\\a\\_temp\\stock-uvicorn\\Scripts\\python.exe",
+    "-m",
+    "uvicorn",
+    "worker_terminate:app",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "56510",
+    "--loop",
+    "asyncio",
+    "--http",
+    "h11",
+    "--ws",
+    "none",
+    "--lifespan",
+    "on",
+    "--no-access-log"
+  ],
+  "web_concurrency": 2,
+  "python": "3.12.13",
+  "platform": "Windows-2022Server-10.0.20348-SP0",
+  "uvicorn": "0.54.0",
+  "http_status": 200,
+  "http_body": "ok",
+  "ctrl_c_sent": true,
+  "exit_code": null,
+  "shutdown_timed_out": true,
+  "post_timeout_connection_opened": true,
+  "exit_code_after_connection": 0,
+  "server_log": "INFO:     Uvicorn running on http://127.0.0.1:56510 (Press CTRL+C to quit)\nINFO:     Started parent process [7132]\nINFO:     Started server process [7704]\nINFO:     Waiting for application startup.\nINFO:     Application startup complete.\nINFO:     Started server process [2460]\nINFO:     Waiting for application startup.\nINFO:     Application startup complete.\nINFO:     Shutting down\nINFO:     Waiting for application shutdown.\nINFO:     Application shutdown complete.\nINFO:     Finished server process [7704]\nINFO:     Received SIGINT, exiting.\nINFO:     Terminated child process [2460]\nINFO:     Waiting for child process [7704]\nINFO:     Waiting for child process [2460]\nINFO:     Shutting down\nINFO:     Waiting for application shutdown.\nINFO:     Application shutdown complete.\nINFO:     Finished server process [2460]\nINFO:     Stopping parent process [7132]\n"
+}

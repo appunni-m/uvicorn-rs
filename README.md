@@ -1,68 +1,81 @@
 # uvicorn-rs
 
-A Rust-first server for ASGI applications and Rust services.
+A Rust-first server for Python ASGI applications and Rust services.
 
-## Project status
+## Packages and release availability
 
-The experimental Rust crates are published on crates.io as version `0.1.0`;
-the Python adapter is not published on PyPI. The Python adapter is **not yet a
-drop-in Uvicorn replacement**. If your application depends on Uvicorn's full command-line,
-Python API, worker, or reload behavior, keep using upstream Uvicorn for now.
+The Python distribution is **`uvicorn-rs`**. It provides the `uvicorn`
+import namespace, `uvicorn` command, and `python -m uvicorn` entry point. The
+optional internal Cargo/PyO3 adapter remains `uvicorn-rs-py`. The Rust release
+contains one Python-free `uvicorn-rs` server crate with HTTP/3 behind the
+optional `http3` feature, plus `asgi-lifespan-protocol-rs`.
 
-The published Cargo packages provide a Rust library, not a standalone server
-executable. The initial Cargo publication does not qualify the Python adapter
-or complete the project's release gates. See [release status](docs/releases.md).
+Check the [release guide](docs/releases.md) for registry availability, exact
+candidate identities and remaining acceptance gates. The
+[compatibility evidence](docs/uvicorn-compatibility.md) records the tested
+Uvicorn 0.54.0 inputs, platform/Python profiles and any separate acceptance
+for a reference defect. Use accepted release artifacts for an application
+trial; a source build or a successful job alone does not establish release
+readiness. See the [benchmark results](docs/benchmark-results.md) for measured
+workloads and regressions; they do not promise an improvement for your app.
 
-The planned Python distribution name is `uvicorn-rs-py`; it provides the
-`uvicorn` command and import namespace after the compatibility and release
-gates pass. The current checkout has those entry points, but only a small
-prototype command and an incomplete Python API. The initial compatibility
-reference is Uvicorn 0.54.0. See [replacement status](docs/uvicorn-compatibility.md)
-for what is and is not available.
+## Try the source checkout
 
-## Try the current prototype
-
-From a development checkout with `uv`, CPython 3.12, and a Rust toolchain
-installed:
+For a source preview, install `uv`, CPython 3.12, and Rust 1.85 or newer, then
+run from the repository root:
 
 ```sh
 uv sync --python 3.12
 uv run uvicorn examples.hello_asgi:app --host 127.0.0.1 --port 8000
 ```
 
-In another terminal:
+In another terminal, request the example:
 
 ```sh
 curl -i http://127.0.0.1:8000/
 ```
 
-You should receive HTTP 200 and a text body beginning with `GET / 1.1`. This
-checkout command is for evaluating the prototype; it does not mean the package
-is published or Uvicorn-compatible. See [the quickstart](docs/quickstart.md)
-and [current options](docs/configuration.md).
+The response should have status `200` and a text body beginning with
+`GET / 1.1`. Press Ctrl-C in the server terminal to request shutdown.
+
+## Install for a FastAPI trial
+
+After version 0.3.0 is published, create a clean environment for the candidate
+and install its standard dependencies:
+
+```sh
+python -m venv .venv-uvicorn-rs
+. .venv-uvicorn-rs/bin/activate
+python -m pip install "uvicorn-rs[standard]==0.3.0"
+python -m uvicorn myapp.main:app --host 127.0.0.1 --port 8000
+```
+
+Use a separate environment for upstream Uvicorn. Both distributions install
+the `uvicorn` import namespace. The [FastAPI evaluation guide](docs/fastapi-evaluation.md)
+describes a matched trial setup and rollback steps.
 
 ## What to expect
 
-Python applications still execute on their Python event loop, and Python
-application code remains subject to the GIL. Current measurements do not show
-a general performance advantage over Uvicorn for Python ASGI applications;
-see the [benchmark results](docs/benchmark-results.md).
-
-Rust applications can use the Python-free `uvicorn-rs` library. The server is
-independent of Starlette-RS and FastAPI-RS; those frameworks do not need it as
-a runtime dependency. See [native Rust integration](docs/native-fastapi-composition.md).
+Python applications still run on their Python event loop and remain subject
+to the GIL. The completed benchmark evidence does not yet establish a general
+FastAPI performance advantage over Uvicorn. Rust applications can use the
+Python-free `uvicorn-rs` library without depending on Starlette-RS or
+FastAPI-RS at runtime; see [native Rust integration](docs/native-fastapi-composition.md).
 
 ## Documentation
 
-- [Run a Python ASGI app](docs/quickstart.md)
-- [Uvicorn replacement status and migration](docs/uvicorn-compatibility.md)
+- [Quickstart](docs/quickstart.md)
+- [Install, replace, or roll back Uvicorn](docs/uvicorn-compatibility.md)
 - [ASGI and protocol support](docs/support-matrix.md)
+- [Configuration](docs/configuration.md)
 - [Deployment guidance](docs/deployment.md)
+- [FastAPI trial guide](docs/fastapi-evaluation.md)
 - [Benchmark results and evidence limits](docs/benchmark-results.md)
+- [Release gates](docs/releases.md)
 
-For contributing, security reporting, support expectations, architecture, and
-release information, see [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md),
-[SUPPORT.md](SUPPORT.md), and the [documentation site](https://appunni-m.github.io/uvicorn-rs/).
+For contribution, security, and support information, see
+[CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and
+[SUPPORT.md](SUPPORT.md).
 
 The project is not affiliated with the Uvicorn project. It is available under
 [BSD-3-Clause or MIT](LICENSE), at your option.

@@ -13,8 +13,11 @@ from coverage_toolchain import capture_coverage_tools
 
 
 ROOT = Path(__file__).resolve().parents[1]
-COVERAGE_TARGET = ROOT / "target" / "asgi-coverage"
-NATIVE_COVERAGE_TARGET = ROOT / "target" / "asgi-native-coverage"
+COVERAGE_TARGET_ROOT = Path(
+    os.environ.get("UVICORN_RS_COVERAGE_TARGET_ROOT", ROOT / "target")
+).resolve()
+COVERAGE_TARGET = COVERAGE_TARGET_ROOT / "asgi-coverage"
+NATIVE_COVERAGE_TARGET = COVERAGE_TARGET_ROOT / "asgi-native-coverage"
 
 
 def main() -> int:
@@ -101,6 +104,8 @@ def main() -> int:
             "uvicorn-rs",
             "--example",
             "native_core_contracts",
+            "--features",
+            "http3",
             "--release",
             "--locked",
         ],

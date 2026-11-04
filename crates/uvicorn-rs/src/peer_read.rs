@@ -5,15 +5,15 @@ use std::{
     task::{Context, Poll},
 };
 
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{BufMut, BytesMut};
 #[cfg(unix)]
 use tokio::net::{
-    unix::OwnedReadHalf as UnixOwnedReadHalf, unix::OwnedWriteHalf as UnixOwnedWriteHalf,
-    UnixStream,
+    UnixStream, unix::OwnedReadHalf as UnixOwnedReadHalf,
+    unix::OwnedWriteHalf as UnixOwnedWriteHalf,
 };
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, ReadBuf},
-    net::{tcp::OwnedWriteHalf, TcpStream},
+    net::{TcpStream, tcp::OwnedWriteHalf},
     sync::{mpsc, watch},
 };
 
@@ -44,7 +44,7 @@ enum ReadMode {
 struct BufferedReadIo<W> {
     writer: W,
     receiver: mpsc::Receiver<ReadEvent>,
-    current: Bytes,
+    current: Option<(BytesMut, usize)>,
     terminal: ReadTerminal,
 }
 
@@ -64,7 +64,7 @@ enum UnixReadMode {
 }
 
 enum ReadEvent {
-    Data(Bytes),
+    Data(BytesMut),
     Eof,
     Error(io::Error),
 }
@@ -125,7 +125,7 @@ pub(super) fn observe_peer_read(
                 ReadMode::Proactive(BufferedReadIo {
                     writer,
                     receiver,
-                    current: Bytes::new(),
+                    current: None,
                     terminal: ReadTerminal::Open,
                 }),
                 Some(pump_peer_read(reader, sender, closed, failed)),
@@ -188,7 +188,7 @@ where
                 {
                     delivered_data = true;
                 }
-                permit.send(ReadEvent::Data(chunk.freeze()));
+                permit.send(ReadEvent::Data(chunk));
             }
             Err(error) => {
                 let kind = error.kind();
@@ -249,7 +249,7 @@ pub(super) fn observe_peer_read_unix(
                 UnixReadMode::Proactive(BufferedReadIo {
                     writer,
                     receiver,
-                    current: Bytes::new(),
+                    current: None,
                     terminal: ReadTerminal::Open,
                 }),
                 Some(pump_peer_read(reader, sender, closed, failed)),
@@ -273,10 +273,13 @@ impl<W: AsyncWrite + Unpin> BufferedReadIo<W> {
         buffer: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
         loop {
-            if !self.current.is_empty() {
-                let count = buffer.remaining().min(self.current.len());
-                buffer.put_slice(&self.current[..count]);
-                self.current.advance(count);
+            if let Some((current, offset)) = self.current.take() {
+                let count = buffer.remaining().min(current.len() - offset);
+                buffer.put_slice(&current[offset..offset + count]);
+                let next_offset = offset + count;
+                if next_offset != current.len() {
+                    self.current = Some((current, next_offset));
+                }
                 return Poll::Ready(Ok(()));
             }
             match self.terminal {
@@ -291,7 +294,7 @@ impl<W: AsyncWrite + Unpin> BufferedReadIo<W> {
             }
             match self.receiver.poll_recv(context) {
                 Poll::Pending => return Poll::Pending,
-                Poll::Ready(Some(ReadEvent::Data(chunk))) => self.current = chunk,
+                Poll::Ready(Some(ReadEvent::Data(chunk))) => self.current = Some((chunk, 0)),
                 Poll::Ready(Some(ReadEvent::Eof)) => self.terminal = ReadTerminal::Eof,
                 Poll::Ready(Some(ReadEvent::Error(error))) => {
                     self.terminal = ReadTerminal::Failed(error.kind());
@@ -328,6 +331,17 @@ impl AsyncRead for UnixPeerReadIo {
                 failed,
             } => {
                 let filled_before = buffer.filled().len();
+                #[cfg(coverage)]
+                let result = if super::coverage::take_http1_unix_peer_read_on_read_error_fault() {
+                    super::coverage::observe_http1_unix_peer_read_on_read_error_fault();
+                    Poll::Ready(Err(io::Error::new(
+                        io::ErrorKind::ConnectionReset,
+                        "injected Unix peer-read failure",
+                    )))
+                } else {
+                    Pin::new(stream).poll_read(context, buffer)
+                };
+                #[cfg(not(coverage))]
                 let result = Pin::new(stream).poll_read(context, buffer);
                 if matches!(&result, Poll::Ready(Ok(())))
                     && buffer.remaining() > 0
@@ -476,5 +490,98 @@ impl AsyncWrite for PeerReadIo {
             ReadMode::OnRead { stream, .. } => Pin::new(stream).poll_shutdown(context),
             ReadMode::Proactive(stream) => Pin::new(&mut stream.writer).poll_shutdown(context),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::VecDeque, sync::Arc};
+
+    use super::*;
+
+    struct ChunkReader {
+        chunks: VecDeque<&'static [u8]>,
+        reads: usize,
+        second_chunk_read: Arc<tokio::sync::Notify>,
+    }
+
+    impl AsyncRead for ChunkReader {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _context: &mut Context<'_>,
+            buffer: &mut ReadBuf<'_>,
+        ) -> Poll<io::Result<()>> {
+            let this = self.get_mut();
+            let Some(chunk) = this.chunks.pop_front() else {
+                return Poll::Ready(Ok(()));
+            };
+            let count = buffer.remaining().min(chunk.len());
+            buffer.put_slice(&chunk[..count]);
+            this.reads += 1;
+            if this.reads == 2 {
+                this.second_chunk_read.notify_one();
+            }
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    struct BufferedReadAdapter<W>(BufferedReadIo<W>);
+
+    impl<W: AsyncWrite + Unpin> AsyncRead for BufferedReadAdapter<W> {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            context: &mut Context<'_>,
+            buffer: &mut ReadBuf<'_>,
+        ) -> Poll<io::Result<()>> {
+            self.get_mut().0.poll_read(context, buffer)
+        }
+    }
+
+    #[tokio::test]
+    async fn pump_preserves_partial_chunk_while_reading_ahead() {
+        // A one-slot queue pauses the pump until the consumer dequeues each
+        // event, letting the test hold one buffer partially consumed while
+        // the pump performs the following read.
+        let (sender, receiver) = mpsc::channel(1);
+        let (closed, _) = watch::channel(false);
+        let (failed, _) = watch::channel(None);
+        let second_chunk_read = Arc::new(tokio::sync::Notify::new());
+        let pump = tokio::spawn(pump_peer_read(
+            ChunkReader {
+                chunks: VecDeque::from([&b"first"[..], &b"second"[..], &b"third"[..]]),
+                reads: 0,
+                second_chunk_read: Arc::clone(&second_chunk_read),
+            },
+            sender,
+            closed,
+            failed,
+        ));
+        let mut reader = BufferedReadAdapter(BufferedReadIo {
+            writer: tokio::io::sink(),
+            receiver,
+            current: None,
+            terminal: ReadTerminal::Open,
+        });
+
+        let mut first_prefix = [0; 2];
+        assert!(reader.read_exact(&mut first_prefix).await.is_ok());
+        assert_eq!(&first_prefix, b"fi");
+        second_chunk_read.notified().await;
+        let mut first_suffix = [0; 3];
+        assert!(reader.read_exact(&mut first_suffix).await.is_ok());
+        assert_eq!(&first_suffix, b"rst");
+        let mut second = [0; 6];
+        assert!(reader.read_exact(&mut second).await.is_ok());
+        assert_eq!(&second, b"second");
+        let mut third = [0; 5];
+        assert!(reader.read_exact(&mut third).await.is_ok());
+        assert_eq!(&third, b"third");
+        assert!(matches!(
+            pump.await,
+            Ok(PeerReadPumpOutcome::ReadHalfClosed)
+        ));
+
+        let mut after_eof = [0; 1];
+        assert_eq!(reader.read(&mut after_eof).await.ok(), Some(0));
     }
 }

@@ -19,6 +19,7 @@ async def main() -> None:
     parser.add_argument("shutdown_path", type=Path)
     parser.add_argument("--server", choices=("uvicorn", "uvicorn-rs"), default="uvicorn-rs")
     parser.add_argument("--uvicorn-compat-api", action="store_true")
+    parser.add_argument("--cancel-serve-task", action="store_true")
     parser.add_argument("--snapshot", type=Path)
     parser.add_argument("--task-factory", choices=("asyncio", "eager"), default="asyncio")
     parser.add_argument("--cleanup-delay", type=float, default=0.5)
@@ -91,7 +92,12 @@ async def main() -> None:
 
     loop = asyncio.get_running_loop()
     shutdown_started = loop.time()
-    if args.server == "uvicorn" and not args.uvicorn_compat_api:
+    if args.cancel_serve_task:
+        server_task.cancel()
+    elif args.server == "uvicorn" or args.uvicorn_compat_api:
+        # Exercise the same public Server.should_exit control in Uvicorn and
+        # the uvicorn namespace adapter. Direct uvicorn_rs.Server cases use
+        # task cancellation because that API has no should_exit property.
         server.should_exit = True
     else:
         server_task.cancel()
