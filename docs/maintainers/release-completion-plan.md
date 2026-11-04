@@ -6,14 +6,28 @@ FastAPI evaluation. Kata remains the system of record. The maintainer will run
 their application trial; collecting their application or running its load is not
 a prerequisite for completing the repository work.
 
-## Owner decision — 2026-11-04
+## Active release goal — 2026-11-05
 
-The project owner waived independent Coverage-MCP review. Keep the exact-source
-raw unified coverage gate: all regions and lines must be at 100%, the complete
-three-repeat matrix must pass, and the report, context, build, CI run, artifact,
-and raw file hashes must be recorded and revalidated by candidate/release jobs.
-Do not create or imply an MCP review receipt. Earlier MCP requirements below
-are historical and superseded by this decision.
+The current user-provided release goal requires an accepted independent
+Coverage-MCP review bound to the final clean source and its exact raw unified
+coverage report. This supersedes the 2026-11-04 waiver below. Require every
+unfiltered region and line page, matching source/build receipts, passing test
+status, no remaining observations, and the actual MCP transcript and receipt.
+Candidate qualification must revalidate that receipt against the same source,
+run, artifact, and report. Do not synthesize or manually assemble review pages.
+
+The raw coverage gate remains 100% for regions and lines, with three passing
+ASGI and native repeats, complete attribution, and zero failures or
+infrastructure retries. Retain the source, run/attempt, artifact ID/digest,
+report/context hashes, build identity, and revalidate them during candidate
+qualification.
+
+## Historical owner decision — 2026-11-04 (superseded)
+
+At the time, the project owner waived independent Coverage-MCP review while
+retaining the exact-source 100% raw coverage gate. The active release goal now
+reinstates the independent review requirement; the remaining raw coverage and
+identity requirements continue to apply.
 
 ## Exact-main evidence update — 2026-11-04
 
