@@ -1621,6 +1621,29 @@
       }
     },
     {
+      "case_id": "fault.http3.native-peer-close-missing-quic-close-reason",
+      "profile": "http3",
+      "operation": "http3.peer-close",
+      "covers": [
+        "http3.peer-close"
+      ],
+      "verification": "fault-contract",
+      "fault": {
+        "point": "http3.native-peer-close.close-reason-unavailable",
+        "contract": "http3-peer-close-classification-defensive-error"
+      },
+      "server_options": {
+        "http3_trace": true
+      },
+      "request": {
+        "method": "GET",
+        "path": "/stream",
+        "headers": [],
+        "body_base64": "",
+        "close_error_code": 33
+      }
+    },
+    {
       "case_id": "http3.request-body-client-abort",
       "profile": "http3",
       "operation": "http3.request-disconnect",

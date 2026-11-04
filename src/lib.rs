@@ -452,6 +452,7 @@ enum CoverageFaultPoint {
     Http3LegacyPathSelection,
     Http3PeerCloseUnexpectedError,
     Http3PeerCloseReasonUnavailable,
+    Http3NativePeerCloseReasonUnavailable,
     Http3RequestResolveError,
     Http3ResponseBuilderError,
     Http3ResponseSendError,
@@ -932,6 +933,9 @@ impl CoverageFaultPoint {
             Self::Http3LegacyPathSelection => "http3.legacy-path.selection",
             Self::Http3PeerCloseUnexpectedError => "http3.peer-close.unexpected-error-kind",
             Self::Http3PeerCloseReasonUnavailable => "http3.peer-close.close-reason-unavailable",
+            Self::Http3NativePeerCloseReasonUnavailable => {
+                "http3.native-peer-close.close-reason-unavailable"
+            }
             Self::Http3RequestResolveError => "http3.request.resolve-error",
             Self::Http3ResponseBuilderError => "http3.response.builder-error",
             Self::Http3ResponseSendError => "http3.response.send-error",
@@ -9339,6 +9343,11 @@ fn coverage_legacy_http3_fault_is_armed() -> bool {
     // retained legacy HTTP/3 path without injecting a runtime failure.
     if coverage_fault_take(CoverageFaultPoint::Http3LegacyPathSelection) {
         return true;
+    }
+    // The native crate consumes this point itself. Keep that coverage case on
+    // the native dispatch path instead of selecting the legacy adapter.
+    if coverage_fault_is_armed(CoverageFaultPoint::Http3NativePeerCloseReasonUnavailable) {
+        return false;
     }
     [
         CoverageFaultPoint::Http3RequestTaskPanic,

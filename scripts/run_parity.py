@@ -385,6 +385,7 @@ FAULT_POINTS = {
     "http3.legacy-path.selection",
     "http3.peer-close.unexpected-error-kind",
     "http3.peer-close.close-reason-unavailable",
+    "http3.native-peer-close.close-reason-unavailable",
     "http3.request.resolve-error",
     "http3.response.builder-error",
     "http3.response.send-error",
@@ -1537,6 +1538,7 @@ def load_contract(
                     or fault["point"] not in {
                         "http3.peer-close.unexpected-error-kind",
                         "http3.peer-close.close-reason-unavailable",
+                        "http3.native-peer-close.close-reason-unavailable",
                     }
                     or case.get("request", {}).get("close_error_code") != 33
                 ):
@@ -5303,6 +5305,8 @@ def load_contract(
                     allowed_options.add("inherited_fd")
                 if kind in {"http1", "http2"}:
                     allowed_options.add("reset_contextvars")
+                if kind == "http3":
+                    allowed_options.add("http3_trace")
                 if kind == "http1-tls":
                     allowed_options.update({"ssl_ca_certs", "ssl_cert_reqs", "ssl_version", "ssl_ciphers"})
                 unknown_options = set(server_options) - allowed_options
@@ -5369,6 +5373,12 @@ def load_contract(
                         raise ParityError(
                             f"{case_id}: server_options.{option} must be a boolean"
                         )
+                if "http3_trace" in server_options and type(
+                    server_options["http3_trace"]
+                ) is not bool:
+                    raise ParityError(
+                        f"{case_id}: server_options.http3_trace must be a boolean"
+                    )
                 if "reset_contextvars" in server_options and type(
                     server_options["reset_contextvars"]
                 ) is not bool:
@@ -6827,6 +6837,7 @@ def start_server(
         "websocket-wsproto": "wsproto",
     }.get(profile_id, "auto")
     env = os.environ.copy()
+    env.pop("UVICORN_RS_TRACE_HTTP3", None)
     if server_id == "uvicorn":
         # Coverage runs add the project Python source to PYTHONPATH so the
         # instrumented target is importable. Keep that path out of the stock
@@ -6868,6 +6879,8 @@ def start_server(
     if server_id == "uvicorn-rs" and coverage_profile_dir is not None:
         coverage_profile_dir.mkdir(parents=True, exist_ok=True)
         env["LLVM_PROFILE_FILE"] = str(coverage_profile_dir / "%p-%m.profraw")
+    if server_id == "uvicorn-rs" and (server_options or {}).get("http3_trace") is True:
+        env["UVICORN_RS_TRACE_HTTP3"] = "1"
     coverage_capture_shutdown = (
         os.environ.get("ASGI_PARITY_COVERAGE_CAPTURE_SHUTDOWN") == "1"
     )
@@ -10817,6 +10830,8 @@ def http3_peer_close_request(
     trust_anchor: Path,
     request: dict[str, Any],
     client: Path,
+    *,
+    fault_point: str | None = None,
 ) -> dict[str, Any]:
     """Observe a complete response, explicit peer closure, and a fresh connection.
 
@@ -10848,6 +10863,17 @@ def http3_peer_close_request(
         case_log,
         re.MULTILINE,
     ))
+    observation["http3_trace_events"] = [
+        line.removeprefix("uvicorn-rs h3-trace ")
+        for line in case_log.splitlines()
+        if line.startswith("uvicorn-rs h3-trace ")
+    ]
+    if fault_point is not None:
+        fault_control_path = server.get("coverage_fault_control_path")
+        observation["fault_consumed"] = bool(
+            fault_control_path is not None
+            and fault_control_path.read_text(encoding="utf-8").strip() != fault_point
+        )
     return observation
 
 
@@ -12408,7 +12434,13 @@ def execute_case(
                 raise ParityError("HTTP/3 adapter is missing its certificate or client")
             request = case["request"]
             if case["operation"] in {"http3.peer-close", "http3.peer-close-registered"}:
-                observation = http3_peer_close_request(server, trust_anchor, request, h3_client)
+                observation = http3_peer_close_request(
+                    server,
+                    trust_anchor,
+                    request,
+                    h3_client,
+                    fault_point=fault["point"] if fault is not None else None,
+                )
                 if fault is not None and fault["contract"] in {
                     "http3-legacy-peer-close-no-error",
                     "http3-legacy-peer-close-unknown-code-ignored",
@@ -13921,13 +13953,26 @@ def fault_contract_matches(
         )
     if fault["contract"] == "http3-peer-close-classification-defensive-error":
         followup = observation.get("followup_response")
+        native_missing_reason = (
+            fault["point"] == "http3.native-peer-close.close-reason-unavailable"
+        )
+        trace_events = observation.get("http3_trace_events", [])
         return (
             observation.get("status") == 200
             and isinstance(followup, dict)
             and followup.get("status") == 200
             and observation.get("process_terminated") is True
             and observation.get("process_exit_code") in {0, -signal.SIGTERM}
-            and observation.get("server_error_observed") is True
+            and observation.get("fault_consumed") is True
+            and (
+                (
+                    observation.get("http3_trace_events")
+                    and any("accept-error error=" in event for event in trace_events)
+                    and any("local-close code=0x102" in event for event in trace_events)
+                )
+                if native_missing_reason
+                else observation.get("server_error_observed") is True
+            )
         )
     if fault["contract"] == "http3-legacy-peer-close-no-error":
         followup = observation.get("followup_response")
@@ -16597,6 +16642,7 @@ def execute_profile(
                                 "fault_consumed": target_raw.get("fault_consumed"),
                             }
                         elif case["fault"]["contract"] in {
+                            "http3-peer-close-classification-defensive-error",
                             "http3-legacy-peer-close-no-error",
                             "http3-legacy-peer-close-unknown-code-ignored",
                             "http3-legacy-peer-close-classification-error",
@@ -16604,6 +16650,7 @@ def execute_profile(
                             fault_observation = {
                                 **target_result,
                                 "fault_consumed": target_raw.get("fault_consumed"),
+                                "http3_trace_events": target_raw.get("http3_trace_events", []),
                             }
                         elif case["fault"]["contract"] == "http3-legacy-handshake-recovery":
                             fault_observation = {

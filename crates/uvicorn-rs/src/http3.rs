@@ -696,7 +696,28 @@ fn is_http3_peer_close_ignorable(
         return false;
     }
 
-    let Some(quinn::ConnectionError::ApplicationClosed(close)) = connection.close_reason() else {
+    #[cfg(coverage)]
+    let close_reason = {
+        const FAULT_POINT: &str = "http3.native-peer-close.close-reason-unavailable";
+        match std::env::var_os("UVICORN_RS_COVERAGE_FAULT_FILE") {
+            Some(path) => {
+                let path = std::path::PathBuf::from(path);
+                let armed =
+                    std::fs::read_to_string(&path).is_ok_and(|value| value.trim() == FAULT_POINT);
+                if armed {
+                    let _ = std::fs::write(path, "");
+                    None
+                } else {
+                    connection.close_reason()
+                }
+            }
+            None => connection.close_reason(),
+        }
+    };
+    #[cfg(not(coverage))]
+    let close_reason = connection.close_reason();
+
+    let Some(quinn::ConnectionError::ApplicationClosed(close)) = close_reason else {
         return false;
     };
 
