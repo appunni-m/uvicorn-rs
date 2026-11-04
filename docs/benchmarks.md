@@ -240,18 +240,27 @@ runner only; it is not a whole-server or cross-system performance claim.
 
 Use `workflow_dispatch` with `Run mode: focused-fastapi-stage` to profile one
 upstream FastAPI workload on one hosted runner. The defaults select the Linux
-x86-64 `fastapi-validated-route` workload. The job builds the Rust server with
-`runtime-diagnostics`, captures a read-only host preflight, and runs the same
-FastAPI app through Rust/asyncio, Uvicorn/asyncio, Rust/uvloop, and
-Uvicorn/uvloop for three repetitions. It skips the full category matrix,
-aggregate, and generated benchmark documentation jobs.
+x86-64 `fastapi-validated-route` workload and asyncio loop. Select `uvloop` to
+compare Rust/uvloop with Uvicorn/uvloop; both servers always use the same loop.
+The job builds the Rust server with `runtime-diagnostics`, captures a read-only
+host preflight, and runs the selected FastAPI workload for one or three
+repetitions. It skips the full category matrix, aggregate, and generated
+benchmark documentation jobs.
 
-To trigger the default case through Git, push a commit to `main` whose subject
-contains `[focused-fastapi-stage]`. This workflow file is included in the
-benchmark push filter. The push also starts regular CI; use the workflow's
-`workflow_dispatch` inputs when avoiding that additional run. The manual inputs
-can select one of the maintained FastAPI workloads and one runner. The Git
-trigger defaults to Linux x86-64 and `fastapi-validated-route`.
+To trigger the diagnostic through Git, include `[focused-fastapi-stage]` in the
+commit subject. This workflow file is included in the benchmark push filter.
+The push also starts regular CI; use the workflow's `workflow_dispatch` inputs
+when avoiding that additional run. The manual inputs can select one of the
+maintained FastAPI workloads, one runner, the Python event loop, and the
+repetition count. Historical Linux ARM64 upload timeouts
+occurred under both loops. The latest focused trace used asyncio; select Linux
+ARM64, `fastapi-upload-1m-write-1k`, `uvloop`, and three repetitions to probe
+the remaining uvloop failures. The Git trigger accepts
+`[fastapi-stage-system=linux-aarch64]`, `[fastapi-stage-loop=uvloop]`, and
+`[fastapi-stage-workload=fastapi-upload-1m-write-1k]`; the loop defaults to
+asyncio. Add `[fastapi-stage-duration=30]` for 30-second samples and
+`[fastapi-stage-repetitions=3]` for three attempts; defaults are five seconds
+and one attempt.
 
 The host preflight must pass before the timer starts, and each measured row is
 still checked by the category runner's live contention guard. A rejected

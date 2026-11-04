@@ -45,6 +45,36 @@ invalidates timing, and no stalled request was available to trace. Keep `nbmg`
 open for review of the missing first-failure evidence; this run is neither a
 root-cause finding nor a performance result.
 
+## Upload timeout investigation correction — 2026-11-04
+
+Historical ARM64 failures occurred under both event loops. Artifact
+12103983742 from run
+[#39036702600](https://github.com/appunni-m/uvicorn-rs/actions/runs/39036702600)
+records `uvicorn-rs-asyncio` failures in repetitions 2, 3 and 5, plus a
+`uvicorn-rs-uvloop` failure in repetition 5. A later ARM64 run
+[#39185987961](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185987961)
+records `uvicorn-rs-uvloop` failures in repetitions 2 and 3. In the later
+artifact, both libcurl records show all 1 MiB supplied and uploaded, no response
+bytes or status, no first response byte, a 15-second timeout, and
+`new_connections=0` (the failing attempt reused an HTTP/1.1 connection).
+FastAPI then observed `ClientDisconnect`; that is the timeout consequence, not
+the first divergence.
+
+Focused diagnostic [#287](https://github.com/appunni-m/uvicorn-rs/actions/runs/41862563840)
+on commit `372463a438bcce50df6850077175e6097e7aa378` used
+`uvicorn-rs-asyncio` and `uvicorn-asyncio-httptools`: the focused workflow
+hard-coded asyncio. Its three 30-second samples completed with zero failures,
+and all traced Rust requests delivered the full 1 MiB body to ASGI. This is a
+non-reproduction of the historical asyncio failures on this source/runner; it
+does not test the historical uvloop failures. Artifact
+13340358259 has digest
+`sha256:7693c6f60ded9ed4ffc1da538850ada7985d0f37394dee09d7d74ea4dfdc52d7`.
+The diagnostic workflow now exposes a loop selector; the next targeted run must
+use Linux ARM64, `fastapi-upload-1m-write-1k`, uvloop, and three attempts, with
+the 15-second timeout unchanged. Existing request-ID-correlated client, Rust
+body-frame/queue, and ASGI receive traces are retained on a failure. No runtime
+cause or fix is established yet.
+
 ## Fixed contract and evidence
 
 - PyPI distribution: `uvicorn-rs`; imports and command: `uvicorn`; optional
@@ -1178,11 +1208,12 @@ ClientDisconnect. Keep the 15-second client timeout. Limit the first diagnostic
 batch to three attempts; if it does not reproduce, record that and the missing
 evidence instead of launching an unrelated matrix.
 
-The focused stage workflow uses one asyncio candidate/reference pair and one
-planned repeat by default; it allows at most three repeats. Select
-`focused-fastapi-stage`, `linux-aarch64`, and `fastapi-upload-1m-write-1k` only
-after the preceding acceptance gates. The workload overrides concurrency to
-eight. Its `runtime-diagnostics` build and `UVICORN_RS_UPLOAD_TRACE=1` opt-in
+The focused stage workflow uses one selected candidate/reference loop pair and
+one planned repeat by default; it allows at most three repeats. For the
+historical failure, select `focused-fastapi-stage`, `linux-aarch64`, `uvloop`,
+and `fastapi-upload-1m-write-1k` only after the preceding acceptance gates. The
+workload overrides concurrency to eight. Its `runtime-diagnostics` build and
+`UVICORN_RS_UPLOAD_TRACE=1` opt-in
 record client PID/worker/attempt IDs in a diagnostic request header. The same
 IDs join libcurl callback counts and first/last callback timestamps, Rust body
 frame/queue/cancellation events, and the ASGI receive/send/cancellation timeline.

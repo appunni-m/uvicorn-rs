@@ -75,8 +75,16 @@ on:
           - fastapi-slow-reader-backpressure
           - fastapi-scope-32-headers
           - fastapi-contextvars
+      fastapi_stage_loop:
+        description: Python event loop used by both servers in the focused ASGI stage diagnostic
+        default: asyncio
+        required: true
+        type: choice
+        options:
+          - asyncio
+          - uvloop
       fastapi_stage_repetitions:
-        description: Candidate attempts, each paired with stock Uvicorn asyncio (diagnostic only)
+        description: Attempts for the selected loop, each paired with stock Uvicorn (diagnostic only)
         default: "1"
         required: true
         type: choice
@@ -444,7 +452,7 @@ jobs:
       - name: Run a FastAPI-only comparison against Uvicorn
         shell: bash
         env:
-          BENCHMARK_DURATION: ${{ inputs.duration || '5' }}
+          BENCHMARK_DURATION: ${{ inputs.duration || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-duration=30]') && '30') || '5' }}
           BENCHMARK_WARMUP: ${{ inputs.warmup || '1' }}
           BENCHMARK_CONCURRENCY: ${{ inputs.concurrency || '64' }}
           BENCHMARK_REPETITIONS: ${{ inputs.repetitions || '5' }}
@@ -516,7 +524,7 @@ jobs:
           retention-days: 90
 
   focused-fastapi-stage-diagnostic:
-    name: ${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }} · matched ASGI stage diagnostic
+    name: ${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }} · ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }} · ${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x matched ASGI stage diagnostic
     if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-fastapi-stage') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-fastapi-stage]')) }}
     runs-on: ${{ (inputs.fastapi_system == 'linux-aarch64' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]'))) && 'ubuntu-24.04-arm' || inputs.fastapi_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
     timeout-minutes: 60
@@ -595,7 +603,8 @@ jobs:
           BENCHMARK_DURATION: ${{ inputs.duration || '5' }}
           BENCHMARK_WARMUP: ${{ inputs.warmup || '1' }}
           BENCHMARK_CONCURRENCY: ${{ inputs.concurrency || '64' }}
-          BENCHMARK_REPETITIONS: ${{ inputs.fastapi_stage_repetitions || '1' }}
+          BENCHMARK_REPETITIONS: ${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}
+          BENCHMARK_STAGE_LOOP: ${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }}
           UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-peer-read=on-read]') && 'on-read' || '' }}
           UVICORN_RS_UPLOAD_TRACE: "1"
         run: |
@@ -603,7 +612,7 @@ jobs:
           .venv/bin/python scripts/run_http_category_bench.py \
             --uvicorn-python "$UVICORN_ORACLE_PYTHON" \
             --workloads "$BENCHMARK_FASTAPI_WORKLOAD" \
-            --servers uvicorn-rs-asyncio uvicorn-asyncio-httptools \
+            --servers "uvicorn-rs-$BENCHMARK_STAGE_LOOP" "uvicorn-$BENCHMARK_STAGE_LOOP-httptools" \
             --duration "$BENCHMARK_DURATION" --warmup "$BENCHMARK_WARMUP" \
             --concurrency "$BENCHMARK_CONCURRENCY" \
             --repetitions "$BENCHMARK_REPETITIONS" --seed 20261019 \
@@ -614,7 +623,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: fastapi-stage-${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}-${{ github.sha }}
+          name: fastapi-stage-${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }}-${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}-${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x-${{ github.sha }}
           path: |
             target/benchmark-preparation/
             target/fastapi-stage/
