@@ -226,6 +226,17 @@ WORKLOADS = {
         # disconnects during warm-up across every server implementation.
         "concurrency": 8,
     },
+    "fastapi-upload-1m-write-1k-close": {
+        "app": "examples.bench_fastapi:app",
+        "client": {
+            "mode": "upload",
+            "path": "/upload/1048576",
+            "upload_bytes": 1_048_576,
+            "upload_chunk_bytes": 1024,
+            "headers": [["Connection", "close"]],
+        },
+        "concurrency": 8,
+    },
     "fastapi-upload-1m-write-16k": {
         "app": "examples.bench_fastapi:app",
         "client": {
@@ -426,6 +437,11 @@ def _uses_node_client(case: dict) -> bool:
 def _client_description(case: dict) -> str:
     if _uses_node_client(case):
         return "Node.js HTTP/1.1 with complete response-body checks"
+    if any(
+        name.lower() == "connection" and value.lower() == "close"
+        for name, value in case.get("headers", [])
+    ):
+        return "threaded libcurl C workers closing each HTTP/1.1 connection"
     return (
         "threaded libcurl C workers with persistent HTTP/1.1 connections "
         "and complete response-body checks"

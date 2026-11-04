@@ -70,6 +70,7 @@ on:
           - fastapi-request-upload
           - fastapi-request-upload-small-chunks
           - fastapi-upload-1m-write-1k
+          - fastapi-upload-1m-write-1k-close
           - fastapi-upload-1m-write-16k
           - fastapi-upload-1m-write-256k
           - fastapi-upload-1m-write-1m

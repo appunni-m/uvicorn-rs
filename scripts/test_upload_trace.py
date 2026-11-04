@@ -158,6 +158,55 @@ class ClientTraceTests(unittest.TestCase):
         self.assertTrue(any(event["event"] == "read-callback" for event in trace["events"]))
         self.assertTrue(any(event["event"] == "curl-progress" for event in trace["events"]))
 
+    def test_upload_trace_counts_reused_and_closed_connections(self):
+        class Handler(BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def log_message(self, *_args):
+                pass
+
+            def do_POST(self):
+                body = self.rfile.read(int(self.headers["Content-Length"]))
+                reply = f"bytes={len(body)}".encode()
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(reply)))
+                self.end_headers()
+                self.wfile.write(reply)
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            command = [str(self.binary), "127.0.0.1", str(server.server_port),
+                "1", "1", "upload", "/upload", "0", "8192", "200", "", "1024", "2"]
+
+            def run(extra_headers):
+                result = subprocess.run(
+                    [*command, *extra_headers],
+                    env={**os.environ, "UVICORN_RS_UPLOAD_TRACE": "1"},
+                    capture_output=True, text=True, timeout=20,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                return json.loads(result.stdout)["upload_trace"]["connection_counts"]
+
+            persistent = run([])
+            closed = run(["Connection: close"])
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+        self.assertEqual(persistent, {
+            "curl_successful_transfers": 2,
+            "new_connections": 1,
+            "reused_transfers": 1,
+        })
+        self.assertEqual(closed, {
+            "curl_successful_transfers": 2,
+            "new_connections": 2,
+            "reused_transfers": 0,
+        })
+
 
 class FailureReportTests(unittest.TestCase):
     def test_server_trace_is_correlated_by_client_request_id(self):

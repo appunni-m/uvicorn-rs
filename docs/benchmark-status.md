@@ -51,6 +51,34 @@ a root-cause explanation. Keep Kata `nbmg` open for review of the missing
 failing-run evidence; do not repeat this unchanged diagnostic without a
 relevant source, input, or runner change.
 
+## Focused upload timer A/B (2026-11-05)
+
+Runs [#295](https://github.com/appunni-m/uvicorn-rs/actions/runs/41903988660)
+and [#296](https://github.com/appunni-m/uvicorn-rs/actions/runs/41905701684)
+used exact `develop` source `80cb48fa87113b960c3da1b32c260ea5ec80fe65` on
+Linux ARM64 / uvloop. Both ran only `fastapi-upload-1m-write-1k`: 1 MiB
+uploads, 1 KiB client writes, effective concurrency eight, 5 s load, 1 s
+warmup, and the unchanged 15 s client timeout. #295 used the pinned resettable
+timer; #296 selected the prior recreated-timer behavior. Each run completed
+three matched Rust/Uvicorn pairs, with zero request failures and clean server
+lifecycle.
+
+Candidate median throughput was 530.9 requests/s with the pinned timer and
+532.9 requests/s with the recreated timer. Uvicorn medians were 644.7 and
+645.8 requests/s. These instrumented diagnostic timings are not performance
+evidence. Neither artifact contains per-request trace events because no
+request failed or exceeded the 100 ms slow-trace threshold. This A/B result
+does not support the timer change as the timeout cause; it also cannot exclude
+a rare race. The historical failure rows all report `new_connections=0`, so
+the next focused diagnostic compares persistent connections with
+`Connection: close` while keeping the upload, runner, loop, concurrency and
+timeout fixed. The trace-only libcurl output now counts completed transfers,
+new connections, and reused transfers; its focused loopback check verified two
+persistent requests as one new plus one reused connection, and two
+`Connection: close` requests as two new connections. The selectable
+`fastapi-upload-1m-write-1k-close` case changes only that request header. No
+server fix is established.
+
 ## Earlier complete three-system matrix on develop (2026-11-04)
 
 [Benchmark run 282](https://github.com/appunni-m/uvicorn-rs/actions/runs/41760326495)

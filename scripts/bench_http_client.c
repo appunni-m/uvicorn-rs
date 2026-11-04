@@ -53,6 +53,9 @@ typedef struct {
     double last_transfer_completed_at;
     unsigned long long trace_callback_calls;
     unsigned long long trace_callback_bytes;
+    unsigned long long trace_successful_transfers;
+    unsigned long long trace_new_connections;
+    unsigned long long trace_reused_transfers;
 } Worker;
 
 typedef struct FirstFailure {
@@ -400,6 +403,17 @@ static void *run_worker(void *argument) {
             break;
         }
 
+        if (shared->upload_trace) {
+            long new_connections = 0;
+            (void)curl_easy_getinfo(curl, CURLINFO_NUM_CONNECTS, &new_connections);
+            worker->trace_successful_transfers++;
+            if (new_connections > 0) {
+                worker->trace_new_connections += (unsigned long long)new_connections;
+            } else {
+                worker->trace_reused_transfers++;
+            }
+        }
+
         long status = 0;
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
         if (status != shared->expected_status) {
@@ -653,9 +667,14 @@ int main(int argc, char **argv) {
     }
     if (shared.upload_trace) {
         unsigned long long calls = 0, bytes = 0;
+        unsigned long long successful_transfers = 0, new_connections = 0;
+        unsigned long long reused_transfers = 0;
         for (int index = 0; index < created; index++) {
             calls += workers[index].trace_callback_calls;
             bytes += workers[index].trace_callback_bytes;
+            successful_transfers += workers[index].trace_successful_transfers;
+            new_connections += workers[index].trace_new_connections;
+            reused_transfers += workers[index].trace_reused_transfers;
         }
         struct timespec wall;
         double calibration_before = now_seconds();
@@ -664,11 +683,14 @@ int main(int argc, char **argv) {
         printf(
             ",\"upload_trace\":{\"schema\":1,\"diagnostic_only\":true,"
             "\"callback_calls\":%llu,\"callback_bytes\":%llu,\"timeout_ms\":15000,"
+            "\"connection_counts\":{\"curl_successful_transfers\":%llu,"
+            "\"new_connections\":%llu,\"reused_transfers\":%llu},"
             "\"failure_event_limit\":%d,"
             "\"sampling\":\"upload callback first/every 32/final; curl progress every 64 KiB or 100 ms\","
             "\"calibration_monotonic_before\":%.9f,\"calibration_monotonic_after\":%.9f,"
             "\"calibration_unix\":%.9f}",
-            calls, bytes, MAX_UPLOAD_TRACE_EVENTS, calibration_before, calibration_after,
+            calls, bytes, successful_transfers, new_connections, reused_transfers,
+            MAX_UPLOAD_TRACE_EVENTS, calibration_before, calibration_after,
             (double)wall.tv_sec + (double)wall.tv_nsec / 1e9);
     }
     printf("}\n");

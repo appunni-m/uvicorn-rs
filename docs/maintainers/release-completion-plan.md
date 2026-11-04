@@ -90,18 +90,34 @@ window. Current trace run #289 used the pinned version and had ten clean 30 s
 samples, but its Python ASGI timing wrapper changes scheduling, so it is not a
 controlled comparison. This is a plausible lead, not a confirmed cause.
 
-The focused upload-trace mode now runs the historical 5 s workload without the
+The focused upload-trace mode runs the historical 5 s workload without the
 Python timing wrapper and can select the old recreated timer only in a
 `runtime-diagnostics` build. It retains libcurl's callback/progress trace and
 the bounded Rust body-pump/ASGI trace; warm-up failures retain the same partial
-client metrics as measured failures. Compare ten paired samples with the
-pinned timer against ten with the recreated timer, keeping Linux ARM64, uvloop,
-1 MiB body, 1 KiB writes, concurrency eight, and the 15 s client timeout fixed.
-Both runs are diagnostic-only and invalidate performance timing. A recreated-
-timer timeout with a matching pinned-timer control would support this lead;
-otherwise the timer refactor is not enough to explain the symptom. No runtime
-fix is claimed until a trace shows the first stalled boundary and a focused
-regression passes.
+client metrics as measured failures.
+
+Same-source A/B evidence is now available. Run [#295](https://github.com/appunni-m/uvicorn-rs/actions/runs/41903988660)
+used the pinned timer for three Linux ARM64 / uvloop pairs; run [#296](https://github.com/appunni-m/uvicorn-rs/actions/runs/41905701684)
+used the recreated timer for three pairs. Both kept the 1 MiB body, 1 KiB
+writes, concurrency eight, and 15 s client timeout fixed. All 12 candidate and
+reference rows passed with zero failures. Candidate median throughput was
+530.9 requests/s pinned and 532.9 requests/s recreated; reference medians
+were 644.7 and 645.8 requests/s. The trace artifacts contain no per-request
+event records because no request failed or exceeded the 100 ms trace threshold.
+These diagnostic timings are invalid as performance evidence. The result does
+not support the timer refactor as the timeout cause, though the small sample
+cannot rule out a rare schedule-sensitive race.
+
+The historical failure rows all reused their HTTP/1.1 connections
+(`new_connections=0`). The next focused discriminator is a matched
+`Connection: close` workload against the existing persistent-connection case,
+keeping Linux ARM64, uvloop, 1 MiB body, 1 KiB writes, concurrency eight, and
+the 15 s timeout fixed. The diagnostic C client now reports completed
+transfer counts split into new and reused connections; a two-request loopback
+check confirmed that persistent and `Connection: close` modes produce the
+expected counts. Run at most three attempts for the changed input; do not
+launch a matrix. No runtime fix is claimed until a failing trace identifies
+the first stalled boundary and a focused regression passes.
 
 ## Fixed contract and evidence
 
