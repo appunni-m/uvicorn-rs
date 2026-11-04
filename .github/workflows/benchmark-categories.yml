@@ -102,6 +102,11 @@ on:
         options:
           - pinned
           - recreated
+      upload_trace_requests:
+        description: Optional comma-separated worker:attempt pairs to trace, for example 2:4,3:25
+        default: ""
+        required: false
+        type: string
       h2_system:
         description: Runner for the focused HTTP/2 diagnostic
         default: linux-x86_64
@@ -621,8 +626,9 @@ jobs:
           BENCHMARK_TRACE_TIMER: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_trace_timer || 'pinned' }}
           UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-peer-read=on-read]') && 'on-read' || '' }}
           UVICORN_RS_UPLOAD_TRACE: "1"
-          # Retain Rust internals for the same slow requests sampled by the ASGI wrapper.
-          UVICORN_RS_UPLOAD_TRACE_MIN_MS: "20"
+          UVICORN_RS_UPLOAD_TRACE_REQUESTS: ${{ inputs.upload_trace_requests || '' }}
+          # Selected request traces are retained even when they finish quickly.
+          UVICORN_RS_UPLOAD_TRACE_MIN_MS: ${{ inputs.upload_trace_requests != '' && '1' || '20' }}
         run: |
           set -euo pipefail
           diagnostic_args=(--require-runtime-diagnostics)

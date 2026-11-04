@@ -2,6 +2,8 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <curl/curl.h>
+#include <errno.h>
+#include <limits.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdint.h>
@@ -13,6 +15,12 @@
 
 #define MAX_UPLOAD_TRACE_EVENTS 256
 #define MAX_SUCCESSFUL_UPLOAD_TRACES_PER_WORKER 32
+#define MAX_UPLOAD_TRACE_REQUEST_SELECTORS 32
+
+typedef struct {
+    unsigned int worker_index;
+    unsigned long long worker_attempt;
+} UploadTraceRequestSelector;
 
 typedef struct {
     const char *event;
@@ -50,6 +58,8 @@ typedef struct {
     size_t upload_bytes;
     size_t upload_chunk_bytes;
     int upload_trace;
+    size_t upload_trace_selector_count;
+    UploadTraceRequestSelector upload_trace_selectors[MAX_UPLOAD_TRACE_REQUEST_SELECTORS];
     unsigned long long max_requests;
     const char *expected_body;
     size_t expected_bytes;
@@ -138,6 +148,93 @@ static double now_seconds(void) {
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
     return (double)now.tv_sec + (double)now.tv_nsec / 1e9;
+}
+
+static int is_decimal_number(const char *value) {
+    if (value == NULL || value[0] == '\0') return 0;
+    for (const char *cursor = value; *cursor != '\0'; cursor++) {
+        if (*cursor < '0' || *cursor > '9') return 0;
+    }
+    return 1;
+}
+
+static int parse_upload_trace_request_selectors(
+    const char *value,
+    UploadTraceRequestSelector *selectors,
+    size_t *selector_count
+) {
+    *selector_count = 0;
+    if (value == NULL || value[0] == '\0') return 1;
+    size_t length = strlen(value);
+    if (value[0] == ',' || value[length - 1] == ',' || strstr(value, ",,") != NULL) {
+        return 0;
+    }
+
+    char *copy = strdup(value);
+    if (copy == NULL) return 0;
+    char *save = NULL;
+    for (char *token = strtok_r(copy, ",", &save); token != NULL;
+         token = strtok_r(NULL, ",", &save)) {
+        if (*selector_count == MAX_UPLOAD_TRACE_REQUEST_SELECTORS) {
+            free(copy);
+            return 0;
+        }
+        char *separator = strchr(token, ':');
+        if (separator == NULL || strchr(separator + 1, ':') != NULL) {
+            free(copy);
+            return 0;
+        }
+        *separator = '\0';
+        if (!is_decimal_number(token) || !is_decimal_number(separator + 1)) {
+            free(copy);
+            return 0;
+        }
+        errno = 0;
+        char *worker_end = NULL;
+        unsigned long worker_index = strtoul(token, &worker_end, 10);
+        if (errno != 0 || worker_end == token || *worker_end != '\0' || worker_index > UINT_MAX) {
+            free(copy);
+            return 0;
+        }
+        errno = 0;
+        char *attempt_end = NULL;
+        unsigned long long worker_attempt = strtoull(separator + 1, &attempt_end, 10);
+        if (errno != 0 || attempt_end == separator + 1 || *attempt_end != '\0'
+            || worker_attempt == 0) {
+            free(copy);
+            return 0;
+        }
+        for (size_t index = 0; index < *selector_count; index++) {
+            if (selectors[index].worker_index == (unsigned int)worker_index
+                && selectors[index].worker_attempt == worker_attempt) {
+                free(copy);
+                return 0;
+            }
+        }
+        selectors[*selector_count] = (UploadTraceRequestSelector){
+            .worker_index = (unsigned int)worker_index,
+            .worker_attempt = worker_attempt,
+        };
+        (*selector_count)++;
+    }
+    free(copy);
+    return 1;
+}
+
+static int upload_trace_request_selected(
+    const Shared *shared,
+    unsigned int worker_index,
+    unsigned long long worker_attempt
+) {
+    if (shared->upload_trace_selector_count == 0) return 1;
+    for (size_t index = 0; index < shared->upload_trace_selector_count; index++) {
+        const UploadTraceRequestSelector *selector = &shared->upload_trace_selectors[index];
+        if (selector->worker_index == worker_index
+            && selector->worker_attempt == worker_attempt) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 static void record_upload_trace_event(
@@ -440,6 +537,11 @@ static void *run_worker(void *argument) {
         && (shared->max_requests == 0
             || atomic_load(shared->request_count) < shared->max_requests)) {
         worker_attempt++;
+        upload.trace_enabled = shared->upload_trace
+            && upload_trace_request_selected(shared, worker->worker_index, worker_attempt);
+        if (shared->upload_trace) {
+            curl_easy_setopt(curl, CURLOPT_NOPROGRESS, upload.trace_enabled ? 0L : 1L);
+        }
         ResponseCheck check = {
             .expected = shared->expected_body,
             .expected_bytes = shared->expected_bytes,
@@ -464,11 +566,13 @@ static void *run_worker(void *argument) {
         // stack node prepends one diagnostic header without copying base headers.
         char trace_header[128];
         struct curl_slist trace_node = {.data = trace_header, .next = shared->headers};
-        if (shared->upload_trace) {
+        if (upload.trace_enabled) {
             snprintf(trace_header, sizeof(trace_header),
                 "X-Uvicorn-Rs-Upload-Trace: %ld-%u-%llu", (long)getpid(),
                 worker->worker_index, worker_attempt);
             curl_easy_setopt(curl, CURLOPT_HTTPHEADER, &trace_node);
+        } else if (shared->upload_trace) {
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, shared->headers);
         }
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &check);
         double started = now_seconds();
@@ -480,7 +584,7 @@ static void *run_worker(void *argument) {
         worker->last_transfer_completed_at = completed_at;
         double elapsed = completed_at - started;
         worker->trace_callback_calls += upload.callback_calls;
-        if (shared->upload_trace) worker->trace_callback_bytes += upload.offset;
+        if (upload.trace_enabled) worker->trace_callback_bytes += upload.offset;
         if (result != CURLE_OK) {
             char reason[256];
             snprintf(reason, sizeof(reason), "libcurl: %s", curl_easy_strerror(result));
@@ -640,6 +744,32 @@ int main(int argc, char **argv) {
         .first_failure = &first_failure,
     };
 
+    const char *trace_request_selection = getenv("UVICORN_RS_UPLOAD_TRACE_REQUESTS");
+    if (!shared.upload_trace && trace_request_selection != NULL
+        && trace_request_selection[0] != '\0') {
+        fprintf(stderr, "UVICORN_RS_UPLOAD_TRACE_REQUESTS requires UVICORN_RS_UPLOAD_TRACE=1\n");
+        return 2;
+    }
+    if (!parse_upload_trace_request_selectors(
+            trace_request_selection,
+            shared.upload_trace_selectors,
+            &shared.upload_trace_selector_count)) {
+        fprintf(stderr,
+            "UVICORN_RS_UPLOAD_TRACE_REQUESTS must be comma-separated worker:attempt pairs "
+            "with at most %d unique selectors\n",
+            MAX_UPLOAD_TRACE_REQUEST_SELECTORS);
+        return 2;
+    }
+    for (size_t index = 0; index < shared.upload_trace_selector_count; index++) {
+        if (shared.upload_trace_selectors[index].worker_index >= (unsigned int)concurrency) {
+            fprintf(stderr,
+                "UVICORN_RS_UPLOAD_TRACE_REQUESTS contains worker %u, outside concurrency %d\n",
+                shared.upload_trace_selectors[index].worker_index,
+                concurrency);
+            return 2;
+        }
+    }
+
     if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) return 2;
     pthread_t *threads = calloc((size_t)concurrency, sizeof(*threads));
     Worker *workers = calloc((size_t)concurrency, sizeof(*workers));
@@ -778,7 +908,18 @@ int main(int argc, char **argv) {
         double calibration_after = now_seconds();
         printf(
             ",\"upload_trace\":{\"schema\":1,\"diagnostic_only\":true,"
-            "\"callback_calls\":%llu,\"callback_bytes\":%llu,\"timeout_ms\":15000,"
+            "\"request_selection\":[");
+        if (shared.upload_trace_selector_count == 0) {
+            printf("\"all\"");
+        } else {
+            for (size_t index = 0; index < shared.upload_trace_selector_count; index++) {
+                const UploadTraceRequestSelector *selector = &shared.upload_trace_selectors[index];
+                if (index > 0) putchar(',');
+                printf("\"%u:%llu\"", selector->worker_index, selector->worker_attempt);
+            }
+        }
+        printf(
+            "],\"callback_calls\":%llu,\"callback_bytes\":%llu,\"timeout_ms\":15000,"
             "\"connection_counts\":{\"curl_successful_transfers\":%llu,"
             "\"new_connections\":%llu,\"reused_transfers\":%llu},"
             "\"failure_event_limit\":%d,"

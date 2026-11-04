@@ -97,7 +97,7 @@ class ClientTraceTests(unittest.TestCase):
         subprocess.run(["cc", "-O2", "-std=c11", "-pthread", "-Wall", "-Wextra", "-Werror",
                         str(ROOT / "scripts/bench_http_client.c"), "-o", str(cls.binary), *flags], check=True)
 
-    def request(self, enabled, reset=False):
+    def request(self, enabled, reset=False, max_requests=1, trace_requests=None):
         headers = []
 
         class Handler(BaseHTTPRequestHandler):
@@ -124,8 +124,13 @@ class ClientTraceTests(unittest.TestCase):
         thread.start()
         try:
             result = subprocess.run([str(self.binary), "127.0.0.1", str(server.server_port),
-                "1", "1", "upload", "/upload", "0", "8192", "200", "", "1024", "1"],
-                env={**os.environ, "UVICORN_RS_UPLOAD_TRACE": "1" if enabled else ""},
+                "1", "1", "upload", "/upload", "0", "8192", "200", "", "1024",
+                str(max_requests)],
+                env={
+                    **os.environ,
+                    "UVICORN_RS_UPLOAD_TRACE": "1" if enabled else "",
+                    "UVICORN_RS_UPLOAD_TRACE_REQUESTS": trace_requests or "",
+                },
                 capture_output=True, text=True, timeout=20)
         finally:
             server.shutdown()
@@ -143,6 +148,7 @@ class ClientTraceTests(unittest.TestCase):
         self.assertEqual(traced["upload_trace"]["callback_calls"], 8)
         self.assertEqual(traced["upload_trace"]["callback_bytes"], 8192)
         self.assertEqual(traced["upload_trace"]["timeout_ms"], 15000)
+        self.assertEqual(traced["upload_trace"]["request_selection"], ["all"])
 
     def test_successful_upload_trace_is_bounded_and_correlated(self):
         traced, headers = self.request(True)
@@ -163,6 +169,52 @@ class ClientTraceTests(unittest.TestCase):
         self.assertEqual(offsets, sorted(offsets))
         self.assertTrue(any(event["event"] == "read-callback" for event in events))
         self.assertTrue(any(event["event"] == "curl-progress" for event in events))
+
+    def test_request_selection_traces_only_the_selected_worker_attempt(self):
+        traced, headers = self.request(True, max_requests=3, trace_requests="0:2")
+        diagnostics = traced["upload_trace"]
+        self.assertEqual(diagnostics["request_selection"], ["0:2"])
+        self.assertEqual(len(headers), 3)
+        self.assertIsNone(headers[0])
+        self.assertRegex(headers[1], r"^\d+-0-2$")
+        self.assertIsNone(headers[2])
+        self.assertEqual(len(diagnostics["successful_transfers"]), 1)
+        transfer = diagnostics["successful_transfers"][0]
+        self.assertEqual(transfer["request_id"], headers[1])
+        self.assertEqual(transfer["worker_attempt"], 2)
+        self.assertEqual(diagnostics["callback_bytes"], 8192)
+
+    def test_request_selection_rejects_non_decimal_attempts(self):
+        result = subprocess.run(
+            [str(self.binary), "127.0.0.1", "1", "1", "1", "upload", "/upload",
+             "0", "8192", "200", "", "1024", "1"],
+            env={
+                **os.environ,
+                "UVICORN_RS_UPLOAD_TRACE": "1",
+                "UVICORN_RS_UPLOAD_TRACE_REQUESTS": "0:-1",
+            },
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("comma-separated worker:attempt pairs", result.stderr)
+
+    def test_request_selection_rejects_workers_outside_concurrency(self):
+        result = subprocess.run(
+            [str(self.binary), "127.0.0.1", "1", "1", "1", "upload", "/upload",
+             "0", "8192", "200", "", "1024", "1"],
+            env={
+                **os.environ,
+                "UVICORN_RS_UPLOAD_TRACE": "1",
+                "UVICORN_RS_UPLOAD_TRACE_REQUESTS": "1:1",
+            },
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("outside concurrency 1", result.stderr)
 
     def test_transport_failure_retains_correlated_callback_timestamps(self):
         result, headers = self.request(True, reset=True)

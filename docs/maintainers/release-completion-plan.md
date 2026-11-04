@@ -57,6 +57,10 @@ records `uvicorn-rs-uvloop` failures in repetitions 2 and 3. In the later
 artifact, both libcurl records show all 1 MiB supplied and uploaded, no response
 bytes or status, no first response byte, a 15-second timeout, and
 `new_connections=0` (the failing attempt reused an HTTP/1.1 connection).
+The exact failed transfers were worker 2 / attempt 4 and worker 3 / attempt 25;
+both had 1 MiB of upload-callback bytes and 1 MiB reported uploaded, with zero
+downloaded bytes. The retained server log is empty, so there is still no server
+request ID or first-stall event for either transfer.
 FastAPI then observed `ClientDisconnect`; that is the timeout consequence, not
 the first divergence.
 
@@ -144,8 +148,15 @@ reused connections makes connection reuse a lead, but current persistent
 connections also pass; reuse is not established as a cause. Both runs include
 runtime and ASGI instrumentation and have invalid timing for performance
 claims. Keep `nbmg` open and do not repeat these inputs without a new trigger
-or source-level lead. No server behavior or timeout change is justified by
-these results.
+or source-level lead. The original worker/attempt IDs are now a concrete trace
+target: focused upload-trace mode can emit Rust events only for `2:4` and
+`3:25`, at a 1 ms threshold, without the ASGI timing wrapper. The next bounded
+run keeps Linux ARM64, uvloop, the 5 s sample, 1 s warmup, 1 MiB body,
+1 KiB callbacks, concurrency 8, and 15 s client timeout; it uses the recreated
+body-batch timer to match the historical implementation and three pairs. This
+adds request-level evidence for the exact historical attempts while avoiding
+per-request trace overhead for the rest of the sample. No server behavior or
+timeout change is justified by the existing results.
 
 ## Fixed contract and evidence
 
