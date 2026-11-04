@@ -143,6 +143,26 @@ class ClientTraceTests(unittest.TestCase):
         self.assertEqual(traced["upload_trace"]["callback_bytes"], 8192)
         self.assertEqual(traced["upload_trace"]["timeout_ms"], 15000)
 
+    def test_successful_upload_trace_is_bounded_and_correlated(self):
+        traced, headers = self.request(True)
+        diagnostics = traced["upload_trace"]
+        self.assertEqual(
+            diagnostics["successful_transfer_trace_limit_per_worker"], 32,
+        )
+        self.assertEqual(len(diagnostics["successful_transfers"]), 1)
+        transfer = diagnostics["successful_transfers"][0]
+        self.assertEqual(transfer["request_id"], headers[0])
+        self.assertEqual(transfer["expected_upload_bytes"], 8192)
+        self.assertEqual(transfer["callback_bytes"], 8192)
+        self.assertEqual(transfer["curl_uploaded_bytes"], 8192)
+        self.assertEqual(transfer["response_code"], 200)
+        self.assertGreater(transfer["elapsed_ms"], 0)
+        events = transfer["events"]
+        offsets = [event["offset_ns"] for event in events]
+        self.assertEqual(offsets, sorted(offsets))
+        self.assertTrue(any(event["event"] == "read-callback" for event in events))
+        self.assertTrue(any(event["event"] == "curl-progress" for event in events))
+
     def test_transport_failure_retains_correlated_callback_timestamps(self):
         result, headers = self.request(True, reset=True)
         trace = result["first_failure"]["upload_trace"]
@@ -322,6 +342,61 @@ class FailureReportTests(unittest.TestCase):
             [event["source"] for event in trace["correlated_timeline"]],
             ["asgi-wrapper", "uvicorn-rs", "asgi-wrapper"],
         )
+
+    def test_slowest_asgi_trace_joins_client_server_and_rust_timelines(self):
+        with patch.object(sys, "path", [str(ROOT / "scripts"), *sys.path]):
+            import run_http_category_bench as bench
+
+        request_id = "88-1-43"
+        server_output = "\n".join([
+            f"uvicorn-rs-upload-trace schema=1 request={request_id} lane=pump "
+            "origin_unix_ns=1700000000000000000 origin_uncertainty_ns=3 "
+            "expected_bytes=1024 emission_reason=slow "
+            "read_bytes=1024 offered_bytes=1024 delivered_bytes=1024 "
+            "events_seen=2 events_retained=2 events_dropped=0",
+            f"uvicorn-rs-upload-event request={request_id} lane=pump "
+            "offset_ns=1500000 event=read-data bytes=1024 flag=false",
+        ])
+        diagnostics = {
+            "paths": {"/upload/1024": {"upload_trace": {"traces": [{
+                "request_id": request_id,
+                "origin_unix_ns": 1_700_000_000_000_000_000,
+                "origin_uncertainty_ns": 5,
+                "events": [{"offset_ns": 1_000_000, "event": "receive-ready"}],
+            }]}}},
+        }
+        client_metrics = {
+            "upload_trace": {
+                "calibration_monotonic_before": 10.0,
+                "calibration_monotonic_after": 10.000002,
+                "calibration_unix": 1_700_000_000.0,
+                "successful_transfers": [{
+                    "request_id": request_id,
+                    "started": 10.0,
+                    "elapsed_ms": 2.0,
+                    "callback_bytes": 1024,
+                    "events": [{
+                        "offset_ns": 500_000,
+                        "event": "curl-progress",
+                        "curl_uploaded_bytes": 1024,
+                    }],
+                }],
+            },
+        }
+
+        result = bench._correlate_asgi_upload_traces(
+            diagnostics, server_output, client_metrics,
+        )
+        trace = diagnostics["paths"]["/upload/1024"]["upload_trace"]["traces"][0]
+        self.assertEqual(result["matched_request_count"], 1)
+        self.assertEqual(result["matched_client_upload_trace_count"], 1)
+        self.assertEqual(trace["libcurl_client_trace_status"], "matched")
+        timeline = trace["correlated_timeline"]
+        self.assertEqual(
+            [event["source"] for event in timeline],
+            ["libcurl", "asgi-wrapper", "uvicorn-rs"],
+        )
+        self.assertEqual(timeline[0]["curl_uploaded_bytes"], 1024)
 
     def test_measured_failure_keeps_client_metrics_through_sample_cleanup(self):
         # Exercise the actual measured-sample error path without starting a

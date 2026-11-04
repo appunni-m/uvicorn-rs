@@ -12,15 +12,36 @@
 #include <unistd.h>
 
 #define MAX_UPLOAD_TRACE_EVENTS 256
+#define MAX_SUCCESSFUL_UPLOAD_TRACES_PER_WORKER 32
 
 typedef struct {
     const char *event;
     unsigned long long offset_ns;
     unsigned long long callback_calls;
     size_t callback_bytes;
-    long long curl_uploaded_bytes;
-    long long curl_downloaded_bytes;
+    curl_off_t curl_uploaded_bytes;
+    curl_off_t curl_downloaded_bytes;
 } UploadTraceEvent;
+
+typedef struct {
+    double elapsed_seconds;
+    unsigned long long worker_attempt;
+    unsigned long long callback_calls;
+    size_t callback_bytes;
+    double started_monotonic;
+    double first_callback_monotonic;
+    double last_callback_monotonic;
+    double completed_monotonic;
+    double last_progress_monotonic;
+    unsigned long long trace_events_seen;
+    size_t trace_event_count;
+    size_t trace_event_head;
+    curl_off_t curl_uploaded_bytes;
+    curl_off_t curl_downloaded_bytes;
+    long response_code;
+    long new_connections;
+    UploadTraceEvent trace_events[MAX_UPLOAD_TRACE_EVENTS];
+} SuccessfulUploadTrace;
 
 typedef struct {
     const char *url;
@@ -56,6 +77,8 @@ typedef struct {
     unsigned long long trace_successful_transfers;
     unsigned long long trace_new_connections;
     unsigned long long trace_reused_transfers;
+    size_t successful_trace_count;
+    SuccessfulUploadTrace *successful_traces;
 } Worker;
 
 typedef struct FirstFailure {
@@ -301,6 +324,64 @@ static int append_latency(Worker *worker, double latency) {
     return 1;
 }
 
+static void retain_successful_upload_trace(
+    Worker *worker,
+    CURL *curl,
+    const UploadCursor *upload,
+    unsigned long long worker_attempt,
+    double started,
+    double completed,
+    long response_code,
+    long new_connections
+) {
+    if (!upload->trace_enabled) return;
+
+    double elapsed = completed - started;
+    size_t slot = worker->successful_trace_count;
+    if (slot == MAX_SUCCESSFUL_UPLOAD_TRACES_PER_WORKER) {
+        slot = 0;
+        for (size_t index = 1; index < worker->successful_trace_count; index++) {
+            if (worker->successful_traces[index].elapsed_seconds
+                < worker->successful_traces[slot].elapsed_seconds) {
+                slot = index;
+            }
+        }
+        if (elapsed <= worker->successful_traces[slot].elapsed_seconds) return;
+    } else {
+        worker->successful_trace_count++;
+    }
+
+    SuccessfulUploadTrace *trace = &worker->successful_traces[slot];
+    memset(trace, 0, sizeof(*trace));
+    trace->elapsed_seconds = elapsed;
+    trace->worker_attempt = worker_attempt;
+    trace->callback_calls = upload->callback_calls;
+    trace->callback_bytes = upload->offset;
+    trace->started_monotonic = started;
+    trace->first_callback_monotonic = upload->first_callback_monotonic;
+    trace->last_callback_monotonic = upload->last_callback_monotonic;
+    trace->completed_monotonic = completed;
+    trace->last_progress_monotonic = upload->last_progress_monotonic;
+    trace->trace_events_seen = upload->trace_events_seen;
+    trace->trace_event_count = upload->trace_events_seen < MAX_UPLOAD_TRACE_EVENTS
+        ? (size_t)upload->trace_events_seen
+        : MAX_UPLOAD_TRACE_EVENTS;
+    trace->trace_event_head = upload->trace_events_seen < MAX_UPLOAD_TRACE_EVENTS
+        ? 0
+        : (size_t)(upload->trace_events_seen % MAX_UPLOAD_TRACE_EVENTS);
+    trace->response_code = response_code;
+    trace->new_connections = new_connections;
+    trace->curl_uploaded_bytes = (curl_off_t)-1;
+    trace->curl_downloaded_bytes = (curl_off_t)-1;
+    if (upload->trace_events != NULL) {
+        memcpy(trace->trace_events, upload->trace_events, sizeof(trace->trace_events));
+    }
+#if LIBCURL_VERSION_NUM >= 0x073700
+    (void)curl_easy_getinfo(curl, CURLINFO_SIZE_UPLOAD_T, &trace->curl_uploaded_bytes);
+    (void)curl_easy_getinfo(curl, CURLINFO_SIZE_DOWNLOAD_T, &trace->curl_downloaded_bytes);
+#endif
+}
+
 static void *run_worker(void *argument) {
     Worker *worker = (Worker *)argument;
     Shared *shared = worker->shared;
@@ -308,6 +389,17 @@ static void *run_worker(void *argument) {
     if (curl == NULL) {
         set_failure(shared, "curl_easy_init failed");
         return NULL;
+    }
+    if (shared->upload_trace) {
+        worker->successful_traces = calloc(
+            MAX_SUCCESSFUL_UPLOAD_TRACES_PER_WORKER,
+            sizeof(*worker->successful_traces)
+        );
+        if (worker->successful_traces == NULL) {
+            set_failure(shared, "could not allocate successful upload trace retention");
+            curl_easy_cleanup(curl);
+            return NULL;
+        }
     }
 
     curl_easy_setopt(curl, CURLOPT_URL, shared->url);
@@ -403,8 +495,8 @@ static void *run_worker(void *argument) {
             break;
         }
 
+        long new_connections = 0;
         if (shared->upload_trace) {
-            long new_connections = 0;
             (void)curl_easy_getinfo(curl, CURLINFO_NUM_CONNECTS, &new_connections);
             worker->trace_successful_transfers++;
             if (new_connections > 0) {
@@ -416,6 +508,10 @@ static void *run_worker(void *argument) {
 
         long status = 0;
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+        retain_successful_upload_trace(
+            worker, curl, &upload, worker_attempt, started, completed_at, status,
+            new_connections
+        );
         if (status != shared->expected_status) {
             char reason[256];
             snprintf(reason, sizeof(reason), "unexpected HTTP status %ld (wanted %ld)", status, shared->expected_status);
@@ -656,8 +752,8 @@ int main(int argc, char **argv) {
                         event->offset_ns,
                         event->callback_calls,
                         event->callback_bytes,
-                        event->curl_uploaded_bytes,
-                        event->curl_downloaded_bytes);
+                        (long long)event->curl_uploaded_bytes,
+                        (long long)event->curl_downloaded_bytes);
                 }
                 putchar(']');
                 putchar('}');
@@ -688,14 +784,66 @@ int main(int argc, char **argv) {
             "\"failure_event_limit\":%d,"
             "\"sampling\":\"upload callback first/every 32/final; curl progress every 64 KiB or 100 ms\","
             "\"calibration_monotonic_before\":%.9f,\"calibration_monotonic_after\":%.9f,"
-            "\"calibration_unix\":%.9f}",
+            "\"calibration_unix\":%.9f,"
+            "\"successful_transfer_trace_limit_per_worker\":%d,"
+            "\"successful_transfers\":[",
             calls, bytes, successful_transfers, new_connections, reused_transfers,
             MAX_UPLOAD_TRACE_EVENTS, calibration_before, calibration_after,
-            (double)wall.tv_sec + (double)wall.tv_nsec / 1e9);
+            (double)wall.tv_sec + (double)wall.tv_nsec / 1e9,
+            MAX_SUCCESSFUL_UPLOAD_TRACES_PER_WORKER);
+        int first_successful_trace = 1;
+        for (int worker_index = 0; worker_index < created; worker_index++) {
+            Worker *worker = &workers[worker_index];
+            for (size_t trace_index = 0; trace_index < worker->successful_trace_count; trace_index++) {
+                const SuccessfulUploadTrace *trace = &worker->successful_traces[trace_index];
+                if (!first_successful_trace) putchar(',');
+                first_successful_trace = 0;
+                printf(
+                    "{\"request_id\":\"%ld-%u-%llu\",\"worker_index\":%u,"
+                    "\"worker_attempt\":%llu,\"elapsed_ms\":%.6f,"
+                    "\"expected_upload_bytes\":%zu,\"callback_calls\":%llu,"
+                    "\"callback_bytes\":%zu,\"curl_uploaded_bytes\":%lld,"
+                    "\"curl_downloaded_bytes\":%lld,\"response_code\":%ld,"
+                    "\"new_connections\":%ld,\"started\":%.9f,"
+                    "\"first_callback\":%.9f,\"last_callback\":%.9f,"
+                    "\"completed\":%.9f,\"last_progress\":%.9f,"
+                    "\"events_seen\":%llu,\"events_retained\":%zu,"
+                    "\"events_dropped\":%llu,\"events\":[",
+                    (long)getpid(), (unsigned int)worker_index, trace->worker_attempt,
+                    (unsigned int)worker_index,
+                    trace->worker_attempt, trace->elapsed_seconds * 1000.0,
+                    shared.upload_bytes, trace->callback_calls, trace->callback_bytes,
+                    (long long)trace->curl_uploaded_bytes,
+                    (long long)trace->curl_downloaded_bytes,
+                    trace->response_code, trace->new_connections, trace->started_monotonic,
+                    trace->first_callback_monotonic, trace->last_callback_monotonic,
+                    trace->completed_monotonic, trace->last_progress_monotonic,
+                    trace->trace_events_seen, trace->trace_event_count,
+                    trace->trace_events_seen > trace->trace_event_count
+                        ? trace->trace_events_seen - trace->trace_event_count
+                        : 0ULL);
+                for (size_t event_index = 0; event_index < trace->trace_event_count; event_index++) {
+                    size_t slot = (trace->trace_event_head + event_index) % MAX_UPLOAD_TRACE_EVENTS;
+                    const UploadTraceEvent *event = &trace->trace_events[slot];
+                    if (event_index > 0) putchar(',');
+                    printf(
+                        "{\"event\":\"%s\",\"offset_ns\":%llu,"
+                        "\"callback_calls\":%llu,\"callback_bytes\":%zu,"
+                        "\"curl_uploaded_bytes\":%lld,\"curl_downloaded_bytes\":%lld}",
+                        event->event != NULL ? event->event : "unknown",
+                        event->offset_ns, event->callback_calls, event->callback_bytes,
+                        (long long)event->curl_uploaded_bytes,
+                        (long long)event->curl_downloaded_bytes);
+                }
+                printf("]}");
+            }
+        }
+        printf("]}");
     }
     printf("}\n");
 
     free(latencies);
+    for (int index = 0; index < created; index++) free(workers[index].successful_traces);
     free(workers);
     free(threads);
     free(expected_body);

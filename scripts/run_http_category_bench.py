@@ -728,11 +728,28 @@ def _upload_trace_min_duration_ms() -> int:
 def _correlate_asgi_upload_traces(
     asgi_diagnostics: dict,
     server_output: str,
+    client_metrics: dict | None = None,
 ) -> dict[str, int]:
-    """Join the wrapper's slow-request samples to Rust request-level traces."""
+    """Join slow ASGI samples to libcurl and Rust request-level traces."""
     wrapper_trace_count = 0
     matched_request_count = 0
     matched_lane_trace_count = 0
+    matched_client_trace_count = 0
+    successful_client_traces = {}
+    client_calibration = None
+    if isinstance(client_metrics, dict):
+        upload_trace = client_metrics.get("upload_trace")
+        if isinstance(upload_trace, dict):
+            client_calibration = upload_trace
+            successful_transfers = upload_trace.get("successful_transfers", [])
+            if isinstance(successful_transfers, list):
+                successful_client_traces = {
+                    trace["request_id"]: trace
+                    for trace in successful_transfers
+                    if isinstance(trace, dict)
+                    and isinstance(trace.get("request_id"), str)
+                }
+
     for path, path_data in asgi_diagnostics.get("paths", {}).items():
         if not isinstance(path_data, dict):
             continue
@@ -749,11 +766,16 @@ def _correlate_asgi_upload_traces(
             if not isinstance(request_id, str):
                 continue
             wrapper_trace_count += 1
-            server_trace = _server_upload_trace(server_output, request_id)
-            if server_trace["status"] != "matched":
-                continue
+            client_trace = successful_client_traces.get(request_id)
+            if client_trace is not None:
+                wrapper_trace["libcurl_client_trace_status"] = "matched"
+                matched_client_trace_count += 1
+            else:
+                wrapper_trace["libcurl_client_trace_status"] = "not_retained"
 
-            wrapper_trace["uvicorn_rs_server_trace"] = server_trace
+            server_trace = _server_upload_trace(server_output, request_id)
+            if server_trace["status"] == "matched":
+                wrapper_trace["uvicorn_rs_server_trace"] = server_trace
             timeline = []
             origin_unix_ns = wrapper_trace.get("origin_unix_ns")
             uncertainty_ns = wrapper_trace.get("origin_uncertainty_ns", 0)
@@ -767,28 +789,67 @@ def _correlate_asgi_upload_traces(
                     "estimated_unix_ns": origin_unix_ns + int(event.get("offset_ns", 0)),
                     "clock_uncertainty_ns": uncertainty_ns,
                 })
-            for event in server_trace["events"]:
-                lane_trace = next(
-                    (trace for trace in server_trace["trace_records"]
-                     if trace["lane"] == event["lane"]),
-                    None,
+            if client_trace is not None and isinstance(client_calibration, dict):
+                calibration_fields = (
+                    "calibration_monotonic_before",
+                    "calibration_monotonic_after",
+                    "calibration_unix",
                 )
-                timeline.append({
-                    "source": "uvicorn-rs",
-                    **event,
-                    "clock_uncertainty_ns": (
-                        lane_trace["origin_uncertainty_ns"] if lane_trace else None
-                    ),
-                })
+                if all(isinstance(client_calibration.get(key), (int, float))
+                       for key in calibration_fields):
+                    calibration_mono = (
+                        client_calibration["calibration_monotonic_before"]
+                        + client_calibration["calibration_monotonic_after"]
+                    ) / 2
+                    calibration_uncertainty_ns = round((
+                        client_calibration["calibration_monotonic_after"]
+                        - client_calibration["calibration_monotonic_before"]
+                    ) * 500_000_000)
+                    started = client_trace.get("started")
+                    client_events = client_trace.get("events", [])
+                    if isinstance(started, (int, float)) and isinstance(client_events, list):
+                        for event in client_events:
+                            if not isinstance(event, dict):
+                                continue
+                            event_monotonic = (
+                                started + int(event.get("offset_ns", 0)) / 1_000_000_000
+                            )
+                            timeline.append({
+                                "source": "libcurl",
+                                **event,
+                                "request_id": request_id,
+                                "monotonic_seconds": event_monotonic,
+                                "estimated_unix_ns": round((
+                                    client_calibration["calibration_unix"]
+                                    + event_monotonic - calibration_mono
+                                ) * 1_000_000_000),
+                                "clock_uncertainty_ns": calibration_uncertainty_ns,
+                            })
+            if server_trace["status"] == "matched":
+                for event in server_trace["events"]:
+                    lane_trace = next(
+                        (trace for trace in server_trace["trace_records"]
+                         if trace["lane"] == event["lane"]),
+                        None,
+                    )
+                    timeline.append({
+                        "source": "uvicorn-rs",
+                        **event,
+                        "clock_uncertainty_ns": (
+                            lane_trace["origin_uncertainty_ns"] if lane_trace else None
+                        ),
+                    })
             timeline.sort(key=lambda event: event.get("estimated_unix_ns", 0))
             wrapper_trace["correlated_timeline"] = timeline
-            matched_request_count += 1
-            matched_lane_trace_count += len(server_trace["trace_records"])
+            if server_trace["status"] == "matched":
+                matched_request_count += 1
+                matched_lane_trace_count += len(server_trace["trace_records"])
 
     return {
         "wrapper_slow_trace_count": wrapper_trace_count,
         "matched_request_count": matched_request_count,
         "matched_rust_lane_trace_count": matched_lane_trace_count,
+        "matched_client_upload_trace_count": matched_client_trace_count,
     }
 
 
@@ -900,6 +961,7 @@ def _sample(
                 correlation = _correlate_asgi_upload_traces(
                     metrics["asgi_stage_diagnostics"],
                     server_output,
+                    metrics,
                 )
                 correlation["server_trace_min_duration_ms"] = (
                     _upload_trace_min_duration_ms()
