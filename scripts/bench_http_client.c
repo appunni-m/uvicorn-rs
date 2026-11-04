@@ -11,6 +11,17 @@
 #include <time.h>
 #include <unistd.h>
 
+#define MAX_UPLOAD_TRACE_EVENTS 256
+
+typedef struct {
+    const char *event;
+    unsigned long long offset_ns;
+    unsigned long long callback_calls;
+    size_t callback_bytes;
+    long long curl_uploaded_bytes;
+    long long curl_downloaded_bytes;
+} UploadTraceEvent;
+
 typedef struct {
     const char *url;
     const char *method;
@@ -64,6 +75,11 @@ typedef struct FirstFailure {
     double first_callback_monotonic;
     double last_callback_monotonic;
     double completed_monotonic;
+    double last_progress_monotonic;
+    size_t trace_event_count;
+    size_t trace_event_head;
+    unsigned long long trace_events_seen;
+    UploadTraceEvent trace_events[MAX_UPLOAD_TRACE_EVENTS];
 } FirstFailure;
 
 typedef struct {
@@ -83,12 +99,41 @@ typedef struct {
     double started_monotonic;
     double first_callback_monotonic;
     double last_callback_monotonic;
+    double last_progress_monotonic;
+    curl_off_t last_progress_uploaded_bytes;
+    curl_off_t last_progress_downloaded_bytes;
+    double last_progress_sample_monotonic;
+    curl_off_t last_progress_sample_uploaded_bytes;
+    unsigned long long trace_events_seen;
+    UploadTraceEvent *trace_events;
 } UploadCursor;
 
 static double now_seconds(void) {
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
     return (double)now.tv_sec + (double)now.tv_nsec / 1e9;
+}
+
+static void record_upload_trace_event(
+    UploadCursor *upload,
+    const char *event,
+    double now,
+    curl_off_t uploaded_bytes,
+    curl_off_t downloaded_bytes
+) {
+    if (!upload->trace_enabled) return;
+    size_t slot = (size_t)(upload->trace_events_seen % MAX_UPLOAD_TRACE_EVENTS);
+    UploadTraceEvent *trace = &upload->trace_events[slot];
+    double elapsed = now > upload->started_monotonic
+        ? now - upload->started_monotonic
+        : 0.0;
+    trace->event = event;
+    trace->offset_ns = (unsigned long long)(elapsed * 1e9);
+    trace->callback_calls = upload->callback_calls;
+    trace->callback_bytes = upload->offset;
+    trace->curl_uploaded_bytes = (long long)uploaded_bytes;
+    trace->curl_downloaded_bytes = (long long)downloaded_bytes;
+    upload->trace_events_seen++;
 }
 
 static size_t check_response(char *data, size_t size, size_t count, void *user_data) {
@@ -105,14 +150,20 @@ static size_t check_response(char *data, size_t size, size_t count, void *user_d
 
 static size_t read_upload(char *buffer, size_t size, size_t count, void *user_data) {
     UploadCursor *upload = (UploadCursor *)user_data;
+    double now = 0.0;
     if (upload->trace_enabled) {
-        double now = now_seconds();
+        now = now_seconds();
         if (upload->callback_calls == 0) upload->first_callback_monotonic = now;
         upload->last_callback_monotonic = now;
         upload->callback_calls++;
     }
     size_t capacity = size * count;
-    if (upload->offset >= upload->bytes || capacity == 0) return 0;
+    if (upload->offset >= upload->bytes || capacity == 0) {
+        if (upload->trace_enabled) {
+            record_upload_trace_event(upload, "read-eof", now, -1, -1);
+        }
+        return 0;
+    }
     size_t length = upload->bytes - upload->offset;
     if (length > capacity) length = capacity;
     /* This caps bytes returned to libcurl per read callback; it does not
@@ -120,7 +171,46 @@ static size_t read_upload(char *buffer, size_t size, size_t count, void *user_da
     if (upload->chunk_bytes > 0 && length > upload->chunk_bytes) length = upload->chunk_bytes;
     memcpy(buffer, upload->body + upload->offset, length);
     upload->offset += length;
+    if (upload->trace_enabled
+        && (upload->callback_calls == 1
+            || upload->callback_calls % 32 == 0
+            || upload->offset == upload->bytes)) {
+        record_upload_trace_event(upload, "read-callback", now, -1, -1);
+    }
     return length;
+}
+
+static int record_transfer_progress(
+    void *user_data,
+    curl_off_t download_total,
+    curl_off_t download_now,
+    curl_off_t upload_total,
+    curl_off_t upload_now
+) {
+    UploadCursor *upload = (UploadCursor *)user_data;
+    if (!upload->trace_enabled) return 0;
+
+    double now = now_seconds();
+    int progress_changed = upload_now != upload->last_progress_uploaded_bytes
+        || download_now != upload->last_progress_downloaded_bytes;
+    if (progress_changed) {
+        upload->last_progress_monotonic = now;
+        upload->last_progress_uploaded_bytes = upload_now;
+        upload->last_progress_downloaded_bytes = download_now;
+    }
+
+    int upload_sample_due = upload_now >= upload->last_progress_sample_uploaded_bytes
+        && upload_now - upload->last_progress_sample_uploaded_bytes >= 65536;
+    int time_sample_due = upload->last_progress_sample_monotonic == 0.0
+        || now - upload->last_progress_sample_monotonic >= 0.100;
+    int transfer_complete = upload_total > 0 && upload_now >= upload_total;
+    if (upload_sample_due || time_sample_due || transfer_complete) {
+        record_upload_trace_event(upload, "curl-progress", now, upload_now, download_now);
+        upload->last_progress_sample_monotonic = now;
+        upload->last_progress_sample_uploaded_bytes = upload_now;
+    }
+    (void)download_total;
+    return 0;
 }
 
 static void set_failure(Shared *shared, const char *reason) {
@@ -168,6 +258,17 @@ static void set_transfer_failure(
         failure->first_callback_monotonic = upload->first_callback_monotonic;
         failure->last_callback_monotonic = upload->last_callback_monotonic;
         failure->completed_monotonic = now_seconds();
+        failure->last_progress_monotonic = upload->last_progress_monotonic;
+        failure->trace_events_seen = upload->trace_events_seen;
+        failure->trace_event_count = upload->trace_events_seen < MAX_UPLOAD_TRACE_EVENTS
+            ? (size_t)upload->trace_events_seen
+            : MAX_UPLOAD_TRACE_EVENTS;
+        failure->trace_event_head = upload->trace_events_seen < MAX_UPLOAD_TRACE_EVENTS
+            ? 0
+            : (size_t)(upload->trace_events_seen % MAX_UPLOAD_TRACE_EVENTS);
+        if (upload->trace_events != NULL) {
+            memcpy(failure->trace_events, upload->trace_events, sizeof(failure->trace_events));
+        }
 #if LIBCURL_VERSION_NUM >= 0x073700
         (void)curl_easy_getinfo(curl, CURLINFO_SIZE_UPLOAD_T, &failure->curl_uploaded_bytes);
         (void)curl_easy_getinfo(curl, CURLINFO_SIZE_DOWNLOAD_T, &failure->curl_downloaded_bytes);
@@ -221,6 +322,17 @@ static void *run_worker(void *argument) {
         .offset = 0,
         .trace_enabled = shared->upload_trace,
     };
+    if (shared->upload_trace) {
+        upload.trace_events = calloc(MAX_UPLOAD_TRACE_EVENTS, sizeof(*upload.trace_events));
+        if (upload.trace_events == NULL) {
+            set_failure(shared, "could not allocate upload trace events");
+            curl_easy_cleanup(curl);
+            return NULL;
+        }
+        curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+        curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, record_transfer_progress);
+        curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &upload);
+    }
     if (strcmp(shared->method, "POST") == 0) {
         curl_easy_setopt(curl, CURLOPT_POST, 1L);
         curl_easy_setopt(curl, CURLOPT_READFUNCTION, read_upload);
@@ -243,6 +355,16 @@ static void *run_worker(void *argument) {
         upload.callback_calls = 0;
         upload.first_callback_monotonic = 0;
         upload.last_callback_monotonic = 0;
+        upload.last_progress_monotonic = 0;
+        upload.last_progress_uploaded_bytes = 0;
+        upload.last_progress_downloaded_bytes = 0;
+        upload.last_progress_sample_monotonic = 0;
+        upload.last_progress_sample_uploaded_bytes = 0;
+        upload.trace_events_seen = 0;
+        if (upload.trace_events != NULL) {
+            memset(upload.trace_events, 0,
+                MAX_UPLOAD_TRACE_EVENTS * sizeof(*upload.trace_events));
+        }
         // libcurl borrows this list only during the synchronous transfer. The
         // stack node prepends one diagnostic header without copying base headers.
         char trace_header[128];
@@ -256,6 +378,7 @@ static void *run_worker(void *argument) {
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &check);
         double started = now_seconds();
         upload.started_monotonic = started;
+        upload.last_progress_monotonic = started;
         CURLcode result = curl_easy_perform(curl);
         if (shared->upload_trace) curl_easy_setopt(curl, CURLOPT_HTTPHEADER, shared->headers);
         double completed_at = now_seconds();
@@ -301,6 +424,7 @@ static void *run_worker(void *argument) {
     }
 
     curl_easy_cleanup(curl);
+    free(upload.trace_events);
     return NULL;
 }
 
@@ -491,11 +615,38 @@ int main(int argc, char **argv) {
                     ",\"upload_trace\":{\"request_id\":\"%ld-%u-%llu\","
                     "\"callback_calls\":%llu,\"clock\":\"CLOCK_MONOTONIC seconds\","
                     "\"started\":%.9f,\"first_callback\":%.9f,"
-                    "\"last_callback\":%.9f,\"completed\":%.9f}",
+                    "\"last_callback\":%.9f,\"completed\":%.9f,"
+                    "\"last_progress\":%.9f,\"last_progress_age_ms\":%.3f,"
+                    "\"events_seen\":%llu,\"events_retained\":%zu,"
+                    "\"events_dropped\":%llu,\"events\":[",
                     (long)getpid(), first_failure.worker_index, first_failure.worker_attempt,
                     first_failure.callback_calls, first_failure.request_started_monotonic,
                     first_failure.first_callback_monotonic, first_failure.last_callback_monotonic,
-                    first_failure.completed_monotonic);
+                    first_failure.completed_monotonic, first_failure.last_progress_monotonic,
+                    first_failure.completed_monotonic >= first_failure.last_progress_monotonic
+                        ? (first_failure.completed_monotonic - first_failure.last_progress_monotonic) * 1000.0
+                        : 0.0,
+                    first_failure.trace_events_seen, first_failure.trace_event_count,
+                    first_failure.trace_events_seen > first_failure.trace_event_count
+                        ? first_failure.trace_events_seen - first_failure.trace_event_count
+                        : 0ULL);
+                for (size_t index = 0; index < first_failure.trace_event_count; index++) {
+                    size_t slot = (first_failure.trace_event_head + index) % MAX_UPLOAD_TRACE_EVENTS;
+                    const UploadTraceEvent *event = &first_failure.trace_events[slot];
+                    if (index > 0) putchar(',');
+                    printf(
+                        "{\"event\":\"%s\",\"offset_ns\":%llu,"
+                        "\"callback_calls\":%llu,\"callback_bytes\":%zu,"
+                        "\"curl_uploaded_bytes\":%lld,\"curl_downloaded_bytes\":%lld}",
+                        event->event != NULL ? event->event : "unknown",
+                        event->offset_ns,
+                        event->callback_calls,
+                        event->callback_bytes,
+                        event->curl_uploaded_bytes,
+                        event->curl_downloaded_bytes);
+                }
+                putchar(']');
+                putchar('}');
             }
         }
         printf("}");
@@ -513,9 +664,11 @@ int main(int argc, char **argv) {
         printf(
             ",\"upload_trace\":{\"schema\":1,\"diagnostic_only\":true,"
             "\"callback_calls\":%llu,\"callback_bytes\":%llu,\"timeout_ms\":15000,"
+            "\"failure_event_limit\":%d,"
+            "\"sampling\":\"upload callback first/every 32/final; curl progress every 64 KiB or 100 ms\","
             "\"calibration_monotonic_before\":%.9f,\"calibration_monotonic_after\":%.9f,"
             "\"calibration_unix\":%.9f}",
-            calls, bytes, calibration_before, calibration_after,
+            calls, bytes, MAX_UPLOAD_TRACE_EVENTS, calibration_before, calibration_after,
             (double)wall.tv_sec + (double)wall.tv_nsec / 1e9);
     }
     printf("}\n");

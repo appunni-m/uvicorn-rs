@@ -151,9 +151,63 @@ class ClientTraceTests(unittest.TestCase):
         if trace["callback_calls"]:
             self.assertGreaterEqual(trace["last_callback"], trace["first_callback"])
             self.assertGreaterEqual(trace["first_callback"], trace["started"])
+        self.assertGreater(trace["events_seen"], 0)
+        self.assertGreater(trace["events_retained"], 0)
+        offsets = [event["offset_ns"] for event in trace["events"]]
+        self.assertEqual(offsets, sorted(offsets))
+        self.assertTrue(any(event["event"] == "read-callback" for event in trace["events"]))
+        self.assertTrue(any(event["event"] == "curl-progress" for event in trace["events"]))
 
 
 class FailureReportTests(unittest.TestCase):
+    def test_server_trace_is_correlated_by_client_request_id(self):
+        with patch.object(sys, "path", [str(ROOT / "scripts"), *sys.path]):
+            import run_http_category_bench as bench
+
+        server_output = "\n".join([
+            "uvicorn-rs-upload-trace schema=1 request=77-2-9 lane=pump "
+            "origin_unix_ns=1700000000000000000 origin_uncertainty_ns=4 "
+            "read_bytes=1024 offered_bytes=1024 delivered_bytes=1024 "
+            "events_seen=3 events_retained=3 events_dropped=0",
+            "uvicorn-rs-upload-event request=77-2-9 lane=pump offset_ns=10 "
+            "event=read-wait bytes=0 flag=false",
+            "uvicorn-rs-upload-event request=77-2-9 lane=pump offset_ns=1000010 "
+            "event=read-data bytes=1024 flag=false",
+            "uvicorn-rs-upload-trace schema=1 request=77-2-9 lane=asgi "
+            "origin_unix_ns=1700000000001000000 origin_uncertainty_ns=5 "
+            "read_bytes=0 offered_bytes=0 delivered_bytes=1024 "
+            "events_seen=2 events_retained=2 events_dropped=0",
+            "uvicorn-rs-upload-event request=77-2-9 lane=asgi offset_ns=20 "
+            "event=asgi-deliver bytes=1024 flag=true",
+        ])
+        metrics = {
+            "upload_trace": {
+                "calibration_monotonic_before": 10.0,
+                "calibration_monotonic_after": 10.000002,
+                "calibration_unix": 1700000000.0,
+            },
+            "first_failure": {
+                "upload_trace": {
+                    "request_id": "77-2-9",
+                    "started": 10.0,
+                    "events": [{"event": "curl-progress", "offset_ns": 1_000_000}],
+                },
+            },
+        }
+        bench._correlate_upload_trace(metrics, server_output)
+        trace = metrics["first_failure"]["upload_trace"]
+        self.assertEqual(trace["server_trace"]["status"], "matched")
+        self.assertEqual(len(trace["server_trace"]["trace_records"]), 2)
+        self.assertEqual(
+            [event["source"] for event in trace["correlated_timeline"]],
+            ["uvicorn-rs", "libcurl", "uvicorn-rs", "uvicorn-rs"],
+        )
+        pump_events = [
+            event for event in trace["server_trace"]["events"]
+            if event["lane"] == "pump"
+        ]
+        self.assertEqual(pump_events[1]["delta_from_previous_lane_event_ns"], 1_000_000)
+
     def test_measured_failure_keeps_client_metrics_through_sample_cleanup(self):
         # Exercise the actual measured-sample error path without starting a
         # server or load generator. The first failure must survive cleanup.
@@ -180,7 +234,12 @@ class FailureReportTests(unittest.TestCase):
                 with self.assertRaises(bench._BenchmarkCaseFailure) as raised:
                     bench._sample("uvicorn-rs-asyncio", {}, "fastapi-upload-1m-write-1k",
                                   1, 0, 1, Path(sys.executable), Path(sys.executable))
-                self.assertEqual(raised.exception.partial_client_metrics, payload)
+                retained = raised.exception.partial_client_metrics
+                self.assertEqual(retained["requests"], payload["requests"])
+                self.assertEqual(
+                    retained["first_failure"]["upload_trace"]["server_trace"]["status"],
+                    "no_matching_server_request_id",
+                )
 
 
 if __name__ == "__main__":
