@@ -560,8 +560,8 @@ The completed Linux x86-64 FastAPI upload comparison found no repeatable
 benefit from limiting Tokio's blocking pool. Uvicorn was faster in all twelve
 matched workload/loop cells; the Rust/Uvicorn throughput ratios ranged from
 0.247x to 0.445x. The custom runtime cap and its five startup contracts were
-removed. See the [complete measurements](benchmark-results.md#final-tokio-blocking-pool-cap-experiment-2026-10-17)
-and the [benchmark runbook](benchmarks.md#historical-tokio-blocking-pool-cap-experiment).
+removed. The [historical benchmark detail](benchmarks.md#historical-tokio-blocking-pool-cap-experiment)
+retains the measurement table and its limits.
 
 ## Focused current-main upload-timeout reproduction (Linux x86-64; 2026-10-20; unqualified)
 
@@ -3894,7 +3894,7 @@ passed 24/24 response checks. Its 0.2-second duration is exploratory; although
 the analyzer formed one matched H3 uvloop pair, the fresh host preflight had
 rejected and the run is not a performance result. Older rows that sent a
 one-byte GET body are a different input identity. See the [HTTP/3 request-shape
-details](benchmark-results.md#http3-request-shape-correction-2026-10-11).
+details](#http3-request-semantics).
 Thirteen subsequent preflights rejected timed work for aggregate unrelated CPU
 above 100% of one core and a process above the per-process threshold in
 consecutive intervals. The latest receipt (`benchmarks/results/2026-10-11/wh9k-after-native-core-20261011-1.json`)

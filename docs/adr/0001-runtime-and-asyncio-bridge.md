@@ -107,7 +107,7 @@ The experimental Tokio blocking-pool maximum was rejected. Matched FastAPI
 upload runs at the default, one-thread, and four-thread limits showed
 loop- and write-size-dependent results without a repeatable end-to-end gain.
 The runtime keeps Tokio's default blocking-pool behavior and exposes no
-project-specific cap. See the [recorded measurements](../benchmark-results.md#final-tokio-blocking-pool-cap-experiment-2026-10-17).
+project-specific cap. See the [recorded measurements](../benchmark-status.md#tokio-blocking-pool-cap-decision-2026-10-17).
 
 ### 7. Preserve transport capabilities and typed H3 close handling
 

@@ -1488,9 +1488,9 @@ Uvicorn was faster in every measured pair. The cap effects varied by loop and
 write size, and separate runner instances do not isolate causality, so no cap
 showed a repeatable end-to-end gain. The experimental
 `UVICORN_RS_MAX_BLOCKING_THREADS` override and its startup contracts were
-removed; Tokio's default behavior remains. The [full results](benchmark-results.md#final-tokio-blocking-pool-cap-experiment-2026-10-17)
-include throughput, latency percentiles, CPU, memory, valid-pair counts, and
-host exclusions.
+removed; Tokio's default behavior remains. The [recorded decision](benchmark-status.md#tokio-blocking-pool-cap-decision-2026-10-17)
+summarizes throughput, latency percentiles, CPU, memory, valid-pair counts,
+and host exclusions.
 
 ### Separate event-loop CPU from other server threads
 
