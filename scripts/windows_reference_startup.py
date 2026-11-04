@@ -21,10 +21,20 @@ from windows_reference_hang import (
 
 POLICY = "uvicorn-0.54.0-windows-two-worker-listen-winerror10022@2"
 CASE_ID = "python-api.module-cli-two-workers-serve-request"
+WEB_CONCURRENCY_CASE_ID = "python-api.module-cli-web-concurrency-two-workers-serve-request"
+WEB_CONCURRENCY_STARTUP_POLICY = "uvicorn-0.54.0-windows-web-concurrency-listen-winerror10022@1"
 CRASH_RESTART_CASE_ID = "python-api.module-cli-worker-crash-restarts"
 TWO_CRASH_RESTART_CASE_ID = "python-api.module-cli-worker-restarts-after-two-crashes"
 CRASH_RESTART_POLICY = "uvicorn-0.54.0-windows-worker-restart-listen-winerror10022@1"
 TWO_CRASH_RESTART_POLICY = "uvicorn-0.54.0-windows-two-crashes-listen-winerror10022@1"
+TWO_CRASH_RESTART_HANG_POLICY = "uvicorn-0.54.0-windows-two-crash-restart-tcp-wakeup@1"
+
+_WEB_CONCURRENCY_INPUT = {
+    "method": "GET", "path": "/python-api-web-concurrency-two-workers",
+    "shutdown_signal": "SIGINT", "timeout_seconds": 12,
+    "lifespan": "auto", "invocation": "module-cli", "root_path": "",
+    "environment": {"WEB_CONCURRENCY": "2"},
+}
 
 _CRASH_RESTART_INPUT = {
     "method": "GET", "path": "/python-api-worker-restart",
@@ -84,6 +94,70 @@ def validate_reference_startup(
     return _validate_reference_startup(row, case, environment, with_shutdown_hang=False)
 
 
+def validate_reference_crash_restart_hang(
+    row: dict[str, Any], case: dict[str, Any], environment: dict[str, Any]
+) -> dict[str, Any]:
+    """Accept the exact two-crash stock shutdown stall with a clean candidate."""
+    policy = TWO_CRASH_RESTART_HANG_POLICY
+    _policy_require(policy, diagnostic_input(case)
+                    and case.get("case_id") == TWO_CRASH_RESTART_CASE_ID
+                    and case["api"]["run_http"] == _TWO_CRASH_RESTART_INPUT,
+                    "input is outside the exact two-crash worker restart case")
+    _policy_require(policy, environment["platform"].lower().startswith(("windows", "win32")),
+                    "not Windows")
+    _policy_require(policy, environment["machine"].lower() in {"amd64", "x86_64"},
+                    "not Windows x86-64")
+    _policy_require(policy, environment["python"] == "3.12.13", "captured Python version changed")
+    _policy_require(policy, environment["dependencies"].get("uvicorn") == "0.54.0",
+                    "reference version changed")
+    _policy_require(policy, row.get("status") == "failed"
+                    and row.get("difference") == "Python API observations differ: process_timed_out",
+                    "raw comparison is not only the captured reference timeout")
+    _policy_require(policy, row.get("server_exit_codes") == {"oracle": 0, "target": 0},
+                    "probe process failed")
+
+    oracle, target = row["oracle_observation"], row["target_observation"]
+    _policy_require(policy, isinstance(oracle, dict) and isinstance(target, dict)
+                    and set(oracle) == set(target), "reference observation envelope differs")
+    for field in set(oracle) - {"process_timed_out", "stdout_base64"}:
+        _policy_require(policy, oracle[field] == target[field],
+                        f"unreviewed observation differs: {field}")
+
+    raw_by_side = {}
+    for side, observation, timed_out in (
+        ("oracle", oracle, True), ("target", target, False),
+    ):
+        _policy_require(policy, observation["exit_code"] == 0
+                        and observation["process_exit_code"] == 0
+                        and observation["process_timed_out"] is timed_out,
+                        f"{side} process outcome differs from the captured policy")
+        _policy_require(policy, observation["response_received"] is True
+                        and observation["response_status"] == 200
+                        and observation["shutdown_signal_sent"] is True
+                        and observation["shutdown_signals_sent"] == ["SIGINT"],
+                        f"{side} request or signal outcome differs")
+        _policy_require(policy, observation["worker_start_count"] == 4
+                        and observation["worker_replacement_observed"] is True
+                        and observation["worker_clean_shutdown_count"] == 2,
+                        f"{side} did not recover from the two declared worker crashes")
+        raw_by_side[side] = _raw_observation(observation, policy=policy, side=side)
+
+    raw_oracle, raw_target = raw_by_side["oracle"], raw_by_side["target"]
+    before = _reference_recovery(raw_oracle, raw_target, case).replace("\r\n", "\n")
+    _validate_two_crash_restart_log(
+        _decode(raw_oracle["server_stderr_base64"]), policy=policy, completed=True,
+    )
+    _validate_two_crash_restart_log(before, policy=policy, completed=False)
+    _validate_two_crash_restart_log(
+        _decode(raw_target["server_stderr_base64"]), policy=policy, completed=True,
+    )
+    return {
+        "case_id": case["case_id"], "policy": policy,
+        "raw_comparison": "failed", "candidate_contract": "passed",
+        "startup_exception": False,
+    }
+
+
 def validate_reference_startup_and_hang(
     row: dict[str, Any], case: dict[str, Any], environment: dict[str, Any]
 ) -> dict[str, Any]:
@@ -115,14 +189,20 @@ def _validate_reference_startup(
     sigbreak = case.get("case_id") == SIGBREAK_CASE_ID
     shutdown_signal = "SIGTERM" if sigbreak else "SIGINT"
     console_signal = "SIGBREAK" if sigbreak else "SIGINT"
-    _require(eligible_input(case) and case["case_id"] in {CASE_ID, SIGBREAK_CASE_ID},
+    _require(eligible_input(case) and case["case_id"] in {
+        CASE_ID, SIGBREAK_CASE_ID, WEB_CONCURRENCY_CASE_ID,
+    },
              "input is outside the captured explicit two-worker case")
-    _require(case["api"]["run_http"] == {
-        "method": "GET", "path": "/python-api-two-workers-sigterm" if sigbreak
-        else "/python-api-two-workers", "shutdown_signal": shutdown_signal,
-        "timeout_seconds": 12, "lifespan": "auto", "invocation": "module-cli",
-        "root_path": "", "post_response_settle_seconds": 1, "workers": 2,
-    }, "captured request or deadline changed")
+    if case["case_id"] == WEB_CONCURRENCY_CASE_ID:
+        _require(case["api"]["run_http"] == _WEB_CONCURRENCY_INPUT,
+                 "captured WEB_CONCURRENCY request or deadline changed")
+    else:
+        _require(case["api"]["run_http"] == {
+            "method": "GET", "path": "/python-api-two-workers-sigterm" if sigbreak
+            else "/python-api-two-workers", "shutdown_signal": shutdown_signal,
+            "timeout_seconds": 12, "lifespan": "auto", "invocation": "module-cli",
+            "root_path": "", "post_response_settle_seconds": 1, "workers": 2,
+        }, "captured request or deadline changed")
     _require(environment["platform"].lower().startswith(("windows", "win32")), "not Windows")
     _require(environment["machine"].lower() in {"amd64", "x86_64"}, "not Windows x86-64")
     _require(environment["python"] == "3.12.13", "captured Python version changed")
@@ -237,7 +317,8 @@ def _validate_reference_startup(
                  and set(terminated) <= set(finishes), "unreviewed child termination")
     hang_policy = SIGBREAK_POLICY if sigbreak else SIGINT_HANG_POLICY
     return {"case_id": case["case_id"],
-            "policy": f"{POLICY}+{hang_policy}" if with_shutdown_hang else POLICY,
+            "policy": (f"{POLICY}+{hang_policy}" if with_shutdown_hang else
+                       WEB_CONCURRENCY_STARTUP_POLICY if case_id == WEB_CONCURRENCY_CASE_ID else POLICY),
             "raw_comparison": "failed", "candidate_contract": "passed"}
 
 
@@ -313,6 +394,64 @@ def _worker_log_counts(log: str, *, policy: str, starts: int, deaths: int) -> tu
     _policy_require(policy, len(parent_ids) == 1 and parent_ids[0] not in start_ids,
                     "missing unique worker supervisor")
     return start_ids, finish_ids
+
+
+def _validate_two_crash_restart_log(log: str, *, policy: str, completed: bool) -> None:
+    """Check the two injected crashes and the reference-only shutdown join."""
+    log = log.replace("\r\n", "\n")
+    _policy_require(policy, not re.search(r"Traceback|WinError|ERROR:|CRITICAL:", log),
+                    "unexpected server error in the two-crash log")
+    allowed = re.compile(
+        r"INFO:\s+(?:Uvicorn running on http://127\.0\.0\.1:\d+ \(Press CTRL\+C to quit\)|"
+        r"Started parent process \[\d+\]|Started server process \[\d+\]|"
+        r"Waiting for child process \[\d+\]|Child process \[\d+\] died|Shutting down|"
+        r"Received SIGINT, exiting\.|Terminated child process \[\d+\]|"
+        r"Finished server process \[\d+\]|Stopping parent process \[\d+\])"
+    )
+    lines = [line for line in log.splitlines() if line]
+    _policy_require(policy, all(allowed.fullmatch(line) for line in lines),
+                    "unreviewed message in the two-crash log")
+    starts = re.findall(r"Started server process \[(\d+)\]", log)
+    deaths = re.findall(r"Child process \[(\d+)\] died", log)
+    finishes = re.findall(r"Finished server process \[(\d+)\]", log)
+    parents = re.findall(r"Started parent process \[(\d+)\]", log)
+    _policy_require(policy, len(starts) == len(set(starts)) == 4
+                    and len(deaths) == len(set(deaths)) == 2
+                    and set(deaths) <= set(starts[:2]),
+                    "expected two original crashes and two replacement workers")
+    _policy_require(policy, len(parents) == 1 and parents[0] not in starts,
+                    "missing unique worker supervisor")
+    survivors = set(starts) - set(deaths)
+    _policy_require(policy, len(survivors) == 2, "expected two surviving replacement workers")
+    signal_positions = [m.start() for m in re.finditer(r"Received SIGINT, exiting\.", log)]
+    _policy_require(policy, len(signal_positions) == 1, "expected exactly one SIGINT shutdown")
+    start_positions = [m.start() for m in re.finditer(r"Started server process \[\d+\]", log)]
+    death_positions = [m.start() for m in re.finditer(r"Child process \[\d+\] died", log)]
+    _policy_require(policy, max(death_positions) < signal_positions[0]
+                    and max(start_positions) < signal_positions[0],
+                    "worker replacement continued after shutdown began")
+    _policy_require(policy, len(re.findall(r"Terminated child process \[(\d+)\]", log)) == 2
+                    and set(re.findall(r"Terminated child process \[(\d+)\]", log)) == survivors,
+                    "shutdown termination did not match the surviving workers")
+    joins = set(re.findall(r"Waiting for child process \[(\d+)\]", log))
+    if completed:
+        _policy_require(policy, len(finishes) == 2 and set(finishes) == survivors,
+                        "both surviving workers did not finish cleanly")
+        _policy_require(policy, joins >= set(starts),
+                        "supervisor did not join every started worker")
+        stop = re.search(r"Stopping parent process \[(\d+)\]", log)
+        _policy_require(policy, stop is not None and stop[1] == parents[0]
+                        and stop.start() > max(m.start() for m in re.finditer(
+                            r"Finished server process \[\d+\]", log)),
+                        "supervisor stopped before both workers finished")
+    else:
+        _policy_require(policy, len(finishes) == 1 and finishes[0] in survivors,
+                        "pre-wakeup evidence does not show exactly one finished worker")
+        pending = survivors - set(finishes)
+        _policy_require(policy, len(pending) == 1
+                        and next(iter(pending)) in joins
+                        and "Stopping parent process" not in log,
+                        "pre-wakeup evidence does not show the captured supervisor join stall")
 
 
 def _validate_crash_restart_reference(

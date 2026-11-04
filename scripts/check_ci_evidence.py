@@ -35,6 +35,7 @@ from windows_reference_hang import (
 )
 from windows_reference_startup import (
     diagnostic_input as windows_reference_startup_input,
+    validate_reference_crash_restart_hang,
     validate_reference_startup,
     validate_reference_startup_and_hang,
 )
@@ -823,6 +824,7 @@ def validate_parity(
             failures = []
             for enabled, validator in (
                 (allow_windows_reference_hang, validate_reference_hang),
+                (allow_windows_reference_hang, validate_reference_crash_restart_hang),
                 (allow_windows_reference_startup, validate_reference_startup),
                 (allow_windows_reference_hang and allow_windows_reference_startup,
                  validate_reference_startup_and_hang),
@@ -838,8 +840,15 @@ def validate_parity(
                 if (windows_reference_startup_input(case)
                         and case["case_id"] not in candidate_contract_cases):
                     candidate_contract_cases.append(case["case_id"])
-                accepted_hang = validator in (validate_reference_hang, validate_reference_startup_and_hang)
-                accepted_startup = validator in (validate_reference_startup, validate_reference_startup_and_hang)
+                accepted_hang = validator in (
+                    validate_reference_hang,
+                    validate_reference_crash_restart_hang,
+                    validate_reference_startup_and_hang,
+                )
+                accepted_startup = (
+                    validator in (validate_reference_startup, validate_reference_startup_and_hang)
+                    and decision.get("startup_exception", True)
+                )
                 accepted_sigbreak_stall = decision.get("policy") == SIGBREAK_STALL_POLICY
                 break
             require(accepted_hang or accepted_startup,

@@ -21,8 +21,11 @@ from windows_reference_startup import (
     POLICY,
     SIGINT_HANG_POLICY,
     SIGBREAK_POLICY,
+    TWO_CRASH_RESTART_HANG_POLICY,
     TWO_CRASH_RESTART_CASE_ID,
     TWO_CRASH_RESTART_POLICY,
+    WEB_CONCURRENCY_CASE_ID,
+    WEB_CONCURRENCY_STARTUP_POLICY,
     _windows_log_events,
     diagnostic_input,
 )
@@ -90,7 +93,7 @@ def _worker_log(base: int, *, crash_count: int, listen_failure: bool, stalled: b
         lines.append(_listen_traceback().rstrip("\n"))
     failed_workers = crash_count + (1 if listen_failure else 0)
     for _ in range(failed_workers):
-        failed = active.pop()
+        failed = active.pop(0)
         lines.extend((
             f"INFO:     Waiting for child process [{failed}]",
             f"INFO:     Child process [{failed}] died",
@@ -117,13 +120,15 @@ def _worker_log(base: int, *, crash_count: int, listen_failure: bool, stalled: b
     return "\n".join(lines) + "\n", before if stalled else None
 
 
-def _worker_crash_fixture(case_id: str, *, with_shutdown_hang: bool = False):
+def _worker_crash_fixture(
+    case_id: str, *, with_shutdown_hang: bool = False, listen_failure: bool = True,
+):
     result, _ = fixture()
     _, cases, _ = evidence.load_contract()
     case = deepcopy(next(item for item in cases if item["case_id"] == case_id))
     crash_count = 1 if case_id == CRASH_RESTART_CASE_ID else 2
     reference_log, before = _worker_log(
-        3000, crash_count=crash_count, listen_failure=True, stalled=with_shutdown_hang,
+        3000, crash_count=crash_count, listen_failure=listen_failure, stalled=with_shutdown_hang,
     )
     candidate_log, _ = _worker_log(
         4000, crash_count=crash_count, listen_failure=False, stalled=False,
@@ -172,14 +177,16 @@ def _worker_crash_fixture(case_id: str, *, with_shutdown_hang: bool = False):
 
     oracle = observation(reference_log, timeout=with_shutdown_hang, side="oracle")
     target = observation(candidate_log, timeout=False, side="target")
-    difference = "server_log_events"
-    if with_shutdown_hang:
-        difference = "process_timed_out, server_log_events"
+    difference_fields = []
+    if oracle["process_timed_out"] != target["process_timed_out"]:
+        difference_fields.append("process_timed_out")
+    if oracle["server_log_events"] != target["server_log_events"]:
+        difference_fields.append("server_log_events")
     row = {
         "case_id": case["case_id"], "profile": case["profile"],
         "operation": case["operation"], "requirements": case["covers"],
         "verification": "oracle-parity", "fault": None, "status": "failed",
-        "difference": f"Python API observations differ: {difference}",
+        "difference": f"Python API observations differ: {', '.join(difference_fields)}",
         "oracle_observation": oracle, "target_observation": target,
         "server_exit_codes": {"oracle": 0, "target": 0},
     }
@@ -231,6 +238,29 @@ class ReferenceStartupPolicyTests(unittest.TestCase):
         self.assertEqual(decision["accepted_reference_defects"][0]["policy"], POLICY)
         self.assertEqual(decision["candidate_contract_cases"], [self.case["case_id"]])
         self.assertEqual(self.result, before)
+
+    def test_web_concurrency_startup_failure_has_its_own_exact_input_policy(self):
+        _, cases, _ = evidence.load_contract()
+        self.case = deepcopy(next(item for item in cases
+                                  if item["case_id"] == WEB_CONCURRENCY_CASE_ID))
+        self.row.update(case_id=self.case["case_id"], profile=self.case["profile"],
+                        operation=self.case["operation"], requirements=self.case["covers"])
+        self.result["run"]["command"] = [
+            "python", "scripts/run_parity.py", "--case-id", WEB_CONCURRENCY_CASE_ID,
+        ]
+        decision = self.check()
+        self.assertEqual(decision["status"], "accepted_with_reference_exception")
+        self.assertEqual(decision["accepted_reference_defects"][0]["policy"],
+                         WEB_CONCURRENCY_STARTUP_POLICY)
+        self.assertEqual(decision["raw_parity_summary"]["failed"], 1)
+        self.assertEqual(decision["candidate_contract_cases"], [WEB_CONCURRENCY_CASE_ID])
+
+        changed = deepcopy(self.case)
+        changed["api"]["run_http"]["environment"]["WEB_CONCURRENCY"] = "3"
+        with self.assertRaises(evidence.EvidenceError):
+            evidence.validate_parity(
+                self.result, expected_cases=[changed], allow_windows_reference_startup=True,
+            )
 
     def test_default_and_shutdown_policy_still_reject_startup_failure(self):
         for kwargs in ({}, {"allow_windows_reference_hang": True}):
@@ -514,6 +544,52 @@ class WorkerCrashReferencePolicyTests(unittest.TestCase):
             result, expected_cases=[case], allow_windows_reference_startup=True,
         )
         self.assertEqual(decision["accepted_reference_defects"][0]["policy"], TWO_CRASH_RESTART_POLICY)
+
+    def test_two_crash_reference_hang_without_startup_failure_is_accepted_by_hang_policy(self):
+        result, case = _worker_crash_fixture(
+            TWO_CRASH_RESTART_CASE_ID, with_shutdown_hang=True, listen_failure=False,
+        )
+        decision = evidence.validate_parity(
+            result, expected_cases=[case], allow_windows_reference_hang=True,
+        )
+        self.assertEqual(decision["status"], "accepted_with_reference_exception")
+        self.assertEqual(decision["raw_parity_status"], "failed")
+        self.assertEqual(decision["raw_parity_summary"]["failed"], 1)
+        self.assertEqual(decision["accepted_reference_defects"][0]["policy"],
+                         TWO_CRASH_RESTART_HANG_POLICY)
+        self.assertEqual(decision["candidate_contract_cases"], [TWO_CRASH_RESTART_CASE_ID])
+        with self.assertRaises(evidence.EvidenceError):
+            evidence.validate_parity(result, expected_cases=[case])
+        with self.assertRaises(evidence.EvidenceError):
+            evidence.validate_parity(
+                result, expected_cases=[case], allow_windows_reference_startup=True,
+            )
+
+    def test_two_crash_reference_hang_requires_wakeup_and_clean_candidate(self):
+        for side, field, value in (
+            ("target", "process_timed_out", True),
+            ("oracle", "process_timed_out", False),
+        ):
+            result, case = _worker_crash_fixture(
+                TWO_CRASH_RESTART_CASE_ID, with_shutdown_hang=True, listen_failure=False,
+            )
+            result["cases"][0][f"{side}_observation"][field] = value
+            with self.subTest(side=side, field=field), self.assertRaises(evidence.EvidenceError):
+                evidence.validate_parity(
+                    result, expected_cases=[case], allow_windows_reference_hang=True,
+                )
+
+        result, case = _worker_crash_fixture(
+            TWO_CRASH_RESTART_CASE_ID, with_shutdown_hang=True, listen_failure=False,
+        )
+        observation = result["cases"][0]["oracle_observation"]
+        raw = json.loads(base64.b64decode(observation["stdout_base64"]))
+        raw["run_http"]["reference_shutdown_diagnostic"]["connection_opened"] = False
+        observation["stdout_base64"] = encode(json.dumps(raw))
+        with self.assertRaises(evidence.EvidenceError):
+            evidence.validate_parity(
+                result, expected_cases=[case], allow_windows_reference_hang=True,
+            )
 
     def test_candidate_must_perform_the_declared_crashes_and_shutdown(self):
         result, case = _worker_crash_fixture(CRASH_RESTART_CASE_ID)
