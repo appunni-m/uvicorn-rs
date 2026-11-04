@@ -274,8 +274,8 @@ main. The hosted exact-main handoff remains open under `7t4g`.
 Interim `[skip ci]` commits avoid broad unchanged reruns while focused tooling
 and Windows checks qualify their changes. Required PR checks remain pending;
 complete final-source CI is still required before merge and release. Coverage
-acceptance precedes benchmark timing; independent Coverage-MCP review is not
-required by the owner decision above. Compatibility
+acceptance precedes benchmark timing; independent Coverage-MCP review remains
+required by the active release goal. Compatibility
 task `x3az` and all ten children are closed. The capped Linux ARM64
 [upload diagnostic #275](https://github.com/appunni-m/uvicorn-rs/actions/runs/41632864829)
 completes three candidate/reference pairs with zero failures; it does not
@@ -1300,20 +1300,21 @@ lines, complete per-case attribution and three complete passing repeats with no
 case, infrastructure, retry or unrun failure. Record integer totals and hashes.
 Independent acceptance of that report is tracked by 7t4g; neither gate is waived.
 
-## 7t4g — Coverage-MCP recovery and exact-report handoff
+## 7t4g — Coverage-MCP review of the final exact-source report
 
-**Work:** Diagnose the service/import failure once from its current logs. Use the
-existing canonical-report projection (`scripts/project_coverage_mcp.py`) and
-handoff tooling rather than repeatedly importing the large raw report. Recover
-in an isolated store when necessary; preserve the shared database and unchanged
-raw CI artifact. Query and retain every region and line page for the passing
-source, attach the receipt, strict-check it offline and publish the existing
-reviewed handoff artifact for the exact main run/attempt.
+**Work:** After the final-source unified coverage job passes, use the existing
+canonical-report projection (`scripts/project_coverage_mcp.py`) and handoff
+tooling rather than repeatedly importing the large raw report. Query Coverage-
+MCP 0.16.0 for every unfiltered region and line page. Preserve the shared
+database and unchanged raw CI artifact. Retain the complete MCP transcript,
+source/build identity, passing test status, and accepted receipt; attach and
+strict-check the handoff artifact for the exact final-source run and attempt.
 
-**Close with:** Complete zero-gap independent page chains with source/build
-identity, successful attachment/offline verification, and one digest-checked
-handoff artifact selected by the candidate workflow. A timeout, pending status,
-raw LLVM summary, or synthetic receipt cannot satisfy this task.
+**Close with:** Complete zero-gap independent page chains with matching
+source/build identity and passing tests, successful attachment/offline
+verification, and one digest-checked handoff artifact selected and revalidated
+by candidate qualification. A timeout, pending status, raw LLVM summary, or
+synthetic receipt cannot satisfy this task.
 
 ## nbmg — HTTP/1 upload timeout root cause
 

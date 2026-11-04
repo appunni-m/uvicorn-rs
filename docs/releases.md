@@ -16,14 +16,17 @@ Use these state labels precisely:
   are complete.
 
 <a id="current-release-gates-2026-11-04"></a>
+<a id="current-release-gates-2026-11-05"></a>
 
-## Current release gates (2026-11-04)
+## Current release gates (2026-11-05)
 
-The project owner has waived independent Coverage-MCP review. Exact-source raw
-unified coverage remains mandatory: the complete three-repeat matrix must
-pass, every measured production region and line must be covered, and the
-candidate must preserve and revalidate the report, run, artifact, and file
-hashes. No MCP receipt is required or implied.
+The active release contract requires an accepted independent Coverage-MCP
+review bound to the final clean source and its exact raw unified coverage
+report. The 2026-11-04 waiver is superseded. The report must show 100% regions
+and lines across the complete three-repeat matrix, and the candidate must
+preserve and revalidate the source, run, artifact, report, context, build, and
+raw-file identities. The exact-main #661 report below is historical evidence;
+the final candidate still needs its own exact-source report and review receipt.
 
 Exact-main CI [#661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
 passed on `feb955d2758166ad8c4b519903fd1318b29e7d2d`: all 1,453 coverage
@@ -457,8 +460,9 @@ version.
    installed-package checks, and native composition inputs.
 3. Record the exact-source raw coverage report and its artifact, report,
    context, build, and full-matrix identities. Require 100% of normalized
-   regions and lines. Independent Coverage-MCP review is waived; the tag
-   workflow does not require an MCP handoff.
+   regions and lines, plus an accepted independent Coverage-MCP review receipt
+   for that same report. Candidate validation must recheck the receipt and
+   source identities before the tag can be published.
 4. Complete the correctness-gated three-system performance matrix. Require
    matching valid repetitions and report throughput, p50/p95/p99 latency,
    server CPU per operation, and sampled peak RSS. Keep stock FastAPI and

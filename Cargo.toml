@@ -27,7 +27,7 @@ name = "uvicorn_rs"
 crate-type = ["cdylib"]
 
 [features]
-runtime-diagnostics = []
+runtime-diagnostics = ["uvicorn-rs/runtime-diagnostics"]
 
 [dependencies]
 aes = "0.9"

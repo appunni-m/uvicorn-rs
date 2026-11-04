@@ -35,6 +35,8 @@
 
 #[cfg(coverage)]
 use std::sync::atomic::AtomicU8;
+#[cfg(feature = "runtime-diagnostics")]
+mod connection_trace;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{
     error::Error,
@@ -3384,6 +3386,8 @@ struct ConnectionRequestMetadata {
     peer_read_failed: Option<PeerReadFailed>,
     response_body_activity: Option<watch::Sender<usize>>,
     http1_keep_alive: Option<Arc<Http1KeepAlive>>,
+    #[cfg(feature = "runtime-diagnostics")]
+    connection_trace: Option<Arc<connection_trace::ConnectionTrace>>,
 }
 
 struct ConnectionOptions<'a> {
@@ -3611,6 +3615,12 @@ where
     B::Error: Into<BoxBodyError> + Send + Sync + 'static,
 {
     let peer_addr = connection_info.peer_addr;
+    #[cfg(feature = "runtime-diagnostics")]
+    let connection_trace = (connection_info.transport == TransportKind::Tcp
+        && connection_info.tls.is_none()
+        && std::env::var_os("UVICORN_RS_UPLOAD_TRACE").as_deref()
+            == Some(std::ffi::OsStr::new("1")))
+    .then(|| Arc::new(connection_trace::ConnectionTrace::new(peer_addr)));
     let ConnectionOptions {
         error_observer,
         concurrency_limit_observer,
@@ -3666,6 +3676,8 @@ where
                 peer_read_failed: Some(peer_read_failed),
                 response_body_activity: Some(response_body_activity),
                 http1_keep_alive,
+                #[cfg(feature = "runtime-diagnostics")]
+                connection_trace: connection_trace.clone(),
             },
         ),
         error_observer.cloned(),
@@ -3681,6 +3693,8 @@ where
         stream,
         keep_alive_timeout_enabled.then_some(keep_alive_deadline_sender),
     );
+    #[cfg(feature = "runtime-diagnostics")]
+    let stream = connection_trace::ConnectionTraceIo::new(stream, connection_trace.clone());
     #[cfg(coverage)]
     let stream = CoverageFaultIo::new(stream);
     let connection = builder.serve_connection_with_upgrades(TokioIo::new(stream), service);
@@ -3768,6 +3782,8 @@ struct ConnectionInfoService<S, RequestBody, B> {
     peer_read_failed: Option<PeerReadFailed>,
     response_body_activity: Option<watch::Sender<usize>>,
     http1_keep_alive: Option<Arc<Http1KeepAlive>>,
+    #[cfg(feature = "runtime-diagnostics")]
+    connection_trace: Option<Arc<connection_trace::ConnectionTrace>>,
     _types: std::marker::PhantomData<fn(RequestBody) -> B>,
 }
 
@@ -3785,6 +3801,8 @@ where
             peer_read_failed: self.peer_read_failed.clone(),
             response_body_activity: self.response_body_activity.clone(),
             http1_keep_alive: self.http1_keep_alive.clone(),
+            #[cfg(feature = "runtime-diagnostics")]
+            connection_trace: self.connection_trace.clone(),
             _types: std::marker::PhantomData,
         }
     }
@@ -3807,6 +3825,8 @@ impl<S, RequestBody, B> ConnectionInfoService<S, RequestBody, B> {
             peer_read_failed: request_metadata.peer_read_failed,
             response_body_activity: request_metadata.response_body_activity,
             http1_keep_alive: request_metadata.http1_keep_alive,
+            #[cfg(feature = "runtime-diagnostics")]
+            connection_trace: request_metadata.connection_trace,
             _types: std::marker::PhantomData,
         }
     }
@@ -3826,6 +3846,16 @@ where
     }
 
     fn call(&mut self, mut request: Request<RequestBody>) -> Self::Future {
+        #[cfg(feature = "runtime-diagnostics")]
+        if let Some(trace) = &self.connection_trace {
+            if let Some(request_id) = request
+                .headers()
+                .get("x-uvicorn-rs-upload-trace")
+                .and_then(|value| value.to_str().ok())
+            {
+                trace.request_dispatched(request_id);
+            }
+        }
         request
             .extensions_mut()
             .insert(self.connection_info.clone());

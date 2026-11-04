@@ -307,6 +307,15 @@ class FailureReportTests(unittest.TestCase):
             "event=asgi-deliver bytes=1024 flag=true",
             "uvicorn-rs-upload-event request=77-2-9 lane=asgi offset_ns=30 "
             "event=asgi-response-start-queued bytes=0 flag=false value=200",
+            "uvicorn-rs-connection-trace schema=1 pid=44 connection=3 "
+            "peer=127.0.0.1:41003 peer_port=41003 elapsed_ns=9000000 "
+            "read_bytes=1049000 write_bytes=500 read_ready_polls=12 "
+            "read_pending_polls=5 read_eof=1 read_errors=0 write_ready_polls=3 "
+            "write_pending_polls=0 write_errors=0 max_read_wait_ns=7000000 "
+            "max_write_wait_ns=0 events_seen=2 events_retained=2 events_dropped=0",
+            "uvicorn-rs-connection-event schema=1 pid=44 connection=3 peer_port=41003 "
+            "offset_ns=1000 event=request-dispatched bytes=0 read_total=1049000 "
+            "write_total=0 request_id=77-2-9",
         ])
         metrics = {
             "upload_trace": {
@@ -315,6 +324,7 @@ class FailureReportTests(unittest.TestCase):
                 "calibration_unix": 1700000000.0,
             },
             "first_failure": {
+                "transfer": {"local_port": 41003},
                 "upload_trace": {
                     "request_id": "77-2-9",
                     "started": 10.0,
@@ -327,6 +337,15 @@ class FailureReportTests(unittest.TestCase):
         self.assertEqual(trace["server_trace"]["status"], "matched")
         self.assertEqual(len(trace["server_trace"]["trace_records"]), 2)
         self.assertEqual(trace["server_trace"]["trace_records"][0]["expected_bytes"], 1024)
+        self.assertEqual(trace["server_connection_trace"]["status"], "matched")
+        self.assertEqual(
+            trace["server_connection_trace"]["connections"][0]["peer_port"],
+            41003,
+        )
+        self.assertEqual(
+            trace["server_connection_trace"]["connections"][0]["events"][0]["request_id"],
+            "77-2-9",
+        )
         self.assertEqual(
             trace["server_trace"]["trace_records"][0]["emission_reason"],
             "body-size-mismatch",

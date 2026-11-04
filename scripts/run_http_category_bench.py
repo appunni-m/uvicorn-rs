@@ -619,6 +619,76 @@ def _server_upload_trace(server_output: str, request_id: str) -> dict:
     }
 
 
+def _server_connection_trace(server_output: str, peer_port: int | None) -> dict:
+    """Join a libcurl local port to bounded raw TCP observations from Rust."""
+    if not isinstance(peer_port, int) or peer_port <= 0:
+        return {"status": "client_local_port_unavailable", "connections": []}
+
+    traces = []
+    by_id = {}
+    summary_prefix = "uvicorn-rs-connection-trace "
+    event_prefix = "uvicorn-rs-connection-event "
+    for line in server_output.splitlines():
+        if line.startswith(summary_prefix):
+            fields = _trace_fields(line, summary_prefix)
+            try:
+                if int(fields["peer_port"]) != peer_port:
+                    continue
+                trace = {
+                    "pid": int(fields["pid"]),
+                    "connection_id": int(fields["connection"]),
+                    "peer": fields["peer"],
+                    "peer_port": peer_port,
+                    "elapsed_ns": int(fields["elapsed_ns"]),
+                    "read_bytes": int(fields["read_bytes"]),
+                    "write_bytes": int(fields["write_bytes"]),
+                    "read_ready_polls": int(fields["read_ready_polls"]),
+                    "read_pending_polls": int(fields["read_pending_polls"]),
+                    "read_eof": int(fields["read_eof"]),
+                    "read_errors": int(fields["read_errors"]),
+                    "write_ready_polls": int(fields["write_ready_polls"]),
+                    "write_pending_polls": int(fields["write_pending_polls"]),
+                    "write_errors": int(fields["write_errors"]),
+                    "max_read_wait_ns": int(fields["max_read_wait_ns"]),
+                    "max_write_wait_ns": int(fields["max_write_wait_ns"]),
+                    "events_seen": int(fields["events_seen"]),
+                    "events_dropped": int(fields["events_dropped"]),
+                    "events": [],
+                }
+            except (KeyError, ValueError):
+                continue
+            traces.append(trace)
+            by_id[(trace["pid"], trace["connection_id"])] = trace
+        elif line.startswith(event_prefix):
+            fields = _trace_fields(line, event_prefix)
+            try:
+                if int(fields["peer_port"]) != peer_port:
+                    continue
+                trace = by_id.get((int(fields["pid"]), int(fields["connection"])))
+                if trace is None:
+                    continue
+                event = {
+                    "offset_ns": int(fields["offset_ns"]),
+                    "event": fields["event"],
+                    "bytes": int(fields["bytes"]),
+                    "read_total": int(fields["read_total"]),
+                    "write_total": int(fields["write_total"]),
+                }
+                if "wait_ns" in fields:
+                    event["wait_ns"] = int(fields["wait_ns"])
+                if "request_id" in fields:
+                    event["request_id"] = fields["request_id"]
+                trace["events"].append(event)
+            except (KeyError, ValueError):
+                continue
+
+    return {
+        "status": "matched" if traces else "no_matching_server_peer_port",
+        "peer_port": peer_port,
+        "connections": traces,
+    }
+
+
 def _correlate_upload_trace(
     client_metrics: dict,
     server_output: str,
@@ -637,6 +707,12 @@ def _correlate_upload_trace(
 
     server_trace = _server_upload_trace(server_output, request_id)
     client_trace["server_trace"] = server_trace
+    transfer = first_failure.get("transfer")
+    local_port = transfer.get("local_port") if isinstance(transfer, dict) else None
+    client_trace["server_connection_trace"] = _server_connection_trace(
+        server_output,
+        local_port if isinstance(local_port, int) else None,
+    )
     calibration = client_metrics.get("upload_trace")
     aligned = isinstance(calibration, dict) and all(
         isinstance(calibration.get(key), (int, float))

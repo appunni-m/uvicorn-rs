@@ -8,15 +8,17 @@
 <a id="current-unified-coverage-status-2026-10-31"></a>
 <a id="current-unified-coverage-status-2026-11-01"></a>
 <a id="current-unified-coverage-status-2026-11-04"></a>
+<a id="current-unified-coverage-status-2026-11-05"></a>
 
-## Current unified coverage status (2026-11-04)
+## Current unified coverage status (2026-11-05)
 
-**Owner decision:** independent Coverage-MCP review is not required. The raw
-exact-source unified report is the acceptance evidence: all measured production
-regions and lines must be 100%, and the complete matrix must pass three times.
-The candidate records the source, CI run and attempt, artifact digest, report,
-context, build and raw-file hashes. Older sections below record historical
-MCP checks; they do not add a current release requirement.
+**Current release requirement:** the exact-source unified report must have
+100% measured production regions and lines, and the complete matrix must pass
+three times. An accepted independent Coverage-MCP review must inspect every
+unfiltered region and line page for that same final-source report. The
+candidate records and revalidates the source, CI run and attempt, artifact
+digest, report, context, build, raw-file hashes, and actual MCP transcript and
+receipt. The 2026-11-04 review waiver is superseded.
 
 Exact-main CI [#661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
 passed on clean source `feb955d2758166ad8c4b519903fd1318b29e7d2d`, run
@@ -29,6 +31,11 @@ SHA-256 `d7ce785d590e7195be7eaa57e7761b8acb182ac4475599e2ab43cbd45567745d`.
 The CI report and artifact digests bind the measurement to this source and
 run; the candidate's raw-evidence manifest will additionally record the
 canonical report and context hashes.
+
+This main-branch report does not qualify the current `develop` candidate. PR
+#23 CI #678 is the fresh exact-head run for
+`c09d11944670a99f64640fc8ed31377d55cd1635`; its coverage and package jobs must
+finish before the current-source report can be reviewed.
 
 The matching three-system benchmark [#283](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681)
 also passed. Its aggregate artifact is

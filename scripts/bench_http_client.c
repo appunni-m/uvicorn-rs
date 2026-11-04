@@ -48,6 +48,8 @@ typedef struct {
     curl_off_t curl_downloaded_bytes;
     long response_code;
     long new_connections;
+    long local_port;
+    long primary_port;
     UploadTraceEvent trace_events[MAX_UPLOAD_TRACE_EVENTS];
 } SuccessfulUploadTrace;
 
@@ -102,6 +104,8 @@ typedef struct FirstFailure {
     curl_off_t curl_downloaded_bytes;
     long response_code;
     long new_connections;
+    long local_port;
+    long primary_port;
     double connect_time_seconds;
     double starttransfer_time_seconds;
     double total_time_seconds;
@@ -372,6 +376,8 @@ static void set_transfer_failure(
         failure->curl_downloaded_bytes = -1;
         failure->response_code = 0;
         failure->new_connections = -1;
+        failure->local_port = -1;
+        failure->primary_port = -1;
         failure->connect_time_seconds = -1.0;
         failure->starttransfer_time_seconds = -1.0;
         failure->total_time_seconds = -1.0;
@@ -398,6 +404,10 @@ static void set_transfer_failure(
 #endif
         (void)curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &failure->response_code);
         (void)curl_easy_getinfo(curl, CURLINFO_NUM_CONNECTS, &failure->new_connections);
+#if LIBCURL_VERSION_NUM >= 0x071500
+        (void)curl_easy_getinfo(curl, CURLINFO_LOCAL_PORT, &failure->local_port);
+        (void)curl_easy_getinfo(curl, CURLINFO_PRIMARY_PORT, &failure->primary_port);
+#endif
         (void)curl_easy_getinfo(curl, CURLINFO_CONNECT_TIME, &failure->connect_time_seconds);
         (void)curl_easy_getinfo(
             curl,
@@ -468,6 +478,8 @@ static void retain_successful_upload_trace(
         : (size_t)(upload->trace_events_seen % MAX_UPLOAD_TRACE_EVENTS);
     trace->response_code = response_code;
     trace->new_connections = new_connections;
+    trace->local_port = -1;
+    trace->primary_port = -1;
     trace->curl_uploaded_bytes = (curl_off_t)-1;
     trace->curl_downloaded_bytes = (curl_off_t)-1;
     if (upload->trace_events != NULL) {
@@ -476,6 +488,10 @@ static void retain_successful_upload_trace(
 #if LIBCURL_VERSION_NUM >= 0x073700
     (void)curl_easy_getinfo(curl, CURLINFO_SIZE_UPLOAD_T, &trace->curl_uploaded_bytes);
     (void)curl_easy_getinfo(curl, CURLINFO_SIZE_DOWNLOAD_T, &trace->curl_downloaded_bytes);
+#endif
+#if LIBCURL_VERSION_NUM >= 0x071500
+    (void)curl_easy_getinfo(curl, CURLINFO_LOCAL_PORT, &trace->local_port);
+    (void)curl_easy_getinfo(curl, CURLINFO_PRIMARY_PORT, &trace->primary_port);
 #endif
 }
 
@@ -837,6 +853,7 @@ int main(int argc, char **argv) {
                 "\"expected_upload_bytes\":%zu,\"upload_callback_bytes\":%zu,"
                 "\"curl_uploaded_bytes\":%lld,\"curl_downloaded_bytes\":%lld,"
                 "\"response_code\":%ld,\"new_connections\":%ld,"
+                "\"local_port\":%ld,\"primary_port\":%ld,"
                 "\"connect_time_seconds\":%.9f,\"starttransfer_time_seconds\":%.9f,"
                 "\"total_time_seconds\":%.9f}",
                 first_failure.worker_index,
@@ -847,6 +864,8 @@ int main(int argc, char **argv) {
                 (long long)first_failure.curl_downloaded_bytes,
                 first_failure.response_code,
                 first_failure.new_connections,
+                first_failure.local_port,
+                first_failure.primary_port,
                 first_failure.connect_time_seconds,
                 first_failure.starttransfer_time_seconds,
                 first_failure.total_time_seconds);
@@ -945,7 +964,8 @@ int main(int argc, char **argv) {
                     "\"expected_upload_bytes\":%zu,\"callback_calls\":%llu,"
                     "\"callback_bytes\":%zu,\"curl_uploaded_bytes\":%lld,"
                     "\"curl_downloaded_bytes\":%lld,\"response_code\":%ld,"
-                    "\"new_connections\":%ld,\"started\":%.9f,"
+                    "\"new_connections\":%ld,\"local_port\":%ld,"
+                    "\"primary_port\":%ld,\"started\":%.9f,"
                     "\"first_callback\":%.9f,\"last_callback\":%.9f,"
                     "\"completed\":%.9f,\"last_progress\":%.9f,"
                     "\"events_seen\":%llu,\"events_retained\":%zu,"
@@ -956,7 +976,8 @@ int main(int argc, char **argv) {
                     shared.upload_bytes, trace->callback_calls, trace->callback_bytes,
                     (long long)trace->curl_uploaded_bytes,
                     (long long)trace->curl_downloaded_bytes,
-                    trace->response_code, trace->new_connections, trace->started_monotonic,
+                    trace->response_code, trace->new_connections,
+                    trace->local_port, trace->primary_port, trace->started_monotonic,
                     trace->first_callback_monotonic, trace->last_callback_monotonic,
                     trace->completed_monotonic, trace->last_progress_monotonic,
                     trace->trace_events_seen, trace->trace_event_count,
