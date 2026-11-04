@@ -472,7 +472,6 @@ def analyze_category(loaded, driver):
     if not repetition(planned_repetitions):
         planned_repetitions = MINIMUM_MATCHES
     exclusions = metadata.get("excluded_servers_by_workload", {})
-    target_only = {"request-upload"} if category == "http3" else set()
     identities = Counter(key for row in rows if (key := row_key(row)) is not None)
     missing = []
     for workload in workloads:
@@ -521,11 +520,8 @@ def analyze_category(loaded, driver):
                 None,
             )
             if (
-                workload in target_only
-                or (
-                    candidate_pair is not None
-                    and candidate_pair["reference"] in excluded_for_workload
-                )
+                candidate_pair is not None
+                and candidate_pair["reference"] in excluded_for_workload
             ):
                 exclusions_counts["target_only_no_live_reference_pair"] += 1
     gates = metadata.get("paired_timing_repetitions", [])
@@ -557,8 +553,6 @@ def analyze_category(loaded, driver):
                           gate.get("required", MINIMUM_MATCHES) if gate and repetition(gate.get("required")) else MINIMUM_MATCHES)
             if len(matching) < minimum:
                 reasons.append("fewer_than_required_matching_valid_repetitions")
-            if workload in target_only:
-                reasons.append("target_only_no_live_reference_pair")
             if reference in excluded_for_workload:
                 reasons.append("target_only_no_live_reference_pair")
             if workload == "exception-to-500":

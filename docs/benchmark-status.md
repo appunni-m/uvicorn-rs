@@ -12,6 +12,39 @@
 This attempt did not produce a validated three-system aggregate or a complete performance report. Partial per-system measurements remain in this run's artifacts. The [previous complete report](benchmark-results.md) remains the latest complete measurement; inspect the [workflow artifacts and logs](https://github.com/appunni-m/uvicorn-rs/actions/runs/40228012455) for this attempt.
 <!-- END GENERATED LATEST ATTEMPT -->
 
+## Provisional complete three-system matrix on develop (2026-11-04)
+
+[Benchmark run 282](https://github.com/appunni-m/uvicorn-rs/actions/runs/41760326495)
+completed on develop commit
+[`6bc2cb05c86a6501a2a24bf3f70e40e2f562c26f`](https://github.com/appunni-m/uvicorn-rs/commit/6bc2cb05c86a6501a2a24bf3f70e40e2f562c26f).
+Its aggregate artifact is
+[13294985788](https://github.com/appunni-m/uvicorn-rs/actions/runs/41760326495/artifacts/13294985788),
+SHA-256 `4ff588d451d9e19a89b41d00b1f93ae3a577f0cfa03a6e61dfacf5f0f0247e95`.
+The matrix has complete Linux x86-64, Linux ARM64, and macOS ARM64 system
+receipts, each following the installed-wheel public parity gate.
+
+The original aggregate excluded every H3 `request-upload` pair through a stale
+workload-wide analyzer rule. Reanalysis of the unchanged, checksum-verified raw
+system bundles with the corrected analyzer qualifies both asyncio and uvloop
+upload pairs on all three systems: five valid matched repetitions per pair.
+No timed workload was rerun. The only unranked H3 cell remains the approved
+Linux ARM64 Hypercorn 0.18.0 asyncio `slow-reader-backpressure` reference; its
+Rust candidate completed all five correctness and shutdown repetitions. The
+policy ID, platform, server mapping, and raw reference logs remain in the
+artifact.
+
+FastAPI HTTP/1.1 validated-route throughput is below Uvicorn on all six
+system/loop pairs, with higher p95 latency and server CPU per operation. H2/H3
+results are workload-specific and do not establish a broad Python ASGI speed
+gain. The performance decision remains `scope_revised` with no FastAPI
+superiority claim. The aggregate report now includes process-level server and
+client CPU per operation alongside CPU percent and RSS; per-thread CPU is not
+collected. The Rust adapter uses one Tokio worker thread.
+
+This run is source-bound to its recorded develop commit, but it does not prove
+the release gates for exact `main`. A complete benchmark on the final main
+commit is still required before artifact promotion or publication.
+
 ## Buffer recycling decision and ARM64 trace (2026-11-03)
 
 **Reject and remove peer-read buffer recycling.** The normal-build

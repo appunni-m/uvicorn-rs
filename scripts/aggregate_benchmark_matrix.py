@@ -328,8 +328,12 @@ def workload_rows(system: dict, *, resources: bool = False) -> list[str]:
                     f"| {category} | {workload} | {profile} | "
                     f"{metric(pair, 'server_cpu_percent_elapsed', 'reference')} / "
                     f"{metric(pair, 'server_cpu_percent_elapsed', 'rust')} | "
+                    f"{metric(pair, 'server_cpu_microseconds_per_operation', 'reference')} / "
+                    f"{metric(pair, 'server_cpu_microseconds_per_operation', 'rust')} | "
                     f"{metric(pair, 'client_cpu_percent_elapsed_complete', 'reference')} / "
                     f"{metric(pair, 'client_cpu_percent_elapsed_complete', 'rust')} | "
+                    f"{metric(pair, 'client_cpu_microseconds_per_operation_complete', 'reference')} / "
+                    f"{metric(pair, 'client_cpu_microseconds_per_operation_complete', 'rust')} | "
                     f"{metric(pair, 'server_rss_sampled_peak_mib', 'reference')} / "
                     f"{metric(pair, 'server_rss_sampled_peak_mib', 'rust')} | "
                     f"{metric(pair, 'client_rss_sampled_peak_mib', 'reference')} / "
@@ -362,8 +366,12 @@ def fastapi_rows(system: dict, *, resources: bool = False) -> list[str]:
                 f"| {workload} | {pair.get('protocol', 'unknown')} | {profile} | {matched} | "
                 f"{metric(pair, 'server_cpu_percent_elapsed', 'reference')} / "
                 f"{metric(pair, 'server_cpu_percent_elapsed', 'rust')} | "
+                f"{metric(pair, 'server_cpu_microseconds_per_operation', 'reference')} / "
+                f"{metric(pair, 'server_cpu_microseconds_per_operation', 'rust')} | "
                 f"{metric(pair, 'client_cpu_percent_elapsed_complete', 'reference')} / "
                 f"{metric(pair, 'client_cpu_percent_elapsed_complete', 'rust')} | "
+                f"{metric(pair, 'client_cpu_microseconds_per_operation_complete', 'reference')} / "
+                f"{metric(pair, 'client_cpu_microseconds_per_operation_complete', 'rust')} | "
                 f"{metric(pair, 'server_rss_sampled_peak_mib', 'reference')} / "
                 f"{metric(pair, 'server_rss_sampled_peak_mib', 'rust')} | "
                 f"{metric(pair, 'client_rss_sampled_peak_mib', 'reference')} / "
@@ -471,11 +479,11 @@ def render_markdown(report: dict) -> str:
             "",
             "Stock FastAPI resource measurements:",
             "",
-            "| Workload | Protocol | Loop | Valid matches | Server CPU % ref / Rust | Client CPU % ref / Rust | Server RSS MiB ref / Rust | Client RSS MiB ref / Rust |",
-            "|---|---|---|---:|---:|---:|---:|---:|",
+            "| Workload | Protocol | Loop | Valid matches | Server CPU % ref / Rust | Server CPU µs/op ref / Rust | Client CPU % ref / Rust | Client CPU µs/op ref / Rust | Server RSS MiB ref / Rust | Client RSS MiB ref / Rust |",
+            "|---|---|---|---:|---:|---:|---:|---:|---:|---:|",
         ]
         fastapi_resource_rows = fastapi_rows(system, resources=True)
-        lines.extend(fastapi_resource_rows or ["| No qualified FastAPI pairs | — | — | — | — | — | — | — |"])
+        lines.extend(fastapi_resource_rows or ["| No qualified FastAPI pairs | — | — | — | — | — | — | — | — | — |"])
         lines += [
             "",
             "Throughput and latency:",
@@ -489,11 +497,11 @@ def render_markdown(report: dict) -> str:
             "",
             "Resource measurements:",
             "",
-            "| Category | Workload | Loop | Server CPU % ref / Rust | Client CPU % ref / Rust | Server RSS MiB ref / Rust | Client RSS MiB ref / Rust |",
-            "|---|---|---:|---:|---:|---:|---:|",
+            "| Category | Workload | Loop | Server CPU % ref / Rust | Server CPU µs/op ref / Rust | Client CPU % ref / Rust | Client CPU µs/op ref / Rust | Server RSS MiB ref / Rust | Client RSS MiB ref / Rust |",
+            "|---|---|---:|---:|---:|---:|---:|---:|---:|",
         ]
         resource_rows = workload_rows(system, resources=True)
-        lines.extend(resource_rows or ["| No qualified pairs | — | — | — | — | — | — |"])
+        lines.extend(resource_rows or ["| No qualified pairs | — | — | — | — | — | — | — | — |"])
         lines += [
             "",
             "Category qualification counts:",
@@ -616,6 +624,7 @@ def render_markdown(report: dict) -> str:
         "- A rate above 1× is a measured Rust/reference ratio for that workload and runner only; it does not establish a universal speedup or statistical significance.",
         "- HTTP/2 and HTTP/3 compare against Hypercorn because Uvicorn does not provide those protocol servers.",
         "- FastAPI-only rows compare the same upstream FastAPI/Starlette/Pydantic stack; they do not use FastAPI-RS or Starlette-RS.",
+        "- CPU percentage and CPU per operation are process totals, not per-thread measurements. The uvicorn-rs adapter uses one Tokio worker; per-thread CPU attribution is not collected.",
         "- This report identifies each platform's hosted runner image and CPU. Hosted hardware and neighboring load can change between runs; inspect the raw environment and timing-valid rows before comparing revisions.",
         "- The Rust server still invokes Python for ASGI callables, event-loop tasks, and ASGI message construction/dispatch. These end-to-end results include that integration boundary.",
         "",

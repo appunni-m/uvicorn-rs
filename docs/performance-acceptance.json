@@ -1,7 +1,7 @@
 {
   "schema": "uvicorn-rs-performance-review@1",
   "decision": "scope_revised",
-  "rationale": "The exact-commit normal-build FastAPI comparison on Linux x86-64 qualified five matched asyncio repetitions and four matched uvloop repetitions. Rust delivered 0.652x and 0.726x of Uvicorn throughput while using 1.96x and 1.75x server CPU per request. The broader three-system category evidence also shows repeated HTTP/1.1 and WebSocket regressions. The Python ASGI compatibility path therefore does not meet the original faster-than-Uvicorn objective. Retain compatibility and correctness gates for Python ASGI; target the performance claim at the Python-free Rust-native application path. The release verifier must still validate a complete exact-commit matrix before accepting a candidate.",
+  "rationale": "The exact-commit normal-build FastAPI comparison on Linux x86-64 qualified five matched asyncio repetitions and four matched uvloop repetitions. Rust delivered 0.652x and 0.726x of Uvicorn throughput while using 1.96x and 1.75x server CPU per request. Provisional three-system run 41760326495 on develop commit 6bc2cb05c86a6501a2a24bf3f70e40e2f562c26f also qualifies the stock FastAPI HTTP/1.1 validated route on all six system/loop pairs; Rust is slower and uses more CPU per operation in every pair. The same matrix contains workload-specific HTTP/2 and HTTP/3 gains as well as regressions, so it does not support a broad Python ASGI performance claim. Retain compatibility and correctness gates for Python ASGI and make no performance superiority claim for that distribution. The revised Python-free Rust-native performance objective has not been established by this FastAPI matrix. The release verifier must validate a complete exact-main matrix before accepting a candidate.",
   "scope": {
     "comparison": "stock FastAPI and Starlette under the uvicorn-rs PyPI distribution versus Uvicorn",
     "category": "http1",
@@ -45,7 +45,7 @@
   "scope_revision": {
     "document": "docs/benchmark-status.md",
     "statement": "Treat the uvicorn-rs PyPI distribution, implemented by the optional uvicorn-rs-py Cargo/PyO3 adapter, as the Python ASGI compatibility server without a performance superiority claim over Uvicorn. Target server performance claims at Python-free Rust-native application composition; keep Python ASGI parity and benchmark results as compatibility and regression evidence.",
-    "rationale": "The normal-build validated-route run used a bodyless GET, so request-body copying cannot explain its measured regression. Instrumented stage data points to extra Python ASGI wall time and task scheduling but does not establish a causal function-level attribution. Further Python-boundary work should be justified by a correctness-preserving before/after measurement rather than the original general speed objective.",
+    "rationale": "The normal-build validated-route run used a bodyless GET, so request-body copying cannot explain its measured regression. Instrumented stage data points to extra Python ASGI wall time and task scheduling but does not establish a causal function-level attribution. The three-system matrix continues to show this HTTP/1.1 route slower on every tested system and event loop, with higher p95 latency and server CPU per operation. H2/H3 gains are workload-specific and do not cancel H1 or WebSocket regressions. Further Python-boundary work should be justified by a correctness-preserving before/after measurement rather than the original general speed objective.",
     "measured_pairs": [
       {
         "system": "linux-x86_64",
@@ -54,6 +54,26 @@
       },
       {
         "system": "linux-x86_64",
+        "workload": "fastapi-validated-route",
+        "loop": "uvloop"
+      },
+      {
+        "system": "linux-aarch64",
+        "workload": "fastapi-validated-route",
+        "loop": "asyncio"
+      },
+      {
+        "system": "linux-aarch64",
+        "workload": "fastapi-validated-route",
+        "loop": "uvloop"
+      },
+      {
+        "system": "macos-arm64",
+        "workload": "fastapi-validated-route",
+        "loop": "asyncio"
+      },
+      {
+        "system": "macos-arm64",
         "workload": "fastapi-validated-route",
         "loop": "uvloop"
       }
