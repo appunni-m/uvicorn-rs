@@ -254,7 +254,7 @@ jobs:
 
   release-evidence-contracts:
     if: github.event_name != 'workflow_dispatch' || inputs.mode == 'full'
-    name: Release artifact and Coverage-MCP handoff contract
+    name: Release artifact and raw 100% coverage evidence contract
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -264,7 +264,7 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.12.13"
-      - name: Exercise exact-run handoff and fail-closed receipt cases
+      - name: Exercise exact-run raw coverage and optional handoff evidence cases
         run: |
           python scripts/check_release_version.py
           python scripts/test_native_fault_contracts.py

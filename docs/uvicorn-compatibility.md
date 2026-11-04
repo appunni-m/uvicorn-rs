@@ -1,13 +1,13 @@
 # Can I replace Uvicorn?
 
-The latest installed-wheel evidence passes the indexed Uvicorn 0.54.0
-comparisons on Linux x86-64 and macOS ARM64. The focused Windows gate accepts
-the two precisely captured stock-Uvicorn worker defects and independently
-passes all three candidate lifecycle contracts. Full final-source Windows
-package qualification remains pending.
-The 0.3.0 PyPI distribution remains
-unpublished. Final-source coverage/review, benchmarks and candidate
-qualification are still release gates.
+Exact-main CI #661 passes the indexed Uvicorn 0.54.0 installed-wheel
+comparisons on Linux x86-64, macOS ARM64 and Windows x86-64, with the two
+captured stock-Windows defects accepted only under their narrow candidate
+correctness policy. Linux, macOS and Windows candidate package consumers and
+the Python 3.9 floor consumer passed. Unified coverage and the three-system
+benchmark are complete; the benchmark does not support a broad performance
+advantage claim. The 0.3.0 PyPI distribution remains unpublished while the
+compatibility roll-up, exact-tag candidate and release checks continue.
 
 Both distributions install files under the `uvicorn` import namespace. Keep
 upstream `uvicorn` and `uvicorn-rs` in separate environments. Use the
@@ -15,8 +15,25 @@ upstream `uvicorn` and `uvicorn-rs` in separate environments. Use the
 [rollback environment](fastapi-evaluation.md#restore-upstream-uvicorn).
 
 <a id="current-status-2026-11-02"></a>
+<a id="current-status-2026-11-04"></a>
 
-## Current status (2026-11-03)
+## Current status (2026-11-04)
+
+Exact-main [CI #661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
+passed on clean commit `feb955d2758166ad8c4b519903fd1318b29e7d2d`. Its
+installed-wheel public parity and Linux x86-64, macOS ARM64, Windows x86-64,
+and Python 3.9 candidate consumers passed. The unified matrix passed 1,453
+cases (1,194 ASGI and 259 native) through three ASGI and three native repeats,
+with 14,965/14,965 regions and 10,984/10,984 lines.
+
+The exact-source three-system [benchmark #283](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681)
+completed on Linux x86-64, Linux ARM64 and macOS ARM64. It validates the
+workload matrix but shows lower HTTP/1 FastAPI validated-route throughput on
+all six system/loop pairs, workload-specific H2/H3 results, and a WebSocket
+text-echo regression. No general FastAPI performance advantage is claimed.
+The remaining compatibility work is tracked in the migration roll-up and
+its open acceptance task; the maintainer's real application trial follows
+repository completion.
 
 [CI #640](https://github.com/appunni-m/uvicorn-rs/actions/runs/41641278412)
 tests PR #21 head `8e0f792a7dc00597c580fb7ddc6d5222e0310ec2` at clean
@@ -151,10 +168,11 @@ The validator repair independently replays LCOV line/hit sets while retaining
 raw JSON checks. Actual Coverage-MCP review of the captured producer returns
 zero gaps with matching source and passing tests across all 46 pages; attachment
 passes. Recorded Linux toolchain validation and
-Independent final-source Coverage-MCP handoff, matched
-three-system FastAPI measurements, complete final-source artifacts and
-publication remain open. Later wrapper, upload-diagnostic and
-documentation changes are not qualified by these older receipts.
+Independent Coverage-MCP review is waived by the project owner. Exact-source
+raw coverage at 100%, matched three-system FastAPI measurements, complete
+final-source artifacts and publication remain open. Later wrapper,
+upload-diagnostic and documentation changes are not qualified by these older
+receipts.
 
 [Documentation #263](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642063)
 built successfully for its recorded source; PR deployment was skipped. This

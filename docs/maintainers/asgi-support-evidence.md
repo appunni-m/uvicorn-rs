@@ -9,11 +9,31 @@ The [user-facing ASGI support matrix](../support-matrix.md) summarizes what the 
 
 The Python-free uvicorn-rs Cargo library is the Rust server. uvicorn-rs-py is the optional Python adapter for Python ASGI applications. Python application code remains on its owning asyncio or uvloop event loop; the Rust runtime handles network and protocol work, while application calls and ASGI messages cross the Python boundary.
 
-The confirmed PyPI distribution name is `uvicorn-rs`, following the project's `pillow-rs` naming convention. The root Cargo integration package and optional extra console script remain named `uvicorn-rs-py`; the installed compatibility command and import namespace are `uvicorn`. The current source draft is not a verified candidate, and its command options and Python APIs are still incomplete. Its initial compatibility reference is upstream Uvicorn 0.54.0. The full CLI/API/process compatibility matrix has not passed. See [Uvicorn replacement status](../uvicorn-compatibility.md).
+The confirmed PyPI distribution name is `uvicorn-rs`, following the project's `pillow-rs` naming convention. The root Cargo integration package and optional extra console script remain named `uvicorn-rs-py`; the installed compatibility command and import namespace are `uvicorn`. Exact-main CI has passed the indexed Uvicorn 0.54.0 installed-wheel matrix and package consumers, but the migration roll-up and final release-candidate assembly remain open. See [Uvicorn replacement status](../uvicorn-compatibility.md).
 
 This matrix records live-tested ASGI and protocol behavior. A passing ASGI case does not by itself establish Uvicorn CLI, Python API, worker, or reload compatibility. The Rust server remains independent of Starlette-RS and FastAPI-RS; they do not need it as a runtime dependency.
 
-### Historical verified coverage and open review (2026-10-19)
+### Exact-main unified coverage and platform evidence (2026-11-04)
+
+Exact-main [CI #661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
+passed for clean source `feb955d2758166ad8c4b519903fd1318b29e7d2d`. The unified
+report attributes all **1,453 cases** (1,194 ASGI and 259 native) and passes
+three repeats of each matrix with zero failures and zero infrastructure
+retries. Coverage is **14,965/14,965 regions** and **10,984/10,984 physical
+source lines**. The retained raw artifact is
+[13313323556](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662/artifacts/13313323556),
+SHA-256 `d7ce785d590e7195be7eaa57e7761b8acb182ac4475599e2ab43cbd45567745d`.
+The project owner waived the separate Coverage-MCP review; no review receipt
+is claimed. The candidate workflow records and revalidates the exact report,
+context, build, artifact and raw-file identities.
+
+The same CI run passed Linux x86-64, macOS ARM64 and Windows x86-64 package
+consumers, the Python 3.9 floor consumer, and the native FastAPI-RS →
+Starlette-RS → Uvicorn-RS composition. Exact-source benchmark #283 completed
+the three-system matrix; its performance interpretation is recorded in the
+[benchmark report](../benchmark-results.md).
+
+### Historical verified coverage (2026-10-19)
 
 This 761-case report is historical. The latest exact-main run is
 [39689988928](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988928)

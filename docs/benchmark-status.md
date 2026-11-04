@@ -3,16 +3,55 @@
 <!-- BEGIN GENERATED LATEST ATTEMPT -->
 ## Latest automated benchmark attempt
 
-- Run: [40228012455 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/40228012455)
-- Commit: [`7811b2392b60cd8eadc8a951c1eff47d57ace2d6`](https://github.com/appunni-m/uvicorn-rs/commit/7811b2392b60cd8eadc8a951c1eff47d57ace2d6)
-- Recorded: 2026-10-25T23:51:23Z
-- Category matrix job: `failure`
-- Aggregate job: `failure`
+- Run: [41802594681 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681)
+- Commit: [`feb955d2758166ad8c4b519903fd1318b29e7d2d`](https://github.com/appunni-m/uvicorn-rs/commit/feb955d2758166ad8c4b519903fd1318b29e7d2d)
+- Recorded: 2026-11-04T10:30:31Z
+- Category matrix job: `success`
+- Aggregate job: `success`
 
-This attempt did not produce a validated three-system aggregate or a complete performance report. Partial per-system measurements remain in this run's artifacts. The [previous complete report](benchmark-results.md) remains the latest complete measurement; inspect the [workflow artifacts and logs](https://github.com/appunni-m/uvicorn-rs/actions/runs/40228012455) for this attempt.
+All three systems produced a complete validated matrix. The [latest complete benchmark report](benchmark-results.md) is included in this documentation update. Hashed machine-readable receipts and raw system bundles remain in this run's GitHub Actions artifacts for 90 days; generated logs and per-run files are not committed.
 <!-- END GENERATED LATEST ATTEMPT -->
 
-## Provisional complete three-system matrix on develop (2026-11-04)
+## Exact-main result and performance interpretation (2026-11-04)
+
+Benchmark #283 ran against exact-main commit
+[`feb955d2758166ad8c4b519903fd1318b29e7d2d`](https://github.com/appunni-m/uvicorn-rs/commit/feb955d2758166ad8c4b519903fd1318b29e7d2d).
+Its aggregate artifact is
+[13313622768](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681/artifacts/13313622768),
+SHA-256 `99b295b2b5fcea8d04604aa8e3b55f16919403a48ed1fa94c716d9b2474931aa`.
+All category and FastAPI comparisons passed their correctness and identity
+gates on Linux x86-64, Linux ARM64 and macOS ARM64: respectively 68/28,
+67/27 and 66/26 qualified category/FastAPI pairs.
+
+This closes the three-system measurement gate; it does not support a general
+FastAPI speedup claim. HTTP/1 validated-route throughput, p95 latency and
+server CPU per operation are worse on all six system/loop pairs. H2/H3 gains
+are workload-specific, and WebSocket text echo is slower. `docs/performance-acceptance.json`
+therefore retains `scope_revised` with no Python ASGI superiority claim; the
+maintainer's Rust-native performance objective remains separate and unproven
+by this FastAPI comparison.
+
+## Focused exact-main HTTP/1 upload trace (2026-11-04)
+
+Focused diagnostic [run #284](https://github.com/appunni-m/uvicorn-rs/actions/runs/41816958680)
+used exact-main commit
+[`feb955d2758166ad8c4b519903fd1318b29e7d2d`](https://github.com/appunni-m/uvicorn-rs/commit/feb955d2758166ad8c4b519903fd1318b29e7d2d)
+on Linux ARM64 for only `fastapi-upload-1m-write-1k` (1 MiB request bodies,
+1 KiB client writes, effective concurrency 8). The instrumented five-second
+load completed 2,307 Rust and 3,227 Uvicorn requests with zero failures; both
+servers passed the lifecycle gate. Client traces retained 2,362,368 Rust and
+3,304,448 Uvicorn upload callbacks, with the expected full request bytes and
+the 15-second timeout unchanged. Both ASGI reports have no receive waits above
+100 ms. The stage trace therefore does not identify a stalled boundary: the
+historical timeout did not reproduce. The [diagnostic artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/41816958680/artifacts/13315456620)
+has SHA-256 `18f2d482353e1427c32cecade84d7da960d389a35ed31ec2fbd982e0af8671a8`.
+
+Tracing invalidates timing, and this clean run is not a performance result or
+a root-cause explanation. Keep Kata `nbmg` open for review of the missing
+failing-run evidence; do not repeat this unchanged diagnostic without a
+relevant source, input, or runner change.
+
+## Earlier complete three-system matrix on develop (2026-11-04)
 
 [Benchmark run 282](https://github.com/appunni-m/uvicorn-rs/actions/runs/41760326495)
 completed on develop commit
@@ -41,9 +80,8 @@ superiority claim. The aggregate report now includes process-level server and
 client CPU per operation alongside CPU percent and RSS; per-thread CPU is not
 collected. The Rust adapter uses one Tokio worker thread.
 
-This run is source-bound to its recorded develop commit, but it does not prove
-the release gates for exact `main`. A complete benchmark on the final main
-commit is still required before artifact promotion or publication.
+This run is source-bound to its recorded develop commit and is superseded for
+release evidence by exact-main benchmark #283 above.
 
 ## Buffer recycling decision and ARM64 trace (2026-11-03)
 

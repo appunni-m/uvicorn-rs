@@ -7,56 +7,41 @@
 <a id="current-unified-coverage-status-2026-10-30"></a>
 <a id="current-unified-coverage-status-2026-10-31"></a>
 <a id="current-unified-coverage-status-2026-11-01"></a>
+<a id="current-unified-coverage-status-2026-11-04"></a>
 
-## Current unified coverage status (2026-11-03)
+## Current unified coverage status (2026-11-04)
 
-[CI #637](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084)
-completes all **1,451 cases** (1,192 ASGI and 259 native), full attribution and
-three complete verification repeats on clean producer
-`00f38c82dd869ba0dcc7068cbc5cc769cd0f6294`. It measures
-**14,809/14,809 regions and 10,894/10,894 physical source lines**. The directory
-identity repair passes, but its original evidence validation fails on an incorrect
-comparison between raw LLVM function-line totals and unique physical lines.
+**Owner decision:** independent Coverage-MCP review is not required. The raw
+exact-source unified report is the acceptance evidence: all measured production
+regions and lines must be 100%, and the complete matrix must pass three times.
+The candidate records the source, CI run and attempt, artifact digest, report,
+context, build and raw-file hashes. Older sections below record historical
+MCP checks; they do not add a current release requirement.
 
-The correction retains the raw JSON summary checks and independently replays
-LCOV physical-line and hit sets from the recorded objects and aggregate profile.
-Twelve focused checks, a real retained-object closure fixture and cross-host
-replay of the actual report pass. [CI #639](https://github.com/appunni-m/uvicorn-rs/actions/runs/41629464593)
-then passes strict replay of every retained case and the aggregate with the
-recorded Linux LLVM executable bytes. Its digest-checked
-[audit artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/41629464593/artifacts/13227718896)
-has SHA-256 `7379fcf882c2ab804fc4328539ac97e8f9694d70f6db35b913c984b99b5f4584`.
-This accepts the retained producer's 100% result without rerunning servers.
-The original
-[archive](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084/artifacts/13225094864)
-is unchanged, SHA-256
-`b6ba9e17a5338e369fcd2d8bccea7d6a1777e91905a10dd36fbf99e335d23dc4`.
+Exact-main CI [#661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
+passed on clean source `feb955d2758166ad8c4b519903fd1318b29e7d2d`, run
+attempt 1. All **1,453 cases** (1,194 ASGI and 259 native) passed with complete
+attribution, three ASGI repeats and three native repeats, zero failures, and
+zero infrastructure retries. The strict raw report records
+**14,965/14,965 regions and 10,984/10,984 physical source lines**. Its retained
+artifact is [13313323556](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662/artifacts/13313323556),
+SHA-256 `d7ce785d590e7195be7eaa57e7761b8acb182ac4475599e2ab43cbd45567745d`.
+The CI report and artifact digests bind the measurement to this source and
+run; the candidate's raw-evidence manifest will additionally record the
+canonical report and context hashes.
 
-Actual Coverage-MCP review completes all 45 unfiltered region pages and one
-line page with matching source, passing tests and zero gaps. Receipt SHA-256
-`4f77ad641d4105dfa1f66ff757cf30dcf2d8957a5a466496b5a407ad92ee8330`
-attaches successfully to the captured measurement. Coverage Kata `b8k7` is
-closed. The final exact-main hosted review handoff remains open under `7t4g`;
-neither the replay nor this receipt qualifies a later source automatically.
+The matching three-system benchmark [#283](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681)
+also passed. Its aggregate artifact is
+[13313622768](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681/artifacts/13313622768),
+SHA-256 `99b295b2b5fcea8d04604aa8e3b55f16919403a48ed1fa94c716d9b2474931aa`.
+The complete matrix includes 68/67/66 qualified category pairs and 28/27/26
+matched ordinary-FastAPI pairs on Linux x86-64, Linux ARM64 and macOS ARM64.
+These measurements establish matrix completeness, not a general speedup.
 
-The subsequent peer-read recycling removal changes Rust runtime source after
-this accepted producer. It preserves the existing input contracts, but must
-obtain its own full unified measurement, three verification repeats and
-source-bound independent review. CI #637's totals above are retained evidence,
-not a coverage claim for the removal. See the
-[measured rejection decision](benchmark-status.md#buffer-recycling-decision-and-arm64-trace-2026-11-03).
-The corresponding [CI #640 job](https://github.com/appunni-m/uvicorn-rs/actions/runs/41641278412/job/125935287032)
-has completed attribution of all 1,192 ASGI and 259 native cases and is still
-running the required full verification repeats. No final-source 100% claim or
-independent receipt is inferred from its progress logs.
-
-For evidence-checker repairs, CI's `replay-unified-coverage` dispatch mode
-accepts the original CI run ID, attempt, producer commit and artifact ID. It
-downloads and digest-checks the existing artifact, checks out the actual
-producer, and replays all retained profiles with the recorded LLVM bytes using
-the updated validator. It runs no server or reference tests and does not
-qualify a later source or create the final-main MCP handoff. The separate replay
-artifact records both validator and producer identities and any rejection.
+The prior [CI #637 result](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084)
+measured 14,809/14,809 regions and 10,894/10,894 physical lines, and a later
+retained-object replay validated that report. Its source predates current
+`main`; it is historical and does not qualify source `feb955d`.
 
 ### Earlier full report: CI #636
 
@@ -3448,58 +3433,53 @@ uv run --python 3.12 --locked --group benchmark python scripts/check_ci_evidence
   build/asgi-coverage/unified/coverage-report.json
 ```
 
-CI uses `--allow-pending-mcp` only to validate the raw report while the MCP
-query is pending; it does not satisfy the strict acceptance gate.
+CI accepts the exact-source raw report with `--allow-pending-mcp`; this enables
+the raw evidence gate while no independent review is attached. It still
+validates the complete indexed matrix, all three repeats, clean source and
+100% normalized regions and lines. A failed matrix, missing counter, or
+uncovered region/line remains a failure.
 
-<a id="release-coverage-mcp-handoff"></a>
+## Record exact-source release coverage
 
-## Complete the release Coverage-MCP handoff
+Independent Coverage-MCP review is not a release requirement. The project
+owner has chosen the raw unified 100% report as the coverage acceptance
+authority. Do not create or imply an independent review receipt.
 
-The release candidate needs a Coverage-MCP receipt for the exact successful
-main CI run. The handoff preserves the raw artifact byte for byte, creates a
-deterministic compact projection containing every canonical source span and
-uncovered span, and binds that projection and its receipt to the raw report,
-CI run, source hashes, build, and passing full test matrix. The candidate
-rebuilds and validates the projection and receipt offline.
+The candidate workflow selects the latest successful `main` CI run for the
+exact annotated tag commit, downloads that run's
+`uvicorn-rs-unified-coverage` artifact by ID and verifies GitHub's artifact
+digest. It runs the strict offline evidence validator, snapshots every raw
+artifact file hash, and writes `coverage-evidence.json` with the source SHA,
+CI run and attempt, artifact identity, report/context/build hashes, region and
+line totals, and full three-repeat matrix counts. The candidate and publication
+jobs revalidate the record against the unchanged raw report and file inventory.
 
-1. Wait for the complete main CI run to succeed. Record its run ID, attempt,
-   and commit. Download `uvicorn-rs-unified-coverage` into
-   `target/asgi-coverage/` and confirm `ci-run.json` has the same run ID,
-   attempt, and commit. Leave `coverage-report.json` and its context unchanged.
-2. Create the review projection:
+For a local audit of a downloaded artifact, retain the artifact at
+`target/asgi-coverage/`, then create and validate the raw inventory:
 
-   ```sh
-   python scripts/coverage_mcp_handoff.py project \
-     --report target/asgi-coverage/coverage-report.json \
-     --output target/asgi-coverage-review/coverage-mcp-projection.json
-   ```
+```sh
+python scripts/coverage_evidence.py snapshot \
+  --report target/asgi-coverage/coverage-report.json \
+  --source FULL_COMMIT_SHA \
+  --ci-run-id CI_RUN_ID --ci-attempt CI_RUN_ATTEMPT \
+  --raw-artifact-id ARTIFACT_ID \
+  --raw-artifact-name uvicorn-rs-unified-coverage \
+  --raw-artifact-size ARTIFACT_SIZE \
+  --raw-artifact-digest sha256:ARTIFACT_DIGEST \
+  --output target/asgi-coverage/raw-inventory.json
+python scripts/check_ci_evidence.py coverage \
+  target/asgi-coverage/coverage-report.json --offline --allow-pending-mcp --require-clean
+python scripts/coverage_evidence.py record \
+  --report target/asgi-coverage/coverage-report.json \
+  --raw-inventory target/asgi-coverage/raw-inventory.json \
+  --source FULL_COMMIT_SHA \
+  --output target/asgi-coverage/coverage-evidence.json
+```
 
-   Query `coverage_gaps` for
-   `target/asgi-coverage-review/coverage-mcp-projection.json` with
-   `metric: "regions"`, then `metric: "lines"`; use `limit: 15`, no filters,
-   and follow each `next_offset` through its terminal page. Save every request
-   with the exact structured response in one JSON array.
-3. Open **Actions → Coverage MCP handoff → Run workflow**. Select `main` at
-   the same commit as the CI run, provide its run ID and attempt, and provide a
-   single-line gzip+base64 encoding of the compact JSON array as
-   `receipt_gzip_base64`. For example, save the JSON array to a local file and
-   run `gzip -c receipt.json | base64 | tr -d '\n'`. Dispatch it once for that
-   CI attempt. The handoff decodes the receipt with a 32 MiB output limit and
-   writes the page array into the ignored review directory.
-
-The handoff rejects stale or mismatched CI runs and artifacts, incomplete page
-chains, altered projections, source/build mismatches, failed tests, and any
-missing region or line. It leaves the raw CI artifact unchanged and uploads
-the projection, derived reviewed report, page receipt, and digest manifest.
-The release candidate selects exactly one successful handoff for its commit
-and CI attempt, checks the raw file hashes against the original CI artifact,
-rebuilds the projection from that report, and validates both metric page
-chains offline. If `main` moves before the handoff is dispatched, use a
-successful CI run for the new commit and query its projection; do not reuse
-pages from the previous source.
-
-The handoff artifact contains generated reports, profiles, and logs. Keep them
-in the Actions artifact; do not commit them to the repository.
+The separate Coverage-MCP handoff workflow and projection tools remain
+available for optional diagnostics. They are not part of the candidate or
+publication gates. Keep generated reports, profiles, and logs in Actions
+artifacts; do not commit them to the repository.
 
 ## Measure an incremental case or profile
 

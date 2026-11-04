@@ -6,6 +6,45 @@ FastAPI evaluation. Kata remains the system of record. The maintainer will run
 their application trial; collecting their application or running its load is not
 a prerequisite for completing the repository work.
 
+## Owner decision — 2026-11-04
+
+The project owner waived independent Coverage-MCP review. Keep the exact-source
+raw unified coverage gate: all regions and lines must be at 100%, the complete
+three-repeat matrix must pass, and the report, context, build, CI run, artifact,
+and raw file hashes must be recorded and revalidated by candidate/release jobs.
+Do not create or imply an MCP review receipt. Earlier MCP requirements below
+are historical and superseded by this decision.
+
+## Exact-main evidence update — 2026-11-04
+
+CI #661 passed on `feb955d2758166ad8c4b519903fd1318b29e7d2d`: 1,453 unified
+coverage cases passed, with three ASGI and three native repeats and 100%
+coverage (14,965/14,965 regions; 10,984/10,984 lines). Raw artifact
+13313323556 has GitHub digest
+`sha256:d7ce785d590e7195be7eaa57e7761b8acb182ac4475599e2ab43cbd45567745d`.
+The main CI package and consumer jobs for Linux x86-64, macOS ARM64, Windows
+x86-64 and the Python 3.9 floor passed.
+
+Benchmark #283 completed the exact-source Linux x86-64, Linux ARM64 and macOS
+ARM64 matrix. Its aggregate artifact 13313622768 has digest
+`sha256:99b295b2b5fcea8d04604aa8e3b55f16919403a48ed1fa94c716d9b2474931aa`.
+The HTTP/1 FastAPI validated route is slower on all six system/loop pairs;
+H2/H3 gains vary by workload, and WebSocket text echo regresses. No general
+FastAPI performance advantage is claimed. Raw-only candidate/release evidence
+workflow changes are on `develop`; candidate assembly and publication still
+require the reviewed changes on `main` and a candidate for the resulting
+commit.
+
+Focused upload diagnostic #284 ran only `fastapi-upload-1m-write-1k` on Linux
+ARM64 at the same exact-main source. Rust and Uvicorn completed 2,307 and 3,227
+requests, respectively, with zero failures and passing lifecycle gates; the
+15-second client timeout remained unchanged. Both ASGI traces report no receive
+wait above 100 ms. Artifact 13315456620 has SHA-256
+`18f2d482353e1427c32cecade84d7da960d389a35ed31ec2fbd982e0af8671a8`. Tracing
+invalidates timing, and no stalled request was available to trace. Keep `nbmg`
+open for review of the missing first-failure evidence; this run is neither a
+root-cause finding nor a performance result.
+
 ## Fixed contract and evidence
 
 - PyPI distribution: `uvicorn-rs`; imports and command: `uvicorn`; optional
@@ -31,9 +70,10 @@ a prerequisite for completing the repository work.
   A PR merge ref and its branch head are different revisions: retain both and
   let the existing identity validators decide applicability.
 
-No original release gate is waived by this plan. Historical measurements remain
-historical. A task closes on its own deliverable; downstream publication gates
-belong to the release tasks rather than being copied into every prerequisite.
+The owner decision above changes only the independent-review requirement.
+Historical measurements remain historical. A task closes on its own deliverable;
+downstream publication gates belong to the release tasks rather than being
+copied into every prerequisite.
 
 ### Release audit — 2026-11-03 (PR #21 / CI #637–639)
 
@@ -87,7 +127,8 @@ main. The hosted exact-main handoff remains open under `7t4g`.
 Interim `[skip ci]` commits avoid broad unchanged reruns while focused tooling
 and Windows checks qualify their changes. Required PR checks remain pending;
 complete final-source CI is still required before merge and release. Coverage
-acceptance and independent review precede benchmark timing. Compatibility
+acceptance precedes benchmark timing; independent Coverage-MCP review is not
+required by the owner decision above. Compatibility
 task `x3az` and all ten children are closed. The capped Linux ARM64
 [upload diagnostic #275](https://github.com/appunni-m/uvicorn-rs/actions/runs/41632864829)
 completes three candidate/reference pairs with zero failures; it does not

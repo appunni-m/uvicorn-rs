@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Focused acceptance fixtures for the Coverage-MCP release evidence handoff."""
+"""Focused acceptance fixtures for raw release coverage and optional MCP handoff evidence."""
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ from project_coverage_mcp import ProjectionError, repository_llvm_paths, uncover
 ROOT = Path(__file__).resolve().parents[1]
 HANDOFF = ROOT / "scripts" / "coverage_mcp_handoff.py"
 ATTACH = ROOT / "scripts" / "attach_coverage_mcp.py"
+COVERAGE = ROOT / "scripts" / "coverage_evidence.py"
 SOURCE = "a" * 40
 SOURCE_FILE_HASH = "b" * 64
 CI_RUN_ID = 123456
@@ -83,9 +84,12 @@ def make_fixture(root: Path) -> tuple[Path, Path, Path, Path]:
                       "uncovered_regions": [],
                       "coverage_mcp": pending_coverage_mcp_request(relative_report)},
         "matrix": {
-            "scope": "complete", "passed": 1, "selected": 1, "executed": 1,
+            "scope": "complete", "manifest_case_count": 2,
+            "asgi_manifest_case_count": 1, "native_manifest_case_count": 1,
+            "passed": 2, "selected": 2, "executed": 2,
             "failed": 0, "transient_infrastructure_failures": 0,
             "infrastructure_failed": 0, "asgi_selected": 1, "native_selected": 1,
+            "case_attribution_complete": True,
             "verification_runs_required": 3,
             "verification_runs": [{
                 "status": "complete", "runner_exit_code": 0,
@@ -224,6 +228,48 @@ def main() -> int:
             "--raw-artifact-id", str(RAW_ARTIFACT_ID), "--raw-artifact-name", "uvicorn-rs-unified-coverage",
             "--raw-artifact-size", str(RAW_ARTIFACT_SIZE), "--raw-artifact-digest", RAW_ARTIFACT_DIGEST,
             "--output", str(snapshot_path))
+        coverage_snapshot_path = root / "valid" / "coverage-raw-inventory.json"
+        run(str(COVERAGE), "snapshot", "--report", str(report), "--source", SOURCE,
+            "--ci-run-id", str(CI_RUN_ID), "--ci-attempt", str(CI_ATTEMPT),
+            "--raw-artifact-id", str(RAW_ARTIFACT_ID), "--raw-artifact-name", "uvicorn-rs-unified-coverage",
+            "--raw-artifact-size", str(RAW_ARTIFACT_SIZE), "--raw-artifact-digest", RAW_ARTIFACT_DIGEST,
+            "--output", str(coverage_snapshot_path))
+        coverage_evidence_path = coverage_snapshot_path.parent / "coverage-evidence.json"
+        run(str(COVERAGE), "record", "--report", str(report), "--raw-inventory", str(coverage_snapshot_path),
+            "--source", SOURCE, "--output", str(coverage_evidence_path))
+        recorded_coverage = json.loads(coverage_evidence_path.read_text(encoding="utf-8"))
+        if (recorded_coverage.get("schema") != "uvicorn-rs-coverage-evidence@1"
+                or recorded_coverage.get("independent_review") != "not-required-per-project-owner"
+                or recorded_coverage.get("coverage") != {
+                    "regions": {"covered": 1, "total": 1, "missing": 0},
+                    "lines": {"covered": 1, "total": 1, "missing": 0},
+                }):
+            raise AssertionError("raw 100% coverage evidence was not recorded as expected")
+        run(str(COVERAGE), "verify", "--report", str(report), "--raw-inventory", str(coverage_snapshot_path),
+            "--source", SOURCE)
+        alternate_report_root = root / "valid" / "alternate-coverage-path"
+        shutil.copytree(report.parent, alternate_report_root)
+        run(str(COVERAGE), "verify", "--report", str(alternate_report_root / report.name),
+            "--raw-inventory", str(coverage_snapshot_path), "--source", SOURCE,
+            expected=1, detail="different or unexpected coverage report path")
+
+        incomplete_root = root / "incomplete" / "asgi-coverage"
+        shutil.copytree(report.parent, incomplete_root)
+        incomplete_report = incomplete_root / report.name
+        incomplete_data = json.loads(incomplete_report.read_text(encoding="utf-8"))
+        incomplete_data["uvicorn_rs_unified"]["coverage"]["summary"]["regions"].update(
+            {"covered": 0, "missing": 1})
+        write_json(incomplete_report, incomplete_data)
+        incomplete_context_path = incomplete_report.with_name(incomplete_report.name + ".context.json")
+        incomplete_context = json.loads(incomplete_context_path.read_text(encoding="utf-8"))
+        incomplete_context["report_sha256"] = hashlib.sha256(incomplete_report.read_bytes()).hexdigest()
+        write_json(incomplete_context_path, incomplete_context)
+        run(str(COVERAGE), "snapshot", "--report", str(incomplete_report), "--source", SOURCE,
+            "--ci-run-id", str(CI_RUN_ID), "--ci-attempt", str(CI_ATTEMPT),
+            "--raw-artifact-id", str(RAW_ARTIFACT_ID), "--raw-artifact-name", "uvicorn-rs-unified-coverage",
+            "--raw-artifact-size", str(RAW_ARTIFACT_SIZE), "--raw-artifact-digest", RAW_ARTIFACT_DIGEST,
+            "--output", str(root / "incomplete" / "raw-inventory.json"), expected=1,
+            detail="regions coverage gate")
         projection = review_root / "coverage-mcp-projection.json"
         run(str(HANDOFF), "project", "--report", str(report), "--output", str(projection))
         projected_data = json.loads(projection.read_text(encoding="utf-8"))["data"]
@@ -311,7 +357,7 @@ def main() -> int:
         run(str(ATTACH), "--report", str(broken_projection), "--output", str(broken_reviewed),
             "--receipt", str(broken_receipt),
             expected=1, detail="receipt omits later pages")
-    print("PASS coverage MCP handoff: exact raw artifact, reviewed report, source/run binding, and rejection cases")
+    print("PASS coverage evidence: exact raw artifact, 100% record, source/run binding, and optional handoff cases")
     return 0
 
 

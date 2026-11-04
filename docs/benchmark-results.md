@@ -1,788 +1,778 @@
-# FastAPI benchmark results
-
-> **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
-
-Each dated result is bound to the source and normal extension recorded in its
-receipt. “Current source” in an older benchmark entry means current for that
-measurement, not necessarily the present worktree. The latest exact-main
-three-system attempt, [run 39689988939](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939),
-produced a partial matrix: Linux ARM64 failed the Hypercorn HTTP/3
-`slow-reader-backpressure` correctness gate with `KeyError: 52`. The failed
-cell is not a performance result, and the attempt does not qualify as a
-complete multi-system comparison. A focused Linux x86-64 slice measured one
-workload from each maintained protocol category and the lifecycle scenario;
-it is useful single-host evidence, not a completed multi-system report. See
-[current benchmark status](benchmark-status.md) for the focused results, limits,
-the partial hosted run, and retained artifacts. Coverage results are correctness
-evidence and do not add performance samples.
-
-## Samply CPU profiles of fixed H1 and uploads (2026-10-12)
-
-Four correctness-passing Samply profiles used the same stock FastAPI 0.142.4
-application, CPython 3.12.13, asyncio, Uvicorn 0.54.0 with httptools, and the
-dirty uvicorn-rs source SHA-256
-db4d8297c607fb722415c3dc2a0c5891cd05bbf582872e194dfb142283e7822a. The normal
-Rust extension SHA-256 was
-351c3d36f4b42ba1d4313c366c31a67a96e6b22e9e6a796cd5f9ca34b5a4823d. All
-warmups and load responses passed; all servers shut down gracefully. The
-profiles covered about 4.5 seconds of each nine-second load because Samply
-started with the server and captured six seconds including startup and warmup.
-
-| Workload | Server | Active load covered | Sampled process CPU weight | Threads with Tokio blocking-pool loop stacks |
-|---|---|---:|---:|---:|
-| Fixed response | uvicorn-rs | 4.58 s | 5.061 s | 1 |
-| Fixed response | Uvicorn | 4.51 s | 4.450 s | 0 |
-| 1 MiB request upload | uvicorn-rs | 4.55 s | 6.255 s | 32 |
-| 1 MiB request upload | Uvicorn | 4.50 s | 4.432 s | 0 |
-
-The single Tokio scheduler worker remains configured in the Rust source. The
-32 upload threads are not 32 scheduler workers: their sampled stacks enter
-Tokio's blocking-pool thread loop. During the fixed route, the Rust profile
-attributed 1.528 s of sampled CPU weight to one Tokio-named thread; during
-upload it attributed 4.147 s across 32 such threads. Uvicorn's profiles showed
-one Python server thread.
-
-In the Rust upload profile, the inclusive call path for the PyO3
-AsgiIo.receive future accumulated 1.245 s (19.9% of sampled process CPU
-weight); PyGILState_Ensure appeared in 1.058 s (16.9%). These values overlap
-because they are caller-stack weights, not exclusive time. They point to
-receive-bridge scheduling and GIL attachment as optimization targets, with
-Tokio blocking-pool activity as a second measurable factor. They do not prove
-that copying bytes is the dominant cost.
-
-These are diagnostic profiles, not CPU-per-request or speed results. The OS
-shared-cache functions remain unresolved, profiles perturb scheduling, and
-only part of the load interval was sampled. At the time these profiles were
-reviewed, the host-clean matched timing gate rejected the machine, so the next
-performance step was the existing blocking-pool cap comparison after a clean
-preflight. The raw profiles, source
-snapshots, receipts, machine-readable analysis, and profile guide are in the
-Samply attribution report (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/h1-samply-attribution/README.md`).
-A subsequent eight-interval host preflight also rejected: unrelated aggregate
-CPU was 100.4–151.4%, with a process named `python3.12` using 85.3–104.3% of one
-core. That receipt did not start a timed run; later accepted windows allowed the
-partial experiment below. See the preflight receipt (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-post-doc-audit.json`).
-
-## First blocking-pool cap timing slice (2026-10-12)
-
-The first normal-build timing slice compared the same stock FastAPI 1 MiB
-uploads at default Tokio blocking-pool settings and a cap of one. It ran on
-macOS 15.7.7 / Apple M3 Pro with CPython 3.12.13 and Uvicorn 0.54.0
-(`httptools`). Each setting used asyncio, concurrency 8, three planned
-repetitions, five seconds of load, one second of warmup, and seed `20261012`.
-The Tokio async scheduler remains one worker. Responses, body checks, and
-shutdown passed; the per-row host guard determined which timings qualified.
-
-The only qualified pair was the default pool for `fastapi-request-upload`
-(1 MiB request body, 64 KiB libcurl read-callback cap): Uvicorn completed
-4,149.3 requests/s and Rust 3,840.0, a 0.925× ratio. Median p50/p95/p99 were
-1.918/2.088/2.215 ms for Uvicorn and 2.065/2.711/2.992 ms for Rust. Observed
-server CPU was 240.5 versus 420.1 µs/request; server RSS was 113.0 versus
-110.3 MiB. Client CPU was 153.2 versus 178.7 µs/request and client RSS 6.94
-versus 6.69 MiB.
-
-This is a descriptive three-repeat pair, not a statistical-significance claim.
-It establishes the default-pool baseline for this run only. The default
-256 KiB workload lacked valid paired repetitions. The cap-1 run passed all
-response checks but host activity invalidated all Rust timing rows, so it has
-no qualified pair. Cap 4 has not run: ten cap-4 preflights and eighteen resumed
-preflights rejected before timing. Across the resumed checks, unrelated CPU
-ranged from 56.2% to 279.6%, with `mediaanalysisd` above the per-process limit
-in the latest receipt. No process was stopped. See the latest
-receipt (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/blocking-pool/resume-host-preflight-18.json`).
-The experiment report and raw results (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/blocking-pool/README.md`)
-preserve configuration, identities, exclusions, and receipts. No conclusion
-about the cap's effect is supported yet.
-
-## Final Tokio blocking-pool cap experiment (2026-10-17)
-
-The hosted comparison used stock FastAPI 0.142.4, CPython 3.12.13, Uvicorn
-0.54.0, Linux x86-64, concurrency 64, five 5-second samples, and a 1-second
-warmup. Each request uploaded 1 MiB using either 64 KiB or 256 KiB client
-writes. The default Tokio pool and explicit caps of one and four threads were
-compared under asyncio and uvloop. Every workload passed response correctness,
-lifecycle, and shutdown checks. Each setting/workload/loop cell retained four
-or five valid matched repetitions; excluded repetitions were rejected for
-unrelated host CPU activity.
-
-Throughput lists median Uvicorn / Rust requests per second and the median
-paired Rust/Uvicorn ratio. Latency lists median p50/p95/p99 milliseconds in
-Uvicorn / Rust order.
-
-| Upload writes | Tokio pool | Loop | Valid pairs | Throughput, Uvicorn / Rust (ratio) | p50 ms | p95 ms | p99 ms |
-|---|---|---|---:|---:|---:|---:|---:|
-| 64 KiB | Default | asyncio | 5/5 | 1,233.2 / 370.9 (0.304x) | 50.86 / 169.78 | 60.20 / 232.91 | 67.66 / 268.92 |
-| 64 KiB | Default | uvloop | 5/5 | 1,319.0 / 325.2 (0.247x) | 47.91 / 114.67 | 52.15 / 155.16 | 55.48 / 288.27 |
-| 64 KiB | 1 thread | asyncio | 4/5 | 1,572.9 / 515.2 (0.314x) | 40.07 / 94.68 | 46.98 / 134.10 | 54.35 / 266.41 |
-| 64 KiB | 1 thread | uvloop | 5/5 | 1,709.7 / 581.0 (0.337x) | 37.36 / 71.06 | 39.47 / 94.33 | 43.85 / 119.54 |
-| 64 KiB | 4 threads | asyncio | 4/5 | 1,223.7 / 379.3 (0.304x) | 51.04 / 166.01 | 58.96 / 232.49 | 67.87 / 270.60 |
-| 64 KiB | 4 threads | uvloop | 5/5 | 1,339.6 / 554.5 (0.411x) | 47.03 / 112.54 | 51.71 / 150.61 | 56.39 / 176.86 |
-| 256 KiB | Default | asyncio | 5/5 | 1,225.0 / 361.6 (0.311x) | 51.46 / 174.89 | 58.82 / 242.17 | 69.69 / 274.42 |
-| 256 KiB | Default | uvloop | 5/5 | 1,320.7 / 508.5 (0.394x) | 48.02 / 117.96 | 51.08 / 159.28 | 54.11 / 187.93 |
-| 256 KiB | 1 thread | asyncio | 4/5 | 1,214.3 / 347.8 (0.275x) | 51.39 / 144.19 | 61.07 / 202.85 | 67.90 / 241.87 |
-| 256 KiB | 1 thread | uvloop | 5/5 | 1,318.0 / 584.8 (0.445x) | 48.07 / 103.64 | 51.63 / 143.67 | 56.13 / 235.18 |
-| 256 KiB | 4 threads | asyncio | 5/5 | 1,108.7 / 352.3 (0.319x) | 56.45 / 178.42 | 67.19 / 252.22 | 84.07 / 296.82 |
-| 256 KiB | 4 threads | uvloop | 4/5 | 1,157.1 / 485.1 (0.420x) | 54.52 / 128.21 | 59.36 / 172.32 | 61.85 / 236.72 |
-
-| Upload writes | Tokio pool | Loop | Server CPU, Uvicorn / Rust (µs/request) | Peak server RSS, Uvicorn / Rust (MiB) |
-|---|---|---|---:|---:|
-| 64 KiB | Default | asyncio | 802 / 4,127 | 106.4 / 141.0 |
-| 64 KiB | Default | uvloop | 756 / 2,685 | 106.2 / 140.3 |
-| 64 KiB | 1 thread | asyncio | 632 / 2,247 | 111.1 / 130.8 |
-| 64 KiB | 1 thread | uvloop | 583 / 1,538 | 106.9 / 137.7 |
-| 64 KiB | 4 threads | asyncio | 802 / 4,010 | 108.9 / 144.6 |
-| 64 KiB | 4 threads | uvloop | 743 / 2,582 | 107.2 / 136.4 |
-| 256 KiB | Default | asyncio | 813 / 4,267 | 109.0 / 140.0 |
-| 256 KiB | Default | uvloop | 755 / 2,739 | 105.9 / 138.5 |
-| 256 KiB | 1 thread | asyncio | 815 / 3,516 | 109.7 / 142.5 |
-| 256 KiB | 1 thread | uvloop | 756 / 2,326 | 105.4 / 137.4 |
-| 256 KiB | 4 threads | asyncio | 892 / 4,368 | 109.7 / 142.8 |
-| 256 KiB | 4 threads | uvloop | 860 / 2,905 | 106.4 / 140.6 |
-
-Uvicorn completed more requests per second in all twelve cells. Ratios varied
-by loop and write size, and separate hosted runner instances do not isolate
-the causal effect of the cap. No setting showed a repeatable end-to-end gain;
-the runtime override and its startup contracts were removed. This result does
-not explain the broader Rust/Python performance gap. Artifacts are retained
-for the [initial comparison](https://github.com/appunni-m/uvicorn-rs/actions/runs/39044400046),
-[cap-4 retry](https://github.com/appunni-m/uvicorn-rs/actions/runs/39051369699),
-[cap-1 64-KiB follow-up](https://github.com/appunni-m/uvicorn-rs/actions/runs/39052022411),
-and [cap-4 64-KiB follow-up](https://github.com/appunni-m/uvicorn-rs/actions/runs/39052457474).
-
-## H1 benchmark-source retries stopped by host activity (2026-10-12)
-
-The captured dirty benchmark source passed 243/243 public parity cases, and
-each attempt's
-initial host preflight accepted. Unrelated CPU load returned during both full
-300-row HTTP/1 plans. The first stopped at 41 rows (zero response failures, 24
-timing-valid, 17 host-rejected); the retry stopped at 22 (zero failures, 9
-timing-valid, 13 host-rejected). The strict analyzer withheld throughput and
-latency ratios because category completion and identity gates were incomplete.
-Do not combine these partial attempts. See the attempt ledger and raw
-evidence (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/README.md`).
-They are not performance results.
-
-## FastAPI H1 benchmark-source route and fixed-response batch (2026-10-12)
-
-The captured dirty benchmark source passed 243/243 public parity cases before
-a complete 40-row selected-subset run on stock FastAPI. All response checks passed; 30
-rows passed the host guard. Three pairs qualified: validated-route throughput
-was 0.900× Uvicorn under asyncio and 0.966× under uvloop, while fixed-response
-throughput was 0.750× under asyncio. The fixed-response uvloop pair had only
-two valid repetitions. Qualified pairs used 9.0–20.1 µs more aggregate server
-process CPU per operation. These totals do not identify whether the extra CPU
-is in the Python app, bridge, or Rust network path. See the run report and raw
-evidence (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/h1-route-fixed/README.md`).
-The selected subset covers two of 15 H1 workloads and is not an overall
-performance claim.
-
-## FastAPI H1 benchmark-source response workloads (2026-10-12)
-
-A separate 60-row batch covered large responses, many response chunks, and
-small response chunks. All correctness checks passed; 50 timing rows were
-accepted by the host guard and five workload/loop pairs qualified. Throughput
-versus Uvicorn was 0.871× / 0.931× for large responses, 0.956× / 1.275× for
-many chunks under asyncio / uvloop, and 0.920× for small chunks under asyncio.
-Small response chunks under uvloop had only two valid repetitions. Rust used
-more aggregate server-process CPU in every qualified pair. The source-bound
-report and raw evidence (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/h1-response-workloads/README.md`)
-include latency percentiles, CPU, RSS, host exclusions, and interpretation
-limits. These measurements do not establish an overall speedup.
-
-## FastAPI H1 benchmark-source request-upload workloads (2026-10-12)
-
-A 120-row batch exercised six upload cases on the same stock FastAPI app; all
-correctness rows passed, 60 rows passed the host timing guard, and five
-workload/loop pairs qualified. Throughput versus Uvicorn was 0.648× / 0.686×
-for 1 MiB bodies written in 64 KiB chunks, 1.001× / 0.995× for 1 KiB chunks,
-and 0.649× for 256 KiB chunks under asyncio. Rust used more aggregate server
-CPU in all five qualified pairs. The other workloads lacked enough matching
-valid samples. The source-bound report and raw evidence (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/h1-upload-workloads/README.md`)
-include latency percentiles, CPU, RSS, host exclusions, and interpretation
-limits. The input-size dependence suggests the receive path should be profiled,
-but this data does not attribute the overhead to a specific function or
-establish an overall speedup.
-
-The apparent throughput parity for 1 MiB requests written in 1 KiB chunks is
-client-limited: the load generator used about 33 ms CPU/request, equivalent to
-roughly 10.4–10.8 cores at the observed rate on the 12-core machine, while the
-server used about 1.0–1.3 ms/request. These rows do not establish server parity.
-The “write chunk” setting is actually a cap on bytes returned from the
-libcurl read callback; it does not guarantee TCP packet or socket-write sizes.
-The upload report (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/h1-upload-workloads/README.md`)
-records the calculation and the separated-client follow-up.
-
-## Replayed archived 1 KiB upload failure (2026-10-12)
-
-The attached macOS ARM64 archive stopped its 300-row HTTP/1.1 plan at row 120.
-Its Rust/uvloop 1 MiB upload with 1 KiB libcurl reads recorded 31 client send
-failures and an ASGI `ClientDisconnect`. A focused current-dirty-build replay
-completed all 20 samples with zero request failures, so the archived failure
-did not reproduce. The source and native-extension hashes differ between the
-runs, so this does not establish a fix or root cause. All 20 replay timings
-were rejected for unrelated host CPU activity; no performance comparison is
-available. See the replay report and raw artifacts (`benchmarks/results/2026-10-12/http1-upload-1k-current-20261012/README.md`).
-
-The post-run host preflight rejected another timed run before it started:
-unrelated aggregate CPU peaked at 134.4% of one core and `mediaanalysisd` used
-72.4–105.2% across all eight intervals. A later retry still rejected, with
-aggregate CPU peaking at 129.0% and that process above 25% in every interval.
-No result-grade timing was started after those rejections. A later
-diagnostic-only upload profile ran with the host guard rejecting; all profile
-timing rows are explicitly unrankable. Its thread snapshots show one Tokio
-async scheduler worker plus blocking-pool threads, and sampled stacks include
-the PyO3 future-completion/GIL path. This is a testable overhead hypothesis,
-not a measured CPU attribution. See the profile report (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/h1-upload-profile/README.md`),
-host receipts (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-h1-rest.json`),
-and retry (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-profile-next-2.json`).
-The latest preflight also rejected before timing: `mediaanalysisd` used
-63.2–87.9% of one core in all eight intervals and unrelated aggregate CPU
-peaked at 115.9%. A retry 30 seconds later also rejected: aggregate unrelated
-CPU peaked at 290.0%, and `mediaanalysisd` remained at 65.5–87.2% in every
-interval. See the first check (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-after-archive-20261012.json`)
-and retry (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-after-archive-retry1-20261012.json`).
-A second retry also rejected, with `mediaanalysisd` at 56.6–85.9% of one core
-in all eight intervals and unrelated aggregate CPU peaking at 136.4%. See the
-second retry receipt (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-after-archive-retry2-20261012.json`).
-A third retry rejected too: unrelated aggregate CPU peaked at 214.2%, while
-`mediaanalysisd` used 55.1–87.8% and a `python3.12` process used 86.0–100.5%
-in all intervals. It started no benchmark and stopped no process. See the
-third receipt (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-after-archive-retry3-20261012.json`).
-A fourth retry also rejected: `mediaanalysisd` used 51.6–98.4%, `rustc` used
-94.0–103.5% in all intervals, and aggregate unrelated CPU peaked at 220.1%.
-No benchmark started. See the fourth receipt (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-after-archive-retry4-20261012.json`).
-A fifth preflight 60 seconds later rejected too: `mediaanalysisd` used
-70.8–75.5%, `rustc` used 94.3–101.5% in all intervals, and aggregate CPU
-peaked at 211.9%. See the fifth receipt (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-after-archive-retry5-20261012.json`).
-A fresh preflight on continuation rejected too: aggregate unrelated CPU
-peaked at 200.3%, `mediaanalysisd` used 50.6–80.4% in all intervals, and a
-`python3.12` process used 95.8–97.1% in three. No timing began. See the
-receipt (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-continuation-20261012-1.json`).
-A second continuation preflight rejected as well: aggregate unrelated CPU
-peaked at 227.1%, `mediaanalysisd` used 46.8–73.5% in all intervals, `git`
-used 27.5–32.0% in seven, and `rustc` briefly used 101.1%. See the
-receipt (`benchmarks/results/2026-10-12/wh9k-focused-h1-20261012-1/host-preflight-continuation-20261012-2.json`).
-
-The next workstream preflight also rejected before timing. `mediaanalysisd` used
-25.6–91.9% of one core, `rustc` used 44.6–98.3% across consecutive samples,
-and unrelated aggregate CPU peaked at 192.4%. The receipt confirms
-`timing_benchmark_started: false`; no process was stopped. See the
-preflight receipt (`benchmarks/results/2026-10-12/kata-workstream-host-preflight.json`).
-A follow-up preflight rejected too: `mediaanalysisd` used 77.3–100.0% and
-`rustc` 98.6–103.1% of one core in all eight intervals, while unrelated
-aggregate CPU ranged from 198.8% to 222.1%. No timing started and no process
-was stopped. See the follow-up receipt (`benchmarks/results/2026-10-12/kata-workstream-host-preflight-retry-1.json`).
-A second follow-up also rejected: `mediaanalysisd` used 69.5–102.9% of one
-core, and unrelated aggregate CPU ranged from 97.7% to 122.0% across the eight
-samples. No timing started and no process was stopped. See the second follow-up
-receipt (`benchmarks/results/2026-10-12/kata-workstream-host-preflight-retry-2.json`).
-A third follow-up rejected after another 30 seconds: `mediaanalysisd` used
-62.9–101.2% of one core, and aggregate unrelated CPU ranged from 87.3% to
-136.4%, with consecutive samples above the aggregate threshold. No timing
-started and no process was stopped. See the third follow-up
-receipt (`benchmarks/results/2026-10-12/kata-workstream-host-preflight-retry-3.json`).
-A fourth spaced preflight rejected as well: `mediaanalysisd` used 66.2–100.9%
-of one core, `qemu-system-aarch64-headless` briefly reached 28.7%, and
-unrelated aggregate CPU ranged from 94.8% to 140.1%, including consecutive
-over-limit intervals. No timing started and no process was stopped. See the
-fourth follow-up receipt (`benchmarks/results/2026-10-12/kata-workstream-host-preflight-retry-4.json`).
-
-## Latest full-category attempt: exact commit `443c5cc` (2026-10-11)
-
-A local run on the commit used by hosted benchmark #16 passed its 240/240
-public parity gate and completed all 650 correctness-gated category rows with
-zero recorded failures. It qualified only three matched H1 pairs; the other
-570 timing rows were rejected for unrelated host CPU activity, and HTTP/2,
-HTTP/3, WebSocket, and lifecycle produced no qualified pairs. The
-source-bound report and raw archive (`benchmarks/results/2026-10-11/fastapi-exact-443c5cc-local-evidence/README.md`)
-preserve the evidence. The recorded source hash was
-`56cccea49215b2b96cf7028ec01804c7142b0f364f91bbd957b1114ab13b65fb`; all 59
-source/harness identities in its receipts matched commit `443c5cc` when
-reviewed.
-
-| Qualified workload | Throughput ratio | p50, reference → Rust | Server CPU, reference → Rust |
-|---|---:|---:|---:|
-| H1 small response chunks, asyncio | 0.952× | 23.782 → 25.076 ms | 376.0 → 574.7 µs/request |
-| H1 1 MiB upload, asyncio | 0.453× | 18.798 → 43.534 ms | 307.0 → 1,066.8 µs/request |
-| H1 1 MiB upload, uvloop | 0.544× | 18.225 → 33.920 ms | 288.4 → 831.4 µs/request |
-
-The H1 upload workload regressed substantially in this run. These three pairs
-are a local exact-commit result, not a general speed claim and not an
-explanation for the hosted #16 category-step failure. The latest host preflight
-rejected another timing attempt before it started; preflight 10 (`benchmarks/results/2026-10-11/kata-continuation-preflight-http-spec-20261011-10/host-preflight.json`)
-records the host activity. See [benchmark status](benchmark-status.md).
-
-## HTTP/3 request-shape correction (2026-10-11)
-
-The Rust H3 probe now sends ordinary GETs with no request content and no
-`Content-Length` field. RFC 9110 says a sender SHOULD NOT include
-`Content-Length` when a request has no content and its method does not
-anticipate it, and that GET content has no generally defined semantics
-([§8.6](https://www.rfc-editor.org/rfc/rfc9110.html#section-8.6),
-[§9.3.1](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.3.1)). The
-dedicated consumed-request route accepts POST and reads its one-byte body; the
-upload workload also uses POST. The body buffer is allocated once and reused
-through `Bytes` clones.
-
-The corrected-input run (`benchmarks/results/2026-10-11/fastapi-http-spec-correctness-20261011/analysis.md`)
-passed 24/24 response checks and recorded the method, body length, and
-`Content-Length` choice per workload. It used 0.2-second exploratory samples;
-16/24 rows passed the per-sample host guard and the analyzer formed one H3
-uvloop pair, but the fresh host preflight had rejected and the wrapper marks
-performance evidence not proven. Do not use that short run's ratio as a
-performance result. Historical rows using a one-byte GET body belong to a
-different workload identity.
-
-## Full FastAPI matrix with qualified timing rows (2026-10-10)
-
-The complete matrix and focused retries (`benchmarks/results/2026-10-10/fastapi-current-matched-matrix-20261010/README.md`)
-use stock FastAPI 0.142.4 on CPython 3.12.13, macOS 15.7.7 arm64 / Apple M3
-Pro, with Rust 1.98.1 and one Tokio async worker. Uvicorn 0.54.0 is the HTTP/1.1,
-WebSocket, and lifecycle reference; Hypercorn 0.18.0 is the HTTP/2 and HTTP/3
-reference. The same 243-case public parity gate passed. The five-category run
-passed 390/390 correctness rows, then protocol-focused retries passed another
-420 rows. Qualified results include a 0.845× Uvicorn-matched fixed HTTP/1
-route, near-parity WebSocket binary echo with higher Rust server CPU per
-message, large HTTP/2 upload gains against Hypercorn, and large/chunked HTTP/3
-response gains at concurrency 1. These are separate workload results, not a
-single server speed ratio.
-
-The hosted run #13 parity follow-up (`benchmarks/results/2026-10-10/hosted-parity-13-disconnect/README.md`)
-completed with one HTTP/1.1 pre-receive disconnect mismatch on commit
-`72dfa51`; that revision predates the post-close test barrier. A later attached
-preparation archive preserved the exact row: Uvicorn returned
-`http.disconnect`, while uvicorn-rs returned `http.request` followed by
-`http.disconnect`. The old fixture's fixed 50 ms wait did not synchronize its
-first `receive()` with the driver's 250 ms post-close delay. With the fixture
-waiting on the driver's release marker, the corrected dirty local test input
-passed one focused invocation and 10 repeats with matching observations. This
-is local input synchronization evidence, not a hosted rerun or a production
-behavior fix. The current host guard rejected timing because unrelated system
-load exceeded its CPU threshold, so no benchmark was started. The two earlier
-local full-suite attempts still each had one unrelated TLS infrastructure
-failure; no new full-suite pass is claimed. See the archived-row review and
-repeat evidence (`benchmarks/results/2026-10-12/http1-disconnect-before-first-receive-repro/README.md`).
-
-The follow-up per-thread CPU report (`benchmarks/results/2026-10-10/fastapi-current-all-h1-thread-cpu-retry-20261010/README.md`)
-adds guarded CPU splits for 15 H1 FastAPI workload variants. The
-protocol-stage report (`benchmarks/results/2026-10-10/fastapi-current-protocol-stages-20261010/README.md`)
-adds 320 response-checked diagnostic captures across H2, H3, and WebSockets.
-Both reports separate clean repeated pairs from host-rejected rows and keep
-instrumented timing out of normal performance rankings.
-
-The macOS native-stack report (`benchmarks/results/2026-10-10/fastapi-current-macos-native-stacks-20261010/README.md`)
-adds 10 response-checked stack samples for fixed, large-response, chunked,
-1 MiB upload, and Python-CPU FastAPI workloads on Uvicorn and uvicorn-rs under
-uvloop. It shows Rust frames in the ASGI send/receive bridge, header extraction,
-body-chunk queues, and Tokio notification paths. These are qualitative stack
-samples, not function-level CPU shares; all sampled timings are invalid, and
-the profile uses the dirty local source recorded in its report.
-
-### Where the extra cost appears
-
-The table uses the measured dirty source snapshot (`src/lib.rs` SHA-256
-`1f222c06c5ecfa4f1c3b22299259ddb69f5d39822427e50c4a9f8b4eebf8f455`) and the
-normal extension used by the matrix. At capture time, committed `HEAD`
-`e8148e4e` had `src/lib.rs` SHA-256
-`56cccea49215b2b96cf7028ec01804c7142b0f364f91bbd957b1114ab13b65fb`; the
-working-tree hash above is different. These measurements therefore describe
-the dirty candidate, not commit-level or release performance. The candidate
-contains the 256 KiB / 1 ms request-body batching path and segmented-body
-materialization. HTTP/1.1, WebSocket, and lifecycle use Uvicorn; HTTP/2 and
-HTTP/3 use Hypercorn because Uvicorn has no HTTP/2 or HTTP/3 server. All
-applications are ordinary FastAPI with its standard Starlette and Pydantic
-stack.
-
-| Workload | Matched measurement | What it identifies |
-|---|---|---|
-| HTTP/1 small fixed route, concurrency 64, asyncio | Uvicorn 25,189 vs uvicorn-rs 19,222 req/s; server CPU 39.6 vs 59.0 µs/request; p50 2.521 vs 3.375 ms | The Rust server adds about 19 µs of process CPU per request. Three clean asyncio CPU-profile pairs show Python-loop CPU near parity (38.9 vs 37.9 µs) and about 19 µs on Tokio-named threads. The separate uvloop profile has two clean pairs and the same shape (34.4 vs 28.3 µs on the Python loop; 16.9 µs Tokio). In the closed-loop client, the rate loss grows into an 854 µs p50 gap as requests queue. |
-| HTTP/1 1 MiB upload | In a separate instrumented diagnostic, p50 time inside `receive()` was 21.334 vs 12.997 ms; Rust used 5.701 receive bridge futures and delivered about six Python `bytes` messages. Conversion took 73 µs/request, including allocation. | The latency gap follows request-body delivery and Rust/Python future scheduling. The app spent only 0.117 vs 0.061 ms outside awaited ASGI I/O. The expanded CPU diagnostic has three clean asyncio pairs (281.6 vs 608.6 µs total process CPU/op, including 418.5 µs on Tokio-named threads) and five uvloop pairs (275.5 vs 544.0 µs/op, including 373.2 µs on Tokio). This CPU capture is separate from rankable throughput/latency; the conversion timer is not pure memcpy CPU. |
-| HTTP/1 256-chunk response | Uvicorn 1,391 vs uvicorn-rs 1,399 req/s; server CPU 717 vs 1,069 µs/request; p50 45.77 vs 46.57 ms | Throughput is at parity while Rust uses more CPU. A separate diagnostic counted 257 ASGI body messages, 15.77 full-queue waits, and 38.86 ms accumulated response-send wait per request. This points to per-message bridge work and bounded-queue backpressure. |
-| WebSocket | Handshake rate was 2,965 vs 5,463/s. For 64 KiB echo, rates were 22,634 vs 22,934 messages/s under asyncio and 27,637 vs 29,160 under uvloop, with higher Rust CPU/message. A 32-byte text-echo attempt on the recorded source passed all 20 correctness checks, but all 20 timings failed the host-activity guard. | Handshake setup is faster in Rust; large echo rate is near parity but CPU is higher. Small-frame rate and per-frame CPU remain unqualified. |
-| HTTP/2 and HTTP/3 | HTTP/2 small-chunk upload and HTTP/3 large/chunked responses beat Hypercorn on the qualifying workloads. HTTP/2 many-chunk responses were 1.21–1.54× faster but used more server CPU. The two qualifying HTTP/3 response comparisons ran at concurrency 1. | These are protocol-specific comparisons against Hypercorn, not Uvicorn. They show that the Rust implementation is not slower across the board; HTTP/2 response chunking still has a CPU cost even when its throughput is higher. |
-| Lifespan | Startup medians were 151.5 ms for Uvicorn and 144.4 ms for Rust; idle SIGTERM exit was 199.2 vs 22.6 ms; active graceful exit was 2,190.6 vs 2,027.6 ms. | Lifecycle is not the source of the steady-state request slowdown in these measurements. |
-
-An expanded exact-source per-thread profile captured 300 repetitions across
-15 HTTP/1 FastAPI workloads, four server/loop variants, and five repetitions.
-Every response check passed; 193 captures passed the host and identity guard.
-The paired CPU splits cover fixed and validated routes, Python CPU, large and
-chunked responses, uploads at multiple client write sizes, slow readers,
-headers, and context variables. See the full thread-CPU report (`benchmarks/results/2026-10-10/fastapi-current-all-h1-thread-cpu-retry-20261010/README.md`).
-An earlier 228-row attempt had no timing rows pass the guard and remains in the
-causal-profile archive (`benchmarks/results/2026-10-10/fastapi-causal-profiling-20261010/attempts.md`);
-the later clean pairs supersede it for per-thread attribution. The complete
-11-workload thread profile on source `6b164eb…` remains a separate source
-snapshot and is not pooled with this matrix.
-
-The focused text-echo attempt (`benchmarks/results/2026-10-10/fastapi-current-ws-text-echo-20261010/README.md`)
-used 32-byte messages with asyncio and uvloop. All 20 rows passed payload
-correctness; zero timing rows qualified because of unrelated host CPU activity.
-The raw result and row artifacts are retained, but this attempt adds no
-throughput, latency, or CPU claim.
-
-A fresh identity-bound retry on the same dirty source first reran the complete
-public parity gate: the first attempt had one infrastructure-only Uvicorn
-TLS-WebSocket handshake timeout, while the preserved second attempt passed
-243/243 cases. The normal-build H1 retry (`benchmarks/results/2026-10-10/fastapi-h1-targeted-rerun-20261010/analysis.md`)
-then passed correctness on all 80 rows covering fixed requests, 1 MiB uploads
-with 16 KiB client writes, and small chunked responses. The separate
-WebSocket text retry (`benchmarks/results/2026-10-10/fastapi-ws-text-echo-rerun-20261010/analysis.md`)
-passed all 20 message checks. A later focused fixed-route retry (`benchmarks/results/2026-10-10/fastapi-h1-fixed-retry-hostwindow-20261010/analysis.md`)
-passed another 20 correctness rows. All 120 timing rows were rejected by the
-existing host-activity guard because of unrelated CPU activity, including the
-Android emulator; source, native, and client identities stayed stable. These
-retries add correctness and rejection evidence only, with no throughput,
-latency, or CPU claim.
-
-A fresh identity-bound 1 MiB upload retry (`benchmarks/results/2026-10-10/fastapi-current-upload-host-retry-20261010/http1-upload/analysis.md`)
-then passed its source-matched parity gate (243/243) and all 20 upload response
-checks. The source and normal extension matched the matrix identities, but all
-20 timing rows were rejected for unrelated host CPU activity. The full
-parity receipt (`benchmarks/results/2026-10-10/fastapi-current-upload-host-retry-20261010/parity.json`),
-raw rows, process logs, and identity are retained. This attempt adds no
-throughput or latency result and is not pooled with earlier measurements.
-
-The measured hot paths are ASGI bridge calls, scheduling, body materialization,
-and bounded-queue waits. The sampled native stacks identify relevant functions
-but do not provide exact function-level CPU shares. No SIMD bottleneck has been
-identified.
-
-The source-confirmed adapter-boundary copy ledger documents an asymmetric
-boundary: immutable Python `bytes` sent in HTTP response bodies or WebSocket
-binary messages are retained by PyO3's `Bytes` conversion without copying the
-payload; network request bodies and inbound WebSocket frames still need to be
-copied into Python-owned `bytes` objects. This does not count copies inside the
-protocol, TLS, allocator, kernel, or framework paths. See the copy ledger (`benchmarks/results/2026-10-10/fastapi-current-one-tokio-20261010/copy-time-runtime-diagnostics-retry2-20261010/README.md#confirmed-adapter-boundary-copy-ledger`).
-
-The checkout was dirty and a Rust build overlapped the deeper eight-repeat
-HTTP/1 retry. Consequently, 143/192 timings in that retry were host-invalid,
-including the Python-CPU and request-upload pairs; they have no speed claim.
-The report retains every excluded row, raw result, parity receipt, and exact
-source/native identity. No release-performance claim follows from this local
-run. A later short fixed-route concurrency sweep at 1, 8, 32, and 64 matched
-both asyncio and uvloop against Uvicorn. Its host-valid rows show a stable
-roughly 18–22 µs/request CPU premium under asyncio, with the latency gap growing
-as concurrency increases. Same-source per-thread profiles put about 20
-µs/request of fixed-route CPU on Tokio-named threads and about 419 µs/request
-there for 1 MiB uploads; exact function-level upload attribution remains open.
-
-A feature-gated follow-up on the matrix source measured 5.701 receive bridge
-futures and about six ASGI body messages per 1 MiB upload, with 73 µs wall time
-for the complete Rust-to-Python `bytes` materialization path. Diagnostic p50
-`receive()` wait was 21.334 ms for uvicorn-rs and 12.997 ms for Uvicorn. For a
-256-chunk response, Rust recorded 15.77 bounded-queue full waits and 38.86 ms
-of accumulated send wait per request. These instrumented timings are not
-normal-build rankings; the conversion timer includes allocation and is not a
-pure copy or CPU-share measurement. See the bridge diagnostic receipt (`benchmarks/results/2026-10-10/fastapi-current-one-tokio-20261010/copy-time-runtime-diagnostics-retry2-20261010/README.md`).
-
-## Previous focused diagnosis on an earlier source snapshot
-
-This page reports only upstream FastAPI on its normal Starlette and Pydantic
-dependencies. No FastAPI-RS or Starlette-RS app or runtime was used. Results
-are local, source-bound evidence from one Apple M3 Pro; they are not a
-cross-platform release claim.
-
-The 2026-10-10 focused diagnosis (`benchmarks/results/2026-10-10/fastapi-current-one-tokio-20261010/README.md`)
-uses the earlier `6b164eb…` source. Its qualified request-upload, response-
-streaming, WebSocket echo, HTTP/2, lifecycle, H3 chunked-response, and
-slow-reader measurements show near parity on the Python CPU route, extra Rust
-CPU on small HTTP and WebSocket work, roughly 2× CPU for 1 MiB HTTP/1.1
-uploads, and near-equal throttled slow-reader throughput. Its three-pair
-per-thread profile covers all 11 H1 FastAPI workload types. These are
-source-specific results and are not pooled with the `1f222c0…` matrix above.
-See the full H1 CPU split (`benchmarks/results/2026-10-10/fastapi-current-one-tokio-20261010/README.md#per-thread-cpu-across-all-http1-fastapi-workloads`).
-
-A later same-source experiment changed only the request-body batch limit from
-256 KiB to 1 MiB for a 1 MiB upload written in 16 KiB chunks. The 256 KiB
-baseline reached three shared clean pairs; the candidate did not reach the
-three-pair gate because unrelated host CPU activity invalidated most attempts.
-Two isolated candidate pairs suggest modest CPU savings but higher sampled RSS
-and worse tail latency, while throughput remained about one-third below
-Uvicorn. The candidate was reverted. See the threshold A/B receipt (`benchmarks/results/2026-10-10/fastapi-upload-threshold-ab-20261010/README.md`)
-for exact source/build hashes and every accepted and rejected run.
-
-The recorded dirty working-tree source (`src/lib.rs` SHA-256
-`6b164eb7333b9e20f30feaa94f23f32059d02ebd7852527318260d652e510a79`) passed
-243/243 normal-build public parity cases. Its unified matrix passed 506/506
-cases in three runs, with Coverage-MCP measuring 5,518/5,518 regions and
-3,960/3,960 lines. The coverage report (`benchmarks/results/2026-10-10/unified-coverage-current-send-mode-20261010/coverage-report.json`)
-is local evidence for this dirty source, not hosted candidate CI.
-
-For the exact dirty `6b164eb…` source, three same-numbered fixed-route CPU
-profile repetitions passed the host and identity guards on both servers. Their
-matched medians were 34.1 µs/request for Uvicorn and 45.3 for uvicorn-rs. Four
-same-numbered 1 MiB-upload repetitions passed on both servers, with matched
-medians of 274.8 versus 547.5 µs/request. uvicorn-rs used less CPU on its
-Python event-loop thread in both cases; the extra appeared on Tokio-named
-threads. In the upload profiles, that split was 173.3 µs on Python plus 374.2
-µs on Tokio-named threads. Details and the profiling-only ASGI timing captures are in the
-focused diagnosis (`benchmarks/results/2026-10-10/fastapi-current-one-tokio-20261010/README.md`).
-The first all-H1 profile attempts overlapped an unrelated Rust build and were
-rejected by the host guard. The final retry provides three clean matched CPU
-profiles for every H1 workload; earlier rejected rows remain in the
-causal-profile archive (`benchmarks/results/2026-10-10/fastapi-causal-profiling-20261010/attempts.md`).
-
-## Full-category report (2026-10-10, earlier source snapshot)
-
-The full report (`benchmarks/results/2026-10-10/fastapi-final-506/README.md`)
-compares the same FastAPI app, Python version, dependencies, event-loop choices,
-and host across uvicorn-rs, Uvicorn, and Hypercorn where the protocol matches.
-It records Rust `src/lib.rs` SHA-256
-`b5c1140587a5998e0ef835e7fa935a1177771b8dcbb9e0c0d4681a664f99fd22`. The
-later focused report above uses the dirty working-tree source hash
-`6b164eb7333b9e20f30feaa94f23f32059d02ebd7852527318260d652e510a79`; do not
-combine their rows as one exact-source run. The Rust runtime uses one Tokio
-async worker. Only host-clean matched repetitions count in the ratios below;
-the raw report retains host-contended and otherwise invalid samples with their
-exclusion reasons.
-
-| Workload | Reference | Rust/reference throughput | p50 reference → Rust | Server CPU reference → Rust |
-|---|---|---:|---:|---:|
-| H1 fixed route / uvloop | Uvicorn | 0.835× | 2.167 → 2.663 ms | 34.2 → 46.5 µs/op |
-| H1 validated FastAPI route / uvloop | Uvicorn | 0.941× | 3.846 → 4.169 ms | 60.4 → 70.9 µs/op |
-| H1 Python CPU route / uvloop | Uvicorn | 1.007× | 57.257 → 60.341 ms | 913.3 → 922.8 µs/op |
-| H1 1 MiB upload / asyncio | Uvicorn | 0.622× | 17.704 → 28.400 ms | 282.5 → 617.9 µs/op |
-| H1 1 MiB upload / uvloop | Uvicorn | 0.684× | 16.959 → 25.784 ms | 275.4 → 547.6 µs/op |
-| H2 1 MiB upload / asyncio | Hypercorn | 5.006× | 252.516 → 50.512 ms | 3,901.4 → 1,040.2 µs/op |
-| H2 1 MiB response / uvloop | Hypercorn | 7.719× | 257.278 → 33.100 ms | 4,005.2 → 573.2 µs/op |
-| H3 fixed response / asyncio, concurrency 1 | Hypercorn | 4.381× | 0.483 → 0.109 ms | 353.9 → 83.5 µs/op |
-| H3 large response / uvloop, concurrency 1 | Hypercorn | 19.986× | 54.982 → 2.763 ms | 23,911.7 → 2,736.3 µs/op |
-| H3 slow-reader backpressure / uvloop, concurrency 1 | Hypercorn | 0.997× | 251.6 → 251.9 ms | 29,748.6 → 9,097.4 µs/op |
-| WebSocket text echo / asyncio | Uvicorn | 0.596× | 1.138 → 1.899 ms | 17.8 → 48.8 µs/op |
-| WebSocket text echo / uvloop | Uvicorn | 0.728× | 0.972 → 1.346 ms | 15.2 → 32.4 µs/op |
-| WebSocket 64 KiB binary echo / uvloop | Uvicorn | 1.068× | 2.333 → 2.265 ms | 36.5 → 46.4 µs/op |
-
-For this `b5c1140` source snapshot, the full-category H3 attempt did not qualify
-at concurrency 8 or 64 because Hypercorn timed out. A separate low-load retry
-qualified seven H3 workload/loop pairs at concurrency 1; it found
-large-response and chunked-response gains, while slow-reader throughput was
-equal. Those H3 rows do not establish the later `6b164eb` working-tree source:
-its focused report qualifies only the chunked-response workload at concurrency
-1. H3 uploads and protocol-scope workloads remain unqualified. Lifecycle also
-gained enough clean evidence in a
-20-repetition follow-up: 14 matched asyncio repetitions and 9 uvloop
-repetitions. Startup measured about 136–138 ms for Rust versus 154–156 ms for
-Uvicorn; idle exit measured about 23 ms versus 195 ms, while held graceful exit
-was about 2.03 s versus 2.20 s. These are local lifecycle boundaries, not
-request throughput. The detailed report includes p50/p95/p99, RSS, all category
-correctness and timing counts, raw receipts, stage diagnostics, and CPU
-attribution limits. Results are per workload and must not be combined across
-protocols into one speed ratio.
-
-For the earlier `b5c1140…` source snapshot, the stage trace localized its H1
-upload gap to request-body delivery and the Rust/Python receive bridge: that
-version spent more time in `receive()` and more process CPU there, while the
-handler and `send()` stages were not slower in the instrumented trace. Its
-small WebSocket echo gap was consistent with fixed per-frame bridge/scheduling
-cost. The separate 360-profile H1 CPU sweep and its 1.15–2.13× ratios also use
-that `b5c1140…` source, as recorded by the profile README; they are historical
-evidence and must not be merged with the dirty `6b164eb…` results. The full
-HTTP/1 thread-CPU analysis (`benchmarks/results/2026-10-10/fastapi-final-506/current-source-diagnostics/all-http1-thread-cpu-20261010-aggregate.md`)
-contains the accepted and excluded receipts for that older source.
-
-For the 2026-10-10 benchmark source snapshot at dirty revision `6b164eb…`, the
-profiling-only ASGI capture puts about 9.23 ms of the 1 MiB upload's p50 latency difference inside awaited
-`receive()` calls, close to the 8.96 ms normal-build end-to-end p50 gap. The
-same source's clean CPU profiles show about 374 µs/request on Tokio-named
-threads, offset by about 102 µs less Python event-loop CPU than Uvicorn. Sampled
-stacks include the PyO3 future bridge, Tokio `spawn_blocking` tasks,
-`call_soon_threadsafe`, and memory movement, but stack samples are not
-function-level CPU shares. No SIMD bottleneck was identified. The focused
-report records exact profiles, source identity, and measurement limits.
-
-## Previous five-category run (2026-10-09)
-
-The full report (`benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio-retry1/full-matrix-retry2/README.md`)
-measured the same FastAPI 0.142.4 app on CPython 3.12.13, macOS 15.7.7 arm64,
-with Rust 1.98.1 and one configured Tokio async worker. Uvicorn 0.54.0 with
-httptools 0.8.0 is the H1, WebSocket, and lifespan reference. Hypercorn 0.18.0
-is the H2 and H3 reference. Both asyncio and uvloop owned the Python ASGI app
-loop. The run used five repetitions, five seconds per sample, one second of
-warmup, and concurrency 64. Source and normal extension hashes stayed stable.
-
-| Category | Reference | Correct rows | Qualified pairs | Result |
-|---|---|---:|---:|---|
-| HTTP/1.1 | Uvicorn | 300/300 | 12 | Mixed; common routes and large responses regress, Python CPU route is near parity |
-| HTTP/2 | Hypercorn | 140/140 | 14 | Fixed and large responses are faster; small-chunk uploads regress |
-| HTTP/3 | Hypercorn | 2/130 planned | 0 | The concurrency-64 reference timed out; no pair qualifies |
-| WebSockets | Uvicorn | 60/60 | 5 | Handshakes are faster; text echo is slower |
-| Lifespan/shutdown | Uvicorn | 20/20 | 1 | One workload/loop pair; insufficient for a category conclusion |
-
-The four completed categories passed 520 correctness rows. The H3 failure was
-64 response-header timeouts in the Hypercorn/uvloop reference during
-`protocol-scope-consumed-request`; the two Rust rows are not a comparison.
-An earlier run of the same Rust source and native extension measured H3 at
-concurrency 1 against Hypercorn and qualified 10 workload/loop pairs. Its
-per-workload analysis (`benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio/http3-concurrency1/analysis.md`)
-is separate evidence and does not establish high-concurrency H3 performance.
-
-Representative matched results follow. Throughput is Rust/reference; latency
-is the median of per-run p50 values; CPU is server process-tree microseconds
-per operation. The complete analysis (`benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio-retry1/full-matrix-retry2/analysis.md`)
-contains every qualified workload's p50/p95/p99, server/client CPU, sampled
-RSS, invalid rows, and comparison exclusions.
-
-| Workload and loop | Throughput ratio | p50 reference → Rust | Server CPU reference → Rust |
-|---|---:|---:|---:|
-| H1 validated FastAPI route / asyncio | 0.908× | 4.381 → 4.928 ms | 68.5 → 83.2 µs/op |
-| H1 large response / asyncio | 0.874× | 6.411 → 7.920 ms | 100.6 → 130.4 µs/op |
-| H1 1 MiB upload, 1 KiB client writes / asyncio | 1.084× | 197.8 → 187.5 ms | 990.7 → 1,705.2 µs/op |
-| H1 Python CPU route / asyncio | 1.043× | 59.708 → 60.416 ms | 955.9 → 934.8 µs/op |
-| H2 fixed response / asyncio | 3.720× | 9.135 → 2.606 ms | 147.5 → 48.2 µs/op |
-| H2 large response / asyncio | 8.077× | 264.3 → 32.572 ms | 4,122.3 → 574.1 µs/op |
-| H2 small-chunk upload / asyncio | 0.548× | 53.090 → 100.8 ms | 860.6 → 2,613.3 µs/op |
-| WebSocket handshake / asyncio | 2.151× | 0.420 → 0.189 ms | 281.1 → 152.3 µs/op |
-| WebSocket text echo / asyncio | 0.591× | 1.108 → 1.863 ms | 17.3 → 48.1 µs/op |
-
-These ratios are per workload and reference. Do not combine H1, H2, H3, or
-WebSocket results into one overall speed number. The deliberate 1 KiB-write
-upload above differs from the default 1 MiB upload workload: a separate
-qualified same-source run measured that default case at 0.458× Uvicorn
-throughput, with 2.33× p50 latency and 3.4× server CPU per operation. The
-same-source diagnosis (`benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio/README.md`)
-explains the upload workload difference and keeps its raw rows.
-
-A new matched 1 MiB upload write-size sweep (`benchmarks/results/2026-10-09/fastapi-upload-granularity-current/README.md`)
-tested 1 KiB through 1 MiB client writes on both servers with uvloop. For
-16 KiB–1 MiB writes, uvicorn-rs stayed near 0.53× Uvicorn throughput and used
-2.94–3.05× server CPU per request, regardless of client write size. The
-diagnostic pass found 18 ASGI receive messages and 17.9 receive bridge futures
-per Rust request versus five Uvicorn receive messages, with one payload's
-worth of bytes copied into Python `bytes`. The 1 KiB-write run was limited by
-the client and showed near-equal throughput despite higher Rust server CPU.
-
-A receive-loop task-locals reuse experiment passed the 240-case public ASGI
-matrix but did not show a material, repeatable upload gain; it was reverted.
-The default 1 MiB upload measured 0.533× Uvicorn in five candidate pairs
-versus 0.516× in an earlier three-pair baseline, with less than 1% lower Rust
-CPU across separate measurement windows. See the
-candidate report (`benchmarks/results/2026-10-09/fastapi-receive-locals-reuse-candidate/README.md`)
-for latency, CPU, exclusions, and raw receipts.
-
-## Where the additional time appears
-
-This section is historical diagnostic evidence for committed source
-`e8148e4` (`src/lib.rs` SHA-256
-`56cccea49215b2b96cf7028ec01804c7142b0f364f91bbd957b1114ab13b65fb`). It
-predates the dirty `6b164eb…` source measured in the focused 2026-10-10 report;
-do not combine the following stage counters, thread counts, or CPU values with
-that report.
-
-The FastAPI server cost breakdown (`benchmarks/results/2026-10-09/fastapi-stage-breakdown-current/README.md`)
-combines the exact-source H1 counters, new HTTP/2 and WebSocket stage profiles,
-repeated paired normal-build Python CPU-route samples, and signal-gated CPU
-counters for the Python event-loop thread and whole process. It separates
-normal-build results from instrumented-only timings and records why exact
-Rust/PyO3 on-CPU function shares remain unmeasured on this Mac.
-
-The normal matrix shows higher server CPU per request on several H1 workloads
-and WebSocket echo. A Python CPU-bound route stays near parity in throughput
-and server CPU, so that route's Python handler work does not explain the
-broader H1 overhead. The upload measurements point to receive and bridge work.
-
-Three alternating normal-build stack captures of the same Python CPU route
-found a Rust Tokio worker in `PyGILState_Ensure` followed by a condition wait
-in 80.7–83.6% of that worker's sampled wall-time ticks. This is a GIL wait
-signal, not a CPU share. The repeated profiles and their limits are in the
-stage report (`benchmarks/results/2026-10-09/fastapi-stage-breakdown-current/README.md`);
-the matched CPU-route benchmark itself remains near parity.
-
-The exact-source instrumented probe checked 48 runs of fixed route, validated
-route, 1 MiB upload, and 256-chunk response workloads across Uvicorn and
-uvicorn-rs with asyncio and uvloop. All responses were checked, but diagnostic
-timings are excluded from performance ratios. Its counters locate two strong
-cost signals:
-
-1. **Request-body delivery crosses into Python repeatedly.** Rust produced
-   about 18 `http.request` messages and 17.8 receive-bridge futures for a
-   1 MiB request; Uvicorn produced five messages. Rust copied approximately
-   one payload's worth into Python `bytes`, split across those messages. The
-   extra cost is per-message PyO3 future completion, Python attachment, GIL
-   acquisition, and event-loop scheduling—not 18 full-body copies.
-2. **Chunked responses wait in the bounded Rust body queue.** At 256 chunks,
-   the queue filled about 15.8 times per response and accumulated roughly
-   40–48 ms of queue-send wait. TCP write-pending wait was negligible for a
-   fast reader, so that observed wait is before socket writes. The deliberately
-   slow-reader case exercises both queue and TCP backpressure.
-
-The H2 profile narrows its small-upload regression to `receive()` awaits:
-Rust took 108 ms at p50 versus Hypercorn's 56.5 ms with nearly equal counts of
-body messages, and Rust created 62.8 receive bridge futures per request. Its
-chunked response profile shows 242.5 ms of queue-send wait per response; Rust
-still completed that normal workload faster than Hypercorn. The WebSocket
-profile shows one Rust receive bridge future per small echo frame, while the
-normal 32-byte echo workload used 2.8× the server CPU per message and delivered
-0.591× the throughput of Uvicorn. A 64 KiB frame reached near-throughput parity.
-Those cross-protocol details are in the stage report (`benchmarks/results/2026-10-09/fastapi-stage-breakdown-current/README.md`).
-
-The new thread-level CPU attribution (`benchmarks/results/2026-10-09/fastapi-thread-cpu-attribution/README.md`)
-measured four ordinary FastAPI H1 workloads with three short captures per
-server and event loop. The synchronous Python CPU endpoint itself used about
-810 µs/call on Uvicorn and 772–783 µs/call on uvicorn-rs; whole-process CPU
-was near parity for that route. On the 1 MiB upload, Rust used less CPU on its
-Python event-loop thread but about 582–741 µs/request more across the process.
-That aligns with the receive/bridge evidence, although the process residual
-includes all non-loop threads and does not identify a Rust function. The 48
-responses passed checks, but only 12 passed the host/identity timing guard, so
-these captures are diagnostic evidence rather than rankable benchmarks.
-
-A Mach thread snapshot for the recorded source (`benchmarks/results/2026-10-09/fastapi-thread-cpu-mach-current-source-run2/README.md`)
-then repeated the validated route and 1 MiB upload with Uvicorn and uvicorn-rs
-both using uvloop. All 12 response checks passed and 11/12 captures passed the
-host/identity guard. On the upload, the guard-clean medians were 276.6 µs of
-process CPU per request for Uvicorn and 817.5 µs for uvicorn-rs, or 92.2% and
-150.5% of one logical core during the measured intervals. Rust's Python
-event-loop thread used 253.1 µs; Tokio-named threads used another 562.8 µs,
-with 22–23 such threads visible. On the validated route the Rust event-loop
-thread used less CPU, while the process still used about 9.6 µs more per
-request. The Mach per-thread sum reconciled with process CPU within 0.002%.
-These are CPU-attribution diagnostics, not throughput or latency rankings.
-
-A repeat set of 12 Apple `sample` captures now includes validated routes,
-1 MiB uploads, and 256-chunk responses under asyncio and uvloop. Every sample
-passed exact response checks. The Rust app's inner FastAPI timing stayed near
-the Uvicorn app timing on validated routes; upload `receive()` p50 was about
-2.1–2.5× higher, while chunked-response `send()` p50 exposed bounded body-queue
-wait. During upload profiles, the Rust process exposed 22–24 threads named
-`tokio-rt-worker` despite one configured Tokio async worker. These are
-diagnostic stack and wait measurements, not per-function CPU shares. See the
-native stack attribution report (`benchmarks/results/2026-10-09/fastapi-native-stack-attribution-run2/README.md`)
-for the per-loop measurements and interpretation.
-
-The focused H1 diagnostic receipt (`benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio/README.md`)
-and new H2/WebSocket diagnostic receipts contain raw Rust counters and ASGI
-timings. Signal-gated thread counters add attribution at the event-loop-thread
-and process levels, and the Mach snapshots add per-OS-thread CPU totals. They
-still do not attribute on-CPU time to individual Rust or Python functions.
-The available Apple `sample` profiles include waiting threads; exact function
-shares and comparable total allocation counts remain unmeasured. No SIMD
-hotspot has been identified. The one Tokio async worker is not a one-thread
-process: Python owns a separate event loop, and the PyO3 completion path uses
-Tokio's blocking pool.
-
-The current host has only Apple Command Line Tools; `xcrun xctrace` is
-unavailable, and DTrace cannot initialize with SIP and privilege restrictions.
-The write-size sweep therefore closes the request-boundary and byte-counter
-questions for H1 uploads, but native function-level on-CPU attribution still
-requires a profiling-capable host.
-
-## Evidence and limits
-
-- The machine-readable category rows (`benchmarks/results/2026-10-09/fastapi-exact-f260-one-tokio-retry1/full-matrix-retry2/`)
-  preserve matched repetitions and exclusions; the [methodology](benchmarks.md)
-  describes the validity gates and resource accounting.
-- The normal extension passed 239/239 public cases before the full-category
-  run. The same extension hash subsequently passed the expanded 240/240
-  normal-wheel parity matrix in the coverage evidence archive (`benchmarks/results/2026-10-09/asgi-unified-coverage-494/`).
-- The checkout was dirty, host-contended rows were retained and excluded, and
-  H3 did not finish at concurrency 64. The automated three-system benchmark
-  also failed before producing a validated aggregate; see
-  [latest run status](benchmark-status.md).
-- Three valid matched repetitions are a descriptive gate, not a statistical
-  significance test. The closed-loop, same-host load does not correct for
-  coordinated omission. RSS is sampled process-tree RSS, not PSS or allocator
-  peak.
-
-The project has no broad performance-replacement claim. Continue performance
-work only against a measured workload-specific bottleneck and require normal
-parity plus repeatable end-to-end improvement before accepting an optimization.
+<!-- Generated by scripts/aggregate_benchmark_matrix.py; update through the benchmark docs workflow. -->
+# Multi-system benchmark results
+
+Run: [41802594681 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681)
+Commit: [`feb955d2758166ad8c4b519903fd1318b29e7d2d`](https://github.com/appunni-m/uvicorn-rs/commit/feb955d2758166ad8c4b519903fd1318b29e7d2d)
+Generated: 2026-11-04T10:30:12.749582+00:00
+Evidence status: **validated_complete_matrix**. Partial inputs are shown per system; only individually qualified rows contribute metrics.
+Latest attempt status is tracked separately in [benchmark-status.md](benchmark-status.md).
+
+The matrix uses independent hosted systems. Results are reported per system; rates and latencies are never averaged across architectures. A row appears below only when its correctness, identity, timing, and matching-repetition gates qualify. No qualified row means the run makes no performance claim for that workload.
+
+The workflow runs five repetitions by default and requires at least three matching valid repetitions. The report records general and HTTP/3 concurrency separately because the H3 reference has a lower sustainable same-host load. Invalid or incomplete rows remain in the downloadable raw artifacts and are excluded from ratios. These measurements include the Python ASGI boundary and the closed-loop client; see [benchmark methodology](benchmarks.md) for scope and limitations.
+
+## Runner summary
+
+| System | Runner | CPU / cores | Memory | Python | Concurrency / H3 | Matrix / driver / pairs | FastAPI status / pairs | Raw artifact |
+|---|---|---|---:|---|---:|---|---|---|
+| linux-x86_64 (x86_64) | ubuntu-24.04 | AMD EPYC 9V74 80-Core Processor (4 logical / 2 physical) | 15.6 GiB | 3.12.13 | 64 / H3 1 | validated_complete_system / completed_correctness_gated / 68 | qualified_local_pairs / H2 qualified_local_pairs / H3 qualified_local_pairs / 28 | `asgi-category-benchmarks-linux-x86_64` |
+| linux-aarch64 (aarch64) | ubuntu-24.04-arm | Neoverse-N2 (4 logical / 4 physical) | 15.6 GiB | 3.12.13 | 64 / H3 1 | validated_complete_system / completed_correctness_gated / 67 | qualified_local_pairs / H2 qualified_local_pairs / H3 qualified_local_pairs / 27 | `asgi-category-benchmarks-linux-aarch64` |
+| macos-arm64 (arm64) | macos-15 | Apple M1 (Virtual) (3 logical / 3 physical) | 7.0 GiB | 3.12.13 | 64 / H3 1 | validated_complete_system / completed_correctness_gated / 66 | qualified_local_pairs / H2 qualified_local_pairs / H3 qualified_local_pairs / 26 | `asgi-category-benchmarks-macos-arm64` |
+
+## linux-x86_64 (x86_64)
+
+Runner: `ubuntu-24.04`; CPU: AMD EPYC 9V74 80-Core Processor (4 logical, 2 physical); memory: 15.6 GiB; platform: `Linux-7.0.0-1017-azure-x86_64-with-glibc2.39`.
+Load parameters: {'duration': 5.0, 'warmup': 1.0, 'concurrency': 64, 'h3_concurrency': 1, 'repetitions': 5, 'seed': 20261005}.
+
+Stock FastAPI comparison (upstream FastAPI, Starlette, and Pydantic):
+
+| Workload | Protocol | Loop | Valid matches | Qualified | Ops/s ref / Rust | p50 ms ref / Rust | p95 ms ref / Rust | p99 ms ref / Rust | Rate ratio |
+|---|---|---|---:|---|---:|---:|---:|---:|---:|
+| fastapi-validated-route | HTTP/1.1 | asyncio | 4 | yes | 8513.698 / 5044.753 | 7.572 / 12.589 | 8.189 / 17.481 | 9.293 / 18.448 | 0.589× |
+| fastapi-validated-route | HTTP/1.1 | uvloop | 5 | yes | 9139.379 / 5386.225 | 6.964 / 11.630 | 8.507 / 16.433 | 13.421 / 17.643 | 0.590× |
+| fastapi-python-cpu | HTTP/1.1 | asyncio | 5 | yes | 635.177 / 599.233 | 99.834 / 100.634 | 115.555 / 136.917 | 127.901 / 146.425 | 0.945× |
+| fastapi-python-cpu | HTTP/1.1 | uvloop | 5 | yes | 648.803 / 613.778 | 97.110 / 106.868 | 118.598 / 131.937 | 147.808 / 137.764 | 0.948× |
+| fastapi-validated-route | HTTP/2 | asyncio | 5 | yes | 3064.982 / 5341.141 | 20.058 / 11.880 | 31.837 / 19.493 | 33.394 / 23.326 | 1.752× |
+| fastapi-validated-route | HTTP/2 | uvloop | 5 | yes | 3064.995 / 6219.519 | 20.050 / 9.799 | 32.180 / 17.887 | 33.630 / 21.381 | 2.029× |
+| fastapi-python-cpu | HTTP/2 | asyncio | 5 | yes | 552.438 / 609.703 | 114.214 / 107.262 | 134.254 / 162.046 | 151.783 / 176.710 | 1.096× |
+| fastapi-python-cpu | HTTP/2 | uvloop | 5 | yes | 563.092 / 621.800 | 112.685 / 104.911 | 132.599 / 162.264 | 153.283 / 182.799 | 1.098× |
+| fastapi-large-response | HTTP/2 | asyncio | 5 | yes | 146.005 / 485.252 | 437.035 / 116.789 | 461.806 / 258.894 | 469.833 / 369.685 | 3.324× |
+| fastapi-large-response | HTTP/2 | uvloop | 5 | yes | 154.303 / 501.492 | 414.077 / 114.471 | 452.639 / 236.214 | 463.420 / 315.437 | 3.284× |
+| fastapi-many-response-chunks | HTTP/2 | asyncio | 5 | yes | 103.049 / 149.019 | 637.337 / 415.417 | 673.726 / 460.281 | 722.977 / 507.688 | 1.445× |
+| fastapi-many-response-chunks | HTTP/2 | uvloop | 5 | yes | 117.673 / 190.162 | 544.147 / 327.512 | 594.395 / 369.743 | 625.682 / 384.173 | 1.629× |
+| fastapi-request-upload | HTTP/2 | asyncio | 5 | yes | 22.272 / 666.728 | 347.982 / 95.501 | 7612.120 / 120.124 | 7654.374 / 131.817 | 30.099× |
+| fastapi-request-upload | HTTP/2 | uvloop | 5 | yes | 45.211 / 803.241 | 321.756 / 80.003 | 3819.350 / 97.509 | 4084.368 / 105.406 | 17.819× |
+| fastapi-slow-reader-backpressure | HTTP/2 | asyncio | 5 | yes | 7.044 / 7.076 | 284.753 / 279.197 | 286.555 / 292.164 | 295.681 / 296.943 | 1.002× |
+| fastapi-slow-reader-backpressure | HTTP/2 | uvloop | 5 | yes | 7.023 / 7.124 | 284.304 / 278.893 | 286.219 / 289.428 | 291.231 / 292.479 | 1.014× |
+| fastapi-validated-route | HTTP/3 | asyncio | 5 | yes | 1713.910 / 2688.106 | 0.589 / 0.368 | 0.641 / 0.413 | 0.787 / 0.441 | 1.565× |
+| fastapi-validated-route | HTTP/3 | uvloop | 5 | yes | 1766.387 / 2875.499 | 0.564 / 0.343 | 0.641 / 0.389 | 0.800 / 0.421 | 1.620× |
+| fastapi-python-cpu | HTTP/3 | asyncio | 5 | yes | 459.725 / 557.155 | 2.154 / 1.778 | 2.458 / 1.877 | 2.971 / 2.518 | 1.215× |
+| fastapi-python-cpu | HTTP/3 | uvloop | 5 | yes | 471.717 / 574.665 | 2.085 / 1.721 | 2.349 / 1.805 | 2.915 / 2.469 | 1.221× |
+| fastapi-large-response | HTTP/3 | asyncio | 5 | yes | 17.225 / 468.152 | 71.151 / 2.110 | 85.403 / 2.449 | 96.910 / 2.884 | 26.928× |
+| fastapi-large-response | HTTP/3 | uvloop | 5 | yes | 17.976 / 475.097 | 55.794 / 2.087 | 57.834 / 2.400 | 60.628 / 2.822 | 26.430× |
+| fastapi-many-response-chunks | HTTP/3 | asyncio | 5 | yes | 16.834 / 339.579 | 59.571 / 2.905 | 61.888 / 3.357 | 64.781 / 3.915 | 20.246× |
+| fastapi-many-response-chunks | HTTP/3 | uvloop | 5 | yes | 17.964 / 371.183 | 55.830 / 2.655 | 56.940 / 3.052 | 59.738 / 3.561 | 20.633× |
+| fastapi-request-upload | HTTP/3 | asyncio | 5 | yes | 12.545 / 34.672 | 79.744 / 28.968 | 82.565 / 32.887 | 83.254 / 37.313 | 2.773× |
+| fastapi-request-upload | HTTP/3 | uvloop | 5 | yes | 8.234 / 62.061 | 118.945 / 15.788 | 134.687 / 18.233 | 153.354 / 19.621 | 7.523× |
+| fastapi-slow-reader-backpressure | HTTP/3 | asyncio | 5 | yes | 7.943 / 7.946 | 251.757 / 251.812 | 252.439 / 252.184 | 252.812 / 252.862 | 1.001× |
+| fastapi-slow-reader-backpressure | HTTP/3 | uvloop | 5 | yes | 7.940 / 7.948 | 251.732 / 251.532 | 252.771 / 252.406 | 253.506 / 252.902 | 1.001× |
+
+Stock FastAPI resource measurements:
+
+| Workload | Protocol | Loop | Valid matches | Server CPU % ref / Rust | Server CPU µs/op ref / Rust | Client CPU % ref / Rust | Client CPU µs/op ref / Rust | Server RSS MiB ref / Rust | Client RSS MiB ref / Rust |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|
+| fastapi-validated-route | HTTP/1.1 | asyncio | 4 | 96.067 / 125.302 | 117.282 / 259.758 | 34.534 / 21.813 | 42.184 / 45.915 | 48.398 / 58.617 | 13.162 / 13.092 |
+| fastapi-validated-route | HTTP/1.1 | uvloop | 5 | 95.960 / 124.832 | 109.501 / 241.655 | 33.839 / 22.731 | 38.505 / 44.423 | 51.137 / 62.238 | 13.160 / 13.102 |
+| fastapi-python-cpu | HTTP/1.1 | asyncio | 5 | 99.896 / 105.273 | 1614.308 / 1801.058 | 3.775 / 3.822 | 61.055 / 65.509 | 51.129 / 59.730 | 12.684 / 12.660 |
+| fastapi-python-cpu | HTTP/1.1 | uvloop | 5 | 98.931 / 104.839 | 1565.934 / 1748.072 | 3.726 / 3.876 | 58.988 / 64.671 | 53.887 / 62.758 | 12.656 / 12.695 |
+| fastapi-validated-route | HTTP/2 | asyncio | 5 | 96.643 / 117.691 | 325.451 / 229.590 | 28.079 / 10.227 | 95.072 / 19.742 | 94.465 / 56.242 | 6.082 / 6.375 |
+| fastapi-validated-route | HTTP/2 | uvloop | 5 | 96.590 / 115.757 | 325.224 / 193.857 | 27.618 / 11.699 | 92.896 / 19.495 | 97.227 / 58.977 | 6.105 / 6.352 |
+| fastapi-python-cpu | HTTP/2 | asyncio | 5 | 99.783 / 103.136 | 1855.413 / 1744.859 | 5.969 / 1.695 | 110.844 / 28.705 | 95.938 / 59.145 | 5.883 / 6.004 |
+| fastapi-python-cpu | HTTP/2 | uvloop | 5 | 99.314 / 103.955 | 1809.257 / 1703.822 | 6.099 / 1.711 | 111.026 / 28.236 | 97.785 / 62.441 | 5.848 / 6.023 |
+| fastapi-large-response | HTTP/2 | asyncio | 5 | 95.762 / 77.223 | 6835.937 / 1656.158 | 44.550 / 102.464 | 3165.587 / 2193.605 | 167.762 / 56.355 | 7.750 / 7.945 |
+| fastapi-large-response | HTTP/2 | uvloop | 5 | 98.402 / 79.767 | 6465.409 / 1626.298 | 47.682 / 107.817 | 3169.225 / 2191.011 | 174.188 / 58.988 | 7.711 / 7.922 |
+| fastapi-many-response-chunks | HTTP/2 | asyncio | 5 | 98.759 / 147.630 | 9676.259 / 10026.042 | 33.286 / 73.544 | 3265.700 / 5028.924 | 163.051 / 58.344 | 7.801 / 8.160 |
+| fastapi-many-response-chunks | HTTP/2 | uvloop | 5 | 97.058 / 131.457 | 8426.966 / 7103.175 | 37.002 / 91.957 | 3244.909 / 5027.044 | 146.438 / 60.895 | 7.676 / 8.016 |
+| fastapi-request-upload | HTTP/2 | asyncio | 5 | 12.963 / 138.069 | 5909.091 / 2172.619 | 4.853 / 56.062 | 2131.142 / 883.873 | 177.988 / 130.258 | 7.059 / 7.957 |
+| fastapi-request-upload | HTTP/2 | uvloop | 5 | 24.247 / 126.269 | 5349.794 / 1645.320 | 9.325 / 66.345 | 2098.323 / 873.311 | 172.617 / 134.777 | 7.145 / 8.539 |
+| fastapi-slow-reader-backpressure | HTTP/2 | asyncio | 5 | 8.759 / 18.822 | 12777.778 / 26944.444 | 3.621 / 10.005 | 5408.583 / 14308.944 | 95.637 / 54.512 | 7.152 / 7.281 |
+| fastapi-slow-reader-backpressure | HTTP/2 | uvloop | 5 | 7.584 / 13.290 | 10833.333 / 18947.368 | 3.769 / 9.358 | 5381.556 / 13504.541 | 97.207 / 57.078 | 7.090 / 7.273 |
+| fastapi-validated-route | HTTP/3 | asyncio | 5 | 96.050 / 87.599 | 582.264 / 338.996 | 21.874 / 23.664 | 132.601 / 91.816 | 114.477 / 54.551 | 5.938 / 6.039 |
+| fastapi-validated-route | HTTP/3 | uvloop | 5 | 96.163 / 85.897 | 563.859 / 314.693 | 22.343 / 25.103 | 130.986 / 91.464 | 116.219 / 57.195 | 5.992 / 6.004 |
+| fastapi-python-cpu | HTTP/3 | asyncio | 5 | 97.416 / 95.250 | 2196.607 / 1769.562 | 7.031 / 5.423 | 158.919 / 100.573 | 114.156 / 55.410 | 5.922 / 5.898 |
+| fastapi-python-cpu | HTTP/3 | uvloop | 5 | 97.031 / 94.787 | 2135.593 / 1705.534 | 7.147 / 5.625 | 156.997 / 100.911 | 116.039 / 58.523 | 5.840 / 5.980 |
+| fastapi-large-response | HTTP/3 | asyncio | 5 | 53.815 / 90.637 | 33255.814 / 2032.244 | 17.214 / 111.913 | 10807.506 / 2508.874 | 117.973 / 57.566 | 7.367 / 9.156 |
+| fastapi-large-response | HTTP/3 | uvloop | 5 | 96.981 / 90.692 | 55666.667 / 1999.158 | 17.109 / 113.915 | 9820.722 / 2522.493 | 119.406 / 59.430 | 7.180 / 9.195 |
+| fastapi-many-response-chunks | HTTP/3 | asyncio | 5 | 97.159 / 136.179 | 59529.412 / 4225.103 | 25.015 / 98.041 | 15272.341 / 3040.038 | 114.836 / 55.695 | 7.246 / 8.891 |
+| fastapi-many-response-chunks | HTTP/3 | uvloop | 5 | 96.924 / 126.863 | 55555.556 / 3615.302 | 18.226 / 103.422 | 10447.189 / 2928.952 | 118.324 / 58.742 | 7.141 / 9.227 |
+| fastapi-request-upload | HTTP/3 | asyncio | 5 | 49.914 / 115.140 | 40952.381 / 34770.115 | 4.462 / 10.221 | 3714.714 / 3090.682 | 116.793 / 63.633 | 8.066 / 8.508 |
+| fastapi-request-upload | HTTP/3 | uvloop | 5 | 45.865 / 108.843 | 58571.429 / 18424.437 | 4.540 / 18.338 | 5570.810 / 3080.090 | 117.508 / 66.227 | 8.051 / 8.445 |
+| fastapi-slow-reader-backpressure | HTTP/3 | asyncio | 5 | 35.452 / 3.702 | 46250.000 / 4750.000 | 10.600 / 4.864 | 13823.000 / 6241.425 | 115.348 / 56.195 | 11.578 / 11.012 |
+| fastapi-slow-reader-backpressure | HTTP/3 | uvloop | 5 | 34.075 / 3.116 | 44000.000 / 4000.000 | 10.720 / 4.753 | 13825.075 / 6102.475 | 117.492 / 58.871 | 11.836 / 10.457 |
+
+Throughput and latency:
+
+| Category | Workload | Loop | Reference / Rust | Valid matches | Ops/s ref / Rust | p50 ms ref / Rust | p95 ms ref / Rust | p99 ms ref / Rust | Rate ratio |
+|---|---|---|---|---:|---:|---:|---:|---:|---:|
+| http1 | fastapi-validated-route | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 9322.342 / 5050.538 | 6.668 / 12.523 | 8.306 / 17.426 | 8.678 / 18.525 | 0.553× |
+| http1 | fastapi-validated-route | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 9005.999 / 5362.129 | 7.108 / 11.670 | 8.000 / 16.417 | 13.995 / 17.278 | 0.590× |
+| http1 | fastapi-fixed | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 14692.016 / 6581.730 | 4.219 / 9.669 | 5.707 / 13.484 | 6.749 / 14.262 | 0.453× |
+| http1 | fastapi-fixed | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 13988.434 / 7231.088 | 4.513 / 8.601 | 5.478 / 12.118 | 9.177 / 12.795 | 0.505× |
+| http1 | fastapi-large-response | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 3439.523 / 3073.958 | 18.615 / 21.545 | 19.837 / 26.399 | 23.026 / 27.787 | 0.901× |
+| http1 | fastapi-large-response | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 3475.817 / 3214.589 | 18.165 / 19.930 | 20.602 / 25.504 | 36.459 / 26.851 | 0.926× |
+| http1 | fastapi-many-response-chunks | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 332.237 / 483.027 | 192.565 / 132.059 | 206.145 / 141.151 | 209.689 / 149.125 | 1.454× |
+| http1 | fastapi-many-response-chunks | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 345.374 / 675.141 | 172.891 / 95.414 | 201.093 / 104.103 | 1601.082 / 111.197 | 1.957× |
+| http1 | fastapi-small-response-chunks | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 678.875 / 877.654 | 94.135 / 72.693 | 107.663 / 79.622 | 111.505 / 87.269 | 1.309× |
+| http1 | fastapi-small-response-chunks | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 713.785 / 1278.916 | 87.690 / 49.732 | 101.995 / 59.036 | 277.926 / 66.611 | 1.811× |
+| http1 | fastapi-request-upload | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 1401.613 / 816.211 | 44.595 / 75.996 | 55.293 / 97.152 | 67.558 / 111.534 | 0.573× |
+| http1 | fastapi-request-upload | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 1559.474 / 1022.838 | 41.003 / 62.152 | 45.360 / 75.378 | 48.386 / 86.015 | 0.663× |
+| http1 | fastapi-upload-1m-write-1k | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 359.845 / 344.414 | 21.526 / 22.998 | 30.808 / 31.940 | 35.596 / 37.005 | 0.965× |
+| http1 | fastapi-upload-1m-write-1k | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 363.327 / 354.816 | 21.852 / 21.992 | 30.389 / 31.805 | 34.995 / 35.737 | 0.970× |
+| http1 | fastapi-upload-1m-write-16k | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 1335.840 / 827.432 | 47.087 / 76.863 | 54.413 / 94.999 | 72.448 / 106.077 | 0.616× |
+| http1 | fastapi-upload-1m-write-16k | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 1450.272 / 1008.795 | 43.160 / 62.797 | 50.615 / 76.740 | 69.035 / 86.014 | 0.711× |
+| http1 | fastapi-upload-1m-write-256k | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 1533.270 / 881.385 | 41.106 / 71.891 | 44.359 / 87.664 | 54.459 / 100.344 | 0.574× |
+| http1 | fastapi-upload-1m-write-256k | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 1653.092 / 1091.359 | 38.327 / 57.694 | 41.169 / 72.186 | 45.362 / 83.561 | 0.668× |
+| http1 | fastapi-upload-1m-write-1m | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 1477.812 / 889.434 | 42.207 / 71.564 | 47.973 / 86.456 | 58.465 / 99.373 | 0.598× |
+| http1 | fastapi-upload-1m-write-1m | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 1611.446 / 1069.968 | 38.869 / 58.915 | 45.128 / 72.542 | 62.543 / 86.640 | 0.676× |
+| http1 | fastapi-request-upload-small-chunks | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 3657.309 / 1911.730 | 17.203 / 33.410 | 20.020 / 45.141 | 21.852 / 52.559 | 0.523× |
+| http1 | fastapi-request-upload-small-chunks | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 3716.709 / 2379.348 | 16.202 / 26.754 | 29.506 / 36.660 | 34.069 / 45.062 | 0.627× |
+| http1 | fastapi-slow-reader-backpressure | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 31.634 / 31.645 | 251.472 / 251.910 | 257.231 / 256.028 | 264.438 / 260.677 | 1.000× |
+| http1 | fastapi-slow-reader-backpressure | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 31.675 / 31.677 | 251.372 / 251.889 | 255.266 / 254.369 | 264.128 / 260.801 | 1.000× |
+| http1 | fastapi-scope-32-headers | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 8956.263 / 5722.510 | 7.125 / 11.177 | 7.744 / 15.317 | 8.530 / 16.063 | 0.649× |
+| http1 | fastapi-scope-32-headers | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 11091.902 / 6149.460 | 5.557 / 10.294 | 7.468 / 14.196 | 10.420 / 15.312 | 0.557× |
+| http1 | fastapi-contextvars | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 10282.962 / 5552.742 | 6.298 / 11.381 | 7.192 / 15.792 | 8.320 / 16.758 | 0.540× |
+| http1 | fastapi-contextvars | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 11106.157 / 6088.169 | 5.240 / 10.335 | 7.865 / 14.638 | 12.382 / 15.369 | 0.548× |
+| http1 | fastapi-python-cpu | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 631.848 / 599.620 | 100.329 / 103.543 | 116.328 / 135.568 | 123.602 / 143.099 | 0.948× |
+| http1 | fastapi-python-cpu | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 645.248 / 610.994 | 95.603 / 102.562 | 118.656 / 133.008 | 146.284 / 140.108 | 0.948× |
+| http2 | fastapi-validated-route | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 3064.982 / 5341.141 | 20.058 / 11.880 | 31.837 / 19.493 | 33.394 / 23.326 | 1.752× |
+| http2 | fastapi-validated-route | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 3064.995 / 6219.519 | 20.050 / 9.799 | 32.180 / 17.887 | 33.630 / 21.381 | 2.029× |
+| http2 | fastapi-python-cpu | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 552.438 / 609.703 | 114.214 / 107.262 | 134.254 / 162.046 | 151.783 / 176.710 | 1.096× |
+| http2 | fastapi-python-cpu | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 563.092 / 621.800 | 112.685 / 104.911 | 132.599 / 162.264 | 153.283 / 182.799 | 1.098× |
+| http2 | fixed | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 3715.392 / 7140.950 | 16.483 / 8.737 | 27.763 / 14.469 | 29.396 / 17.095 | 1.919× |
+| http2 | fixed | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 3718.240 / 8325.587 | 16.447 / 7.445 | 28.366 / 12.616 | 29.919 / 15.099 | 2.240× |
+| http2 | large-response | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 146.005 / 485.252 | 437.035 / 116.789 | 461.806 / 258.894 | 469.833 / 369.685 | 3.324× |
+| http2 | large-response | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 154.303 / 501.492 | 414.077 / 114.471 | 452.639 / 236.214 | 463.420 / 315.437 | 3.284× |
+| http2 | many-response-chunks | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 103.049 / 149.019 | 637.337 / 415.417 | 673.726 / 460.281 | 722.977 / 507.688 | 1.445× |
+| http2 | many-response-chunks | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 117.673 / 190.162 | 544.147 / 327.512 | 594.395 / 369.743 | 625.682 / 384.173 | 1.629× |
+| http2 | request-upload | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 22.272 / 666.728 | 347.982 / 95.501 | 7612.120 / 120.124 | 7654.374 / 131.817 | 30.099× |
+| http2 | request-upload | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 45.211 / 803.241 | 321.756 / 80.003 | 3819.350 / 97.509 | 4084.368 / 105.406 | 17.819× |
+| http2 | request-upload-small-chunks | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 595.208 / 2061.606 | 95.654 / 30.913 | 180.074 / 44.341 | 311.184 / 52.701 | 3.476× |
+| http2 | request-upload-small-chunks | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 657.598 / 2595.280 | 95.014 / 24.103 | 137.327 / 36.955 | 194.055 / 42.744 | 3.946× |
+| http2 | slow-reader-backpressure | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 7.044 / 7.076 | 284.753 / 279.197 | 286.555 / 292.164 | 295.681 / 296.943 | 1.002× |
+| http2 | slow-reader-backpressure | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 7.023 / 7.124 | 284.304 / 278.893 | 286.219 / 289.428 | 291.231 / 292.479 | 1.014× |
+| http3 | fastapi-validated-route | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 1713.910 / 2688.106 | 0.589 / 0.368 | 0.641 / 0.413 | 0.787 / 0.441 | 1.565× |
+| http3 | fastapi-validated-route | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 1766.387 / 2875.499 | 0.564 / 0.343 | 0.641 / 0.389 | 0.800 / 0.421 | 1.620× |
+| http3 | fastapi-python-cpu | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 459.725 / 557.155 | 2.154 / 1.778 | 2.458 / 1.877 | 2.971 / 2.518 | 1.215× |
+| http3 | fastapi-python-cpu | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 471.717 / 574.665 | 2.085 / 1.721 | 2.349 / 1.805 | 2.915 / 2.469 | 1.221× |
+| http3 | fixed | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 1936.028 / 3120.561 | 0.525 / 0.318 | 0.601 / 0.358 | 0.700 / 0.381 | 1.608× |
+| http3 | fixed | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 1996.554 / 3413.121 | 0.502 / 0.289 | 0.569 / 0.333 | 0.651 / 0.357 | 1.708× |
+| http3 | large-response | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 17.225 / 468.152 | 71.151 / 2.110 | 85.403 / 2.449 | 96.910 / 2.884 | 26.928× |
+| http3 | large-response | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 17.976 / 475.097 | 55.794 / 2.087 | 57.834 / 2.400 | 60.628 / 2.822 | 26.430× |
+| http3 | many-response-chunks | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 16.834 / 339.579 | 59.571 / 2.905 | 61.888 / 3.357 | 64.781 / 3.915 | 20.246× |
+| http3 | many-response-chunks | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 17.964 / 371.183 | 55.830 / 2.655 | 56.940 / 3.052 | 59.738 / 3.561 | 20.633× |
+| http3 | request-upload | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 12.545 / 34.672 | 79.744 / 28.968 | 82.565 / 32.887 | 83.254 / 37.313 | 2.773× |
+| http3 | request-upload | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 8.234 / 62.061 | 118.945 / 15.788 | 134.687 / 18.233 | 153.354 / 19.621 | 7.523× |
+| http3 | slow-reader-backpressure | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 7.943 / 7.946 | 251.757 / 251.812 | 252.439 / 252.184 | 252.812 / 252.862 | 1.001× |
+| http3 | slow-reader-backpressure | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 7.940 / 7.948 | 251.732 / 251.532 | 252.771 / 252.406 | 253.506 / 252.902 | 1.001× |
+| websocket | connection-handshake | asyncio | uvicorn-asyncio-websockets / uvicorn-rs-asyncio | 5 | 1807.111 / 2481.968 | 0.500 / 0.380 | 0.680 / 0.466 | 0.785 / 0.486 | 1.389× |
+| websocket | connection-handshake | uvloop | uvicorn-uvloop-websockets / uvicorn-rs-uvloop | 5 | 1914.573 / 2807.781 | 0.466 / 0.322 | 0.639 / 0.406 | 0.870 / 0.441 | 1.466× |
+| websocket | text-echo | asyncio | uvicorn-asyncio-websockets / uvicorn-rs-asyncio | 5 | 31461.571 / 10888.526 | 1.741 / 6.043 | 2.623 / 7.104 | 2.848 / 8.825 | 0.349× |
+| websocket | text-echo | uvloop | uvicorn-uvloop-websockets / uvicorn-rs-uvloop | 5 | 34854.224 / 19689.544 | 1.551 / 3.384 | 2.398 / 3.785 | 2.572 / 4.574 | 0.572× |
+| websocket | binary-64k-echo | asyncio | uvicorn-asyncio-websockets / uvicorn-rs-asyncio | 5 | 13077.699 / 7809.344 | 4.980 / 9.022 | 5.566 / 10.878 | 6.588 / 11.780 | 0.600× |
+| websocket | binary-64k-echo | uvloop | uvicorn-uvloop-websockets / uvicorn-rs-uvloop | 5 | 15520.555 / 11839.450 | 4.319 / 5.714 | 4.723 / 6.824 | 5.735 / 7.464 | 0.763× |
+
+Resource measurements:
+
+| Category | Workload | Loop | Server CPU % ref / Rust | Server CPU µs/op ref / Rust | Client CPU % ref / Rust | Client CPU µs/op ref / Rust | Server RSS MiB ref / Rust | Client RSS MiB ref / Rust |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| http1 | fastapi-validated-route | asyncio | 95.668 / 124.686 | 107.119 / 258.386 | 32.417 / 21.230 | 36.327 / 44.172 | 48.383 / 57.801 | 13.160 / 13.059 |
+| http1 | fastapi-validated-route | uvloop | 96.104 / 124.690 | 110.860 / 243.004 | 34.668 / 22.554 | 39.991 / 44.118 | 51.141 / 62.574 | 13.113 / 13.043 |
+| http1 | fastapi-fixed | asyncio | 95.127 / 131.868 | 67.988 / 210.242 | 45.813 / 26.929 | 32.247 / 42.990 | 48.266 / 71.000 | 13.160 / 12.984 |
+| http1 | fastapi-fixed | uvloop | 96.224 / 131.823 | 71.391 / 191.904 | 51.936 / 27.922 | 38.533 / 40.641 | 51.082 / 76.055 | 13.195 / 12.973 |
+| http1 | fastapi-large-response | asyncio | 95.406 / 125.662 | 290.812 / 427.600 | 89.191 / 83.018 | 270.218 / 283.392 | 49.293 / 58.551 | 14.711 / 14.742 |
+| http1 | fastapi-large-response | uvloop | 95.719 / 120.474 | 287.188 / 394.208 | 90.595 / 85.145 | 271.815 / 278.645 | 52.168 / 60.738 | 14.746 / 14.703 |
+| http1 | fastapi-many-response-chunks | asyncio | 95.489 / 150.461 | 3006.952 / 3259.442 | 54.794 / 23.710 | 1719.014 / 512.124 | 50.293 / 59.449 | 14.613 / 14.707 |
+| http1 | fastapi-many-response-chunks | uvloop | 98.089 / 140.063 | 2892.239 / 2169.701 | 55.911 / 31.375 | 1648.034 / 486.610 | 53.547 / 61.695 | 14.613 / 14.699 |
+| http1 | fastapi-small-response-chunks | asyncio | 97.589 / 141.443 | 1469.482 / 1688.547 | 54.736 / 17.048 | 816.990 / 203.515 | 50.312 / 59.305 | 13.199 / 13.449 |
+| http1 | fastapi-small-response-chunks | uvloop | 98.036 / 135.747 | 1400.607 / 1108.706 | 54.168 / 22.191 | 794.406 / 180.864 | 53.570 / 62.121 | 13.152 / 13.555 |
+| http1 | fastapi-request-upload | asyncio | 94.858 / 144.987 | 711.345 / 1779.290 | 56.555 / 29.842 | 426.516 / 360.045 | 111.984 / 141.938 | 21.227 / 21.195 |
+| http1 | fastapi-request-upload | uvloop | 95.491 / 135.966 | 639.683 / 1341.085 | 58.292 / 35.780 | 386.059 / 357.953 | 107.746 / 146.281 | 21.203 / 21.199 |
+| http1 | fastapi-upload-1m-write-1k | asyncio | 67.560 / 79.340 | 1976.936 / 2292.030 | 302.005 / 291.440 | 8767.936 / 8654.075 | 58.613 / 65.176 | 11.180 / 11.164 |
+| http1 | fastapi-upload-1m-write-1k | uvloop | 68.606 / 75.052 | 1998.902 / 2130.410 | 301.993 / 293.474 | 8621.626 / 8644.923 | 61.418 / 67.508 | 11.160 / 11.211 |
+| http1 | fastapi-upload-1m-write-16k | asyncio | 97.342 / 140.193 | 744.201 / 1703.297 | 98.107 / 50.689 | 757.016 / 615.613 | 106.500 / 142.941 | 16.363 / 16.387 |
+| http1 | fastapi-upload-1m-write-16k | uvloop | 97.375 / 131.682 | 683.503 / 1306.985 | 108.656 / 63.003 | 760.653 / 637.804 | 108.418 / 146.242 | 16.410 / 16.344 |
+| http1 | fastapi-upload-1m-write-256k | asyncio | 95.128 / 137.514 | 649.604 / 1642.229 | 60.491 / 29.021 | 408.559 / 346.352 | 108.379 / 141.879 | 21.180 / 21.230 |
+| http1 | fastapi-upload-1m-write-256k | uvloop | 95.448 / 135.873 | 602.555 / 1252.964 | 60.157 / 36.106 | 382.030 / 340.871 | 107.559 / 146.723 | 21.219 / 21.219 |
+| http1 | fastapi-upload-1m-write-1m | asyncio | 94.968 / 137.879 | 673.764 / 1641.026 | 59.513 / 29.196 | 416.627 / 344.363 | 111.590 / 139.527 | 21.211 / 21.258 |
+| http1 | fastapi-upload-1m-write-1m | uvloop | 95.392 / 130.034 | 619.207 / 1277.902 | 58.683 / 35.459 | 378.694 / 349.938 | 108.070 / 145.098 | 21.164 / 21.227 |
+| http1 | fastapi-request-upload-small-chunks | asyncio | 72.266 / 114.473 | 206.276 / 605.049 | 208.168 / 110.558 | 587.937 / 586.247 | 51.801 / 71.426 | 13.742 / 13.664 |
+| http1 | fastapi-request-upload-small-chunks | uvloop | 72.057 / 105.601 | 200.805 / 455.460 | 211.052 / 136.357 | 586.745 / 584.735 | 55.395 / 74.688 | 13.727 / 13.762 |
+| http1 | fastapi-slow-reader-backpressure | asyncio | 5.806 / 6.805 | 1875.000 / 2187.500 | 11.151 / 10.143 | 3597.369 / 3262.225 | 48.414 / 51.953 | 99.465 / 100.406 |
+| http1 | fastapi-slow-reader-backpressure | uvloop | 5.441 / 5.631 | 1750.000 / 1812.500 | 11.088 / 10.333 | 3563.506 / 3322.663 | 51.281 / 54.652 | 100.074 / 100.066 |
+| http1 | fastapi-scope-32-headers | asyncio | 96.655 / 129.920 | 111.488 / 239.565 | 49.148 / 33.142 | 56.317 / 61.228 | 48.664 / 58.719 | 13.809 / 13.848 |
+| http1 | fastapi-scope-32-headers | uvloop | 95.514 / 131.893 | 89.832 / 225.317 | 47.403 / 34.259 | 44.265 / 59.478 | 51.465 / 65.512 | 13.742 / 13.848 |
+| http1 | fastapi-contextvars | asyncio | 96.416 / 128.443 | 97.114 / 242.778 | 39.940 / 26.756 | 40.379 / 49.373 | 48.316 / 58.410 | 13.039 / 12.930 |
+| http1 | fastapi-contextvars | uvloop | 94.860 / 128.429 | 89.899 / 222.369 | 38.613 / 28.131 | 36.729 / 47.828 | 51.098 / 67.473 | 13.141 / 12.922 |
+| http1 | fastapi-python-cpu | asyncio | 99.753 / 105.632 | 1626.959 / 1806.833 | 3.897 / 3.927 | 63.103 / 67.593 | 51.125 / 59.363 | 12.707 / 12.703 |
+| http1 | fastapi-python-cpu | uvloop | 98.917 / 105.245 | 1573.932 / 1761.108 | 3.829 / 4.007 | 61.311 / 67.167 | 53.941 / 62.848 | 12.711 / 12.703 |
+| http2 | fastapi-validated-route | asyncio | 96.643 / 117.691 | 325.451 / 229.590 | 28.079 / 10.227 | 95.072 / 19.742 | 94.465 / 56.242 | 6.082 / 6.375 |
+| http2 | fastapi-validated-route | uvloop | 96.590 / 115.757 | 325.224 / 193.857 | 27.618 / 11.699 | 92.896 / 19.495 | 97.227 / 58.977 | 6.105 / 6.352 |
+| http2 | fastapi-python-cpu | asyncio | 99.783 / 103.136 | 1855.413 / 1744.859 | 5.969 / 1.695 | 110.844 / 28.705 | 95.938 / 59.145 | 5.883 / 6.004 |
+| http2 | fastapi-python-cpu | uvloop | 99.314 / 103.955 | 1809.257 / 1703.822 | 6.099 / 1.711 | 111.026 / 28.236 | 97.785 / 62.441 | 5.848 / 6.023 |
+| http2 | fixed | asyncio | 96.535 / 121.371 | 268.140 / 176.135 | 33.174 / 12.901 | 92.420 / 18.850 | 94.641 / 56.312 | 6.301 / 6.633 |
+| http2 | fixed | uvloop | 96.631 / 118.961 | 267.953 / 150.075 | 32.580 / 14.552 | 90.272 / 18.258 | 97.246 / 58.945 | 6.242 / 6.730 |
+| http2 | large-response | asyncio | 95.762 / 77.223 | 6835.937 / 1656.158 | 44.550 / 102.464 | 3165.587 / 2193.605 | 167.762 / 56.355 | 7.750 / 7.945 |
+| http2 | large-response | uvloop | 98.402 / 79.767 | 6465.409 / 1626.298 | 47.682 / 107.817 | 3169.225 / 2191.011 | 174.188 / 58.988 | 7.711 / 7.922 |
+| http2 | many-response-chunks | asyncio | 98.759 / 147.630 | 9676.259 / 10026.042 | 33.286 / 73.544 | 3265.700 / 5028.924 | 163.051 / 58.344 | 7.801 / 8.160 |
+| http2 | many-response-chunks | uvloop | 97.058 / 131.457 | 8426.966 / 7103.175 | 37.002 / 91.957 | 3244.909 / 5027.044 | 146.438 / 60.895 | 7.676 / 8.016 |
+| http2 | request-upload | asyncio | 12.963 / 138.069 | 5909.091 / 2172.619 | 4.853 / 56.062 | 2131.142 / 883.873 | 177.988 / 130.258 | 7.059 / 7.957 |
+| http2 | request-upload | uvloop | 24.247 / 126.269 | 5349.794 / 1645.320 | 9.325 / 66.345 | 2098.323 / 873.311 | 172.617 / 134.777 | 7.145 / 8.539 |
+| http2 | request-upload-small-chunks | asyncio | 92.707 / 124.952 | 1596.445 / 633.070 | 25.762 / 53.965 | 437.035 / 273.412 | 97.844 / 66.664 | 6.262 / 9.320 |
+| http2 | request-upload-small-chunks | uvloop | 97.019 / 122.015 | 1514.063 / 493.429 | 26.435 / 67.071 | 409.185 / 275.398 | 104.207 / 68.898 | 6.359 / 8.918 |
+| http2 | slow-reader-backpressure | asyncio | 8.759 / 18.822 | 12777.778 / 26944.444 | 3.621 / 10.005 | 5408.583 / 14308.944 | 95.637 / 54.512 | 7.152 / 7.281 |
+| http2 | slow-reader-backpressure | uvloop | 7.584 / 13.290 | 10833.333 / 18947.368 | 3.769 / 9.358 | 5381.556 / 13504.541 | 97.207 / 57.078 | 7.090 / 7.273 |
+| http3 | fastapi-validated-route | asyncio | 96.050 / 87.599 | 582.264 / 338.996 | 21.874 / 23.664 | 132.601 / 91.816 | 114.477 / 54.551 | 5.938 / 6.039 |
+| http3 | fastapi-validated-route | uvloop | 96.163 / 85.897 | 563.859 / 314.693 | 22.343 / 25.103 | 130.986 / 91.464 | 116.219 / 57.195 | 5.992 / 6.004 |
+| http3 | fastapi-python-cpu | asyncio | 97.416 / 95.250 | 2196.607 / 1769.562 | 7.031 / 5.423 | 158.919 / 100.573 | 114.156 / 55.410 | 5.922 / 5.898 |
+| http3 | fastapi-python-cpu | uvloop | 97.031 / 94.787 | 2135.593 / 1705.534 | 7.147 / 5.625 | 156.997 / 100.911 | 116.039 / 58.523 | 5.840 / 5.980 |
+| http3 | fixed | asyncio | 95.793 / 85.564 | 515.443 / 288.183 | 24.428 / 27.045 | 131.048 / 90.863 | 114.629 / 54.516 | 6.020 / 6.055 |
+| http3 | fixed | uvloop | 96.066 / 84.047 | 498.848 / 257.461 | 24.874 / 29.266 | 129.280 / 89.651 | 116.520 / 57.160 | 6.074 / 6.133 |
+| http3 | large-response | asyncio | 53.815 / 90.637 | 33255.814 / 2032.244 | 17.214 / 111.913 | 10807.506 / 2508.874 | 117.973 / 57.566 | 7.367 / 9.156 |
+| http3 | large-response | uvloop | 96.981 / 90.692 | 55666.667 / 1999.158 | 17.109 / 113.915 | 9820.722 / 2522.493 | 119.406 / 59.430 | 7.180 / 9.195 |
+| http3 | many-response-chunks | asyncio | 97.159 / 136.179 | 59529.412 / 4225.103 | 25.015 / 98.041 | 15272.341 / 3040.038 | 114.836 / 55.695 | 7.246 / 8.891 |
+| http3 | many-response-chunks | uvloop | 96.924 / 126.863 | 55555.556 / 3615.302 | 18.226 / 103.422 | 10447.189 / 2928.952 | 118.324 / 58.742 | 7.141 / 9.227 |
+| http3 | request-upload | asyncio | 49.914 / 115.140 | 40952.381 / 34770.115 | 4.462 / 10.221 | 3714.714 / 3090.682 | 116.793 / 63.633 | 8.066 / 8.508 |
+| http3 | request-upload | uvloop | 45.865 / 108.843 | 58571.429 / 18424.437 | 4.540 / 18.338 | 5570.810 / 3080.090 | 117.508 / 66.227 | 8.051 / 8.445 |
+| http3 | slow-reader-backpressure | asyncio | 35.452 / 3.702 | 46250.000 / 4750.000 | 10.600 / 4.864 | 13823.000 / 6241.425 | 115.348 / 56.195 | 11.578 / 11.012 |
+| http3 | slow-reader-backpressure | uvloop | 34.075 / 3.116 | 44000.000 / 4000.000 | 10.720 / 4.753 | 13825.075 / 6102.475 | 117.492 / 58.871 | 11.836 / 10.457 |
+| websocket | connection-handshake | asyncio | 83.488 / 105.038 | 540.000 / 460.000 | 20.602 / 32.854 | 127.284 / 153.782 | 48.238 / 51.648 | 3.516 / 3.496 |
+| websocket | connection-handshake | uvloop | 92.559 / 89.588 | 520.000 / 380.000 | 26.162 / 37.085 | 144.502 / 146.638 | 51.203 / 54.301 | 3.488 / 3.523 |
+| websocket | text-echo | asyncio | 95.327 / 145.242 | 31.948 / 141.385 | 67.794 / 23.751 | 22.815 / 23.030 | 51.598 / 65.359 | 13.855 / 12.543 |
+| websocket | text-echo | uvloop | 95.188 / 145.538 | 28.790 / 78.651 | 73.645 / 39.769 | 22.356 / 21.311 | 54.043 / 67.910 | 14.043 / 13.160 |
+| websocket | binary-64k-echo | asyncio | 96.054 / 150.454 | 76.842 / 204.301 | 62.696 / 44.131 | 50.235 / 60.246 | 60.086 / 77.637 | 16.680 / 16.570 |
+| websocket | binary-64k-echo | uvloop | 95.212 / 131.880 | 64.880 / 118.457 | 71.752 / 62.740 | 48.750 / 56.344 | 62.992 / 79.840 | 17.070 / 16.629 |
+
+Category qualification counts:
+
+| Category | Status | Qualified pairs |
+|---|---|---:|
+| http1 | qualified_local_pairs | 30 |
+| http2 | qualified_local_pairs | 16 |
+| http3 | qualified_local_pairs | 14 |
+| websocket | qualified_local_pairs | 6 |
+| lifecycle | qualified_local_pairs | 2 |
+
+Category input integrity and exclusions:
+
+| Category | Status | Rows | Eligible | Invalid | Missing/duplicate planned rows | Invalid reasons |
+|---|---|---:|---:|---:|---:|---|
+| http1 | qualified_local_pairs | 300 | 300 | 0 | 0 | — |
+| http2 | qualified_local_pairs | 160 | 160 | 0 | 0 | — |
+| http3 | qualified_local_pairs | 140 | 140 | 0 | 0 | — |
+| websocket | qualified_local_pairs | 60 | 60 | 0 | 0 | — |
+| lifecycle | qualified_local_pairs | 20 | 20 | 0 | 0 | — |
+
+Category runner failures:
+
+No category runner failures or incomplete receipts were recorded.
+
+Unqualified workload/reference comparisons:
+
+No unqualified workload/reference comparisons.
+
+Lifecycle phase measurements:
+
+| Loop | Reference / Rust | Valid matches | Startup ms ref / Rust | Idle exit ms ref / Rust | Active exit ms ref / Rust | Idle CPU s ref / Rust | Active CPU s ref / Rust | Idle RSS MiB ref / Rust | Active RSS MiB ref / Rust |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 237.516 / 237.467 / 194.043 / 7.274 / 2192.482 / 2016.436 / 0.233 / 0.231 / 0.237 / 0.235 / 45.176 / 49.613 / 45.289 / 49.555 |
+| uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 236.932 / 238.876 / 194.193 / 7.314 / 2193.129 / 2019.596 / 0.236 / 0.233 / 0.239 / 0.238 / 48.285 / 52.242 / 48.289 / 52.199 |
+
+Download `asgi-category-benchmarks-linux-x86_64` from the [workflow run](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681) for raw rows, logs, environment receipts, and the complete per-run analysis.
+The run's matrix artifact includes the hashed machine-readable receipts and raw system bundles. GitHub Actions retains those files for 90 days; generated logs and per-run results are not committed to Git.
+
+## linux-aarch64 (aarch64)
+
+Runner: `ubuntu-24.04-arm`; CPU: Neoverse-N2 (4 logical, 4 physical); memory: 15.6 GiB; platform: `Linux-7.0.0-1017-azure-aarch64-with-glibc2.39`.
+Load parameters: {'duration': 5.0, 'warmup': 1.0, 'concurrency': 64, 'h3_concurrency': 1, 'repetitions': 5, 'seed': 20261005}.
+
+Stock FastAPI comparison (upstream FastAPI, Starlette, and Pydantic):
+
+| Workload | Protocol | Loop | Valid matches | Qualified | Ops/s ref / Rust | p50 ms ref / Rust | p95 ms ref / Rust | p99 ms ref / Rust | Rate ratio |
+|---|---|---|---:|---|---:|---:|---:|---:|---:|
+| fastapi-validated-route | HTTP/1.1 | asyncio | 4 | yes | 4791.647 / 3554.846 | 13.238 / 17.762 | 14.002 / 22.978 | 14.532 / 24.003 | 0.742× |
+| fastapi-validated-route | HTTP/1.1 | uvloop | 5 | yes | 5024.678 / 3896.482 | 12.630 / 17.001 | 13.088 / 20.995 | 13.254 / 22.299 | 0.775× |
+| fastapi-python-cpu | HTTP/1.1 | asyncio | 5 | yes | 476.574 / 457.497 | 133.421 / 130.196 | 151.330 / 177.481 | 162.954 / 186.851 | 0.960× |
+| fastapi-python-cpu | HTTP/1.1 | uvloop | 5 | yes | 485.141 / 471.342 | 131.815 / 121.850 | 141.539 / 172.780 | 279.180 / 181.786 | 0.972× |
+| fastapi-validated-route | HTTP/2 | asyncio | 5 | yes | 1931.898 / 3784.715 | 32.360 / 17.142 | 43.926 / 27.274 | 45.182 / 31.738 | 1.972× |
+| fastapi-validated-route | HTTP/2 | uvloop | 5 | yes | 1899.535 / 4390.951 | 32.938 / 14.923 | 45.343 / 22.808 | 46.945 / 25.870 | 2.333× |
+| fastapi-python-cpu | HTTP/2 | asyncio | 5 | yes | 421.540 / 469.814 | 151.220 / 139.977 | 169.185 / 214.942 | 191.349 / 234.587 | 1.118× |
+| fastapi-python-cpu | HTTP/2 | uvloop | 5 | yes | 422.667 / 481.673 | 150.856 / 138.069 | 170.916 / 189.811 | 189.203 / 207.012 | 1.143× |
+| fastapi-large-response | HTTP/2 | asyncio | 5 | yes | 97.794 / 88.009 | 649.115 / 665.237 | 687.594 / 1225.130 | 696.731 / 1283.887 | 0.900× |
+| fastapi-large-response | HTTP/2 | uvloop | 5 | yes | 103.141 / 71.191 | 614.235 / 830.070 | 671.409 / 1426.775 | 696.628 / 1536.332 | 0.690× |
+| fastapi-many-response-chunks | HTTP/2 | asyncio | 5 | yes | 69.792 / 119.736 | 919.610 / 528.853 | 1017.344 / 589.544 | 1108.902 / 607.204 | 1.751× |
+| fastapi-many-response-chunks | HTTP/2 | uvloop | 5 | yes | 78.878 / 162.626 | 807.473 / 387.839 | 852.490 / 420.956 | 874.770 / 445.959 | 2.062× |
+| fastapi-request-upload | HTTP/2 | asyncio | 5 | yes | 27.508 / 481.805 | 460.082 / 138.255 | 7681.904 / 162.850 | 7695.034 / 176.146 | 17.715× |
+| fastapi-request-upload | HTTP/2 | uvloop | 5 | yes | 50.133 / 565.955 | 512.662 / 116.241 | 4273.594 / 136.705 | 5247.694 / 146.893 | 11.410× |
+| fastapi-slow-reader-backpressure | HTTP/2 | asyncio | 5 | yes | 7.045 / 7.083 | 285.246 / 279.342 | 286.823 / 298.243 | 287.780 / 319.342 | 1.007× |
+| fastapi-slow-reader-backpressure | HTTP/2 | uvloop | 5 | yes | 7.002 / 7.127 | 284.985 / 279.364 | 286.238 / 293.244 | 291.358 / 298.342 | 1.018× |
+| fastapi-validated-route | HTTP/3 | asyncio | 5 | yes | 962.277 / 1812.488 | 1.027 / 0.533 | 1.126 / 0.676 | 1.267 / 0.805 | 1.889× |
+| fastapi-validated-route | HTTP/3 | uvloop | 5 | yes | 1009.578 / 1935.396 | 0.972 / 0.498 | 1.110 / 0.639 | 1.413 / 0.777 | 1.911× |
+| fastapi-python-cpu | HTTP/3 | asyncio | 5 | yes | 319.328 / 392.912 | 3.107 / 2.518 | 3.260 / 2.706 | 3.752 / 3.154 | 1.233× |
+| fastapi-python-cpu | HTTP/3 | uvloop | 5 | yes | 325.407 / 409.392 | 3.032 / 2.418 | 3.352 / 2.600 | 3.897 / 2.931 | 1.257× |
+| fastapi-large-response | HTTP/3 | asyncio | 5 | yes | 17.697 / 390.653 | 41.977 / 2.473 | 82.746 / 3.197 | 95.502 / 3.550 | 22.254× |
+| fastapi-large-response | HTTP/3 | uvloop | 5 | yes | 17.765 / 393.595 | 56.073 / 2.432 | 57.224 / 3.188 | 60.680 / 3.499 | 22.237× |
+| fastapi-many-response-chunks | HTTP/3 | asyncio | 5 | yes | 10.617 / 252.907 | 94.305 / 3.892 | 95.971 / 4.716 | 96.511 / 5.562 | 24.105× |
+| fastapi-many-response-chunks | HTTP/3 | uvloop | 5 | yes | 11.550 / 279.487 | 87.749 / 3.493 | 89.312 / 4.323 | 89.720 / 5.031 | 24.198× |
+| fastapi-request-upload | HTTP/3 | asyncio | 5 | yes | 14.345 / 28.115 | 69.919 / 33.773 | 74.029 / 45.802 | 95.203 / 57.946 | 1.947× |
+| fastapi-request-upload | HTTP/3 | uvloop | 5 | yes | 6.660 / 41.846 | 148.264 / 22.992 | 171.837 / 28.615 | 175.784 / 30.568 | 6.173× |
+| fastapi-slow-reader-backpressure | HTTP/3 | asyncio | 0 | no | — / — | — / — | — / — | — / — | — |
+| fastapi-slow-reader-backpressure | HTTP/3 | uvloop | 5 | yes | 7.931 / 7.937 | 252.007 / 251.913 | 253.206 / 252.850 | 253.482 / 252.937 | 1.001× |
+
+Stock FastAPI resource measurements:
+
+| Workload | Protocol | Loop | Valid matches | Server CPU % ref / Rust | Server CPU µs/op ref / Rust | Client CPU % ref / Rust | Client CPU µs/op ref / Rust | Server RSS MiB ref / Rust | Client RSS MiB ref / Rust |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|
+| fastapi-validated-route | HTTP/1.1 | asyncio | 4 | 98.874 / 127.763 | 208.387 / 364.937 | 20.348 / 13.935 | 43.056 / 39.657 | 48.340 / 56.146 | 12.330 / 12.273 |
+| fastapi-validated-route | HTTP/1.1 | uvloop | 5 | 98.904 / 127.565 | 198.896 / 331.729 | 21.608 / 16.411 | 42.757 / 41.846 | 50.391 / 64.551 | 12.344 / 12.297 |
+| fastapi-python-cpu | HTTP/1.1 | asyncio | 5 | 101.395 / 101.596 | 2135.762 / 2319.897 | 3.453 / 3.722 | 74.470 / 85.318 | 51.227 / 58.207 | 12.035 / 12.035 |
+| fastapi-python-cpu | HTTP/1.1 | uvloop | 5 | 96.212 / 99.873 | 2086.390 / 2225.458 | 3.530 / 3.905 | 73.780 / 86.591 | 53.215 / 61.000 | 12.035 / 12.035 |
+| fastapi-validated-route | HTTP/2 | asyncio | 5 | 99.194 / 117.481 | 516.461 / 312.961 | 16.724 / 8.784 | 87.039 / 23.401 | 94.918 / 54.254 | 4.707 / 5.039 |
+| fastapi-validated-route | HTTP/2 | uvloop | 5 | 99.441 / 115.941 | 525.381 / 266.218 | 16.108 / 10.072 | 87.151 / 23.031 | 97.012 / 55.695 | 4.715 / 5.055 |
+| fastapi-python-cpu | HTTP/2 | asyncio | 5 | 96.674 / 99.603 | 2406.542 / 2209.644 | 4.474 / 1.629 | 112.021 / 36.828 | 97.332 / 56.953 | 4.547 / 4.688 |
+| fastapi-python-cpu | HTTP/2 | uvloop | 5 | 95.958 / 98.687 | 2381.395 / 2145.484 | 4.592 / 1.845 | 114.378 / 39.326 | 98.648 / 59.691 | 4.547 / 4.691 |
+| fastapi-large-response | HTTP/2 | asyncio | 5 | 97.542 / 16.544 | 10214.844 / 1945.946 | 26.315 / 20.217 | 2722.799 / 2338.342 | 169.191 / 53.941 | 6.258 / 6.410 |
+| fastapi-large-response | HTTP/2 | uvloop | 5 | 96.953 / 13.409 | 9675.090 / 1871.658 | 26.766 / 16.322 | 2710.244 / 2344.927 | 174.875 / 56.543 | 6.184 / 6.305 |
+| fastapi-many-response-chunks | HTTP/2 | asyncio | 5 | 95.324 / 141.742 | 14307.692 / 11968.750 | 18.293 / 53.229 | 2744.780 / 4643.997 | 165.102 / 56.332 | 6.352 / 6.883 |
+| fastapi-many-response-chunks | HTTP/2 | uvloop | 5 | 96.999 / 132.962 | 12678.571 / 8279.570 | 21.169 / 72.325 | 2668.496 / 4626.499 | 137.934 / 57.906 | 6.215 / 6.520 |
+| fastapi-request-upload | HTTP/2 | asyncio | 5 | 22.902 / 143.841 | 8437.500 / 3008.264 | 5.248 / 50.702 | 1933.272 / 1077.066 | 183.508 / 132.254 | 5.758 / 7.191 |
+| fastapi-request-upload | HTTP/2 | uvloop | 5 | 40.380 / 131.203 | 8145.833 / 2338.343 | 8.896 / 63.098 | 1877.407 / 1110.757 | 173.504 / 132.820 | 5.777 / 8.234 |
+| fastapi-slow-reader-backpressure | HTTP/2 | asyncio | 5 | 15.678 / 28.022 | 23333.333 / 41666.667 | 5.402 / 15.215 | 8051.083 / 22622.556 | 97.383 / 52.348 | 5.852 / 5.910 |
+| fastapi-slow-reader-backpressure | HTTP/2 | uvloop | 5 | 14.542 / 21.718 | 21666.667 / 30833.333 | 5.565 / 15.225 | 8284.889 / 21615.250 | 97.691 / 54.582 | 5.805 / 5.906 |
+| fastapi-validated-route | HTTP/3 | asyncio | 5 | 93.096 / 89.091 | 1029.167 / 518.583 | 13.541 / 19.415 | 150.379 / 115.751 | 112.973 / 52.156 | 4.688 / 4.797 |
+| fastapi-validated-route | HTTP/3 | uvloop | 5 | 92.510 / 87.099 | 978.605 / 481.121 | 15.257 / 21.293 | 159.754 / 115.065 | 114.980 / 54.645 | 4.746 / 4.820 |
+| fastapi-python-cpu | HTTP/3 | asyncio | 5 | 94.390 / 91.082 | 3158.224 / 2473.391 | 6.180 / 6.357 | 206.708 / 172.751 | 113.391 / 53.426 | 4.648 / 4.660 |
+| fastapi-python-cpu | HTTP/3 | uvloop | 5 | 93.996 / 91.033 | 3083.538 / 2365.591 | 6.112 / 6.408 | 201.647 / 168.387 | 115.168 / 55.633 | 4.645 / 4.664 |
+| fastapi-large-response | HTTP/3 | asyncio | 5 | 59.188 / 82.489 | 35505.618 / 2262.027 | 16.647 / 99.495 | 10044.912 / 2727.119 | 117.355 / 54.832 | 6.172 / 8.363 |
+| fastapi-large-response | HTTP/3 | uvloop | 5 | 93.581 / 82.003 | 56292.135 / 2232.050 | 17.724 / 101.739 | 10668.034 / 2747.349 | 117.984 / 56.957 | 5.977 / 7.996 |
+| fastapi-many-response-chunks | HTTP/3 | asyncio | 5 | 94.164 / 121.170 | 94074.074 / 5146.245 | 17.889 / 79.964 | 17709.296 / 3354.742 | 114.039 / 53.508 | 5.992 / 7.715 |
+| fastapi-many-response-chunks | HTTP/3 | uvloop | 5 | 94.203 / 115.002 | 86551.724 / 4315.264 | 19.467 / 89.183 | 18193.237 / 3315.637 | 115.504 / 55.797 | 6.047 / 7.891 |
+| fastapi-request-upload | HTTP/3 | asyncio | 5 | 86.503 / 109.677 | 65694.444 / 40625.000 | 6.586 / 8.043 | 5037.274 / 3059.563 | 116.254 / 60.895 | 6.746 / 7.242 |
+| fastapi-request-upload | HTTP/3 | uvloop | 5 | 48.465 / 104.830 | 76176.471 / 26619.048 | 4.286 / 11.796 | 6633.029 / 2995.214 | 116.539 / 63.312 | 6.730 / 7.254 |
+| fastapi-slow-reader-backpressure | HTTP/3 | asyncio | 0 | — / — | — / — | — / — | — / — | — / — | — / — |
+| fastapi-slow-reader-backpressure | HTTP/3 | uvloop | 5 | 54.136 / 3.560 | 72500.000 / 4750.000 | 12.695 / 5.681 | 17001.550 / 7581.825 | 116.348 / 56.375 | 9.430 / 9.879 |
+
+Throughput and latency:
+
+| Category | Workload | Loop | Reference / Rust | Valid matches | Ops/s ref / Rust | p50 ms ref / Rust | p95 ms ref / Rust | p99 ms ref / Rust | Rate ratio |
+|---|---|---|---|---:|---:|---:|---:|---:|---:|
+| http1 | fastapi-validated-route | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 4853.184 / 3629.732 | 13.053 / 18.190 | 13.804 / 22.470 | 14.203 / 23.445 | 0.752× |
+| http1 | fastapi-validated-route | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 4931.190 / 3920.257 | 12.832 / 16.412 | 13.321 / 20.793 | 13.666 / 21.789 | 0.795× |
+| http1 | fastapi-fixed | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 9067.102 / 5067.444 | 6.975 / 12.205 | 7.597 / 16.123 | 7.802 / 17.001 | 0.555× |
+| http1 | fastapi-fixed | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 9241.047 / 5671.258 | 6.855 / 11.638 | 7.410 / 14.338 | 7.755 / 14.977 | 0.630× |
+| http1 | fastapi-large-response | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 2596.145 / 2589.027 | 24.451 / 26.512 | 25.685 / 31.189 | 26.753 / 32.309 | 0.988× |
+| http1 | fastapi-large-response | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 2658.177 / 2685.565 | 23.420 / 24.344 | 24.261 / 29.978 | 46.694 / 31.088 | 1.014× |
+| http1 | fastapi-many-response-chunks | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 322.406 / 370.369 | 199.473 / 172.842 | 225.886 / 181.562 | 229.983 / 189.951 | 1.152× |
+| http1 | fastapi-many-response-chunks | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 323.748 / 511.387 | 185.653 / 124.602 | 223.682 / 132.632 | 1749.569 / 142.293 | 1.602× |
+| http1 | fastapi-small-response-chunks | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 709.911 / 665.355 | 89.748 / 95.836 | 102.748 / 104.158 | 107.313 / 114.744 | 0.937× |
+| http1 | fastapi-small-response-chunks | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 608.108 / 935.474 | 103.156 / 68.217 | 118.254 / 77.136 | 442.741 / 82.570 | 1.578× |
+| http1 | fastapi-request-upload | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 1225.804 / 726.722 | 51.360 / 86.999 | 57.530 / 111.808 | 66.339 / 124.193 | 0.591× |
+| http1 | fastapi-request-upload | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 1269.965 / 902.466 | 49.971 / 70.782 | 52.801 / 84.727 | 54.575 / 92.918 | 0.714× |
+| http1 | fastapi-upload-1m-write-1k | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 665.813 / 507.581 | 12.068 / 15.600 | 16.686 / 20.607 | 19.979 / 23.075 | 0.766× |
+| http1 | fastapi-upload-1m-write-1k | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 658.385 / 552.439 | 12.372 / 14.338 | 16.949 / 18.953 | 19.994 / 21.269 | 0.841× |
+| http1 | fastapi-upload-1m-write-16k | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 1223.968 / 709.353 | 51.296 / 89.087 | 56.760 / 112.330 | 67.808 / 125.432 | 0.576× |
+| http1 | fastapi-upload-1m-write-16k | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 1297.305 / 912.991 | 49.047 / 70.336 | 51.048 / 83.919 | 53.386 / 92.004 | 0.705× |
+| http1 | fastapi-upload-1m-write-256k | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 1216.842 / 724.479 | 52.025 / 87.189 | 54.590 / 111.207 | 65.983 / 119.765 | 0.584× |
+| http1 | fastapi-upload-1m-write-256k | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 1261.253 / 921.770 | 50.345 / 69.380 | 52.833 / 83.252 | 54.560 / 91.806 | 0.729× |
+| http1 | fastapi-upload-1m-write-1m | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 1229.117 / 739.862 | 51.116 / 85.541 | 56.838 / 107.279 | 65.803 / 122.677 | 0.604× |
+| http1 | fastapi-upload-1m-write-1m | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 1240.430 / 913.657 | 51.170 / 69.958 | 53.973 / 83.669 | 55.060 / 92.377 | 0.739× |
+| http1 | fastapi-request-upload-small-chunks | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 3641.442 / 1689.654 | 17.502 / 37.807 | 18.036 / 49.741 | 18.550 / 57.237 | 0.464× |
+| http1 | fastapi-request-upload-small-chunks | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 3667.208 / 2116.768 | 17.380 / 30.211 | 17.965 / 39.137 | 19.708 / 46.963 | 0.578× |
+| http1 | fastapi-slow-reader-backpressure | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 31.651 / 31.620 | 251.640 / 251.981 | 255.216 / 256.631 | 262.260 / 262.311 | 0.999× |
+| http1 | fastapi-slow-reader-backpressure | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 31.647 / 31.638 | 251.718 / 251.966 | 255.165 / 254.740 | 262.177 / 262.099 | 0.999× |
+| http1 | fastapi-scope-32-headers | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 6703.258 / 4556.491 | 9.507 / 14.560 | 10.122 / 17.894 | 10.327 / 18.618 | 0.685× |
+| http1 | fastapi-scope-32-headers | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 6678.884 / 4947.449 | 9.499 / 13.329 | 10.027 / 16.440 | 10.371 / 17.134 | 0.740× |
+| http1 | fastapi-contextvars | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 6235.535 / 4279.835 | 10.196 / 14.672 | 10.856 / 19.067 | 11.241 / 19.895 | 0.684× |
+| http1 | fastapi-contextvars | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 6290.796 / 4770.215 | 9.965 / 13.844 | 10.508 / 17.064 | 16.406 / 17.884 | 0.758× |
+| http1 | fastapi-python-cpu | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 482.002 / 465.015 | 132.145 / 141.377 | 151.156 / 174.163 | 157.606 / 182.350 | 0.964× |
+| http1 | fastapi-python-cpu | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 498.591 / 478.502 | 129.648 / 120.996 | 137.315 / 168.914 | 265.491 / 175.160 | 0.960× |
+| http2 | fastapi-validated-route | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 1931.898 / 3784.715 | 32.360 / 17.142 | 43.926 / 27.274 | 45.182 / 31.738 | 1.972× |
+| http2 | fastapi-validated-route | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 1899.535 / 4390.951 | 32.938 / 14.923 | 45.343 / 22.808 | 46.945 / 25.870 | 2.333× |
+| http2 | fastapi-python-cpu | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 421.540 / 469.814 | 151.220 / 139.977 | 169.185 / 214.942 | 191.349 / 234.587 | 1.118× |
+| http2 | fastapi-python-cpu | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 422.667 / 481.673 | 150.856 / 138.069 | 170.916 / 189.811 | 189.203 / 207.012 | 1.143× |
+| http2 | fixed | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 2405.767 / 5230.351 | 25.829 / 12.448 | 37.323 / 19.029 | 39.054 / 21.967 | 2.172× |
+| http2 | fixed | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 2311.269 / 6252.077 | 26.817 / 10.510 | 39.254 / 15.602 | 40.528 / 18.076 | 2.693× |
+| http2 | large-response | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 97.794 / 88.009 | 649.115 / 665.237 | 687.594 / 1225.130 | 696.731 / 1283.887 | 0.900× |
+| http2 | large-response | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 103.141 / 71.191 | 614.235 / 830.070 | 671.409 / 1426.775 | 696.628 / 1536.332 | 0.690× |
+| http2 | many-response-chunks | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 69.792 / 119.736 | 919.610 / 528.853 | 1017.344 / 589.544 | 1108.902 / 607.204 | 1.751× |
+| http2 | many-response-chunks | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 78.878 / 162.626 | 807.473 / 387.839 | 852.490 / 420.956 | 874.770 / 445.959 | 2.062× |
+| http2 | request-upload | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 27.508 / 481.805 | 460.082 / 138.255 | 7681.904 / 162.850 | 7695.034 / 176.146 | 17.715× |
+| http2 | request-upload | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 50.133 / 565.955 | 512.662 / 116.241 | 4273.594 / 136.705 | 5247.694 / 146.893 | 11.410× |
+| http2 | request-upload-small-chunks | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 431.311 / 1421.485 | 140.170 / 44.625 | 205.011 / 65.370 | 359.627 / 75.231 | 3.476× |
+| http2 | request-upload-small-chunks | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 459.252 / 1741.801 | 137.060 / 36.553 | 180.300 / 51.332 | 246.962 / 59.718 | 3.888× |
+| http2 | slow-reader-backpressure | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 7.045 / 7.083 | 285.246 / 279.342 | 286.823 / 298.243 | 287.780 / 319.342 | 1.007× |
+| http2 | slow-reader-backpressure | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 7.002 / 7.127 | 284.985 / 279.364 | 286.238 / 293.244 | 291.358 / 298.342 | 1.018× |
+| http3 | fastapi-validated-route | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 962.277 / 1812.488 | 1.027 / 0.533 | 1.126 / 0.676 | 1.267 / 0.805 | 1.889× |
+| http3 | fastapi-validated-route | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 1009.578 / 1935.396 | 0.972 / 0.498 | 1.110 / 0.639 | 1.413 / 0.777 | 1.911× |
+| http3 | fastapi-python-cpu | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 319.328 / 392.912 | 3.107 / 2.518 | 3.260 / 2.706 | 3.752 / 3.154 | 1.233× |
+| http3 | fastapi-python-cpu | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 325.407 / 409.392 | 3.032 / 2.418 | 3.352 / 2.600 | 3.897 / 2.931 | 1.257× |
+| http3 | fixed | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 1145.070 / 2140.854 | 0.859 / 0.455 | 0.989 / 0.579 | 1.114 / 0.671 | 1.890× |
+| http3 | fixed | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 1147.793 / 2300.018 | 0.847 / 0.421 | 0.970 / 0.537 | 1.146 / 0.648 | 1.933× |
+| http3 | large-response | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 17.697 / 390.653 | 41.977 / 2.473 | 82.746 / 3.197 | 95.502 / 3.550 | 22.254× |
+| http3 | large-response | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 17.765 / 393.595 | 56.073 / 2.432 | 57.224 / 3.188 | 60.680 / 3.499 | 22.237× |
+| http3 | many-response-chunks | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 10.617 / 252.907 | 94.305 / 3.892 | 95.971 / 4.716 | 96.511 / 5.562 | 24.105× |
+| http3 | many-response-chunks | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 11.550 / 279.487 | 87.749 / 3.493 | 89.312 / 4.323 | 89.720 / 5.031 | 24.198× |
+| http3 | request-upload | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 14.345 / 28.115 | 69.919 / 33.773 | 74.029 / 45.802 | 95.203 / 57.946 | 1.947× |
+| http3 | request-upload | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 6.660 / 41.846 | 148.264 / 22.992 | 171.837 / 28.615 | 175.784 / 30.568 | 6.173× |
+| http3 | slow-reader-backpressure | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 7.931 / 7.937 | 252.007 / 251.913 | 253.206 / 252.850 | 253.482 / 252.937 | 1.001× |
+| websocket | connection-handshake | asyncio | uvicorn-asyncio-websockets / uvicorn-rs-asyncio | 5 | 1037.750 / 1550.649 | 0.864 / 0.604 | 1.181 / 0.798 | 1.680 / 1.124 | 1.525× |
+| websocket | connection-handshake | uvloop | uvicorn-uvloop-websockets / uvicorn-rs-uvloop | 5 | 1119.111 / 1813.501 | 0.800 / 0.506 | 1.101 / 0.706 | 1.549 / 1.024 | 1.557× |
+| websocket | text-echo | asyncio | uvicorn-asyncio-websockets / uvicorn-rs-asyncio | 5 | 21659.089 / 7448.656 | 2.952 / 8.854 | 3.172 / 10.950 | 3.563 / 13.093 | 0.338× |
+| websocket | text-echo | uvloop | uvicorn-uvloop-websockets / uvicorn-rs-uvloop | 5 | 23287.163 / 12477.471 | 2.742 / 5.306 | 2.987 / 6.255 | 3.287 / 7.580 | 0.527× |
+| websocket | binary-64k-echo | asyncio | uvicorn-asyncio-websockets / uvicorn-rs-asyncio | 5 | 8375.633 / 6013.347 | 7.648 / 10.758 | 8.371 / 15.989 | 8.695 / 18.397 | 0.718× |
+| websocket | binary-64k-echo | uvloop | uvicorn-uvloop-websockets / uvicorn-rs-uvloop | 5 | 9052.417 / 8370.203 | 7.047 / 8.118 | 7.763 / 10.450 | 8.301 / 11.573 | 0.876× |
+
+Resource measurements:
+
+| Category | Workload | Loop | Server CPU % ref / Rust | Server CPU µs/op ref / Rust | Client CPU % ref / Rust | Client CPU µs/op ref / Rust | Server RSS MiB ref / Rust | Client RSS MiB ref / Rust |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| http1 | fastapi-validated-route | asyncio | 98.881 / 126.935 | 205.919 / 353.372 | 20.039 / 14.095 | 41.969 / 39.112 | 48.148 / 56.363 | 12.340 / 12.281 |
+| http1 | fastapi-validated-route | uvloop | 98.794 / 127.098 | 203.091 / 330.229 | 20.664 / 15.573 | 43.115 / 39.756 | 50.750 / 64.590 | 12.355 / 12.289 |
+| http1 | fastapi-fixed | asyncio | 98.780 / 135.060 | 110.130 / 269.749 | 31.434 / 18.594 | 35.086 / 37.421 | 48.512 / 57.250 | 12.352 / 12.172 |
+| http1 | fastapi-fixed | uvloop | 98.752 / 134.705 | 108.073 / 240.760 | 31.585 / 21.982 | 35.454 / 38.985 | 50.734 / 66.289 | 12.367 / 12.254 |
+| http1 | fastapi-large-response | asyncio | 99.105 / 129.657 | 384.910 / 509.192 | 66.007 / 68.937 | 256.381 / 271.614 | 49.234 / 57.000 | 14.027 / 14.020 |
+| http1 | fastapi-large-response | uvloop | 99.131 / 124.651 | 375.974 / 469.271 | 67.702 / 71.461 | 255.863 / 267.932 | 51.578 / 58.812 | 14.109 / 13.992 |
+| http1 | fastapi-many-response-chunks | asyncio | 97.290 / 140.609 | 3095.238 / 4004.260 | 40.837 / 22.221 | 1297.767 / 628.210 | 50.191 / 57.516 | 13.930 / 13.910 |
+| http1 | fastapi-many-response-chunks | uvloop | 97.244 / 136.622 | 3081.499 / 2810.811 | 40.437 / 27.652 | 1281.375 / 565.367 | 52.844 / 59.543 | 13.926 / 14.027 |
+| http1 | fastapi-small-response-chunks | asyncio | 95.448 / 137.973 | 1406.770 / 2068.047 | 39.928 / 16.777 | 581.381 / 257.408 | 50.223 / 57.203 | 12.590 / 12.836 |
+| http1 | fastapi-small-response-chunks | uvloop | 95.582 / 134.715 | 1644.631 / 1451.030 | 36.235 / 22.699 | 622.229 / 245.356 | 53.016 / 60.168 | 12.531 / 12.879 |
+| http1 | fastapi-request-upload | asyncio | 98.515 / 139.718 | 811.557 / 1938.302 | 38.061 / 22.029 | 322.812 / 305.031 | 108.926 / 142.637 | 20.531 / 20.535 |
+| http1 | fastapi-request-upload | uvloop | 99.045 / 133.356 | 785.848 / 1491.189 | 39.731 / 26.921 | 314.009 / 303.014 | 106.461 / 141.996 | 20.512 / 20.539 |
+| http1 | fastapi-upload-1m-write-1k | asyncio | 95.818 / 90.497 | 1447.801 / 1874.022 | 286.817 / 215.468 | 4355.458 / 4431.037 | 56.969 / 63.957 | 10.535 / 10.535 |
+| http1 | fastapi-upload-1m-write-1k | uvloop | 94.505 / 88.290 | 1456.693 / 1616.853 | 282.642 / 244.006 | 4381.197 / 4454.940 | 58.812 / 66.102 | 10.535 / 10.535 |
+| http1 | fastapi-upload-1m-write-16k | asyncio | 97.632 / 137.802 | 811.425 / 1968.724 | 56.334 / 29.696 | 464.660 / 422.480 | 108.578 / 145.535 | 15.715 / 15.684 |
+| http1 | fastapi-upload-1m-write-16k | uvloop | 98.867 / 131.389 | 769.821 / 1446.174 | 60.467 / 37.985 | 468.796 / 420.660 | 106.059 / 141.129 | 15.766 / 15.688 |
+| http1 | fastapi-upload-1m-write-256k | asyncio | 98.644 / 140.171 | 820.530 / 1942.013 | 38.522 / 21.930 | 314.704 / 303.730 | 109.898 / 144.484 | 20.535 / 20.535 |
+| http1 | fastapi-upload-1m-write-256k | uvloop | 99.161 / 133.367 | 791.923 / 1454.860 | 39.299 / 27.415 | 313.625 / 299.663 | 106.262 / 142.223 | 20.523 / 20.535 |
+| http1 | fastapi-upload-1m-write-1m | asyncio | 98.707 / 138.438 | 812.955 / 1906.158 | 38.534 / 21.978 | 312.191 / 302.031 | 109.680 / 142.168 | 20.527 / 20.527 |
+| http1 | fastapi-upload-1m-write-1m | uvloop | 99.149 / 133.365 | 806.736 / 1471.485 | 38.198 / 27.044 | 310.256 / 299.460 | 107.406 / 143.918 | 20.512 / 20.539 |
+| http1 | fastapi-request-upload-small-chunks | asyncio | 97.902 / 123.083 | 273.733 / 739.596 | 111.549 / 55.461 | 312.652 / 333.867 | 51.664 / 70.602 | 13.047 / 13.023 |
+| http1 | fastapi-request-upload-small-chunks | uvloop | 97.858 / 121.106 | 271.828 / 582.634 | 110.003 / 68.758 | 311.623 / 331.331 | 54.871 / 72.340 | 13.121 / 13.098 |
+| http1 | fastapi-slow-reader-backpressure | asyncio | 4.884 / 7.328 | 1625.000 / 2437.500 | 12.409 / 11.383 | 4128.300 / 3786.569 | 48.211 / 50.332 | 100.543 / 101.758 |
+| http1 | fastapi-slow-reader-backpressure | uvloop | 4.695 / 6.004 | 1562.500 / 2000.000 | 12.161 / 11.347 | 4046.631 / 3779.700 | 50.922 / 52.430 | 99.719 / 101.188 |
+| http1 | fastapi-scope-32-headers | asyncio | 98.854 / 133.336 | 149.183 / 295.161 | 28.231 / 19.067 | 41.824 / 42.361 | 48.617 / 56.574 | 13.051 / 13.008 |
+| http1 | fastapi-scope-32-headers | uvloop | 98.871 / 133.172 | 149.749 / 271.513 | 28.328 / 21.273 | 43.070 / 43.978 | 50.879 / 58.996 | 13.031 / 13.059 |
+| http1 | fastapi-contextvars | asyncio | 98.963 / 130.477 | 160.341 / 309.091 | 22.634 / 14.053 | 36.328 / 33.185 | 48.508 / 56.484 | 12.293 / 12.121 |
+| http1 | fastapi-contextvars | uvloop | 99.055 / 130.409 | 159.279 / 276.779 | 23.309 / 16.086 | 37.448 / 34.133 | 50.746 / 57.938 | 12.297 / 12.184 |
+| http1 | fastapi-python-cpu | asyncio | 96.595 / 101.262 | 2108.285 / 2282.333 | 3.259 / 3.572 | 70.968 / 80.331 | 51.227 / 58.125 | 12.031 / 12.039 |
+| http1 | fastapi-python-cpu | uvloop | 96.208 / 99.723 | 2029.272 / 2179.803 | 3.455 / 3.676 | 72.440 / 80.495 | 52.852 / 61.395 | 12.020 / 12.039 |
+| http2 | fastapi-validated-route | asyncio | 99.194 / 117.481 | 516.461 / 312.961 | 16.724 / 8.784 | 87.039 / 23.401 | 94.918 / 54.254 | 4.707 / 5.039 |
+| http2 | fastapi-validated-route | uvloop | 99.441 / 115.941 | 525.381 / 266.218 | 16.108 / 10.072 | 87.151 / 23.031 | 97.012 / 55.695 | 4.715 / 5.055 |
+| http2 | fastapi-python-cpu | asyncio | 96.674 / 99.603 | 2406.542 / 2209.644 | 4.474 / 1.629 | 112.021 / 36.828 | 97.332 / 56.953 | 4.547 / 4.688 |
+| http2 | fastapi-python-cpu | uvloop | 95.958 / 98.687 | 2381.395 / 2145.484 | 4.592 / 1.845 | 114.378 / 39.326 | 98.648 / 59.691 | 4.547 / 4.691 |
+| http2 | fixed | asyncio | 99.130 / 120.047 | 414.392 / 232.070 | 20.066 / 12.260 | 83.515 / 23.243 | 95.594 / 54.242 | 4.770 / 5.027 |
+| http2 | fixed | uvloop | 99.091 / 118.545 | 431.939 / 190.801 | 19.429 / 14.114 | 84.355 / 22.757 | 97.539 / 56.098 | 4.742 / 5.035 |
+| http2 | large-response | asyncio | 97.542 / 16.544 | 10214.844 / 1945.946 | 26.315 / 20.217 | 2722.799 / 2338.342 | 169.191 / 53.941 | 6.258 / 6.410 |
+| http2 | large-response | uvloop | 96.953 / 13.409 | 9675.090 / 1871.658 | 26.766 / 16.322 | 2710.244 / 2344.927 | 174.875 / 56.543 | 6.184 / 6.305 |
+| http2 | many-response-chunks | asyncio | 95.324 / 141.742 | 14307.692 / 11968.750 | 18.293 / 53.229 | 2744.780 / 4643.997 | 165.102 / 56.332 | 6.352 / 6.883 |
+| http2 | many-response-chunks | uvloop | 96.999 / 132.962 | 12678.571 / 8279.570 | 21.169 / 72.325 | 2668.496 / 4626.499 | 137.934 / 57.906 | 6.215 / 6.520 |
+| http2 | request-upload | asyncio | 22.902 / 143.841 | 8437.500 / 3008.264 | 5.248 / 50.702 | 1933.272 / 1077.066 | 183.508 / 132.254 | 5.758 / 7.191 |
+| http2 | request-upload | uvloop | 40.380 / 131.203 | 8145.833 / 2338.343 | 8.896 / 63.098 | 1877.407 / 1110.757 | 173.504 / 132.820 | 5.777 / 8.234 |
+| http2 | request-upload-small-chunks | asyncio | 92.807 / 129.394 | 2240.071 / 919.283 | 16.364 / 37.342 | 399.715 / 262.776 | 99.539 / 62.922 | 4.852 / 6.633 |
+| http2 | request-upload-small-chunks | uvloop | 94.765 / 125.985 | 2175.768 / 730.202 | 17.407 / 44.040 | 391.518 / 255.513 | 107.039 / 65.809 | 5.285 / 7.629 |
+| http2 | slow-reader-backpressure | asyncio | 15.678 / 28.022 | 23333.333 / 41666.667 | 5.402 / 15.215 | 8051.083 / 22622.556 | 97.383 / 52.348 | 5.852 / 5.910 |
+| http2 | slow-reader-backpressure | uvloop | 14.542 / 21.718 | 21666.667 / 30833.333 | 5.565 / 15.225 | 8284.889 / 21615.250 | 97.691 / 54.582 | 5.805 / 5.906 |
+| http3 | fastapi-validated-route | asyncio | 93.096 / 89.091 | 1029.167 / 518.583 | 13.541 / 19.415 | 150.379 / 115.751 | 112.973 / 52.156 | 4.688 / 4.797 |
+| http3 | fastapi-validated-route | uvloop | 92.510 / 87.099 | 978.605 / 481.121 | 15.257 / 21.293 | 159.754 / 115.065 | 114.980 / 54.645 | 4.746 / 4.820 |
+| http3 | fastapi-python-cpu | asyncio | 94.390 / 91.082 | 3158.224 / 2473.391 | 6.180 / 6.357 | 206.708 / 172.751 | 113.391 / 53.426 | 4.648 / 4.660 |
+| http3 | fastapi-python-cpu | uvloop | 93.996 / 91.033 | 3083.538 / 2365.591 | 6.112 / 6.408 | 201.647 / 168.387 | 115.168 / 55.633 | 4.645 / 4.664 |
+| http3 | fixed | asyncio | 92.790 / 87.808 | 868.201 / 432.383 | 15.284 / 21.923 | 144.191 / 110.387 | 113.637 / 51.762 | 4.730 / 4.832 |
+| http3 | fixed | uvloop | 92.818 / 84.627 | 862.520 / 392.140 | 15.298 / 24.308 | 144.714 / 112.638 | 115.172 / 54.211 | 4.758 / 4.852 |
+| http3 | large-response | asyncio | 59.188 / 82.489 | 35505.618 / 2262.027 | 16.647 / 99.495 | 10044.912 / 2727.119 | 117.355 / 54.832 | 6.172 / 8.363 |
+| http3 | large-response | uvloop | 93.581 / 82.003 | 56292.135 / 2232.050 | 17.724 / 101.739 | 10668.034 / 2747.349 | 117.984 / 56.957 | 5.977 / 7.996 |
+| http3 | many-response-chunks | asyncio | 94.164 / 121.170 | 94074.074 / 5146.245 | 17.889 / 79.964 | 17709.296 / 3354.742 | 114.039 / 53.508 | 5.992 / 7.715 |
+| http3 | many-response-chunks | uvloop | 94.203 / 115.002 | 86551.724 / 4315.264 | 19.467 / 89.183 | 18193.237 / 3315.637 | 115.504 / 55.797 | 6.047 / 7.891 |
+| http3 | request-upload | asyncio | 86.503 / 109.677 | 65694.444 / 40625.000 | 6.586 / 8.043 | 5037.274 / 3059.563 | 116.254 / 60.895 | 6.746 / 7.242 |
+| http3 | request-upload | uvloop | 48.465 / 104.830 | 76176.471 / 26619.048 | 4.286 / 11.796 | 6633.029 / 2995.214 | 116.539 / 63.312 | 6.730 / 7.254 |
+| http3 | slow-reader-backpressure | uvloop | 54.136 / 3.560 | 72500.000 / 4750.000 | 12.695 / 5.681 | 17001.550 / 7581.825 | 116.348 / 56.375 | 9.430 / 9.879 |
+| websocket | connection-handshake | asyncio | 91.121 / 109.053 | 940.000 / 760.000 | 15.158 / 27.255 | 154.644 / 195.900 | 48.137 / 50.391 | 2.645 / 2.641 |
+| websocket | connection-handshake | uvloop | 89.937 / 98.273 | 860.000 / 600.000 | 15.191 / 29.866 | 151.368 / 187.858 | 50.984 / 53.535 | 2.645 / 2.645 |
+| websocket | text-echo | asyncio | 99.075 / 141.413 | 46.506 / 192.411 | 53.885 / 22.979 | 25.260 / 31.192 | 51.727 / 64.234 | 12.156 / 11.594 |
+| websocket | text-echo | uvloop | 98.883 / 136.968 | 43.164 / 110.816 | 55.331 / 32.739 | 24.160 / 26.890 | 53.707 / 66.770 | 12.156 / 11.598 |
+| websocket | binary-64k-echo | asyncio | 99.437 / 144.347 | 120.390 / 256.308 | 48.396 / 36.808 | 58.594 / 65.685 | 60.883 / 75.070 | 15.781 / 15.461 |
+| websocket | binary-64k-echo | uvloop | 99.565 / 133.699 | 111.408 / 162.840 | 54.545 / 46.159 | 60.384 / 57.621 | 62.574 / 78.805 | 15.777 / 15.750 |
+
+Category qualification counts:
+
+| Category | Status | Qualified pairs |
+|---|---|---:|
+| http1 | qualified_local_pairs | 30 |
+| http2 | qualified_local_pairs | 16 |
+| http3 | qualified_local_pairs | 13 |
+| websocket | qualified_local_pairs | 6 |
+| lifecycle | qualified_local_pairs | 2 |
+
+Category input integrity and exclusions:
+
+| Category | Status | Rows | Eligible | Invalid | Missing/duplicate planned rows | Invalid reasons |
+|---|---|---:|---:|---:|---:|---|
+| http1 | qualified_local_pairs | 300 | 300 | 0 | 0 | — |
+| http2 | qualified_local_pairs | 160 | 160 | 0 | 0 | — |
+| http3 | qualified_local_pairs | 135 | 135 | 0 | 0 | — |
+| websocket | qualified_local_pairs | 60 | 60 | 0 | 0 | — |
+| lifecycle | qualified_local_pairs | 20 | 20 | 0 | 0 | — |
+
+Category runner failures:
+
+No category runner failures or incomplete receipts were recorded.
+
+Unqualified workload/reference comparisons:
+
+- http3/slow-reader-backpressure/asyncio: 0 matching valid repetitions; fewer_than_required_matching_valid_repetitions, recorded_pair_gate_missing_or_duplicate, target_only_no_live_reference_pair.
+  Reference exclusions recorded: `{&quot;hypercorn-asyncio&quot;: &quot;hypercorn-0.18.0-h3-slow-reader-linux-aarch64-stream-keyerror: Hypercorn 0.18.0 asyncio raised KeyError for a stream ID absent from its HTTP/3 stream map during slow-reader backpressure, and two probe requests timed out waiting for response headers. The retained log does not establish event ordering or causal direction. Keep uvicorn-rs asyncio as a correctness and lifecycle checked candidate-only cell.&quot;}`
+
+Lifecycle phase measurements:
+
+| Loop | Reference / Rust | Valid matches | Startup ms ref / Rust | Idle exit ms ref / Rust | Active exit ms ref / Rust | Idle CPU s ref / Rust | Active CPU s ref / Rust | Idle RSS MiB ref / Rust | Active RSS MiB ref / Rust |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 316.282 / 293.410 / 187.489 / 7.311 / 2197.328 / 2013.093 / 0.301 / 0.294 / 0.309 / 0.304 / 45.340 / 48.363 / 45.012 / 48.383 |
+| uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 318.531 / 305.283 / 190.023 / 7.318 / 2191.994 / 2013.529 / 0.312 / 0.300 / 0.316 / 0.308 / 47.898 / 50.121 / 47.965 / 49.582 |
+
+Download `asgi-category-benchmarks-linux-aarch64` from the [workflow run](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681) for raw rows, logs, environment receipts, and the complete per-run analysis.
+The run's matrix artifact includes the hashed machine-readable receipts and raw system bundles. GitHub Actions retains those files for 90 days; generated logs and per-run results are not committed to Git.
+
+## macos-arm64 (arm64)
+
+Runner: `macos-15`; CPU: Apple M1 (Virtual) (3 logical, 3 physical); memory: 7.0 GiB; platform: `macOS-15.8.2-arm64-arm-64bit`.
+Load parameters: {'duration': 5.0, 'warmup': 1.0, 'concurrency': 64, 'h3_concurrency': 1, 'repetitions': 5, 'seed': 20261005}.
+
+Stock FastAPI comparison (upstream FastAPI, Starlette, and Pydantic):
+
+| Workload | Protocol | Loop | Valid matches | Qualified | Ops/s ref / Rust | p50 ms ref / Rust | p95 ms ref / Rust | p99 ms ref / Rust | Rate ratio |
+|---|---|---|---:|---|---:|---:|---:|---:|---:|
+| fastapi-validated-route | HTTP/1.1 | asyncio | 5 | yes | 8399.500 / 5009.672 | 6.359 / 11.551 | 12.924 / 22.671 | 18.500 / 30.396 | 0.581× |
+| fastapi-validated-route | HTTP/1.1 | uvloop | 5 | yes | 9950.891 / 5470.150 | 5.685 / 10.572 | 10.946 / 21.266 | 16.662 / 27.072 | 0.521× |
+| fastapi-python-cpu | HTTP/1.1 | asyncio | 5 | yes | 593.116 / 551.027 | 106.490 / 115.558 | 135.581 / 166.012 | 163.512 / 192.697 | 1.013× |
+| fastapi-python-cpu | HTTP/1.1 | uvloop | 5 | yes | 636.513 / 583.233 | 97.583 / 109.771 | 131.471 / 154.445 | 156.883 / 182.240 | 0.962× |
+| fastapi-validated-route | HTTP/2 | asyncio | 5 | yes | 3482.518 / 6415.118 | 16.572 / 9.541 | 29.628 / 18.576 | 39.630 / 24.920 | 1.945× |
+| fastapi-validated-route | HTTP/2 | uvloop | 5 | yes | 3542.599 / 7117.255 | 16.282 / 8.502 | 29.135 / 16.466 | 40.007 / 22.422 | 1.967× |
+| fastapi-python-cpu | HTTP/2 | asyncio | 4 | yes | 509.014 / 570.227 | 123.119 / 112.071 | 152.782 / 169.986 | 170.533 / 194.513 | 1.126× |
+| fastapi-python-cpu | HTTP/2 | uvloop | 5 | yes | 537.265 / 594.464 | 116.042 / 106.908 | 153.987 / 165.814 | 172.422 / 193.447 | 1.120× |
+| fastapi-large-response | HTTP/2 | asyncio | 5 | yes | 159.197 / 433.783 | 387.922 / 144.960 | 642.728 / 179.520 | 665.605 / 212.551 | 2.649× |
+| fastapi-large-response | HTTP/2 | uvloop | 5 | yes | 151.164 / 434.883 | 412.576 / 144.549 | 518.971 / 180.268 | 547.551 / 197.423 | 3.092× |
+| fastapi-many-response-chunks | HTTP/2 | asyncio | 5 | yes | 114.612 / 130.710 | 541.025 / 476.388 | 653.986 / 657.298 | 684.606 / 682.705 | 0.986× |
+| fastapi-many-response-chunks | HTTP/2 | uvloop | 5 | yes | 124.588 / 183.596 | 513.183 / 327.460 | 638.225 / 503.284 | 677.340 / 526.055 | 1.525× |
+| fastapi-request-upload | HTTP/2 | asyncio | 2 | no | — / — | — / — | — / — | — / — | — |
+| fastapi-request-upload | HTTP/2 | uvloop | 2 | no | — / — | — / — | — / — | — / — | — |
+| fastapi-slow-reader-backpressure | HTTP/2 | asyncio | 5 | yes | 7.802 / 7.911 | 254.607 / 252.429 | 257.298 / 254.195 | 278.935 / 255.184 | 1.014× |
+| fastapi-slow-reader-backpressure | HTTP/2 | uvloop | 5 | yes | 7.852 / 7.911 | 254.548 / 252.421 | 256.094 / 254.407 | 257.231 / 254.812 | 1.008× |
+| fastapi-validated-route | HTTP/3 | asyncio | 5 | yes | 847.362 / 2560.520 | 1.020 / 0.359 | 2.037 / 0.619 | 2.628 / 1.022 | 3.134× |
+| fastapi-validated-route | HTTP/3 | uvloop | 5 | yes | 868.294 / 2298.867 | 1.006 / 0.357 | 2.090 / 0.738 | 2.692 / 1.151 | 2.780× |
+| fastapi-python-cpu | HTTP/3 | asyncio | 5 | yes | 257.321 / 287.343 | 3.041 / 2.468 | 7.232 / 6.450 | 8.260 / 8.165 | 1.229× |
+| fastapi-python-cpu | HTTP/3 | uvloop | 5 | yes | 259.901 / 347.526 | 2.839 / 2.178 | 7.283 / 5.759 | 8.672 / 6.713 | 1.326× |
+| fastapi-large-response | HTTP/3 | asyncio | 5 | yes | 20.755 / 163.551 | 45.030 / 5.234 | 88.187 / 11.465 | 99.296 / 16.295 | 7.880× |
+| fastapi-large-response | HTTP/3 | uvloop | 5 | yes | 15.750 / 163.929 | 56.790 / 5.206 | 90.154 / 11.204 | 113.444 / 17.049 | 10.408× |
+| fastapi-many-response-chunks | HTTP/3 | asyncio | 5 | yes | 9.452 / 112.792 | 98.248 / 8.656 | 137.686 / 13.956 | 152.604 / 17.591 | 11.068× |
+| fastapi-many-response-chunks | HTTP/3 | uvloop | 5 | yes | 9.656 / 142.758 | 95.849 / 6.297 | 158.786 / 11.630 | 187.989 / 16.490 | 15.511× |
+| fastapi-request-upload | HTTP/3 | asyncio | 5 | yes | 12.457 / 21.862 | 72.282 / 40.464 | 101.673 / 61.867 | 111.364 / 79.214 | 1.719× |
+| fastapi-request-upload | HTTP/3 | uvloop | 5 | yes | 6.892 / 26.688 | 137.498 / 33.908 | 199.339 / 59.497 | 201.349 / 68.294 | 3.686× |
+| fastapi-slow-reader-backpressure | HTTP/3 | asyncio | 5 | yes | 7.890 / 7.883 | 252.740 / 253.189 | 255.532 / 255.240 | 257.168 / 257.880 | 0.999× |
+| fastapi-slow-reader-backpressure | HTTP/3 | uvloop | 5 | yes | 7.918 / 7.886 | 252.439 / 252.962 | 253.953 / 256.176 | 255.316 / 257.742 | 0.996× |
+
+Stock FastAPI resource measurements:
+
+| Workload | Protocol | Loop | Valid matches | Server CPU % ref / Rust | Server CPU µs/op ref / Rust | Client CPU % ref / Rust | Client CPU µs/op ref / Rust | Server RSS MiB ref / Rust | Client RSS MiB ref / Rust |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|
+| fastapi-validated-route | HTTP/1.1 | asyncio | 5 | 91.790 / 108.232 | 114.797 / 220.190 | 68.522 / 32.829 | 90.584 / 69.912 | 46.359 / 58.531 | 12.234 / 12.234 |
+| fastapi-validated-route | HTTP/1.1 | uvloop | 5 | 93.134 / 106.171 | 97.680 / 199.992 | 59.970 / 36.289 | 65.077 / 68.358 | 48.703 / 61.266 | 12.625 / 12.219 |
+| fastapi-python-cpu | HTTP/1.1 | asyncio | 5 | 97.702 / 99.804 | 1735.627 / 1910.757 | 5.580 / 4.378 | 104.715 / 80.446 | 50.375 / 59.844 | 12.234 / 12.172 |
+| fastapi-python-cpu | HTTP/1.1 | uvloop | 5 | 98.776 / 99.802 | 1588.823 / 1802.271 | 4.313 / 5.051 | 68.428 / 92.772 | 52.000 / 61.156 | 12.188 / 12.219 |
+| fastapi-validated-route | HTTP/2 | asyncio | 5 | 93.419 / 106.832 | 283.937 / 177.210 | 28.033 / 12.508 | 86.226 / 20.709 | 94.953 / 53.188 | 4.656 / 4.766 |
+| fastapi-validated-route | HTTP/2 | uvloop | 5 | 96.409 / 109.832 | 277.917 / 158.984 | 29.972 / 13.480 | 85.277 / 20.023 | 95.891 / 54.969 | 4.594 / 4.984 |
+| fastapi-python-cpu | HTTP/2 | asyncio | 4 | 97.754 / 101.819 | 2006.974 / 1858.697 | 5.833 / 1.589 | 116.622 / 29.411 | 95.523 / 56.102 | 4.273 / 4.398 |
+| fastapi-python-cpu | HTTP/2 | uvloop | 5 | 99.315 / 100.801 | 1898.118 / 1748.036 | 6.145 / 1.822 | 121.487 / 31.593 | 96.938 / 57.203 | 4.281 / 4.375 |
+| fastapi-large-response | HTTP/2 | asyncio | 5 | 92.155 / 84.578 | 6117.067 / 2037.721 | 65.474 / 110.017 | 4446.173 / 2483.072 | 238.578 / 51.203 | 6.625 / 7.203 |
+| fastapi-large-response | HTTP/2 | uvloop | 5 | 93.255 / 82.741 | 6431.932 / 2023.978 | 67.780 / 109.015 | 4940.893 / 2666.682 | 247.562 / 52.594 | 6.719 / 7.094 |
+| fastapi-many-response-chunks | HTTP/2 | asyncio | 5 | 93.458 / 127.756 | 8539.611 / 10129.438 | 38.885 / 46.517 | 3654.653 / 3725.080 | 217.109 / 53.719 | 6.516 / 6.969 |
+| fastapi-many-response-chunks | HTTP/2 | uvloop | 5 | 92.289 / 121.824 | 7956.661 / 6927.890 | 41.930 / 58.773 | 3649.059 / 3240.160 | 223.422 / 55.266 | 6.594 / 6.938 |
+| fastapi-request-upload | HTTP/2 | asyncio | 2 | — / — | — / — | — / — | — / — | — / — | — / — |
+| fastapi-request-upload | HTTP/2 | uvloop | 2 | — / — | — / — | — / — | — / — | — / — | — / — |
+| fastapi-slow-reader-backpressure | HTTP/2 | asyncio | 5 | 22.412 / 28.964 | 29458.515 / 37899.781 | 8.332 / 17.800 | 11200.075 / 23018.625 | 104.250 / 48.859 | 5.500 / 5.562 |
+| fastapi-slow-reader-backpressure | HTTP/2 | uvloop | 5 | 19.691 / 23.060 | 25733.021 / 31112.044 | 8.147 / 17.290 | 10931.375 / 23089.350 | 106.578 / 50.344 | 5.500 / 5.516 |
+| fastapi-validated-route | HTTP/3 | asyncio | 5 | 72.980 / 72.490 | 901.632 / 307.258 | 17.058 / 20.337 | 203.383 / 88.749 | 104.359 / 48.719 | 4.219 / 4.484 |
+| fastapi-validated-route | HTTP/3 | uvloop | 5 | 70.110 / 70.296 | 857.682 / 322.752 | 18.517 / 21.070 | 228.662 / 94.445 | 105.188 / 50.172 | 4.188 / 4.250 |
+| fastapi-python-cpu | HTTP/3 | asyncio | 5 | 82.887 / 81.055 | 3485.276 / 3077.068 | 7.559 / 4.933 | 330.985 / 179.073 | 105.141 / 49.906 | 4.172 / 4.156 |
+| fastapi-python-cpu | HTTP/3 | uvloop | 5 | 83.091 / 84.287 | 3371.779 / 2540.324 | 8.139 / 5.141 | 332.236 / 153.955 | 106.672 / 51.562 | 4.109 / 4.125 |
+| fastapi-large-response | HTTP/3 | asyncio | 5 | 55.275 / 78.848 | 28614.559 / 5100.402 | 29.196 / 97.076 | 15196.391 / 6383.576 | 117.062 / 53.438 | 5.812 / 8.750 |
+| fastapi-large-response | HTTP/3 | uvloop | 5 | 61.804 / 79.394 | 41623.695 / 5019.923 | 20.034 / 101.907 | 13474.478 / 6436.951 | 117.594 / 54.828 | 5.406 / 8.625 |
+| fastapi-many-response-chunks | HTTP/3 | asyncio | 5 | 65.157 / 97.047 | 70990.138 / 9401.558 | 12.994 / 84.930 | 13680.173 / 8311.072 | 104.922 / 51.484 | 5.219 / 7.219 |
+| fastapi-many-response-chunks | HTTP/3 | uvloop | 5 | 62.462 / 93.054 | 70009.491 / 6825.475 | 14.188 / 89.166 | 15779.176 / 6500.983 | 107.109 / 53.125 | 5.281 / 7.312 |
+| fastapi-request-upload | HTTP/3 | asyncio | 5 | 68.191 / 72.100 | 58557.428 / 34718.095 | 9.731 / 12.921 | 8401.635 / 6398.367 | 108.875 / 60.141 | 8.375 / 8.859 |
+| fastapi-request-upload | HTTP/3 | uvloop | 5 | 51.185 / 65.254 | 80374.930 / 25817.581 | 8.455 / 15.039 | 12450.447 / 6117.093 | 110.062 / 61.656 | 8.281 / 8.859 |
+| fastapi-slow-reader-backpressure | HTTP/3 | asyncio | 5 | 52.511 / 10.912 | 73918.992 / 14951.295 | 19.842 / 11.336 | 27613.275 / 15848.100 | 107.562 / 51.750 | 7.375 / 8.812 |
+| fastapi-slow-reader-backpressure | HTTP/3 | uvloop | 5 | 47.323 / 10.473 | 62975.392 / 13776.805 | 18.242 / 11.972 | 24801.575 / 15814.250 | 107.859 / 53.047 | 7.344 / 8.875 |
+
+Throughput and latency:
+
+| Category | Workload | Loop | Reference / Rust | Valid matches | Ops/s ref / Rust | p50 ms ref / Rust | p95 ms ref / Rust | p99 ms ref / Rust | Rate ratio |
+|---|---|---|---|---:|---:|---:|---:|---:|---:|
+| http1 | fastapi-validated-route | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 8881.028 / 5619.876 | 6.031 / 11.052 | 13.512 / 19.083 | 20.129 / 25.986 | 0.633× |
+| http1 | fastapi-validated-route | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 9986.529 / 5635.330 | 5.400 / 10.542 | 11.289 / 19.163 | 16.107 / 28.026 | 0.544× |
+| http1 | fastapi-fixed | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 10785.923 / 5839.535 | 4.945 / 10.305 | 10.650 / 17.040 | 15.775 / 23.535 | 0.533× |
+| http1 | fastapi-fixed | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 11676.874 / 7017.563 | 4.698 / 8.479 | 10.545 / 16.294 | 15.510 / 22.708 | 0.611× |
+| http1 | fastapi-large-response | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 3124.732 / 2472.483 | 19.490 / 25.150 | 30.296 / 39.522 | 37.846 / 48.642 | 0.781× |
+| http1 | fastapi-large-response | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 3208.175 / 2550.703 | 17.846 / 24.074 | 33.958 / 41.521 | 47.089 / 49.696 | 0.795× |
+| http1 | fastapi-many-response-chunks | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 693.823 / 363.636 | 88.142 / 170.289 | 118.618 / 220.439 | 141.519 / 232.096 | 0.556× |
+| http1 | fastapi-many-response-chunks | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 526.582 / 453.603 | 109.303 / 143.267 | 153.712 / 168.955 | 676.438 / 175.709 | 0.851× |
+| http1 | fastapi-small-response-chunks | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 1642.443 / 1226.877 | 35.091 / 49.753 | 53.238 / 72.436 | 65.081 / 93.099 | 0.591× |
+| http1 | fastapi-small-response-chunks | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 1223.578 / 999.534 | 46.847 / 61.106 | 76.113 / 89.497 | 99.668 / 98.133 | 0.974× |
+| http1 | fastapi-request-upload | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 1182.668 / 758.812 | 51.692 / 78.212 | 73.486 / 118.013 | 86.904 / 181.479 | 0.612× |
+| http1 | fastapi-request-upload | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 1365.579 / 882.838 | 43.936 / 68.425 | 70.356 / 109.920 | 84.507 / 137.285 | 0.619× |
+| http1 | fastapi-upload-1m-write-1k | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 182.125 / 172.219 | 41.586 / 44.517 | 82.096 / 76.579 | 117.436 / 114.151 | 0.939× |
+| http1 | fastapi-upload-1m-write-1k | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 182.428 / 168.619 | 40.482 / 44.536 | 78.560 / 82.691 | 120.117 / 107.310 | 0.960× |
+| http1 | fastapi-upload-1m-write-16k | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 964.280 / 692.951 | 64.785 / 90.090 | 85.432 / 134.513 | 96.442 / 148.701 | 0.593× |
+| http1 | fastapi-upload-1m-write-16k | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 1136.986 / 818.627 | 54.474 / 72.328 | 80.517 / 112.274 | 101.157 / 134.197 | 0.717× |
+| http1 | fastapi-upload-1m-write-256k | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 1241.872 / 927.326 | 47.561 / 66.093 | 71.995 / 95.700 | 80.549 / 116.438 | 0.674× |
+| http1 | fastapi-upload-1m-write-256k | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 1445.049 / 1068.064 | 41.855 / 57.256 | 58.821 / 84.672 | 70.561 / 98.478 | 0.739× |
+| http1 | fastapi-upload-1m-write-1m | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 1022.336 / 701.418 | 59.897 / 85.801 | 87.155 / 131.328 | 97.375 / 148.898 | 0.626× |
+| http1 | fastapi-upload-1m-write-1m | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 4 | 1187.577 / 848.706 | 51.212 / 72.493 | 69.640 / 107.456 | 80.593 / 121.412 | 0.692× |
+| http1 | fastapi-request-upload-small-chunks | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 1799.293 / 1017.205 | 34.064 / 57.962 | 53.449 / 96.173 | 62.832 / 113.748 | 0.603× |
+| http1 | fastapi-request-upload-small-chunks | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 1717.957 / 1198.102 | 34.579 / 51.814 | 59.401 / 80.253 | 80.461 / 97.466 | 0.681× |
+| http1 | fastapi-slow-reader-backpressure | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 31.332 / 31.374 | 252.869 / 253.547 | 262.055 / 258.956 | 269.855 / 263.993 | 1.001× |
+| http1 | fastapi-slow-reader-backpressure | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 31.285 / 31.388 | 252.955 / 253.482 | 263.337 / 258.401 | 275.272 / 260.098 | 1.004× |
+| http1 | fastapi-scope-32-headers | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 11363.879 / 7152.416 | 5.396 / 8.357 | 7.498 / 13.945 | 10.017 / 19.088 | 0.656× |
+| http1 | fastapi-scope-32-headers | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 11539.461 / 7699.132 | 4.930 / 7.920 | 9.710 / 13.098 | 12.759 / 18.644 | 0.680× |
+| http1 | fastapi-contextvars | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 11652.598 / 7163.211 | 5.185 / 8.474 | 7.790 / 13.428 | 12.624 / 16.482 | 0.654× |
+| http1 | fastapi-contextvars | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 11898.986 / 8614.089 | 4.911 / 6.837 | 9.126 / 11.332 | 13.005 / 17.533 | 0.726× |
+| http1 | fastapi-python-cpu | asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 578.301 / 592.343 | 109.096 / 106.834 | 140.120 / 163.761 | 162.813 / 190.528 | 0.991× |
+| http1 | fastapi-python-cpu | uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 608.312 / 569.379 | 102.488 / 112.090 | 138.014 / 166.993 | 161.795 / 199.923 | 0.953× |
+| http2 | fastapi-validated-route | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 3482.518 / 6415.118 | 16.572 / 9.541 | 29.628 / 18.576 | 39.630 / 24.920 | 1.945× |
+| http2 | fastapi-validated-route | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 3542.599 / 7117.255 | 16.282 / 8.502 | 29.135 / 16.466 | 40.007 / 22.422 | 1.967× |
+| http2 | fastapi-python-cpu | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 4 | 509.014 / 570.227 | 123.119 / 112.071 | 152.782 / 169.986 | 170.533 / 194.513 | 1.126× |
+| http2 | fastapi-python-cpu | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 537.265 / 594.464 | 116.042 / 106.908 | 153.987 / 165.814 | 172.422 / 193.447 | 1.120× |
+| http2 | fixed | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 4732.323 / 10027.966 | 12.459 / 6.007 | 21.640 / 11.571 | 25.912 / 15.281 | 2.272× |
+| http2 | fixed | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 4317.487 / 13307.053 | 12.882 / 4.433 | 24.590 / 8.342 | 32.014 / 12.197 | 2.805× |
+| http2 | large-response | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 159.197 / 433.783 | 387.922 / 144.960 | 642.728 / 179.520 | 665.605 / 212.551 | 2.649× |
+| http2 | large-response | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 151.164 / 434.883 | 412.576 / 144.549 | 518.971 / 180.268 | 547.551 / 197.423 | 3.092× |
+| http2 | many-response-chunks | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 114.612 / 130.710 | 541.025 / 476.388 | 653.986 / 657.298 | 684.606 / 682.705 | 0.986× |
+| http2 | many-response-chunks | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 124.588 / 183.596 | 513.183 / 327.460 | 638.225 / 503.284 | 677.340 / 526.055 | 1.525× |
+| http2 | request-upload-small-chunks | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 4 | 628.624 / 1751.947 | 95.488 / 35.688 | 157.397 / 57.923 | 188.994 / 71.070 | 2.795× |
+| http2 | request-upload-small-chunks | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 4 | 700.022 / 1994.423 | 92.971 / 31.006 | 127.410 / 51.731 | 144.992 / 66.971 | 2.874× |
+| http2 | slow-reader-backpressure | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 7.802 / 7.911 | 254.607 / 252.429 | 257.298 / 254.195 | 278.935 / 255.184 | 1.014× |
+| http2 | slow-reader-backpressure | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 7.852 / 7.911 | 254.548 / 252.421 | 256.094 / 254.407 | 257.231 / 254.812 | 1.008× |
+| http3 | fastapi-validated-route | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 847.362 / 2560.520 | 1.020 / 0.359 | 2.037 / 0.619 | 2.628 / 1.022 | 3.134× |
+| http3 | fastapi-validated-route | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 868.294 / 2298.867 | 1.006 / 0.357 | 2.090 / 0.738 | 2.692 / 1.151 | 2.780× |
+| http3 | fastapi-python-cpu | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 257.321 / 287.343 | 3.041 / 2.468 | 7.232 / 6.450 | 8.260 / 8.165 | 1.229× |
+| http3 | fastapi-python-cpu | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 259.901 / 347.526 | 2.839 / 2.178 | 7.283 / 5.759 | 8.672 / 6.713 | 1.326× |
+| http3 | fixed | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 931.281 / 2469.987 | 0.903 / 0.325 | 1.951 / 0.840 | 2.743 / 1.203 | 2.580× |
+| http3 | fixed | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 868.958 / 2627.762 | 0.923 / 0.316 | 2.218 / 0.747 | 3.051 / 1.027 | 2.987× |
+| http3 | large-response | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 20.755 / 163.551 | 45.030 / 5.234 | 88.187 / 11.465 | 99.296 / 16.295 | 7.880× |
+| http3 | large-response | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 15.750 / 163.929 | 56.790 / 5.206 | 90.154 / 11.204 | 113.444 / 17.049 | 10.408× |
+| http3 | many-response-chunks | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 9.452 / 112.792 | 98.248 / 8.656 | 137.686 / 13.956 | 152.604 / 17.591 | 11.068× |
+| http3 | many-response-chunks | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 9.656 / 142.758 | 95.849 / 6.297 | 158.786 / 11.630 | 187.989 / 16.490 | 15.511× |
+| http3 | request-upload | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 12.457 / 21.862 | 72.282 / 40.464 | 101.673 / 61.867 | 111.364 / 79.214 | 1.719× |
+| http3 | request-upload | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 6.892 / 26.688 | 137.498 / 33.908 | 199.339 / 59.497 | 201.349 / 68.294 | 3.686× |
+| http3 | slow-reader-backpressure | asyncio | hypercorn-asyncio / uvicorn-rs-asyncio | 5 | 7.890 / 7.883 | 252.740 / 253.189 | 255.532 / 255.240 | 257.168 / 257.880 | 0.999× |
+| http3 | slow-reader-backpressure | uvloop | hypercorn-uvloop / uvicorn-rs-uvloop | 5 | 7.918 / 7.886 | 252.439 / 252.962 | 253.953 / 256.176 | 255.316 / 257.742 | 0.996× |
+| websocket | connection-handshake | asyncio | uvicorn-asyncio-websockets / uvicorn-rs-asyncio | 5 | 964.961 / 1806.119 | 0.865 / 0.517 | 1.799 / 0.862 | 2.417 / 0.987 | 1.880× |
+| websocket | connection-handshake | uvloop | uvicorn-uvloop-websockets / uvicorn-rs-uvloop | 5 | 1175.610 / 1841.132 | 0.697 / 0.486 | 1.517 / 0.799 | 2.271 / 1.132 | 1.564× |
+| websocket | text-echo | asyncio | uvicorn-asyncio-websockets / uvicorn-rs-asyncio | 5 | 30591.050 / 9344.225 | 1.723 / 6.478 | 4.371 / 11.637 | 6.563 / 13.710 | 0.288× |
+| websocket | text-echo | uvloop | uvicorn-uvloop-websockets / uvicorn-rs-uvloop | 5 | 42903.863 / 12278.034 | 1.402 / 5.394 | 2.283 / 8.015 | 3.459 / 9.677 | 0.304× |
+| websocket | binary-64k-echo | asyncio | uvicorn-asyncio-websockets / uvicorn-rs-asyncio | 5 | 8708.317 / 7927.282 | 6.880 / 7.573 | 11.552 / 14.316 | 14.198 / 17.565 | 0.880× |
+| websocket | binary-64k-echo | uvloop | uvicorn-uvloop-websockets / uvicorn-rs-uvloop | 5 | 11923.360 / 7320.496 | 5.141 / 8.592 | 7.432 / 14.052 | 9.780 / 18.946 | 0.614× |
+
+Resource measurements:
+
+| Category | Workload | Loop | Server CPU % ref / Rust | Server CPU µs/op ref / Rust | Client CPU % ref / Rust | Client CPU µs/op ref / Rust | Server RSS MiB ref / Rust | Client RSS MiB ref / Rust |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| http1 | fastapi-validated-route | asyncio | 91.119 / 106.863 | 106.771 / 198.428 | 78.105 / 33.379 | 89.740 / 68.482 | 45.656 / 59.891 | 12.531 / 12.234 |
+| http1 | fastapi-validated-route | uvloop | 92.788 / 106.615 | 95.795 / 197.354 | 61.731 / 37.916 | 75.571 / 72.733 | 48.969 / 59.312 | 12.344 / 12.391 |
+| http1 | fastapi-fixed | asyncio | 82.469 / 107.076 | 80.687 / 198.363 | 88.501 / 40.704 | 91.677 / 76.687 | 45.859 / 59.625 | 12.875 / 12.516 |
+| http1 | fastapi-fixed | uvloop | 83.024 / 111.011 | 74.696 / 160.144 | 86.199 / 47.608 | 76.458 / 70.365 | 48.141 / 60.828 | 12.750 / 12.500 |
+| http1 | fastapi-large-response | asyncio | 80.305 / 105.972 | 269.111 / 451.584 | 105.592 / 77.808 | 342.550 / 339.942 | 47.281 / 58.625 | 13.219 / 13.266 |
+| http1 | fastapi-large-response | uvloop | 80.146 / 101.503 | 260.956 / 404.800 | 101.803 / 80.912 | 338.192 / 319.616 | 49.078 / 59.000 | 13.250 / 13.234 |
+| http1 | fastapi-many-response-chunks | asyncio | 92.794 / 120.449 | 1407.299 / 3478.156 | 58.753 / 33.362 | 978.769 / 923.820 | 50.234 / 56.562 | 13.281 / 13.234 |
+| http1 | fastapi-many-response-chunks | uvloop | 92.306 / 120.211 | 1796.528 / 2787.506 | 62.736 / 40.866 | 1267.171 / 960.216 | 52.422 / 58.141 | 13.219 / 13.219 |
+| http1 | fastapi-small-response-chunks | asyncio | 91.884 / 120.349 | 590.489 / 1038.468 | 47.504 / 25.447 | 298.588 / 215.114 | 48.500 / 58.078 | 12.344 / 12.312 |
+| http1 | fastapi-small-response-chunks | uvloop | 92.589 / 119.672 | 788.113 / 1225.355 | 50.249 / 32.318 | 421.458 / 337.125 | 51.500 / 59.547 | 12.312 / 12.344 |
+| http1 | fastapi-request-upload | asyncio | 88.695 / 122.926 | 770.838 / 1741.243 | 60.163 / 35.780 | 624.120 / 500.615 | 253.422 / 208.172 | 19.281 / 19.219 |
+| http1 | fastapi-request-upload | uvloop | 88.839 / 115.333 | 656.906 / 1456.540 | 61.331 / 39.196 | 463.592 / 473.276 | 196.281 / 210.516 | 19.234 / 19.250 |
+| http1 | fastapi-upload-1m-write-1k | asyncio | 33.505 / 43.945 | 2066.433 / 2730.175 | 195.555 / 176.055 | 11459.924 / 10988.432 | 82.172 / 79.938 | 9.875 / 9.875 |
+| http1 | fastapi-upload-1m-write-1k | uvloop | 34.580 / 40.819 | 2108.617 / 2628.347 | 192.493 / 172.364 | 10832.063 / 11098.686 | 83.297 / 84.891 | 9.828 / 9.859 |
+| http1 | fastapi-upload-1m-write-16k | asyncio | 72.797 / 111.310 | 774.867 / 1672.709 | 107.190 / 65.193 | 1313.109 / 975.927 | 220.031 / 200.781 | 19.156 / 19.172 |
+| http1 | fastapi-upload-1m-write-16k | uvloop | 72.284 / 102.536 | 678.925 / 1297.627 | 104.806 / 71.783 | 984.381 / 888.302 | 197.172 / 217.672 | 19.188 / 19.203 |
+| http1 | fastapi-upload-1m-write-256k | asyncio | 87.652 / 126.256 | 705.151 / 1374.879 | 54.658 / 38.409 | 444.728 / 418.897 | 260.562 / 207.391 | 19.266 / 19.219 |
+| http1 | fastapi-upload-1m-write-256k | uvloop | 88.983 / 120.777 | 633.233 / 1187.400 | 61.022 / 41.818 | 449.386 / 409.789 | 201.406 / 222.344 | 19.250 / 19.250 |
+| http1 | fastapi-upload-1m-write-1m | asyncio | 88.680 / 125.311 | 889.180 / 1716.785 | 53.789 / 36.005 | 581.094 / 491.706 | 254.031 / 201.516 | 19.234 / 19.234 |
+| http1 | fastapi-upload-1m-write-1m | uvloop | 90.234 / 119.428 | 794.269 / 1477.890 | 62.188 / 39.451 | 539.773 / 475.888 | 191.789 / 216.656 | 19.391 / 19.227 |
+| http1 | fastapi-request-upload-small-chunks | asyncio | 45.149 / 75.269 | 273.388 / 726.411 | 176.513 / 103.613 | 1011.493 / 1049.865 | 64.453 / 88.750 | 18.188 / 18.172 |
+| http1 | fastapi-request-upload-small-chunks | uvloop | 43.463 / 68.531 | 261.553 / 611.885 | 176.924 / 116.195 | 1078.680 / 1040.012 | 66.656 / 90.875 | 18.172 / 18.188 |
+| http1 | fastapi-slow-reader-backpressure | asyncio | 10.180 / 11.281 | 3497.242 / 3731.425 | 16.928 / 16.780 | 5878.981 / 5775.081 | 47.719 / 47.125 | 103.641 / 103.203 |
+| http1 | fastapi-slow-reader-backpressure | uvloop | 10.578 / 9.168 | 3638.189 / 3177.670 | 18.857 / 16.657 | 6195.894 / 5665.600 | 49.984 / 48.469 | 101.828 / 101.812 |
+| http1 | fastapi-scope-32-headers | asyncio | 93.370 / 117.040 | 86.929 / 164.113 | 68.843 / 37.936 | 62.247 / 53.091 | 46.375 / 65.391 | 12.859 / 12.250 |
+| http1 | fastapi-scope-32-headers | uvloop | 92.265 / 114.872 | 82.912 / 155.385 | 59.650 / 41.271 | 53.384 / 55.423 | 48.969 / 71.406 | 12.578 / 12.609 |
+| http1 | fastapi-contextvars | asyncio | 92.319 / 114.700 | 84.308 / 162.862 | 64.650 / 34.503 | 59.926 / 48.990 | 45.922 / 64.281 | 12.250 / 12.172 |
+| http1 | fastapi-contextvars | uvloop | 92.780 / 111.885 | 82.279 / 139.315 | 49.980 / 36.646 | 45.162 / 46.190 | 48.562 / 66.094 | 12.734 / 12.250 |
+| http1 | fastapi-python-cpu | asyncio | 97.253 / 99.066 | 1773.223 / 1784.757 | 5.531 / 4.573 | 102.504 / 81.290 | 50.531 / 60.734 | 12.156 / 12.172 |
+| http1 | fastapi-python-cpu | uvloop | 97.463 / 99.805 | 1670.767 / 1832.722 | 5.149 / 5.040 | 100.294 / 89.600 | 52.562 / 62.297 | 12.203 / 12.203 |
+| http2 | fastapi-validated-route | asyncio | 93.419 / 106.832 | 283.937 / 177.210 | 28.033 / 12.508 | 86.226 / 20.709 | 94.953 / 53.188 | 4.656 / 4.766 |
+| http2 | fastapi-validated-route | uvloop | 96.409 / 109.832 | 277.917 / 158.984 | 29.972 / 13.480 | 85.277 / 20.023 | 95.891 / 54.969 | 4.594 / 4.984 |
+| http2 | fastapi-python-cpu | asyncio | 97.754 / 101.819 | 2006.974 / 1858.697 | 5.833 / 1.589 | 116.622 / 29.411 | 95.523 / 56.102 | 4.273 / 4.398 |
+| http2 | fastapi-python-cpu | uvloop | 99.315 / 100.801 | 1898.118 / 1748.036 | 6.145 / 1.822 | 121.487 / 31.593 | 96.938 / 57.203 | 4.281 / 4.375 |
+| http2 | fixed | asyncio | 96.215 / 111.711 | 209.567 / 115.817 | 32.897 / 16.456 | 76.126 / 16.856 | 96.250 / 52.938 | 4.609 / 5.000 |
+| http2 | fixed | uvloop | 96.464 / 110.106 | 227.158 / 87.968 | 33.141 / 17.520 | 78.806 / 14.379 | 96.922 / 54.500 | 4.609 / 5.031 |
+| http2 | large-response | asyncio | 92.155 / 84.578 | 6117.067 / 2037.721 | 65.474 / 110.017 | 4446.173 / 2483.072 | 238.578 / 51.203 | 6.625 / 7.203 |
+| http2 | large-response | uvloop | 93.255 / 82.741 | 6431.932 / 2023.978 | 67.780 / 109.015 | 4940.893 / 2666.682 | 247.562 / 52.594 | 6.719 / 7.094 |
+| http2 | many-response-chunks | asyncio | 93.458 / 127.756 | 8539.611 / 10129.438 | 38.885 / 46.517 | 3654.653 / 3725.080 | 217.109 / 53.719 | 6.516 / 6.969 |
+| http2 | many-response-chunks | uvloop | 92.289 / 121.824 | 7956.661 / 6927.890 | 41.930 / 58.773 | 3649.059 / 3240.160 | 223.422 / 55.266 | 6.594 / 6.938 |
+| http2 | request-upload-small-chunks | asyncio | 92.287 / 123.528 | 1543.549 / 729.232 | 35.728 / 56.227 | 609.004 / 332.844 | 101.766 / 76.570 | 5.156 / 14.383 |
+| http2 | request-upload-small-chunks | uvloop | 95.058 / 116.883 | 1410.006 / 600.593 | 45.416 / 59.478 | 673.676 / 310.864 | 106.195 / 83.727 | 5.203 / 14.938 |
+| http2 | slow-reader-backpressure | asyncio | 22.412 / 28.964 | 29458.515 / 37899.781 | 8.332 / 17.800 | 11200.075 / 23018.625 | 104.250 / 48.859 | 5.500 / 5.562 |
+| http2 | slow-reader-backpressure | uvloop | 19.691 / 23.060 | 25733.021 / 31112.044 | 8.147 / 17.290 | 10931.375 / 23089.350 | 106.578 / 50.344 | 5.500 / 5.516 |
+| http3 | fastapi-validated-route | asyncio | 72.980 / 72.490 | 901.632 / 307.258 | 17.058 / 20.337 | 203.383 / 88.749 | 104.359 / 48.719 | 4.219 / 4.484 |
+| http3 | fastapi-validated-route | uvloop | 70.110 / 70.296 | 857.682 / 322.752 | 18.517 / 21.070 | 228.662 / 94.445 | 105.188 / 50.172 | 4.188 / 4.250 |
+| http3 | fastapi-python-cpu | asyncio | 82.887 / 81.055 | 3485.276 / 3077.068 | 7.559 / 4.933 | 330.985 / 179.073 | 105.141 / 49.906 | 4.172 / 4.156 |
+| http3 | fastapi-python-cpu | uvloop | 83.091 / 84.287 | 3371.779 / 2540.324 | 8.139 / 5.141 | 332.236 / 153.955 | 106.672 / 51.562 | 4.109 / 4.125 |
+| http3 | fixed | asyncio | 71.146 / 74.995 | 813.063 / 305.487 | 17.021 / 22.319 | 191.213 / 96.172 | 104.484 / 48.984 | 4.203 / 4.297 |
+| http3 | fixed | uvloop | 68.668 / 69.482 | 840.412 / 280.944 | 17.555 / 23.295 | 224.196 / 94.190 | 105.953 / 50.562 | 4.203 / 4.297 |
+| http3 | large-response | asyncio | 55.275 / 78.848 | 28614.559 / 5100.402 | 29.196 / 97.076 | 15196.391 / 6383.576 | 117.062 / 53.438 | 5.812 / 8.750 |
+| http3 | large-response | uvloop | 61.804 / 79.394 | 41623.695 / 5019.923 | 20.034 / 101.907 | 13474.478 / 6436.951 | 117.594 / 54.828 | 5.406 / 8.625 |
+| http3 | many-response-chunks | asyncio | 65.157 / 97.047 | 70990.138 / 9401.558 | 12.994 / 84.930 | 13680.173 / 8311.072 | 104.922 / 51.484 | 5.219 / 7.219 |
+| http3 | many-response-chunks | uvloop | 62.462 / 93.054 | 70009.491 / 6825.475 | 14.188 / 89.166 | 15779.176 / 6500.983 | 107.109 / 53.125 | 5.281 / 7.312 |
+| http3 | request-upload | asyncio | 68.191 / 72.100 | 58557.428 / 34718.095 | 9.731 / 12.921 | 8401.635 / 6398.367 | 108.875 / 60.141 | 8.375 / 8.859 |
+| http3 | request-upload | uvloop | 51.185 / 65.254 | 80374.930 / 25817.581 | 8.455 / 15.039 | 12450.447 / 6117.093 | 110.062 / 61.656 | 8.281 / 8.859 |
+| http3 | slow-reader-backpressure | asyncio | 52.511 / 10.912 | 73918.992 / 14951.295 | 19.842 / 11.336 | 27613.275 / 15848.100 | 107.562 / 51.750 | 7.375 / 8.812 |
+| http3 | slow-reader-backpressure | uvloop | 47.323 / 10.473 | 62975.392 / 13776.805 | 18.242 / 11.972 | 24801.575 / 15814.250 | 107.859 / 53.047 | 7.344 / 8.875 |
+| websocket | connection-handshake | asyncio | 68.551 / 79.105 | 803.288 / 515.320 | 15.598 / 23.657 | 182.306 / 156.672 | 45.422 / 47.188 | 2.562 / 2.562 |
+| websocket | connection-handshake | uvloop | 59.054 / 62.814 | 689.296 / 453.323 | 15.344 / 21.505 | 189.414 / 157.514 | 48.578 / 48.594 | 2.562 / 2.594 |
+| websocket | text-echo | asyncio | 91.190 / 137.358 | 32.109 / 134.453 | 68.285 / 27.171 | 28.188 / 28.334 | 48.781 / 71.625 | 13.000 / 11.625 |
+| websocket | text-echo | uvloop | 95.003 / 134.798 | 23.058 / 116.345 | 75.295 / 35.832 | 19.358 / 30.472 | 51.203 / 72.109 | 13.188 / 11.734 |
+| websocket | binary-64k-echo | asyncio | 91.984 / 139.522 | 111.795 / 187.618 | 51.409 / 35.841 | 62.480 / 48.214 | 80.266 / 96.250 | 27.250 / 26.844 |
+| websocket | binary-64k-echo | uvloop | 92.930 / 123.531 | 83.182 / 177.463 | 63.696 / 39.336 | 66.882 / 57.510 | 82.828 / 99.688 | 26.219 / 27.281 |
+
+Category qualification counts:
+
+| Category | Status | Qualified pairs |
+|---|---|---:|
+| http1 | qualified_local_pairs | 30 |
+| http2 | qualified_local_pairs | 14 |
+| http3 | qualified_local_pairs | 14 |
+| websocket | qualified_local_pairs | 6 |
+| lifecycle | qualified_local_pairs | 2 |
+
+Category input integrity and exclusions:
+
+| Category | Status | Rows | Eligible | Invalid | Missing/duplicate planned rows | Invalid reasons |
+|---|---|---:|---:|---:|---:|---|
+| http1 | qualified_local_pairs | 300 | 299 | 1 | 0 | timing_valid_false_or_missing: 1, unrelated_host_cpu_activity: 1 |
+| http2 | qualified_local_pairs | 160 | 147 | 13 | 0 | timing_valid_false_or_missing: 13, unrelated_host_cpu_activity: 13 |
+| http3 | qualified_local_pairs | 140 | 140 | 0 | 0 | — |
+| websocket | qualified_local_pairs | 60 | 60 | 0 | 0 | — |
+| lifecycle | qualified_local_pairs | 20 | 20 | 0 | 0 | — |
+
+Category runner failures:
+
+No category runner failures or incomplete receipts were recorded.
+
+Unqualified workload/reference comparisons:
+
+- http2/request-upload/asyncio: 2 matching valid repetitions; fewer_than_required_matching_valid_repetitions, recorded_pair_gate_not_available.
+- http2/request-upload/uvloop: 2 matching valid repetitions; fewer_than_required_matching_valid_repetitions, recorded_pair_gate_not_available.
+
+Lifecycle phase measurements:
+
+| Loop | Reference / Rust | Valid matches | Startup ms ref / Rust | Idle exit ms ref / Rust | Active exit ms ref / Rust | Idle CPU s ref / Rust | Active CPU s ref / Rust | Idle RSS MiB ref / Rust | Active RSS MiB ref / Rust |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| asyncio | uvicorn-asyncio-httptools / uvicorn-rs-asyncio | 5 | 213.225 / 269.195 / 201.398 / 12.267 / 2172.719 / 2028.610 / 0.207 / 0.222 / 0.207 / 0.240 / 43.156 / 44.312 / 43.219 / 44.531 |
+| uvloop | uvicorn-uvloop-httptools / uvicorn-rs-uvloop | 5 | 238.122 / 261.217 / 204.302 / 12.184 / 2189.379 / 2037.776 / 0.221 / 0.205 / 0.226 / 0.218 / 45.000 / 45.359 / 44.922 / 45.609 |
+
+Download `asgi-category-benchmarks-macos-arm64` from the [workflow run](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681) for raw rows, logs, environment receipts, and the complete per-run analysis.
+The run's matrix artifact includes the hashed machine-readable receipts and raw system bundles. GitHub Actions retains those files for 90 days; generated logs and per-run results are not committed to Git.
+
+## Interpretation
+
+- A rate above 1× is a measured Rust/reference ratio for that workload and runner only; it does not establish a universal speedup or statistical significance.
+- HTTP/2 and HTTP/3 compare against Hypercorn because Uvicorn does not provide those protocol servers.
+- FastAPI-only rows compare the same upstream FastAPI/Starlette/Pydantic stack; they do not use FastAPI-RS or Starlette-RS.
+- CPU percentage and CPU per operation are process totals, not per-thread measurements. The uvicorn-rs adapter uses one Tokio worker; per-thread CPU attribution is not collected.
+- This report identifies each platform's hosted runner image and CPU. Hosted hardware and neighboring load can change between runs; inspect the raw environment and timing-valid rows before comparing revisions.
+- The Rust server still invokes Python for ASGI callables, event-loop tasks, and ASGI message construction/dispatch. These end-to-end results include that integration boundary.

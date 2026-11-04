@@ -177,18 +177,14 @@ jobs:
           cd target/release-candidate
           sha256sum --check --strict SHA256SUMS
           cd ../..
-          mkdir -p target/asgi-coverage target/asgi-coverage-review
+          mkdir -p target/asgi-coverage
           cp -a target/release-candidate/evidence/coverage/raw/. target/asgi-coverage/
-          cp -a target/release-candidate/evidence/coverage/reviewed/. target/asgi-coverage-review/
-          python scripts/coverage_mcp_handoff.py verify-selection \
-            --manifest target/release-candidate/evidence/coverage/handoff.json \
-            --selection target/release-candidate/evidence/coverage/handoff-selection.json \
-            --source "$RELEASE_COMMIT" \
-            --ci-raw-root target/asgi-coverage \
-            --review-root target/asgi-coverage-review \
-            --output target/publication-coverage-selection.json
           python scripts/check_ci_evidence.py coverage \
             target/asgi-coverage/coverage-report.json --offline --allow-pending-mcp --require-clean
+          python scripts/coverage_evidence.py verify \
+            --report target/asgi-coverage/coverage-report.json \
+            --raw-inventory target/release-candidate/evidence/coverage/raw-inventory.json \
+            --source "$RELEASE_COMMIT"
           python - "$RELEASE_VERSION" "$RELEASE_COMMIT" <<'PY'
           import hashlib
           import json
@@ -198,7 +194,7 @@ jobs:
 
           version, commit = sys.argv[1:]
           candidate = json.loads(Path("target/release-candidate/candidate.json").read_text())
-          if (candidate.get("schema") != "uvicorn-rs-release-candidate@3"
+          if (candidate.get("schema") != "uvicorn-rs-release-candidate@4"
                   or candidate.get("state") != "verified candidate; publication disabled"
                   or candidate.get("version") != version
                   or candidate.get("commit") != commit
@@ -206,25 +202,28 @@ jobs:
               raise SystemExit("candidate manifest does not bind the requested tag, version and source commit")
 
           root = Path("target/release-candidate/evidence")
-          selection_path = root / "coverage/handoff-selection.json"
-          selection = json.loads(selection_path.read_text())
+          evidence_path = root / "coverage/coverage-evidence.json"
+          coverage_evidence = json.loads(evidence_path.read_text())
           coverage = candidate.get("coverage", {})
           expected_coverage = {
-              "selection_sha256": hashlib.sha256(selection_path.read_bytes()).hexdigest(),
-              "handoff_manifest_sha256": selection.get("handoff_manifest_sha256"),
-              "reviewed_report_sha256": selection.get("reviewed_report_sha256"),
-              "projection_report_sha256": selection.get("projection_report_sha256"),
-              "projection_context_sha256": selection.get("projection_context_sha256"),
-              "coverage_mcp_receipt_sha256": selection.get("coverage_mcp_receipt_sha256"),
-              "handoff_artifact": selection.get("handoff_artifact"),
+              "evidence_sha256": hashlib.sha256(evidence_path.read_bytes()).hexdigest(),
+              "raw_inventory_sha256": coverage_evidence.get("raw_inventory_sha256"),
+              "source_commit": coverage_evidence.get("source_commit"),
+              "ci_run": coverage_evidence.get("ci_run"),
+              "artifact": coverage_evidence.get("artifact"),
+              "report": coverage_evidence.get("report"),
+              "coverage": coverage_evidence.get("coverage"),
+              "matrix": coverage_evidence.get("matrix"),
+              "independent_review": coverage_evidence.get("independent_review"),
           }
-          if (selection.get("schema") != "uvicorn-rs-coverage-mcp-selection@1"
-                  or selection.get("source_commit") != commit
-                  or selection.get("ci_run") != {"id": int(candidate["ci_run_id"]),
-                                                  "attempt": int(candidate["ci_run_attempt"]),
-                                                  "branch": "main", "event": "push"}
+          if (coverage_evidence.get("schema") != "uvicorn-rs-coverage-evidence@1"
+                  or coverage_evidence.get("status") != "passed"
+                  or coverage_evidence.get("source_commit") != commit
+                  or coverage_evidence.get("ci_run") != {"id": int(candidate["ci_run_id"]),
+                                                           "attempt": int(candidate["ci_run_attempt"]),
+                                                           "branch": "main", "event": "push"}
                   or coverage != expected_coverage):
-              raise SystemExit("candidate Coverage-MCP evidence is missing or differs from its selection receipt")
+              raise SystemExit("candidate exact-source 100% coverage evidence is missing or inconsistent")
           if os.environ["RELEASE_ACTION"] == "pypi":
               print("The PyPI registry preflight below verifies both locally published Cargo archives.")
           PY
