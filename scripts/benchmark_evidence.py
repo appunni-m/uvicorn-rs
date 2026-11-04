@@ -324,21 +324,23 @@ def run_bounded_client(argv, seconds: float, server, *, cwd: Path):
 
 
 def collect_bounded_client(process, seconds: float, server, monitor, *, interval: float = 0.25):
-    """Monitor a load client until completion or its absolute wall deadline."""
+    """Drain client output while monitoring until its absolute wall deadline."""
     if not math.isfinite(seconds) or seconds <= 0:
         raise ValueError("client duration must be finite and positive")
     deadline = process.benchmark_started + seconds + 30
-    while process.poll() is None:
+    while True:
         check_server_alive(server)
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise TimeoutError(f"load client exceeded its {seconds + 30:g}s absolute wall limit")
         _refresh_owned(process)
-        time.sleep(min(interval, remaining))
-        monitor.sample()
-    check_server_alive(server)
-    stdout, stderr = process.communicate(timeout=max(0.001, deadline - time.monotonic()))
-    return stdout, stderr
+        try:
+            stdout, stderr = process.communicate(timeout=min(interval, remaining))
+        except subprocess.TimeoutExpired:
+            monitor.sample()
+            continue
+        check_server_alive(server)
+        return stdout, stderr
 
 
 _EXPECTED_H2_PEER_CLOSE = re.compile(

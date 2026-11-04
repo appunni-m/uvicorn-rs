@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import types
 import unittest
 from unittest.mock import patch
@@ -397,6 +398,34 @@ class FailureReportTests(unittest.TestCase):
             ["libcurl", "asgi-wrapper", "uvicorn-rs"],
         )
         self.assertEqual(timeline[0]["curl_uploaded_bytes"], 1024)
+
+    def test_bounded_client_collection_drains_large_trace_output(self):
+        with patch.object(sys, "path", [str(ROOT / "scripts"), *sys.path]):
+            import benchmark_evidence
+
+        client = subprocess.Popen(
+            [sys.executable, "-c", "import sys; sys.stdout.write('x' * 1048576)"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        # Leave a short deadline so this regression stays fast if collection
+        # accidentally returns to waiting on a child blocked by a full pipe.
+        client.benchmark_started = time.monotonic() - 29.5
+        monitor = types.SimpleNamespace(sample=lambda: None)
+        try:
+            with patch.object(benchmark_evidence, "check_server_alive"), \
+                 patch.object(benchmark_evidence, "_refresh_owned"):
+                stdout, stderr = benchmark_evidence.collect_bounded_client(
+                    client, 0.05, object(), monitor, interval=0.01,
+                )
+        finally:
+            if client.poll() is None:
+                client.kill()
+            client.wait(timeout=2)
+
+        self.assertEqual(len(stdout), 1_048_576)
+        self.assertEqual(stderr, "")
 
     def test_measured_failure_keeps_client_metrics_through_sample_cleanup(self):
         # Exercise the actual measured-sample error path without starting a
