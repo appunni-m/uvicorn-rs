@@ -537,6 +537,12 @@ def _server_upload_trace(server_output: str, request_id: str) -> dict:
                     "lane": fields["lane"],
                     "origin_unix_ns": int(fields["origin_unix_ns"]),
                     "origin_uncertainty_ns": int(fields["origin_uncertainty_ns"]),
+                    "expected_bytes": (
+                        int(fields["expected_bytes"])
+                        if fields.get("expected_bytes", "unknown").isdigit()
+                        else None
+                    ),
+                    "emission_reason": fields.get("emission_reason"),
                     "read_bytes": int(fields["read_bytes"]),
                     "offered_bytes": int(fields["offered_bytes"]),
                     "delivered_bytes": int(fields["delivered_bytes"]),
@@ -987,8 +993,8 @@ def main() -> None:
         not args.asgi_stage_diagnostics or not args.require_runtime_diagnostics or native_client is None
     ):
         parser.error("UVICORN_RS_UPLOAD_TRACE=1 requires ASGI-stage diagnostics, runtime diagnostics and the native libcurl client")
-    if upload_trace and args.repetitions > 3:
-        parser.error("upload tracing is limited to three planned attempts per server")
+    if upload_trace and args.repetitions > 10:
+        parser.error("upload tracing is limited to ten planned attempts per server")
     node_executable = shutil.which("node")
     node_required = native_client is None or any(
         WORKLOADS[name]["client"].get("read_delay_ms", 0) > 0

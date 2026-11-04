@@ -64,16 +64,20 @@ Focused diagnostic [#287](https://github.com/appunni-m/uvicorn-rs/actions/runs/4
 on commit `372463a438bcce50df6850077175e6097e7aa378` used
 `uvicorn-rs-asyncio` and `uvicorn-asyncio-httptools`: the focused workflow
 hard-coded asyncio. Its three 30-second samples completed with zero failures,
-and all traced Rust requests delivered the full 1 MiB body to ASGI. This is a
-non-reproduction of the historical asyncio failures on this source/runner; it
-does not test the historical uvloop failures. Artifact
-13340358259 has digest
-`sha256:7693c6f60ded9ed4ffc1da538850ada7985d0f37394dee09d7d74ea4dfdc52d7`.
-The diagnostic workflow now exposes a loop selector; the next targeted run must
-use Linux ARM64, `fastapi-upload-1m-write-1k`, uvloop, and three attempts, with
-the 15-second timeout unchanged. Existing request-ID-correlated client, Rust
-body-frame/queue, and ASGI receive traces are retained on a failure. No runtime
-cause or fix is established yet.
+and all traced Rust requests delivered the full 1 MiB body to ASGI. Focused
+diagnostic [#288](https://github.com/appunni-m/uvicorn-rs/actions/runs/41879387733)
+on `af6c544cbac9ed99756772b2cfe355dc341c789a` selected uvloop and likewise
+completed three 30-second Linux ARM64 samples with zero timeouts. That run
+printed every request trace and generated hundreds of megabytes of logs, which
+could perturb scheduling. The trace now retains bounded per-request events in
+memory and emits only a request that lasts at least 100 ms, reports an abnormal
+read/queue/cancellation event, or delivers fewer bytes than Content-Length. The
+record also states the expected byte count and why it was emitted. The next
+diagnostic is limited to this same Linux ARM64 uvloop upload pair, ten attempts,
+concurrency eight, and the unchanged 15-second timeout. This is an explicit
+follow-up to the user's request for more trace and a root cause; it is not a
+broad matrix or performance measurement. No runtime cause or fix is established
+yet.
 
 ## Fixed contract and evidence
 
@@ -1209,7 +1213,7 @@ batch to three attempts; if it does not reproduce, record that and the missing
 evidence instead of launching an unrelated matrix.
 
 The focused stage workflow uses one selected candidate/reference loop pair and
-one planned repeat by default; it allows at most three repeats. For the
+one planned repeat by default; it allows up to ten diagnostic repeats. For the
 historical failure, select `focused-fastapi-stage`, `linux-aarch64`, `uvloop`,
 and `fastapi-upload-1m-write-1k` only after the preceding acceptance gates. The
 workload overrides concurrency to eight. Its `runtime-diagnostics` build and

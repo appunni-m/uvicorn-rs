@@ -167,6 +167,7 @@ class FailureReportTests(unittest.TestCase):
         server_output = "\n".join([
             "uvicorn-rs-upload-trace schema=1 request=77-2-9 lane=pump "
             "origin_unix_ns=1700000000000000000 origin_uncertainty_ns=4 "
+            "expected_bytes=1024 emission_reason=body-size-mismatch "
             "read_bytes=1024 offered_bytes=1024 delivered_bytes=1024 "
             "events_seen=3 events_retained=3 events_dropped=0",
             "uvicorn-rs-upload-event request=77-2-9 lane=pump offset_ns=10 "
@@ -175,6 +176,7 @@ class FailureReportTests(unittest.TestCase):
             "event=read-data bytes=1024 flag=false",
             "uvicorn-rs-upload-trace schema=1 request=77-2-9 lane=asgi "
             "origin_unix_ns=1700000000001000000 origin_uncertainty_ns=5 "
+            "expected_bytes=1024 emission_reason=slow "
             "read_bytes=0 offered_bytes=0 delivered_bytes=1024 "
             "events_seen=2 events_retained=2 events_dropped=0",
             "uvicorn-rs-upload-event request=77-2-9 lane=asgi offset_ns=20 "
@@ -198,6 +200,11 @@ class FailureReportTests(unittest.TestCase):
         trace = metrics["first_failure"]["upload_trace"]
         self.assertEqual(trace["server_trace"]["status"], "matched")
         self.assertEqual(len(trace["server_trace"]["trace_records"]), 2)
+        self.assertEqual(trace["server_trace"]["trace_records"][0]["expected_bytes"], 1024)
+        self.assertEqual(
+            trace["server_trace"]["trace_records"][0]["emission_reason"],
+            "body-size-mismatch",
+        )
         self.assertEqual(
             [event["source"] for event in trace["correlated_timeline"]],
             ["uvicorn-rs", "libcurl", "uvicorn-rs", "uvicorn-rs"],

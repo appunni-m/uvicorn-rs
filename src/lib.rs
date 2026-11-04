@@ -1389,7 +1389,13 @@ impl RuntimeDiagnostics {
                 diagnostics.upload_trace = headers
                     .get("x-uvicorn-rs-upload-trace")
                     .and_then(|value| value.to_str().ok())
-                    .and_then(|id| upload_trace::RequestUploadTrace::new(id, lane))
+                    .and_then(|id| {
+                        let expected_bytes = headers
+                            .get(http::header::CONTENT_LENGTH)
+                            .and_then(|value| value.to_str().ok())
+                            .and_then(|value| value.parse::<usize>().ok());
+                        upload_trace::RequestUploadTrace::new(id, lane, expected_bytes)
+                    })
                     .map(Arc::new);
             }
             diagnostics
