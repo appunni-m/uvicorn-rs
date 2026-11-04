@@ -5766,9 +5766,15 @@ async fn pump_http_request_body(
     let body_batch_max_wait = HTTP_REQUEST_BODY_BATCH_MAX_WAIT;
     let mut body_segments = Vec::new();
     let mut body_len = 0usize;
-    let mut body_started = tokio::time::Instant::now();
+    let mut body_started: Option<tokio::time::Instant> = None;
     let mut body_batch_timer =
         std::pin::pin!(tokio::time::sleep_until(tokio::time::Instant::now()));
+    // Compare the timer refactor with its pre-refactor behavior on a focused
+    // diagnostic run. This switch exists only in runtime-diagnostics builds;
+    // normal server builds always use the pinned timer.
+    #[cfg(feature = "runtime-diagnostics")]
+    let recreate_body_batch_timer = std::env::var_os("UVICORN_RS_DIAGNOSTIC_BODY_BATCH_TIMER")
+        .is_some_and(|value| value == std::ffi::OsStr::new("recreated"));
     loop {
         if connection_closed.is_closed()
             || cancellation.is_cancelled()
@@ -5778,6 +5784,12 @@ async fn pump_http_request_body(
             diagnostics.upload_stop(&connection_closed, &cancellation, &request_cancellation);
             return;
         }
+        #[cfg(feature = "runtime-diagnostics")]
+        let flush_deadline = if recreate_body_batch_timer {
+            body_started.map(|started| started + body_batch_max_wait)
+        } else {
+            None
+        };
         diagnostics.upload_event("read-wait", 0, false);
         let frame_wait_started = diagnostics.http_body_frame_wait_started();
         let frame = tokio::select! {
@@ -5812,10 +5824,28 @@ async fn pump_http_request_body(
                 drain_http_request_body(&mut body, &mut connection_closed, &cancellation, &request_cancellation).await;
                 return;
             }
-            _ = &mut body_batch_timer, if !body_segments.is_empty() => {
+            _ = async {
+                #[cfg(feature = "runtime-diagnostics")]
+                if recreate_body_batch_timer {
+                    if let Some(deadline) = flush_deadline {
+                        tokio::time::sleep_until(deadline).await;
+                    } else {
+                        std::future::pending::<()>().await;
+                    }
+                    return;
+                }
+                if !body_segments.is_empty() {
+                    body_batch_timer.as_mut().await;
+                } else {
+                    std::future::pending::<()>().await;
+                }
+            } => {
                 diagnostics.http_body_frame_wait_finished(frame_wait_started);
                 diagnostics.http_body_batch_timeout_flush();
-                diagnostics.http_request_body_batch_deadline_flush(body_started.elapsed());
+                if let Some(started) = body_started {
+                    diagnostics.http_request_body_batch_deadline_flush(started.elapsed());
+                }
+                body_started = None;
                 None
             },
             frame = body.frame() => {
@@ -5882,6 +5912,7 @@ async fn pump_http_request_body(
                             {
                                 return;
                             }
+                            body_started = None;
                         }
                         if data.len() > body_batch_limit {
                             let message = RequestMessage {
@@ -5909,10 +5940,17 @@ async fn pump_http_request_body(
                         }
                         if body_segments.is_empty() {
                             let started = tokio::time::Instant::now();
+                            #[cfg(feature = "runtime-diagnostics")]
+                            if !recreate_body_batch_timer {
+                                body_batch_timer
+                                    .as_mut()
+                                    .reset(started + body_batch_max_wait);
+                            }
+                            #[cfg(not(feature = "runtime-diagnostics"))]
                             body_batch_timer
                                 .as_mut()
                                 .reset(started + body_batch_max_wait);
-                            body_started = started;
+                            body_started = Some(started);
                         }
                         body_len = body_len.saturating_add(data.len());
                         body_segments.push(data);

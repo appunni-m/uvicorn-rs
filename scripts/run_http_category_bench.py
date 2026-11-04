@@ -748,7 +748,9 @@ def _sample(
         if warmup > 0:
             result = _client(port, warmup, concurrency, case, process)
             if result["failures"]:
-                raise RuntimeError(f"warm-up correctness gate failed: {result}")
+                error = RuntimeError(f"warm-up correctness gate failed: {result}")
+                error.partial_client_metrics = result
+                raise error
 
         server_process = psutil.Process(process.pid)
         client = owned_process(
@@ -792,6 +794,12 @@ def _sample(
             metrics["timing_valid"] = False
             metrics.setdefault("timing_invalid_reasons", []).append(
                 "instrumented_asgi_stage_diagnostics"
+            )
+            metrics["performance_evidence_status"] = "diagnostic_only"
+        if os.environ.get("UVICORN_RS_UPLOAD_TRACE") == "1":
+            metrics["timing_valid"] = False
+            metrics.setdefault("timing_invalid_reasons", []).append(
+                "instrumented_upload_trace"
             )
             metrics["performance_evidence_status"] = "diagnostic_only"
         return metrics
@@ -896,7 +904,11 @@ def _median(rows: list[dict], metric: str):
     return statistics.median(values) if values else None
 
 
-def _source_digest(workloads: list[str], asgi_stage_diagnostics: bool = False) -> str:
+def _source_digest(
+    workloads: list[str],
+    asgi_stage_diagnostics: bool = False,
+    upload_trace: bool = False,
+) -> str:
     paths = [
         "scripts/uvicorn_oracle.py",
         "pyproject.toml",
@@ -920,6 +932,7 @@ def _source_digest(workloads: list[str], asgi_stage_diagnostics: bool = False) -
     )
     if asgi_stage_diagnostics:
         paths.append("examples/profile_fastapi.py")
+    if asgi_stage_diagnostics or upload_trace:
         paths.append("src/upload_trace.rs")
     digest = hashlib.sha256()
     for path in paths:
@@ -989,10 +1002,15 @@ def main() -> None:
     assert_clean_coverage_environment()
     native_client = _build_native_client()
     upload_trace = os.environ.get("UVICORN_RS_UPLOAD_TRACE") == "1"
+    upload_trace_timer = os.environ.get("UVICORN_RS_DIAGNOSTIC_BODY_BATCH_TIMER", "pinned")
+    if upload_trace_timer not in {"pinned", "recreated"}:
+        parser.error("UVICORN_RS_DIAGNOSTIC_BODY_BATCH_TIMER must be pinned or recreated")
+    if upload_trace_timer != "pinned" and not upload_trace:
+        parser.error("the diagnostic body batch timer override requires UVICORN_RS_UPLOAD_TRACE=1")
     if upload_trace and (
-        not args.asgi_stage_diagnostics or not args.require_runtime_diagnostics or native_client is None
+        not args.require_runtime_diagnostics or native_client is None
     ):
-        parser.error("UVICORN_RS_UPLOAD_TRACE=1 requires ASGI-stage diagnostics, runtime diagnostics and the native libcurl client")
+        parser.error("UVICORN_RS_UPLOAD_TRACE=1 requires runtime diagnostics and the native libcurl client")
     if upload_trace and args.repetitions > 10:
         parser.error("upload tracing is limited to ten planned attempts per server")
     node_executable = shutil.which("node")
@@ -1037,6 +1055,8 @@ def main() -> None:
     ]
     if args.asgi_stage_diagnostics:
         source_files.append("examples/profile_fastapi.py")
+    if args.asgi_stage_diagnostics or upload_trace:
+        source_files.append("src/upload_trace.rs")
     client_identities = [native_client] if native_client is not None else []
     if node_executable is not None:
         client_identities.append(Path(node_executable))
@@ -1281,7 +1301,11 @@ def main() -> None:
             "uvicorn_oracle": uvicorn_identity,
             "node": node_version,
             "rustc": evidence.rustc_version,
-            "source_sha256": _source_digest(args.workloads, args.asgi_stage_diagnostics),
+            "source_sha256": _source_digest(
+                args.workloads,
+                args.asgi_stage_diagnostics,
+                upload_trace,
+            ),
             "workloads": args.workloads,
             "workload_parameters": {
                 name: {
@@ -1309,8 +1333,13 @@ def main() -> None:
             "runtime_diagnostics_required": args.require_runtime_diagnostics,
             "asgi_stage_diagnostics": args.asgi_stage_diagnostics,
             "upload_trace": upload_trace,
-            "diagnostic_only": args.asgi_stage_diagnostics,
+            "upload_trace_timer": upload_trace_timer,
+            "diagnostic_only": args.asgi_stage_diagnostics or upload_trace,
             "diagnostic_interpretation": (
+                "Upload tracing and any ASGI stage instrumentation are diagnostic only and "
+                "invalidate performance timing. The request ID joins libcurl callback events "
+                "to bounded Rust body-pump and ASGI receive events."
+                if upload_trace else
                 "Instrumented wall-time stages are not CPU time or normal benchmark evidence. "
                 "Per-request ASGI send/receive waits are directly comparable at the app boundary; "
                 "Rust-only internal counters include bridge and scheduling work."

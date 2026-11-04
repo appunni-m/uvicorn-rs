@@ -43,6 +43,7 @@ on:
           - focused-fastapi-match
           - peer-read-comparison
           - focused-fastapi-stage
+          - focused-fastapi-upload-trace
           - focused-h2
           - focused-h3
       fastapi_system:
@@ -84,7 +85,7 @@ on:
           - asyncio
           - uvloop
       fastapi_stage_repetitions:
-        description: Attempts for the selected loop, each paired with stock Uvicorn (diagnostic only; up to 10)
+        description: Attempts for the focused diagnostic, each paired with stock Uvicorn (diagnostic only; up to 10)
         default: "1"
         required: true
         type: choice
@@ -92,6 +93,14 @@ on:
           - "1"
           - "3"
           - "10"
+      upload_trace_timer:
+        description: Timer implementation used by the Rust candidate in the focused upload trace run
+        default: pinned
+        required: true
+        type: choice
+        options:
+          - pinned
+          - recreated
       h2_system:
         description: Runner for the focused HTTP/2 diagnostic
         default: linux-x86_64
@@ -525,8 +534,8 @@ jobs:
           retention-days: 90
 
   focused-fastapi-stage-diagnostic:
-    name: ${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }} · ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }} · ${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x matched ASGI stage diagnostic
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-fastapi-stage') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-fastapi-stage]')) }}
+    name: ${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }} · ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }} · ${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x ${{ inputs.run_mode == 'focused-fastapi-upload-trace' && 'upload trace' || 'matched ASGI stage diagnostic' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-fastapi-upload-trace')) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-fastapi-stage]')) }}
     runs-on: ${{ (inputs.fastapi_system == 'linux-aarch64' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]'))) && 'ubuntu-24.04-arm' || inputs.fastapi_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
     timeout-minutes: 60
     steps:
@@ -544,7 +553,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p target/benchmark-preparation target/fastapi-stage
+          mkdir -p target/benchmark-preparation target/fastapi-stage target/fastapi-upload-trace
           if [[ "$RUNNER_OS" == "Linux" ]]; then
             sudo apt-get update
             sudo apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev libcurl4-openssl-dev
@@ -584,6 +593,7 @@ jobs:
           .venv/bin/python scripts/benchmark_host_preflight.py \
             --output target/benchmark-preparation/host-preflight.json
       - name: Check lifecycle diagnostics and bounded upload trace tooling without a performance workload
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_mode != 'focused-fastapi-upload-trace' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -597,7 +607,7 @@ jobs:
             -o "$RUNNER_TEMP/uvicorn-rs-upload-trace-tests"
           "$RUNNER_TEMP/uvicorn-rs-upload-trace-tests" \
             >> target/benchmark-preparation/upload-trace-tooling.log 2>&1
-      - name: Run one FastAPI workload with matched ASGI stage diagnostics
+      - name: Run one focused FastAPI diagnostic
         shell: bash
         env:
           BENCHMARK_FASTAPI_WORKLOAD: ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}
@@ -606,10 +616,23 @@ jobs:
           BENCHMARK_CONCURRENCY: ${{ inputs.concurrency || '64' }}
           BENCHMARK_REPETITIONS: ${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}
           BENCHMARK_STAGE_LOOP: ${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }}
+          BENCHMARK_TRACE_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-fastapi-upload-trace' }}
+          BENCHMARK_TRACE_TIMER: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_trace_timer || 'pinned' }}
           UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-peer-read=on-read]') && 'on-read' || '' }}
           UVICORN_RS_UPLOAD_TRACE: "1"
         run: |
           set -euo pipefail
+          diagnostic_args=(--require-runtime-diagnostics)
+          output_dir=target/fastapi-stage
+          if [[ "$BENCHMARK_TRACE_ONLY" == "true" ]]; then
+            output_dir=target/fastapi-upload-trace
+            if [[ "$BENCHMARK_TRACE_TIMER" == "recreated" ]]; then
+              export UVICORN_RS_DIAGNOSTIC_BODY_BATCH_TIMER=recreated
+            fi
+          else
+            diagnostic_args+=(--asgi-stage-diagnostics)
+          fi
+          mkdir -p "$output_dir"
           .venv/bin/python scripts/run_http_category_bench.py \
             --uvicorn-python "$UVICORN_ORACLE_PYTHON" \
             --workloads "$BENCHMARK_FASTAPI_WORKLOAD" \
@@ -617,17 +640,18 @@ jobs:
             --duration "$BENCHMARK_DURATION" --warmup "$BENCHMARK_WARMUP" \
             --concurrency "$BENCHMARK_CONCURRENCY" \
             --repetitions "$BENCHMARK_REPETITIONS" --seed 20261019 \
-            --require-runtime-diagnostics --asgi-stage-diagnostics \
-            --output "target/fastapi-stage/${BENCHMARK_FASTAPI_WORKLOAD}.json" \
-            2>&1 | tee "target/fastapi-stage/${BENCHMARK_FASTAPI_WORKLOAD}.log"
+            "${diagnostic_args[@]}" \
+            --output "$output_dir/${BENCHMARK_FASTAPI_WORKLOAD}.json" \
+            2>&1 | tee "$output_dir/${BENCHMARK_FASTAPI_WORKLOAD}.log"
       - name: Retain focused FastAPI diagnostic evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: fastapi-stage-${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }}-${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}-${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x-${{ github.sha }}
+          name: ${{ inputs.run_mode == 'focused-fastapi-upload-trace' && 'fastapi-upload-trace' || 'fastapi-stage' }}-${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }}-${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}-${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x-${{ inputs.run_mode == 'focused-fastapi-upload-trace' && inputs.upload_trace_timer || 'stage' }}-${{ github.sha }}
           path: |
             target/benchmark-preparation/
             target/fastapi-stage/
+            target/fastapi-upload-trace/
           if-no-files-found: warn
           retention-days: 90
 

@@ -79,6 +79,30 @@ follow-up to the user's request for more trace and a root cause; it is not a
 broad matrix or performance measurement. No runtime cause or fix is established
 yet.
 
+## Upload timer hypothesis — 2026-11-05
+
+Comparing the failing source from run #391859 with current `develop` found one
+HTTP/1 request-body-path change that falls between the failure and the
+non-reproducing current runs. The failing source `94c89b79` recreated
+`sleep_until(deadline)` on each body-pump loop. Commit `3fe4206bc` changed that
+to a pinned, resettable Tokio `Sleep`; both versions use the same 5 ms batch
+window. Current trace run #289 used the pinned version and had ten clean 30 s
+samples, but its Python ASGI timing wrapper changes scheduling, so it is not a
+controlled comparison. This is a plausible lead, not a confirmed cause.
+
+The focused upload-trace mode now runs the historical 5 s workload without the
+Python timing wrapper and can select the old recreated timer only in a
+`runtime-diagnostics` build. It retains libcurl's callback/progress trace and
+the bounded Rust body-pump/ASGI trace; warm-up failures retain the same partial
+client metrics as measured failures. Compare ten paired samples with the
+pinned timer against ten with the recreated timer, keeping Linux ARM64, uvloop,
+1 MiB body, 1 KiB writes, concurrency eight, and the 15 s client timeout fixed.
+Both runs are diagnostic-only and invalidate performance timing. A recreated-
+timer timeout with a matching pinned-timer control would support this lead;
+otherwise the timer refactor is not enough to explain the symptom. No runtime
+fix is claimed until a trace shows the first stalled boundary and a focused
+regression passes.
+
 ## Fixed contract and evidence
 
 - PyPI distribution: `uvicorn-rs`; imports and command: `uvicorn`; optional
