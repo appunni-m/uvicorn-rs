@@ -592,6 +592,10 @@ jobs:
         shell: bash
         env:
           BENCHMARK_FASTAPI_WORKLOAD: ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}
+          BENCHMARK_DURATION: ${{ inputs.duration || '5' }}
+          BENCHMARK_WARMUP: ${{ inputs.warmup || '1' }}
+          BENCHMARK_CONCURRENCY: ${{ inputs.concurrency || '64' }}
+          BENCHMARK_REPETITIONS: ${{ inputs.fastapi_stage_repetitions || '1' }}
           UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-peer-read=on-read]') && 'on-read' || '' }}
           UVICORN_RS_UPLOAD_TRACE: "1"
         run: |
@@ -600,8 +604,9 @@ jobs:
             --uvicorn-python "$UVICORN_ORACLE_PYTHON" \
             --workloads "$BENCHMARK_FASTAPI_WORKLOAD" \
             --servers uvicorn-rs-asyncio uvicorn-asyncio-httptools \
-            --duration 5 --warmup 1 --concurrency 64 \
-            --repetitions "${{ inputs.fastapi_stage_repetitions || '1' }}" --seed 20261019 \
+            --duration "$BENCHMARK_DURATION" --warmup "$BENCHMARK_WARMUP" \
+            --concurrency "$BENCHMARK_CONCURRENCY" \
+            --repetitions "$BENCHMARK_REPETITIONS" --seed 20261019 \
             --require-runtime-diagnostics --asgi-stage-diagnostics \
             --output "target/fastapi-stage/${BENCHMARK_FASTAPI_WORKLOAD}.json" \
             2>&1 | tee "target/fastapi-stage/${BENCHMARK_FASTAPI_WORKLOAD}.log"
