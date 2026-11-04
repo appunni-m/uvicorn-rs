@@ -85,6 +85,14 @@ on:
         options:
           - asyncio
           - uvloop
+      fastapi_peer_read_mode:
+        description: Diagnostic-only peer-read path for the Rust candidate; release builds keep the production default
+        default: proactive
+        required: true
+        type: choice
+        options:
+          - proactive
+          - on-read
       fastapi_stage_repetitions:
         description: Attempts for the focused diagnostic, each paired with stock Uvicorn (diagnostic only; up to 10)
         default: "1"
@@ -624,7 +632,7 @@ jobs:
           BENCHMARK_STAGE_LOOP: ${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }}
           BENCHMARK_TRACE_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-fastapi-upload-trace' }}
           BENCHMARK_TRACE_TIMER: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_trace_timer || 'pinned' }}
-          UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-peer-read=on-read]') && 'on-read' || '' }}
+          UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE: ${{ inputs.fastapi_peer_read_mode == 'on-read' && 'on-read' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-peer-read=on-read]') && 'on-read') || '' }}
           UVICORN_RS_UPLOAD_TRACE: "1"
           UVICORN_RS_UPLOAD_TRACE_REQUESTS: ${{ inputs.upload_trace_requests || '' }}
           # Selected request traces are retained even when they finish quickly.
