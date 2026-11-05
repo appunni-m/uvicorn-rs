@@ -300,6 +300,37 @@ class ClientTraceTests(unittest.TestCase):
 
 
 class FailureReportTests(unittest.TestCase):
+    def test_repeated_live_server_checkpoints_deduplicate_retained_events(self):
+        with patch.object(sys, "path", [str(ROOT / "scripts"), *sys.path]):
+            import run_http_category_bench as bench
+
+        request_id = "77-2-9"
+        summary = (
+            f"uvicorn-rs-upload-trace schema=1 request={request_id} lane=pump "
+            "origin_unix_ns=1700000000000000000 origin_uncertainty_ns=4 "
+            "expected_bytes=1024 emission_reason=in-progress-checkpoint "
+        )
+        events = [
+            f"uvicorn-rs-upload-event request={request_id} lane=pump event_index=1 "
+            "offset_ns=10 event=start bytes=0 flag=false",
+            f"uvicorn-rs-upload-event request={request_id} lane=pump event_index=2 "
+            "offset_ns=1000000010 event=read-frame-pending bytes=0 flag=false "
+            "duration_ns=1000000000",
+        ]
+        server_output = "\n".join([
+            summary + "snapshot_index=1 read_bytes=512 offered_bytes=0 delivered_bytes=0 "
+            "events_seen=2 events_retained=2 events_dropped=0",
+            *events,
+            summary + "snapshot_index=2 read_bytes=512 offered_bytes=0 delivered_bytes=0 "
+            "events_seen=2 events_retained=2 events_dropped=0",
+            *events,
+        ])
+
+        trace = bench._server_upload_trace(server_output, request_id)
+        self.assertEqual([item["snapshot_index"] for item in trace["trace_records"]], [1, 2])
+        self.assertEqual([event["event_index"] for event in trace["events"]], [1, 2])
+        self.assertEqual(trace["events"][-1]["duration_ns"], 1_000_000_000)
+
     def test_server_trace_is_correlated_by_client_request_id(self):
         with patch.object(sys, "path", [str(ROOT / "scripts"), *sys.path]):
             import run_http_category_bench as bench

@@ -559,6 +559,7 @@ def _server_upload_trace(server_output: str, request_id: str) -> dict:
                         else None
                     ),
                     "emission_reason": fields.get("emission_reason"),
+                    "snapshot_index": int(fields.get("snapshot_index", "0")),
                     "read_bytes": int(fields["read_bytes"]),
                     "offered_bytes": int(fields["offered_bytes"]),
                     "delivered_bytes": int(fields["delivered_bytes"]),
@@ -586,6 +587,9 @@ def _server_upload_trace(server_output: str, request_id: str) -> dict:
                 event = {
                     "request_id": request_id,
                     "lane": fields["lane"],
+                    "event_index": int(
+                        fields.get("event_index", str(len(current["events"]) + 1))
+                    ),
                     "event": fields["event"],
                     "offset_ns": offset_ns,
                     "estimated_unix_ns": current["origin_unix_ns"] + offset_ns,
@@ -600,7 +604,15 @@ def _server_upload_trace(server_output: str, request_id: str) -> dict:
             except (KeyError, ValueError):
                 continue
 
-    events = [event for trace in traces for event in trace["events"]]
+    # Checkpoints repeat the bounded event tail so a timeout preserves a live
+    # trace. Collapse repeated copies by their per-request sequence number.
+    events_by_index = {}
+    for trace in traces:
+        for event in trace["events"]:
+            events_by_index.setdefault(
+                (event["request_id"], event["lane"], event["event_index"]), event,
+            )
+    events = list(events_by_index.values())
     events.sort(key=lambda event: event["estimated_unix_ns"])
     previous_by_lane = {}
     for event in events:

@@ -13,6 +13,7 @@ const MAX_SLOW_REQUEST_TRACE_THRESHOLD_MS: u64 = 1_000;
 static SLOW_REQUEST_TRACE_THRESHOLD: OnceLock<Duration> = OnceLock::new();
 
 struct Event {
+    sequence: u64,
     offset_ns: u128,
     kind: &'static str,
     bytes: usize,
@@ -24,6 +25,7 @@ struct Event {
 #[derive(Default)]
 struct Events {
     seen: u64,
+    checkpoint_index: u64,
     read_bytes: usize,
     offered_bytes: usize,
     delivered_bytes: usize,
@@ -126,7 +128,9 @@ impl RequestUploadTrace {
         if events.rows.len() == RETAINED_EVENTS {
             events.rows.pop_front();
         }
+        let sequence = events.seen;
         events.rows.push_back(Event {
+            sequence,
             offset_ns: self.started.elapsed().as_nanos(),
             kind,
             bytes,
@@ -161,7 +165,7 @@ impl RequestUploadTrace {
             .lock()
             .unwrap_or_else(|error| error.into_inner());
         let mut output = format!(
-            "uvicorn-rs-upload-trace schema=1 request={} lane={} origin_unix_ns={} origin_uncertainty_ns={} expected_bytes={} emission_reason={} read_bytes={} offered_bytes={} delivered_bytes={} events_seen={} events_retained={} events_dropped={}\n",
+            "uvicorn-rs-upload-trace schema=1 request={} lane={} origin_unix_ns={} origin_uncertainty_ns={} expected_bytes={} emission_reason={} snapshot_index={} read_bytes={} offered_bytes={} delivered_bytes={} events_seen={} events_retained={} events_dropped={}\n",
             self.request_id,
             self.lane,
             self.unix_origin_ns,
@@ -169,6 +173,7 @@ impl RequestUploadTrace {
             self.expected_bytes
                 .map_or_else(|| "unknown".to_owned(), |bytes| bytes.to_string()),
             reason,
+            events.checkpoint_index,
             events.read_bytes,
             events.offered_bytes,
             events.delivered_bytes,
@@ -179,8 +184,14 @@ impl RequestUploadTrace {
         for event in &events.rows {
             let _ = write!(
                 output,
-                "uvicorn-rs-upload-event request={} lane={} offset_ns={} event={} bytes={} flag={}",
-                self.request_id, self.lane, event.offset_ns, event.kind, event.bytes, event.flag,
+                "uvicorn-rs-upload-event request={} lane={} event_index={} offset_ns={} event={} bytes={} flag={}",
+                self.request_id,
+                self.lane,
+                event.sequence,
+                event.offset_ns,
+                event.kind,
+                event.bytes,
+                event.flag,
             );
             if let Some(value) = event.value {
                 let _ = write!(output, " value={value}");
@@ -191,6 +202,28 @@ impl RequestUploadTrace {
             output.push('\n');
         }
         output
+    }
+
+    /// Emit a bounded snapshot while a selected diagnostic request is still
+    /// waiting. The final drop snapshot remains authoritative; repeated
+    /// snapshots let a timeout capture the last observed pipeline boundary
+    /// even if the request task has not been dropped yet.
+    pub(crate) fn checkpoint(&self, kind: &'static str, elapsed: Duration) {
+        self.record_with_duration(
+            kind,
+            0,
+            false,
+            elapsed.as_nanos().min(u64::MAX as u128) as u64,
+        );
+        {
+            let mut events = self
+                .events
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
+            events.checkpoint_index = events.checkpoint_index.saturating_add(1);
+        }
+        let snapshot = self.snapshot("in-progress-checkpoint");
+        let _ = std::io::stderr().lock().write_all(snapshot.as_bytes());
     }
 }
 
@@ -302,14 +335,28 @@ mod tests {
         drop(rows);
         let snapshot = stalled.snapshot("test");
         assert!(snapshot.contains("events_seen=2 events_retained=2 events_dropped=0"));
-        assert!(first
-            .snapshot("test")
-            .contains(&format!(
-                "events_seen={} events_retained={} events_dropped=2",
-                RETAINED_EVENTS + 2,
-                RETAINED_EVENTS
-            )));
+        assert!(first.snapshot("test").contains(&format!(
+            "events_seen={} events_retained={} events_dropped=2",
+            RETAINED_EVENTS + 2,
+            RETAINED_EVENTS
+        )));
         assert!(snapshot.contains("event=read-wait"));
+    }
+
+    #[test]
+    fn checkpoints_emit_live_bounded_snapshots_with_pipeline_wait_duration() {
+        let Some(trace) = RequestUploadTrace::new("8-2-4", "pump", Some(1024)) else {
+            unreachable!();
+        };
+        trace.record("read-data", 512, false);
+        trace.checkpoint("read-frame-pending", Duration::from_secs(2));
+
+        let snapshot = trace.snapshot("test");
+        assert!(snapshot.contains("snapshot_index=1"));
+        assert!(snapshot.contains("read_bytes=512"));
+        assert!(
+            snapshot.contains("event=read-frame-pending bytes=0 flag=false duration_ns=2000000000")
+        );
     }
 
     #[test]

@@ -1449,6 +1449,29 @@ impl RuntimeDiagnostics {
     }
 
     #[inline]
+    fn upload_checkpoint(&self, kind: &'static str, elapsed: std::time::Duration) {
+        #[cfg(feature = "runtime-diagnostics")]
+        if let Some(trace) = &self.upload_trace {
+            trace.checkpoint(kind, elapsed);
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let _ = (kind, elapsed);
+    }
+
+    #[inline]
+    fn upload_trace_heartbeat(&self) -> Option<tokio::time::Interval> {
+        #[cfg(feature = "runtime-diagnostics")]
+        if self.upload_trace.is_some() {
+            let period = std::time::Duration::from_secs(1);
+            let mut heartbeat =
+                tokio::time::interval_at(tokio::time::Instant::now() + period, period);
+            heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            return Some(heartbeat);
+        }
+        None
+    }
+
+    #[inline]
     fn upload_trace_enabled(&self) -> bool {
         #[cfg(feature = "runtime-diagnostics")]
         {
@@ -4094,17 +4117,33 @@ impl AsgiIo {
             let request = if request_disconnected.load(Ordering::Acquire) {
                 None
             } else {
-                tokio::select! {
-                    biased;
-                    message = async { request_messages.lock().await.recv().await } => message,
-                    _ = wait_for_connection_close(&mut connection_closed, receive_call > 0) => {
-                        request_disconnected.store(true, Ordering::Release);
-                        None
-                    }
-                    _ = request_cancellation.cancelled() => {
-                        request_disconnected.store(true, Ordering::Release);
-                        None
-                    }
+                let mut heartbeat = diagnostics.upload_trace_heartbeat();
+                loop {
+                    let message = tokio::select! {
+                        biased;
+                        message = async { request_messages.lock().await.recv().await } => message,
+                        _ = wait_for_connection_close(&mut connection_closed, receive_call > 0) => {
+                            request_disconnected.store(true, Ordering::Release);
+                            None
+                        }
+                        _ = request_cancellation.cancelled() => {
+                            request_disconnected.store(true, Ordering::Release);
+                            None
+                        }
+                        _ = async {
+                            if let Some(heartbeat) = heartbeat.as_mut() {
+                                heartbeat.tick().await;
+                            } else {
+                                std::future::pending::<()>().await;
+                            }
+                        }, if heartbeat.is_some() => {
+                            let elapsed = receive_trace_started
+                                .map_or(std::time::Duration::ZERO, |started| started.elapsed());
+                            diagnostics.upload_checkpoint("asgi-receive-pending", elapsed);
+                            continue;
+                        }
+                    };
+                    break message;
                 }
             };
             if let Some(started) = receive_trace_started {
@@ -5982,6 +6021,10 @@ async fn pump_http_request_body(
     let mut body_segments = Vec::new();
     let mut body_len = 0usize;
     let mut body_started: Option<tokio::time::Instant> = None;
+    let mut body_frame_pending_since = diagnostics
+        .upload_trace_enabled()
+        .then(std::time::Instant::now);
+    let mut upload_heartbeat = diagnostics.upload_trace_heartbeat();
     let mut body_batch_timer =
         std::pin::pin!(tokio::time::sleep_until(tokio::time::Instant::now()));
     // Compare the timer refactor with its pre-refactor behavior on a focused
@@ -6081,8 +6124,25 @@ async fn pump_http_request_body(
                 }
                 Some(frame)
             },
+            _ = async {
+                if let Some(heartbeat) = upload_heartbeat.as_mut() {
+                    heartbeat.tick().await;
+                } else {
+                    std::future::pending::<()>().await;
+                }
+            }, if upload_heartbeat.is_some() => {
+                diagnostics.upload_checkpoint(
+                    "read-frame-pending",
+                    body_frame_pending_since
+                        .map_or(std::time::Duration::ZERO, |started| started.elapsed()),
+                );
+                continue;
+            },
         };
         if frame.is_some() {
+            if let Some(started) = &mut body_frame_pending_since {
+                *started = std::time::Instant::now();
+            }
             diagnostics.http_request_body_frame_poll_finished(frame_wait_started);
         }
         let Some(frame) = frame else {
@@ -6323,60 +6383,76 @@ async fn send_http_request_message(
     let channel_was_full = false;
     let send_wait_started = diagnostics.http_body_channel_send_started(channel_was_full);
     diagnostics.upload_event("queue-offer", message.body.len(), message.more_body);
-    let result = tokio::select! {
-        biased;
-        _ = async {
-            #[cfg(coverage)]
-            if _send_mode == RequestBodySendMode::ContinueAfterStop {
-                std::future::pending::<()>().await;
-            }
-            #[cfg(coverage)]
-            if _send_mode == RequestBodySendMode::Final {
-                if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpFinalSendConnectionClosed) {
+    let send = sender.send(message);
+    tokio::pin!(send);
+    let mut upload_heartbeat = diagnostics.upload_trace_heartbeat();
+    let result = loop {
+        tokio::select! {
+            biased;
+            _ = async {
+                #[cfg(coverage)]
+                if _send_mode == RequestBodySendMode::ContinueAfterStop {
+                    std::future::pending::<()>().await;
+                }
+                #[cfg(coverage)]
+                if _send_mode == RequestBodySendMode::Final {
+                    if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpFinalSendConnectionClosed) {
+                        return;
+                    }
+                } else if coverage_fault_take(
+                    CoverageFaultPoint::HttpBodyPumpBatchThresholdSendConnectionClosed,
+                ) {
+                    return;
+                } else if coverage_fault_take(
+                    CoverageFaultPoint::HttpBodyPumpOversizedSendConnectionClosed,
+                ) {
+                    return;
+                } else if coverage_fault_take(
+                    CoverageFaultPoint::HttpBodyPumpErrorBufferedSendConnectionClosed,
+                ) {
+                    return;
+                } else if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpSendConnectionClosed) {
                     return;
                 }
-            } else if coverage_fault_take(
-                CoverageFaultPoint::HttpBodyPumpBatchThresholdSendConnectionClosed,
-            ) {
-                return;
-            } else if coverage_fault_take(
-                CoverageFaultPoint::HttpBodyPumpOversizedSendConnectionClosed,
-            ) {
-                return;
-            } else if coverage_fault_take(
-                CoverageFaultPoint::HttpBodyPumpErrorBufferedSendConnectionClosed,
-            ) {
-                return;
-            } else if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpSendConnectionClosed) {
-                return;
-            }
-            wait_for_body_pump_stop(connection_closed, cancellation, request_cancellation).await;
-        } => {
-            diagnostics.http_body_channel_send_finished(send_wait_started, channel_was_full);
-            if let Some(started) = send_wait_started {
-                diagnostics.upload_event_with_duration(
-                    "queue-send-cancelled",
-                    0,
-                    true,
-                    started.elapsed(),
-                );
-            }
-            diagnostics.upload_stop(connection_closed, cancellation, request_cancellation);
-            return false;
-        },
-        result = sender.send(message) => {
-            diagnostics.http_body_channel_send_finished(send_wait_started, channel_was_full);
-            if let Some(started) = send_wait_started {
-                diagnostics.upload_event_with_duration(
-                    "queue-send-finished",
-                    0,
-                    result.is_err(),
-                    started.elapsed(),
-                );
-            }
-            diagnostics.upload_event("queue-send-result", 0, result.is_err());
-            result
-        },
+                wait_for_body_pump_stop(connection_closed, cancellation, request_cancellation).await;
+            } => {
+                diagnostics.http_body_channel_send_finished(send_wait_started, channel_was_full);
+                if let Some(started) = send_wait_started {
+                    diagnostics.upload_event_with_duration(
+                        "queue-send-cancelled",
+                        0,
+                        true,
+                        started.elapsed(),
+                    );
+                }
+                diagnostics.upload_stop(connection_closed, cancellation, request_cancellation);
+                return false;
+            },
+            result = &mut send => {
+                diagnostics.http_body_channel_send_finished(send_wait_started, channel_was_full);
+                if let Some(started) = send_wait_started {
+                    diagnostics.upload_event_with_duration(
+                        "queue-send-finished",
+                        0,
+                        result.is_err(),
+                        started.elapsed(),
+                    );
+                }
+                diagnostics.upload_event("queue-send-result", 0, result.is_err());
+                break result;
+            },
+            _ = async {
+                if let Some(heartbeat) = upload_heartbeat.as_mut() {
+                    heartbeat.tick().await;
+                } else {
+                    std::future::pending::<()>().await;
+                }
+            }, if upload_heartbeat.is_some() => {
+                let elapsed = send_wait_started
+                    .map_or(std::time::Duration::ZERO, |started| started.elapsed());
+                diagnostics.upload_checkpoint("queue-send-pending", elapsed);
+            },
+        }
     };
     if result.is_err() {
         drain_http_request_body(body, connection_closed, cancellation, request_cancellation).await;

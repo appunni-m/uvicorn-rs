@@ -192,6 +192,28 @@ complete request path, not the first stalled boundary from the historical
 failure. No production behavior change is supported. Keep `nbmg` open pending
 a captured failure with a request ID or a new, concrete trigger.
 
+## Live upload checkpoints — 2026-11-05
+
+Review of the trace lifecycle found that request events were emitted only when
+the traced request was dropped. A task that remained pending through client
+timeout and process cleanup could therefore lose the live state at the actual
+stall. The focused diagnostic build now emits a bounded one-second snapshot
+only for requests carrying the selected upload trace ID. Checkpoints identify
+whether the Rust pump is waiting for another Hyper body frame, blocked sending
+body data to the ASGI queue, or the application is waiting in `receive()`. Each
+event retains elapsed wait duration and the existing per-request byte totals;
+the final drop record remains available, and the report parser deduplicates
+events repeated across snapshots. Normal builds and nonselected requests do
+not enable heartbeat timers.
+
+The focused parser and trace-ring tests pass, and both the normal and
+`runtime-diagnostics` Cargo checks pass. This adds observability, not a runtime
+fix. The next useful measurement is one focused Linux ARM64/uvloop replay of
+`fastapi-upload-1m-write-1k` with the same 1 MiB body, 1 KiB writes, concurrency
+8, and 15 s timeout. Keep `nbmg` open until a timeout trace names the first
+stalled boundary or a matching historical-kernel replay reproduces the event
+order. Do not run a benchmark matrix from this diagnostic.
+
 ## Fixed contract and evidence
 
 - PyPI distribution: `uvicorn-rs`; imports and command: `uvicorn`; optional
