@@ -208,11 +208,39 @@ not enable heartbeat timers.
 
 The focused parser and trace-ring tests pass, and both the normal and
 `runtime-diagnostics` Cargo checks pass. This adds observability, not a runtime
-fix. The next useful measurement is one focused Linux ARM64/uvloop replay of
-`fastapi-upload-1m-write-1k` with the same 1 MiB body, 1 KiB writes, concurrency
-8, and 15 s timeout. Keep `nbmg` open until a timeout trace names the first
-stalled boundary or a matching historical-kernel replay reproduces the event
-order. Do not run a benchmark matrix from this diagnostic.
+fix. ARM64 replay [#332](https://github.com/appunni-m/uvicorn-rs/actions/runs/41981466609)
+completed on `develop` commit `0eb523b5cf2b210b7f8f618bae35bf3a0c135d3f` with
+10 paired 30-second attempts, Linux ARM64/uvloop,
+`fastapi-upload-1m-write-1k`, concurrency 8, a 15 s client timeout, the
+recreated 1 ms body timer, Hyper 1.11.1, and Tokio 1.53.1. The candidate
+completed 151,024 requests with zero failures; all 2,560 retained successful
+upload traces delivered 1 MiB and returned HTTP 200, with zero dropped events.
+No pending wait reached the one-second checkpoint interval, so the checkpoints
+did not fire. This is diagnostic evidence, not a performance result.
+
+Source comparison found that #332 retained the current 64 KiB proactive
+peer-read chunk size, while the failing source `94c89b79` used 16 KiB. Replay
+[#333](https://github.com/appunni-m/uvicorn-rs/actions/runs/41985002109) changed
+that override to 16 KiB and completed 133,317 candidate requests without a
+failure. All 2,560 retained candidate transfers sent 1 MiB and returned HTTP
+200, with no dropped trace events or one-second pending checkpoints. However,
+both #332 and #333 were dispatched with `recreated-1ms`. The failing source
+uses a 5 ms request-body batch deadline, so these runs do not test its timer
+value. Their zero-failure result only shows that 16 KiB did not fail with the
+altered 1 ms deadline on Linux kernel `7.0.0-1017-azure`; the historical run
+used kernel `6.17.0-1022-azure`.
+
+The original ARM64 report has two uvloop failures: worker/attempt `2:4` and
+`3:25`. Both reused an HTTP/1 connection, reported all 1 MiB uploaded, returned
+no response bytes or status, and timed out at 15 seconds. The server log has
+no request trace for either failure. The workflow now records the peer-read
+mode and chunk size in the artifact, and reports the timer value accurately.
+Next focused replay: keep the 16 KiB peer-read, Hyper 1.11.1, Tokio 1.53.1,
+Linux ARM64/uvloop, concurrency 8, and 15 s client timeout; restore the source's
+5 ms deadline and select attempts `2:4,3:25` for request-level tracing. Keep
+`nbmg` open until a failure identifies its first stalled boundary or the
+source/kernel difference is isolated. Do not run a benchmark matrix from this
+diagnostic.
 
 ## Fixed contract and evidence
 
