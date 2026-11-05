@@ -33,9 +33,25 @@ run; the candidate's raw-evidence manifest will additionally record the
 canonical report and context hashes.
 
 This main-branch report does not qualify the current `develop` candidate. PR
-#23 CI #678 is the fresh exact-head run for
-`c09d11944670a99f64640fc8ed31377d55cd1635`; its coverage and package jobs must
-finish before the current-source report can be reviewed.
+[#23](https://github.com/appunni-m/uvicorn-rs/pull/23) had pushed head
+`0572a48bc4d116aa6d6f5baae45bf99cc30d5b80` when CI
+[#689](https://github.com/appunni-m/uvicorn-rs/actions/runs/42061360886) built
+merge source `3cc692acbfe84e6dcdc8a30d2099e621ea661b8a`. That run's unified
+coverage job was still running when this status was recorded; no report was
+available.
+
+The preceding [CI #688 report](https://github.com/appunni-m/uvicorn-rs/actions/runs/42045047273/artifacts/13429813667)
+completed all 1,453 cases through three repeats with zero failures or
+infrastructure retries, but measured 15,056/15,057 regions and 11,078/11,078
+lines. Its only gap was the false branch of the optional body-start timer guard
+in `pump_http_request_body` (source line 6143). Commit `0572a48` encodes the
+batch-timer invariant in the type and removes that unreachable state.
+
+A later follow-up handles the macOS TLS-over-Unix-socket `NotConnected`
+shutdown log mismatch found by CI #689. Because that follow-up changes
+`src/lib.rs`, CI #689 cannot be accepted as exact-source coverage even if its
+job completes; a fresh full report is required. The active release goal also
+requires an accepted independent Coverage-MCP review bound to the final report.
 
 The matching three-system benchmark [#283](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681)
 also passed. Its aggregate artifact is

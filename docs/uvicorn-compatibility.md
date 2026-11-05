@@ -1,13 +1,12 @@
 # Can I replace Uvicorn?
 
-Exact-main CI #661 passes the indexed Uvicorn 0.54.0 installed-wheel
-comparisons on Linux x86-64, macOS ARM64 and Windows x86-64, with the two
-captured stock-Windows defects accepted only under their narrow candidate
-correctness policy. Linux, macOS and Windows candidate package consumers and
-the Python 3.9 floor consumer passed. Unified coverage and the three-system
-benchmark are complete; the benchmark does not support a broad performance
-advantage claim. The 0.3.0 PyPI distribution remains unpublished while the
-compatibility roll-up, exact-tag candidate and release checks continue.
+Exact-main CI #661 and benchmark #283 are the last fully passed release
+baseline. PR #23 has newer hosted evidence: Linux and Windows parity pass, while
+one macOS TLS-over-Unix-socket case differs by an extra NotConnected shutdown
+log after the expected response. A focused follow-up passes locally; hosted
+confirmation, exact-source coverage and its independent review, final-source
+benchmarks, candidate qualification and publication remain open. Existing
+FastAPI measurements do not support a broad performance advantage claim.
 
 Both distributions install files under the `uvicorn` import namespace. Keep
 upstream `uvicorn` and `uvicorn-rs` in separate environments. Use the
@@ -16,8 +15,9 @@ upstream `uvicorn` and `uvicorn-rs` in separate environments. Use the
 
 <a id="current-status-2026-11-02"></a>
 <a id="current-status-2026-11-04"></a>
+<a id="current-status-2026-11-05"></a>
 
-## Current status (2026-11-04)
+## Current status (2026-11-05)
 
 Exact-main [CI #661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
 passed on clean commit `feb955d2758166ad8c4b519903fd1318b29e7d2d`. Its
@@ -34,6 +34,30 @@ text-echo regression. No general FastAPI performance advantage is claimed.
 The remaining compatibility work is tracked in the migration roll-up and
 its open acceptance task; the maintainer's real application trial follows
 repository completion.
+
+### PR #23 follow-up
+
+CI [#689](https://github.com/appunni-m/uvicorn-rs/actions/runs/42061360886)
+tested head 0572a48 at merge source 3cc692ac. Linux installed-wheel parity
+passed 786/786 and Windows passed 759/759 (27 POSIX-only inputs are declared
+inapplicable). The Linux and Windows candidate consumers passed. macOS ARM64
+passed 785/786; the remaining TLS-over-Unix-domain-socket case returned the
+expected HTTP 200 and exited cleanly, but logged Hyper's NotConnected error
+during TLS shutdown. The macOS candidate archive was not produced.
+
+The focused follow-up treats NotConnected from this completed-connection
+shutdown as a peer disconnect. Its selected macOS parity case passed locally
+after rebuilding the extension; hosted confirmation is still required. The
+full coverage job in #689 was running against the earlier head when this status
+was recorded, so its report cannot qualify the follow-up source.
+
+The prior [CI #688 coverage artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/42045047273/artifacts/13429813667)
+had three passing repeats across all 1,453 cases, with zero failures or
+infrastructure retries, 15,056/15,057 regions and 11,078/11,078 lines. Its
+single uncovered region was the unreachable None arm of the request-body timer
+state. The PR head encodes the timer invariant directly, removing that arm.
+The final source still requires a fresh 100% report and an accepted
+Coverage-MCP review bound to that report.
 
 [CI #640](https://github.com/appunni-m/uvicorn-rs/actions/runs/41641278412)
 tests PR #21 head `8e0f792a7dc00597c580fb7ddc6d5222e0310ec2` at clean
@@ -56,10 +80,8 @@ SIGBREAK; its raw report remains failed. The composed acceptance requires both
 complete defect signatures and a clean candidate. See the
 [versioned acceptance contract](maintainers/uvicorn-0.54.0-contract.md#acceptance-of-known-differences).
 
-The coverage job is still completing its three full verification repeats.
-Final-source coverage/review, hosted Windows gate qualification, complete
-three-system measurements, final-main artifacts and publication remain open.
-The subsequent changes affect diagnostics and acceptance, not server behavior.
+The following PR #21 results are historical and do not qualify PR #23 or the
+release candidate.
 
 ### Earlier qualification: CI #637 and #638
 
@@ -167,9 +189,11 @@ LLVM function-line totals are incorrectly equated with unique source lines.
 The validator repair independently replays LCOV line/hit sets while retaining
 raw JSON checks. Actual Coverage-MCP review of the captured producer returns
 zero gaps with matching source and passing tests across all 46 pages; attachment
-passes. Recorded Linux toolchain validation and
-Independent Coverage-MCP review is waived by the project owner. Exact-source
-raw coverage at 100%, matched three-system FastAPI measurements, complete
+passes. These are historical receipts for that producer, not the final source.
+The 2026-11-04 owner waiver of separate Coverage-MCP review is superseded by
+the active 2026-11-05 release goal, which requires an accepted independent
+review bound to the exact final report. Exact-source raw coverage at 100%,
+matched three-system FastAPI measurements, complete
 final-source artifacts and publication remain open. Later wrapper,
 upload-diagnostic and documentation changes are not qualified by these older
 receipts.

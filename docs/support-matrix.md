@@ -11,8 +11,36 @@ release targets are the Python-free `uvicorn-rs` server crate with optional
 
 <a id="current-verification-status-2026-11-02"></a>
 <a id="current-verification-status-2026-11-04"></a>
+<a id="current-verification-status-2026-11-05"></a>
 
-## Current verification status (2026-11-04)
+## Current verification status (2026-11-05)
+
+PR [#23](https://github.com/appunni-m/uvicorn-rs/pull/23) has newer hosted
+evidence than the exact-main baseline below. CI
+[#689](https://github.com/appunni-m/uvicorn-rs/actions/runs/42061360886) passed
+Linux installed-wheel parity (786/786), Windows parity (759/759, with 27
+declared POSIX-inapplicable cases), and their candidate consumers. macOS ARM64
+parity was 785/786. In the sole failed TLS-over-Unix-domain-socket case, both
+servers returned HTTP 200 and exited cleanly, but the candidate logged an extra
+Hyper NotConnected error during TLS shutdown; no macOS candidate archive was
+produced.
+
+A focused follow-up treats this post-response NotConnected error as a peer
+disconnect, and its selected case passed locally after rebuilding the native
+extension. Hosted confirmation remains required. The full coverage job in #689
+was still running against the earlier PR head when this status was recorded;
+it does not qualify the follow-up source. The preceding #688 report completed
+all 1,453 cases through three repeats with zero failures or infrastructure
+retries, but measured 15,056/15,057 regions and 11,078/11,078 lines. The one
+uncovered region was an unreachable optional request-body timer state, removed
+by the invariant change on the #689 head.
+
+Release acceptance requires exact-source 100% regions and lines, followed by
+an accepted independent Coverage-MCP review of the same complete report. The
+final-source three-system benchmark and exact candidate qualification follow
+those gates. No 0.3.0 package has been published.
+
+## Exact-main release baseline (2026-11-04)
 
 The latest exact-main [CI #661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
 binds to clean commit `feb955d2758166ad8c4b519903fd1318b29e7d2d`. The

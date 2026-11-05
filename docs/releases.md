@@ -57,6 +57,8 @@ The registry audit on 2026-11-03 at 09:20 UTC found both Cargo crates at 0.2.1
 with no 0.3.0 version, and HTTP 404 for PyPI `uvicorn-rs`. Recheck the
 registries immediately before publication.
 
+### Earlier candidate evidence from PR #21
+
 [CI #640](https://github.com/appunni-m/uvicorn-rs/actions/runs/41641278412)
 uses PR #21 head `8e0f792a7dc00597c580fb7ddc6d5222e0310ec2` and clean
 merge source `f42a99b1555133be4ba5095a6f48fe4fb9ffa22f`, after peer-read
@@ -154,9 +156,10 @@ session error contracts also passed 2/2 in
 `target/asgi-coverage/coverage-yawc-session-errors-final-20261027.json`; this
 is selected-case evidence, not full-suite coverage. The later Rust error-mapping
 fix, WebSocket close-path simplification, and parity input additions make the
-earlier full draft report stale for the current source and inventory. The
-exact-main unified coverage run is listed in the current status once complete;
-independent Coverage-MCP review is not required.
+earlier full draft report stale for the current source and inventory. This
+historical snapshot recorded a temporary waiver of separate Coverage-MCP
+review; the active 2026-11-05 release goal supersedes it and requires an
+accepted independent review bound to the final exact-source report.
 
 Benchmark run
 [`39689988939`](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939)
