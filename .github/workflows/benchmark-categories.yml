@@ -112,21 +112,14 @@ on:
           - "3"
           - "10"
       upload_trace_timer:
-        description: Timer implementation used by the Rust candidate in the focused upload trace run
+        description: Timer used by the Rust candidate; recreated-1ms also uses the original 1ms body-batch deadline
         default: pinned
         required: true
         type: choice
         options:
           - pinned
           - recreated
-      fastapi_trace_body_batch_wait:
-        description: Diagnostic-only request-body coalescing deadline; 1ms matches the original failing source
-        default: current
-        required: true
-        type: choice
-        options:
-          - current
-          - 1ms
+          - recreated-1ms
       fastapi_trace_tokio:
         description: Optional Tokio version for isolating historical Linux upload timeouts; the repository lockfile remains unchanged
         default: current
@@ -581,7 +574,7 @@ jobs:
           retention-days: 90
 
   focused-fastapi-stage-diagnostic:
-    name: ${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }} · ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }} · ${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x ${{ inputs.run_mode == 'focused-fastapi-upload-trace' && 'upload trace' || 'matched ASGI stage diagnostic' }} · body batch ${{ inputs.fastapi_trace_body_batch_wait || 'current' }} · Tokio ${{ inputs.fastapi_trace_tokio || 'current' }} · Hyper ${{ inputs.fastapi_trace_http_deps == 'historical' && '1.11.1' || 'current' }}
+    name: ${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }} · ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }} · ${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x ${{ inputs.run_mode == 'focused-fastapi-upload-trace' && 'upload trace' || 'matched ASGI stage diagnostic' }} · timer ${{ inputs.upload_trace_timer || 'pinned' }} · Tokio ${{ inputs.fastapi_trace_tokio || 'current' }} · Hyper ${{ inputs.fastapi_trace_http_deps == 'historical' && '1.11.1' || 'current' }}
     if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-fastapi-upload-trace')) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-fastapi-stage]')) }}
     runs-on: ${{ (inputs.fastapi_system == 'linux-aarch64' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]'))) && 'ubuntu-24.04-arm' || inputs.fastapi_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
     timeout-minutes: 60
@@ -631,7 +624,7 @@ jobs:
         env:
           FASTAPI_TRACE_TOKIO: ${{ inputs.fastapi_trace_tokio || 'current' }}
           FASTAPI_TRACE_HTTP_DEPS: ${{ inputs.fastapi_trace_http_deps || 'current' }}
-          FASTAPI_TRACE_BODY_BATCH_WAIT: ${{ inputs.fastapi_trace_body_batch_wait || 'current' }}
+          FASTAPI_TRACE_BODY_BATCH_WAIT: ${{ inputs.upload_trace_timer == 'recreated-1ms' && '1ms' || 'current' }}
           FASTAPI_TRACE_RUN_MODE: ${{ inputs.run_mode || '' }}
         run: |
           set -euo pipefail
@@ -733,8 +726,8 @@ jobs:
           BENCHMARK_SEED: ${{ inputs.seed || '20261019' }}
           BENCHMARK_STAGE_LOOP: ${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }}
           BENCHMARK_TRACE_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-fastapi-upload-trace' }}
-          BENCHMARK_TRACE_TIMER: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_trace_timer || 'pinned' }}
-          BENCHMARK_TRACE_BODY_BATCH_WAIT: ${{ inputs.fastapi_trace_body_batch_wait || 'current' }}
+          BENCHMARK_TRACE_TIMER: ${{ (inputs.upload_trace_timer == 'recreated' || inputs.upload_trace_timer == 'recreated-1ms') && 'recreated' || 'pinned' }}
+          BENCHMARK_TRACE_BODY_BATCH_WAIT: ${{ inputs.upload_trace_timer == 'recreated-1ms' && '1ms' || 'current' }}
           UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE: ${{ inputs.fastapi_peer_read_mode == 'on-read' && 'on-read' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-peer-read=on-read]') && 'on-read') || '' }}
           UVICORN_RS_DIAGNOSTIC_PEER_READ_CHUNK_SIZE: ${{ inputs.fastapi_peer_read_chunk || '64k' }}
           UVICORN_RS_UPLOAD_TRACE: "1"
@@ -774,7 +767,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ inputs.run_mode == 'focused-fastapi-upload-trace' && 'fastapi-upload-trace' || 'fastapi-stage' }}-${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }}-${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}-${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x-${{ inputs.run_mode == 'focused-fastapi-upload-trace' && inputs.upload_trace_timer || 'stage' }}-bodybatch-${{ inputs.fastapi_trace_body_batch_wait || 'current' }}-tokio-${{ inputs.fastapi_trace_tokio || 'current' }}-hyper-${{ inputs.fastapi_trace_http_deps == 'historical' && '1.11.1' || 'current' }}-${{ github.sha }}
+          name: ${{ inputs.run_mode == 'focused-fastapi-upload-trace' && 'fastapi-upload-trace' || 'fastapi-stage' }}-${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }}-${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}-${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x-${{ inputs.run_mode == 'focused-fastapi-upload-trace' && inputs.upload_trace_timer || 'stage' }}-bodybatch-${{ inputs.upload_trace_timer == 'recreated-1ms' && '1ms' || 'current' }}-tokio-${{ inputs.fastapi_trace_tokio || 'current' }}-hyper-${{ inputs.fastapi_trace_http_deps == 'historical' && '1.11.1' || 'current' }}-${{ github.sha }}
           path: |
             target/benchmark-preparation/
             target/fastapi-stage/
