@@ -276,11 +276,26 @@ marker: the 40 connections across #334 and #336 each saw at least 124,022
 events, with up to 130,851 dropped. The runtime-diagnostics connection trace
 now retains the latest 16 request-dispatch events independently of the socket
 event ring and reports dispatch retention/drop counts. This is diagnostics-only
-and does not change server behavior. Its focused retention tests pass. Run one
-single-repetition selected ARM64 replay to verify the preserved dispatch IDs in
-the hosted artifact; then continue isolating the historical source/kernel
-difference. Keep `nbmg` open until a failure boundary and corrected behavior
-are supported.
+and does not change server behavior. Its focused retention tests pass. Run
+[#337](https://github.com/appunni-m/uvicorn-rs/actions/runs/41998722661) on
+commit `f128d37f134c5b39aab3065024e5878704fe5397` verified that the hosted
+artifact preserves the two selected dispatch IDs even while each socket ring
+dropped over 121,000 events. Both selected requests reached the ASGI path,
+delivered 1 MiB, and returned HTTP 200; no timeout reproduced. The selected
+connection summaries report dispatch `seen=1`, `retained=1`, `dropped=0` for
+both requests. Artifact 13400839796 has SHA-256
+`4ab02e4b2705a4e694687d5043e2eb39c4e4ba9612f753eacacd4d9c9e7bfae3`.
+
+The trace is explicitly diagnostic-only and invalid for timing claims. The
+original timeout used source `94c89b79c1f2a8e5f90b2171ee28ca929444a7f5` on
+Linux kernel `6.17.0-1022-azure`; #337 used current `develop` source on kernel
+`7.0.0-1017-azure`. The matched 16 KiB peer-read setting and both body-timer
+implementations have passed on the current kernel. No first stalled boundary
+or supported root cause has been captured, so no production fix is justified.
+Keep `nbmg` open. The next reproduction must match the historical server source
+or kernel closely enough to trigger the timeout while preserving the dispatch,
+socket, body-pump, queue, and ASGI trace correlation. Avoid another unchanged
+current-kernel replay.
 
 ## Fixed contract and evidence
 
