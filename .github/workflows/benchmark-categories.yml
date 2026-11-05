@@ -128,7 +128,7 @@ on:
           - current
           - 1.53.1
       fastapi_trace_http_deps:
-        description: Hyper/h2 versions for isolating historical Linux upload timeouts; historical restores the registry versions from the failing lockfile
+        description: Hyper source version for isolating historical Linux upload timeouts; historical selects the exact 1.11.1 crates.io source archive
         default: current
         required: true
         type: choice
@@ -573,7 +573,7 @@ jobs:
           retention-days: 90
 
   focused-fastapi-stage-diagnostic:
-    name: ${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }} · ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }} · ${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x ${{ inputs.run_mode == 'focused-fastapi-upload-trace' && 'upload trace' || 'matched ASGI stage diagnostic' }} · Tokio ${{ inputs.fastapi_trace_tokio || 'current' }} · Hyper/h2 ${{ inputs.fastapi_trace_http_deps || 'current' }}
+    name: ${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }} · ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }} · ${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x ${{ inputs.run_mode == 'focused-fastapi-upload-trace' && 'upload trace' || 'matched ASGI stage diagnostic' }} · Tokio ${{ inputs.fastapi_trace_tokio || 'current' }} · Hyper ${{ inputs.fastapi_trace_http_deps == 'historical' && '1.11.1' || 'current' }}
     if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-fastapi-upload-trace')) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-fastapi-stage]')) }}
     runs-on: ${{ (inputs.fastapi_system == 'linux-aarch64' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]'))) && 'ubuntu-24.04-arm' || inputs.fastapi_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
     timeout-minutes: 60
@@ -626,10 +626,21 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$FASTAPI_TRACE_HTTP_DEPS" == "historical" ]]; then
-            python3 -c 'from pathlib import Path; manifest=Path("Cargo.toml"); text=manifest.read_text(); patch=chr(10).join(["[patch.crates-io]", "h2 = { path = \"crates/uvicorn-rs/third-party/h2\" }", "hyper = { path = \"crates/uvicorn-rs/third-party/hyper\" }", "", ""]); assert patch in text, "expected Hyper/h2 local patch block was not found"; manifest.write_text(text.replace(patch, "", 1))'
+            hyper_archive="$RUNNER_TEMP/hyper-1.11.1.crate"
+            hyper_source="$RUNNER_TEMP/hyper-1.11.1-source"
+            curl --fail --location --silent --show-error \
+              --output "$hyper_archive" \
+              https://static.crates.io/crates/hyper/hyper-1.11.1.crate
+            printf '%s  %s\n' \
+              27b501faa50e7a26c3d3560ca625132f4078a17771f4810baf70475ae48cbe43 \
+              "$hyper_archive" | sha256sum --check
+            mkdir -p "$hyper_source"
+            tar -xzf "$hyper_archive" -C "$hyper_source" --strip-components=1
+            rm -rf crates/uvicorn-rs/third-party/hyper
+            mkdir -p crates/uvicorn-rs/third-party/hyper
+            cp -a "$hyper_source/." crates/uvicorn-rs/third-party/hyper/
             cargo update --package hyper --precise 1.11.1
-            cargo update --package h2 --precise 0.4.19
-            printf 'hyper=1.11.1 (crates.io)\nh2=0.4.19 (crates.io)\n' \
+            printf 'hyper=1.11.1 crates.io archive sha256=27b501faa50e7a26c3d3560ca625132f4078a17771f4810baf70475ae48cbe43\n' \
               > target/benchmark-preparation/historical-transport-dependencies.txt
           fi
           if [[ "$FASTAPI_TRACE_TOKIO" == "1.53.1" ]]; then
@@ -641,6 +652,12 @@ jobs:
           cargo tree --locked -i tokio > target/benchmark-preparation/tokio-dependency-tree.txt
           cargo tree --locked -i hyper > target/benchmark-preparation/hyper-dependency-tree.txt
           cargo tree --locked -i h2 > target/benchmark-preparation/h2-dependency-tree.txt
+          if [[ "$FASTAPI_TRACE_TOKIO" == "1.53.1" ]]; then
+            rg -q 'tokio v1\.53\.1 ' target/benchmark-preparation/tokio-dependency-tree.txt
+          fi
+          if [[ "$FASTAPI_TRACE_HTTP_DEPS" == "historical" ]]; then
+            rg -q 'hyper v1\.11\.1 ' target/benchmark-preparation/hyper-dependency-tree.txt
+          fi
           cp Cargo.lock target/benchmark-preparation/diagnostic-Cargo.lock
       - name: Capture read-only host preflight
         shell: bash
@@ -709,7 +726,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ inputs.run_mode == 'focused-fastapi-upload-trace' && 'fastapi-upload-trace' || 'fastapi-stage' }}-${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }}-${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}-${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x-${{ inputs.run_mode == 'focused-fastapi-upload-trace' && inputs.upload_trace_timer || 'stage' }}-tokio-${{ inputs.fastapi_trace_tokio || 'current' }}-hyper-h2-${{ inputs.fastapi_trace_http_deps || 'current' }}-${{ github.sha }}
+          name: ${{ inputs.run_mode == 'focused-fastapi-upload-trace' && 'fastapi-upload-trace' || 'fastapi-stage' }}-${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }}-${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}-${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x-${{ inputs.run_mode == 'focused-fastapi-upload-trace' && inputs.upload_trace_timer || 'stage' }}-tokio-${{ inputs.fastapi_trace_tokio || 'current' }}-hyper-${{ inputs.fastapi_trace_http_deps == 'historical' && '1.11.1' || 'current' }}-${{ github.sha }}
           path: |
             target/benchmark-preparation/
             target/fastapi-stage/
