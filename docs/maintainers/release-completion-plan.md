@@ -235,11 +235,28 @@ The original ARM64 report has two uvloop failures: worker/attempt `2:4` and
 no response bytes or status, and timed out at 15 seconds. The server log has
 no request trace for either failure. The workflow now records the peer-read
 mode and chunk size in the artifact, and reports the timer value accurately.
-Next focused replay: keep the 16 KiB peer-read, Hyper 1.11.1, Tokio 1.53.1,
-Linux ARM64/uvloop, concurrency 8, and 15 s client timeout; restore the source's
-5 ms deadline and select attempts `2:4,3:25` for request-level tracing. Keep
-`nbmg` open until a failure identifies its first stalled boundary or the
-source/kernel difference is isolated. Do not run a benchmark matrix from this
+
+Focused replay [#334](https://github.com/appunni-m/uvicorn-rs/actions/runs/41989359988)
+restored the historical `5 ms` body-batch deadline and `16 KiB` proactive
+peer-read, with Linux ARM64/uvloop, Hyper 1.11.1, Tokio 1.53.1, concurrency 8,
+and the 15 s client timeout. It selected attempts `2:4` and `3:25` across 10
+repetitions on `develop` commit
+`3eeffe388040cb62115a9f941b1535bcd3c4e637`. All 10 candidate repetitions
+completed without failure. All 20 selected client transfers uploaded 1 MiB,
+received the 13-byte HTTP 200 response, and dropped no client trace events.
+ID-matched server records show 20 pump, 20 ASGI, and 20 dispatch lane traces;
+all have zero dropped events, each pump read/offered 1 MiB, and each ASGI lane
+delivered 1 MiB. No selected transfer stalled or reached the 15 s timeout.
+The downloaded artifact SHA-256 is
+`fa655d3aec5c0f2e035569ac754069e27f687ada1f4ae7e3298b04bc5fe6c7f0`.
+
+This confirms the instrumented path and selected requests complete on Linux
+kernel `7.0.0-1017-azure`; it does not reproduce the timeout or prove a fix.
+The historical failure used source `94c89b79` and kernel
+`6.17.0-1022-azure`. The replay used the recreated timer matching the historical
+5 ms deadline, while the current production path uses a pinned timer. The next
+isolated comparison is the current pinned timer with every other replay input
+held constant. Keep `nbmg` open; do not run a benchmark matrix from this
 diagnostic.
 
 ## Fixed contract and evidence
