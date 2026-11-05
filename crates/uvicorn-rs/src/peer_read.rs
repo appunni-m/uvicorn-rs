@@ -364,18 +364,16 @@ async fn pump_peer_read<R>(
     sender: mpsc::Sender<ReadEvent>,
     closed: watch::Sender<bool>,
     failed: watch::Sender<Option<io::ErrorKind>>,
-    trace: PeerReadTraceOption,
+    _trace: PeerReadTraceOption,
 ) -> PeerReadPumpOutcome
 where
     R: AsyncRead + Unpin,
 {
     let read_chunk_size = peer_read_chunk_size();
     #[cfg(feature = "runtime-diagnostics")]
-    let mut trace = trace;
+    let mut trace = _trace;
     #[cfg(coverage)]
     let mut delivered_data = false;
-    #[cfg(not(feature = "runtime-diagnostics"))]
-    let _ = trace;
     loop {
         // Reserve before reading so pressure from HTTP/TLS also bounds socket
         // read-ahead. The consumer may hold one additional, partly read chunk.
