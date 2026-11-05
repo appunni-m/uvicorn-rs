@@ -449,11 +449,19 @@ class BenchmarkEvidence:
         self.validate_native_extension = validate_native_extension
         if validate_native_extension:
             code = (
-                "import importlib.metadata as metadata,json,sys,uvicorn_rs,uvicorn_rs._native as n; "
-                "from pathlib import Path; "
-                "dist=metadata.distribution('uvicorn-rs'); "
-                "direct=dist.read_text('direct_url.json'); "
+                "import importlib.metadata as metadata\n"
+                "import json\n"
+                "import sys\n"
+                "import uvicorn_rs\n"
+                "import uvicorn_rs._native as n\n"
+                "from pathlib import Path\n"
+                "try:\n"
+                "    dist=metadata.distribution('uvicorn-rs')\n"
+                "except metadata.PackageNotFoundError:\n"
+                "    dist=metadata.distribution('uvicorn-rs-py')\n"
+                "direct=dist.read_text('direct_url.json')\n"
                 "print(json.dumps({'native':n.__file__,'python':sys.executable,'version':sys.version,"
+                "'distribution_name':dist.metadata['Name'],"
                 "'python_package':uvicorn_rs.__file__,"
                 "'python_package_root':str(Path(uvicorn_rs.__file__).resolve().parent),"
                 "'direct_url':json.loads(direct) if direct else None}))"
@@ -546,10 +554,19 @@ extra=json.loads(sys.argv[1])
 modules={name:[name.replace("-","_")] for name in ("uvicorn","hypercorn","h11","h2","hpack","hyperframe","aioquic","uvloop","httptools","websockets","wsproto","cryptography","pylsqpack")}
 modules.update(extra)
 for name,module_names in modules.items():
- try: distribution=m.distribution(name)
+ distribution_name=name
+ try: distribution=m.distribution(distribution_name)
  except m.PackageNotFoundError:
-  if name in extra: raise RuntimeError("selected optional workload requires installed distribution "+name)
-  continue
+  if name == "uvicorn-rs":
+   distribution_name="uvicorn-rs-py"
+   try: distribution=m.distribution(distribution_name)
+   except m.PackageNotFoundError:
+    if name in extra: raise RuntimeError("selected optional workload requires installed distribution "+name)
+    continue
+  elif name in extra:
+   raise RuntimeError("selected optional workload requires installed distribution "+name)
+  else:
+   continue
  roots=[]; resolutions={}
  for module_name in module_names:
   spec=importlib.util.find_spec(module_name)
@@ -583,7 +600,7 @@ for name,module_names in modules.items():
   except subprocess.CalledProcessError:
    external={"path":str(checkout),"revision":None,"dirty":None,"source_sha256":None,"compiled_source_binding":"editable path has no readable Git identity"}
  record_text=distribution.read_text("RECORD")
- result[name]={"version":distribution.version,"modules":resolutions,"package_roots":[str(p) for p in roots],"files":files,"source_sha256":hashlib.sha256(json.dumps(files,sort_keys=True).encode()).hexdigest(),"record_sha256":hashlib.sha256(record_text.encode()).hexdigest() if record_text else None,"record_content_mismatches":mismatches,"unrecorded_source_files":unrecorded,"direct_url":direct,"direct_url_sha256":hashlib.sha256(direct_text.encode()).hexdigest() if direct_text else None,"external_checkout":external,"native_instrumentation_detected":instrumented}
+ result[name]={"distribution_name":distribution.metadata.get("Name",distribution_name),"version":distribution.version,"modules":resolutions,"package_roots":[str(p) for p in roots],"files":files,"source_sha256":hashlib.sha256(json.dumps(files,sort_keys=True).encode()).hexdigest(),"record_sha256":hashlib.sha256(record_text.encode()).hexdigest() if record_text else None,"record_content_mismatches":mismatches,"unrecorded_source_files":unrecorded,"direct_url":direct,"direct_url_sha256":hashlib.sha256(direct_text.encode()).hexdigest() if direct_text else None,"external_checkout":external,"native_instrumentation_detected":instrumented}
 print(json.dumps(result))
 '''
         return json.loads(subprocess.check_output([str(python), "-c", code, json.dumps(self.extra_dependencies)], cwd=self.root, text=True))
