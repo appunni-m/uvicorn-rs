@@ -6,7 +6,7 @@ use std::io::Write as _;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-const RETAINED_EVENTS: usize = 128;
+const RETAINED_EVENTS: usize = 512;
 const DEFAULT_SLOW_REQUEST_TRACE_THRESHOLD_MS: u64 = 100;
 const MIN_SLOW_REQUEST_TRACE_THRESHOLD_MS: u64 = 1;
 const MAX_SLOW_REQUEST_TRACE_THRESHOLD_MS: u64 = 1_000;
