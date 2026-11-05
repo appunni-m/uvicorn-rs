@@ -17,6 +17,7 @@ use std::{
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 const RETAINED_EVENTS: usize = 64;
+const RETAINED_REQUEST_DISPATCHES: usize = 16;
 static NEXT_CONNECTION_ID: AtomicU64 = AtomicU64::new(1);
 
 struct Event {
@@ -49,6 +50,8 @@ pub(crate) struct ConnectionTrace {
     max_write_wait_ns: AtomicU64,
     events_seen: AtomicU64,
     events: Mutex<VecDeque<Event>>,
+    request_dispatches_seen: AtomicU64,
+    request_dispatches: Mutex<VecDeque<Event>>,
 }
 
 impl ConnectionTrace {
@@ -78,6 +81,8 @@ impl ConnectionTrace {
             max_write_wait_ns: AtomicU64::new(0),
             events_seen: AtomicU64::new(0),
             events: Mutex::new(VecDeque::with_capacity(RETAINED_EVENTS)),
+            request_dispatches_seen: AtomicU64::new(0),
+            request_dispatches: Mutex::new(VecDeque::with_capacity(RETAINED_REQUEST_DISPATCHES)),
         }
     }
 
@@ -86,6 +91,15 @@ impl ConnectionTrace {
             return;
         }
         self.record_event("request-dispatched", 0, None, Some(request_id));
+        self.request_dispatches_seen.fetch_add(1, Ordering::Relaxed);
+        let mut dispatches = self
+            .request_dispatches
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        if dispatches.len() == RETAINED_REQUEST_DISPATCHES {
+            dispatches.pop_front();
+        }
+        dispatches.push_back(self.event("request-dispatched", 0, None, Some(request_id)));
     }
 
     fn read_pending(&self) {
@@ -144,7 +158,17 @@ impl ConnectionTrace {
         if events.len() == RETAINED_EVENTS {
             events.pop_front();
         }
-        events.push_back(Event {
+        events.push_back(self.event(kind, bytes, wait_ns, request_id));
+    }
+
+    fn event(
+        &self,
+        kind: &'static str,
+        bytes: u64,
+        wait_ns: Option<u64>,
+        request_id: Option<&str>,
+    ) -> Event {
+        Event {
             offset_ns: self.started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
             kind,
             bytes,
@@ -152,7 +176,7 @@ impl ConnectionTrace {
             request_id: request_id.map(str::to_owned),
             read_total: self.read_bytes.load(Ordering::Relaxed),
             write_total: self.write_bytes.load(Ordering::Relaxed),
-        });
+        }
     }
 }
 
@@ -161,7 +185,7 @@ impl Drop for ConnectionTrace {
         let mut output = String::new();
         let _ = writeln!(
             output,
-            "uvicorn-rs-connection-trace schema=1 read_layer=after-peer-read-adapter pid={} connection={} peer={} peer_port={} origin_unix_ns={} origin_uncertainty_ns={} elapsed_ns={} read_bytes={} write_bytes={} read_ready_polls={} read_pending_polls={} read_eof={} read_errors={} write_ready_polls={} write_pending_polls={} write_errors={} max_read_wait_ns={} max_write_wait_ns={} events_seen={} events_retained={} events_dropped={}",
+            "uvicorn-rs-connection-trace schema=1 read_layer=after-peer-read-adapter pid={} connection={} peer={} peer_port={} origin_unix_ns={} origin_uncertainty_ns={} elapsed_ns={} read_bytes={} write_bytes={} read_ready_polls={} read_pending_polls={} read_eof={} read_errors={} write_ready_polls={} write_pending_polls={} write_errors={} max_read_wait_ns={} max_write_wait_ns={} events_seen={} events_retained={} events_dropped={} request_dispatches_seen={} request_dispatches_retained={} request_dispatches_dropped={}",
             std::process::id(),
             self.id,
             self.peer_addr,
@@ -188,6 +212,14 @@ impl Drop for ConnectionTrace {
             self.events_seen
                 .load(Ordering::Relaxed)
                 .saturating_sub(RETAINED_EVENTS as u64),
+            self.request_dispatches_seen.load(Ordering::Relaxed),
+            self.request_dispatches
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .len(),
+            self.request_dispatches_seen
+                .load(Ordering::Relaxed)
+                .saturating_sub(RETAINED_REQUEST_DISPATCHES as u64),
         );
         let events = self
             .events
@@ -212,6 +244,25 @@ impl Drop for ConnectionTrace {
             if let Some(request_id) = &event.request_id {
                 let _ = write!(output, " request_id={request_id}");
             }
+            output.push('\n');
+        }
+        let request_dispatches = self
+            .request_dispatches
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        for event in request_dispatches.iter() {
+            let _ = write!(
+                output,
+                "uvicorn-rs-connection-request schema=1 pid={} connection={} peer_port={} offset_ns={} event={} request_id={} read_total={} write_total={}",
+                std::process::id(),
+                self.id,
+                self.peer_addr.port(),
+                event.offset_ns,
+                event.kind,
+                event.request_id.as_deref().unwrap_or_default(),
+                event.read_total,
+                event.write_total,
+            );
             output.push('\n');
         }
         let _ = io::stderr().lock().write_all(output.as_bytes());
@@ -360,4 +411,56 @@ fn valid_request_id(request_id: &str) -> bool {
         && request_id
             .bytes()
             .all(|byte| byte.is_ascii_digit() || byte == b'-')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ConnectionTrace, RETAINED_EVENTS, RETAINED_REQUEST_DISPATCHES};
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+    fn trace() -> ConnectionTrace {
+        ConnectionTrace::new(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 12345))
+    }
+
+    #[test]
+    fn request_dispatch_survives_socket_event_overflow() {
+        let trace = trace();
+        trace.request_dispatched("123-2-4");
+        for _ in 0..=RETAINED_EVENTS {
+            trace.read_ready(1, None);
+        }
+
+        let socket_events = trace.events.lock().unwrap();
+        assert!(!socket_events.iter().any(|event| {
+            event.kind == "request-dispatched" && event.request_id.as_deref() == Some("123-2-4")
+        }));
+        drop(socket_events);
+
+        let dispatches = trace.request_dispatches.lock().unwrap();
+        assert_eq!(dispatches.len(), 1);
+        assert_eq!(dispatches[0].request_id.as_deref(), Some("123-2-4"));
+    }
+
+    #[test]
+    fn request_dispatch_history_keeps_the_most_recent_bounded_set() {
+        let trace = trace();
+        for attempt in 1..=RETAINED_REQUEST_DISPATCHES + 1 {
+            trace.request_dispatched(&format!("123-2-{attempt}"));
+        }
+
+        let dispatches = trace.request_dispatches.lock().unwrap();
+        assert_eq!(dispatches.len(), RETAINED_REQUEST_DISPATCHES);
+        assert_eq!(
+            dispatches
+                .front()
+                .and_then(|event| event.request_id.as_deref()),
+            Some("123-2-2")
+        );
+        assert_eq!(
+            dispatches
+                .back()
+                .and_then(|event| event.request_id.as_deref()),
+            Some("123-2-17")
+        );
+    }
 }

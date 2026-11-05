@@ -254,10 +254,33 @@ This confirms the instrumented path and selected requests complete on Linux
 kernel `7.0.0-1017-azure`; it does not reproduce the timeout or prove a fix.
 The historical failure used source `94c89b79` and kernel
 `6.17.0-1022-azure`. The replay used the recreated timer matching the historical
-5 ms deadline, while the current production path uses a pinned timer. The next
-isolated comparison is the current pinned timer with every other replay input
-held constant. Keep `nbmg` open; do not run a benchmark matrix from this
-diagnostic.
+5 ms deadline, while the current production path uses a pinned timer. Replay
+#336 below compares the current pinned timer with every other replay input held
+constant. Keep `nbmg` open; do not run a benchmark matrix from this diagnostic.
+
+The controlled pinned-timer replay [#336](https://github.com/appunni-m/uvicorn-rs/actions/runs/41994749937)
+used the same 16 KiB peer-read, Tokio 1.53.1, Hyper 1.11.1, Linux ARM64/uvloop,
+concurrency 8, client timeout, request selectors, and 10 repetitions. Its
+production timer path uses the same 5 ms interval. All 10 candidate repetitions
+and all 20 selected transfers completed successfully with HTTP 200; the
+ID-matched pump, ASGI, and dispatch traces again show full 1 MiB delivery and
+zero dropped request events. Artifact 13400985178 has SHA-256
+`ca2b786e57a165991472b2b8064b7ae2c3a9ced18522fb19a3f344e610878bb3`. The timer
+implementation difference therefore does not reproduce the timeout on the
+current kernel; neither replay establishes a production fix.
+
+The raw connection layer exposed an additional trace-retention gap. Matching
+the 20 selected client ports to server connections succeeded in each replay,
+but each connection's 64-event ring had already dropped its request-dispatch
+marker: the 40 connections across #334 and #336 each saw at least 124,022
+events, with up to 130,851 dropped. The runtime-diagnostics connection trace
+now retains the latest 16 request-dispatch events independently of the socket
+event ring and reports dispatch retention/drop counts. This is diagnostics-only
+and does not change server behavior. Its focused retention tests pass. Run one
+single-repetition selected ARM64 replay to verify the preserved dispatch IDs in
+the hosted artifact; then continue isolating the historical source/kernel
+difference. Keep `nbmg` open until a failure boundary and corrected behavior
+are supported.
 
 ## Fixed contract and evidence
 
