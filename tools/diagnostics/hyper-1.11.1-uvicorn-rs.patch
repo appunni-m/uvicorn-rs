@@ -1,0 +1,654 @@
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -95,6 +95,7 @@
+     "dep:atomic-waker",
+     "dep:futures-channel",
+     "dep:futures-core",
++    "dep:futures-util",
+     "dep:h2",
+ ]
+ nightly = []
+@@ -126,7 +127,7 @@
+ 
+ [dependencies.futures-util]
+ version = "0.3"
+-features = ["alloc"]
++features = ["alloc", "sink"]
+ optional = true
+ default-features = false
+ 
+--- a/src/error.rs
++++ b/src/error.rs
+@@ -100,6 +100,8 @@
+     #[cfg(any(feature = "http1", feature = "http2"))]
+     #[cfg_attr(feature = "http2", allow(unused))]
+     TooLarge,
++    #[cfg(all(any(feature = "client", feature = "server"), feature = "http1"))]
++    IncompleteTooLarge,
+     Status,
+     #[cfg(all(any(feature = "client", feature = "server"), feature = "http1"))]
+     Internal,
+@@ -193,7 +195,9 @@
+     pub fn is_parse_too_large(&self) -> bool {
+         matches!(
+             self.inner.kind,
+-            Kind::Parse(Parse::TooLarge) | Kind::Parse(Parse::UriTooLong)
++            Kind::Parse(Parse::TooLarge)
++                | Kind::Parse(Parse::IncompleteTooLarge)
++                | Kind::Parse(Parse::UriTooLong)
+         )
+     }
+ 
+@@ -370,6 +374,11 @@
+     #[cfg(all(any(feature = "client", feature = "server"), feature = "http1"))]
+     pub(super) fn new_too_large() -> Error {
+         Error::new(Kind::Parse(Parse::TooLarge))
++    }
++
++    #[cfg(all(any(feature = "client", feature = "server"), feature = "http1"))]
++    pub(super) fn new_incomplete_too_large() -> Error {
++        Error::new(Kind::Parse(Parse::IncompleteTooLarge))
+     }
+ 
+     #[cfg(all(any(feature = "client", feature = "server"), feature = "http1"))]
+@@ -523,6 +532,8 @@
+             }
+             #[cfg(any(feature = "http1", feature = "http2"))]
+             Kind::Parse(Parse::TooLarge) => "message head is too large",
++            #[cfg(all(any(feature = "client", feature = "server"), feature = "http1"))]
++            Kind::Parse(Parse::IncompleteTooLarge) => "incomplete message head is too large",
+             Kind::Parse(Parse::Status) => "invalid HTTP status-code parsed",
+             #[cfg(all(any(feature = "client", feature = "server"), feature = "http1"))]
+             Kind::Parse(Parse::Internal) => {
+--- a/src/ext/mod.rs
++++ b/src/ext/mod.rs
+@@ -135,6 +135,37 @@
+     }
+ }
+ 
++#[cfg(feature = "http2")]
++mod informational_sender {
++    use futures_channel::mpsc::{self, Receiver, Sender};
++    use futures_util::SinkExt;
++    use http::Response;
++
++    /// Internal handle for sending HTTP/2 informational responses while a
++    /// request's final response is still being prepared.
++    #[doc(hidden)]
++    #[derive(Clone, Debug)]
++    pub struct Http2InformationalSender(Sender<Response<()>>);
++
++    impl Http2InformationalSender {
++        pub(crate) fn channel() -> (Self, Receiver<Response<()>>) {
++            let (sender, receiver) = mpsc::channel(16);
++            (Self(sender), receiver)
++        }
++
++        /// Queue an informational response for the active HTTP/2 stream,
++        /// waiting for bounded channel capacity when needed.
++        #[doc(hidden)]
++        pub async fn send(&self, response: Response<()>) -> Result<(), ()> {
++            let mut sender = self.0.clone();
++            sender.send(response).await.map_err(|_| ())
++        }
++    }
++}
++
++#[cfg(feature = "http2")]
++pub use informational_sender::Http2InformationalSender;
++
+ /// A map from header names to their original casing as received in an HTTP message.
+ ///
+ /// If an HTTP/1 response `res` is parsed on a connection whose option
+@@ -159,6 +190,94 @@
+ #[cfg(all(any(feature = "client", feature = "server"), feature = "http1"))]
+ #[derive(Clone, Debug)]
+ pub(crate) struct HeaderCaseMap(HeaderMap<Bytes>);
++
++/// The order of response header fields to use when encoding a response.
++///
++/// HTTP header maps group values by name and cannot represent interleaved
++/// fields. Attach this extension to a response when the original sequence of
++/// fields must be retained by Hyper's server encoder. Names not present in
++/// this sequence are encoded afterward using the map's normal iteration order.
++#[cfg(all(feature = "server", feature = "http1", not(feature = "http2")))]
++#[derive(Clone, Debug)]
++pub struct HeaderOrder {
++    names: Vec<HeaderName>,
++    overflow_fields: Vec<(HeaderName, http::header::HeaderValue)>,
++}
++
++#[cfg(all(feature = "server", feature = "http1", not(feature = "http2")))]
++impl HeaderOrder {
++    /// Creates an HTTP/1 response header order from header names.
++    ///
++    /// Include a name once for each field with that name. Repeated names retain
++    /// the order of their values in the response's `HeaderMap`.
++    pub fn new(names: impl IntoIterator<Item = HeaderName>) -> Self {
++        Self {
++            names: names.into_iter().collect(),
++            overflow_fields: Vec::new(),
++        }
++    }
++
++    /// Adds fields before the current sequence, such as server-generated
++    /// default headers that precede application headers.
++    pub fn prepend(&mut self, names: impl IntoIterator<Item = HeaderName>) {
++        let mut prefix: Vec<_> = names.into_iter().collect();
++        prefix.append(&mut self.names);
++        self.names = prefix;
++    }
++
++    /// Adds a response field that could not be stored in `http::HeaderMap`.
++    pub fn append_overflow_field(&mut self, name: HeaderName, value: http::header::HeaderValue) {
++        self.overflow_fields.push((name, value));
++    }
++
++    /// Returns response fields kept outside `HeaderMap` after its fixed
++    /// capacity is reached.
++    pub fn overflow_fields(&self) -> &[(HeaderName, http::header::HeaderValue)] {
++        &self.overflow_fields
++    }
++
++    pub(crate) fn names(&self) -> &[HeaderName] {
++        &self.names
++    }
++}
++
++#[cfg(all(feature = "server", feature = "http2"))]
++pub use h2::ext::HeaderOrder;
++
++/// Shared metadata used to preserve an HTTP/2 response's trailer field order.
++///
++/// The response body can finish producing trailers after Hyper has already
++/// sent the response headers. Store this extension on the response and share
++/// a completed `HeaderOrder` with the HTTP/2 body encoder when the trailer
++/// frame is produced.
++#[cfg(feature = "http2")]
++#[doc(hidden)]
++#[derive(Clone, Debug, Default)]
++pub struct ResponseTrailerOrder(std::sync::Arc<std::sync::Mutex<Option<h2::ext::HeaderOrder>>>);
++
++#[cfg(feature = "http2")]
++impl ResponseTrailerOrder {
++    /// Creates an empty shared response trailer order.
++    pub fn new() -> Self {
++        Self::default()
++    }
++
++    /// Sets the completed order used to encode the response trailer fields.
++    #[doc(hidden)]
++    pub fn set(&self, order: h2::ext::HeaderOrder) {
++        *self
++            .0
++            .lock()
++            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(order);
++    }
++
++    pub(crate) fn take(&self) -> Option<h2::ext::HeaderOrder> {
++        self.0
++            .lock()
++            .unwrap_or_else(std::sync::PoisonError::into_inner)
++            .take()
++    }
++}
+ 
+ #[cfg(all(any(feature = "client", feature = "server"), feature = "http1"))]
+ impl HeaderCaseMap {
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -111,6 +111,12 @@
+ //!   behavior, for the purposes of protection. It is also possible to _change_
+ //!   what the default options are set to, also in efforts to protect the
+ //!   most people possible.
++
++/// Build marker checked by `uvicorn-rs` before using workspace-only HTTP/1
++/// buffer sizes that the published Hyper release does not accept.
++#[doc(hidden)]
++pub const UVICORN_RS_WORKSPACE_BUFFER_LIMIT: () = ();
++
+ #[doc(hidden)]
+ pub use http;
+ 
+--- a/src/proto/h1/io.rs
++++ b/src/proto/h1/io.rs
+@@ -15,6 +15,7 @@
+ pub(crate) const INIT_BUFFER_SIZE: usize = 8192;
+ 
+ /// The minimum value that can be set to max buffer size.
++#[cfg(feature = "client")]
+ pub(crate) const MINIMUM_MAX_BUFFER_SIZE: usize = INIT_BUFFER_SIZE;
+ 
+ /// The default maximum read buffer size. If the buffer gets this big and
+@@ -84,10 +85,7 @@
+     }
+ 
+     pub(crate) fn set_max_buf_size(&mut self, max: usize) {
+-        assert!(
+-            max >= MINIMUM_MAX_BUFFER_SIZE,
+-            "The max_buf_size cannot be smaller than {MINIMUM_MAX_BUFFER_SIZE}.",
+-        );
++        assert!(max > 0, "The max_buf_size must be greater than zero.");
+         self.read_buf_strategy = ReadStrategy::with_max(max);
+         self.write_buf.max_buf_size = max;
+     }
+@@ -204,7 +202,7 @@
+                 let curr_len = self.read_buf.len();
+                 if curr_len >= max {
+                     debug!("max_buf_size ({}) reached, closing", max);
+-                    return Poll::Ready(Err(crate::Error::new_too_large()));
++                    return Poll::Ready(Err(crate::Error::new_incomplete_too_large()));
+                 }
+                 if curr_len > 0 {
+                     trace!("partial headers; {} bytes so far", curr_len);
+--- a/src/proto/h1/mod.rs
++++ b/src/proto/h1/mod.rs
+@@ -10,6 +10,7 @@
+ pub(crate) use self::dispatch::Dispatcher;
+ pub(crate) use self::encode::{EncodedBuf, Encoder};
+ //TODO: move out of h1::io
++#[cfg(feature = "client")]
+ pub(crate) use self::io::MINIMUM_MAX_BUFFER_SIZE;
+ 
+ mod conn;
+--- a/src/proto/h1/role.rs
++++ b/src/proto/h1/role.rs
+@@ -1,3 +1,5 @@
++#[cfg(feature = "server")]
++use std::collections::{HashMap, VecDeque};
+ use std::mem::MaybeUninit;
+ 
+ #[cfg(feature = "client")]
+@@ -18,6 +20,8 @@
+ use crate::common::date;
+ use crate::error::Parse;
+ use crate::ext::HeaderCaseMap;
++#[cfg(feature = "server")]
++use crate::ext::HeaderOrder;
+ #[cfg(feature = "ffi")]
+ use crate::ext::OriginalHeaderOrder;
+ use crate::headers;
+@@ -458,6 +462,7 @@
+ 
+         let orig_headers;
+         let extensions = std::mem::take(&mut msg.head.extensions);
++        let header_order = extensions.get::<HeaderOrder>();
+         let orig_headers = match extensions.get::<HeaderCaseMap>() {
+             None if msg.title_case_headers => {
+                 orig_headers = HeaderCaseMap::default();
+@@ -473,9 +478,17 @@
+                 orig_len,
+                 wrote_len,
+                 orig_headers,
++                header_order,
+             )?
+         } else {
+-            Self::encode_headers_with_lower_case(msg, dst, is_last, orig_len, wrote_len)?
++            Self::encode_headers_with_lower_case(
++                msg,
++                dst,
++                is_last,
++                orig_len,
++                wrote_len,
++                header_order,
++            )?
+         };
+ 
+         ret.map(|()| encoder)
+@@ -487,7 +500,8 @@
+             Kind::Parse(Parse::Method)
+             | Kind::Parse(Parse::Header(_))
+             | Kind::Parse(Parse::Uri)
+-            | Kind::Parse(Parse::Version) => StatusCode::BAD_REQUEST,
++            | Kind::Parse(Parse::Version)
++            | Kind::Parse(Parse::IncompleteTooLarge) => StatusCode::BAD_REQUEST,
+             Kind::Parse(Parse::TooLarge) => StatusCode::REQUEST_HEADER_FIELDS_TOO_LARGE,
+             Kind::Parse(Parse::UriTooLong) => StatusCode::URI_TOO_LONG,
+             _ => return None,
+@@ -545,6 +559,7 @@
+         is_last: bool,
+         orig_len: usize,
+         wrote_len: bool,
++        header_order: Option<&HeaderOrder>,
+     ) -> crate::Result<Encoder> {
+         struct LowercaseWriter;
+ 
+@@ -575,7 +590,15 @@
+             }
+         }
+ 
+-        Self::encode_headers(msg, dst, is_last, orig_len, wrote_len, LowercaseWriter)
++        Self::encode_headers(
++            msg,
++            dst,
++            is_last,
++            orig_len,
++            wrote_len,
++            LowercaseWriter,
++            header_order,
++        )
+     }
+ 
+     #[cold]
+@@ -587,6 +610,7 @@
+         orig_len: usize,
+         wrote_len: bool,
+         orig_headers: &HeaderCaseMap,
++        header_order: Option<&HeaderOrder>,
+     ) -> crate::Result<Encoder> {
+         struct OrigCaseWriter<'map> {
+             map: &'map HeaderCaseMap,
+@@ -646,7 +670,15 @@
+             title_case_headers: msg.title_case_headers,
+         };
+ 
+-        Self::encode_headers(msg, dst, is_last, orig_len, wrote_len, header_name_writer)
++        Self::encode_headers(
++            msg,
++            dst,
++            is_last,
++            orig_len,
++            wrote_len,
++            header_name_writer,
++            header_order,
++        )
+     }
+ 
+     #[inline]
+@@ -657,6 +689,7 @@
+         orig_len: usize,
+         mut wrote_len: bool,
+         mut header_name_writer: W,
++        header_order: Option<&HeaderOrder>,
+     ) -> crate::Result<Encoder>
+     where
+         W: HeaderNameWriter,
+@@ -695,7 +728,8 @@
+             }};
+         }
+ 
+-        'headers: for (opt_name, value) in msg.head.headers.drain() {
++        let fields = drain_header_fields(&mut msg.head.headers, header_order);
++        'headers: for (opt_name, value) in fields {
+             if let Some(n) = opt_name {
+                 cur_name = Some(n);
+                 handle_is_name_written!();
+@@ -1002,6 +1036,82 @@
+ }
+ 
+ #[cfg(feature = "server")]
++enum HeaderFieldDrain<'a> {
++    Map(http::header::Drain<'a, HeaderValue>),
++    Ordered(std::vec::IntoIter<(Option<HeaderName>, HeaderValue)>),
++}
++
++#[cfg(feature = "server")]
++impl Iterator for HeaderFieldDrain<'_> {
++    type Item = (Option<HeaderName>, HeaderValue);
++
++    fn next(&mut self) -> Option<Self::Item> {
++        match self {
++            Self::Map(fields) => fields.next(),
++            Self::Ordered(fields) => fields.next(),
++        }
++    }
++}
++
++#[cfg(feature = "server")]
++fn drain_header_fields<'a>(
++    headers: &'a mut HeaderMap,
++    order: Option<&HeaderOrder>,
++) -> HeaderFieldDrain<'a> {
++    let Some(order) = order else {
++        return HeaderFieldDrain::Map(headers.drain());
++    };
++
++    let mut expanded = Vec::with_capacity(headers.len() + order.overflow_fields().len());
++    let mut current_name: Option<HeaderName> = None;
++    for (name, value) in headers.drain() {
++        if let Some(name) = name {
++            current_name = Some(name);
++        }
++        if let Some(name) = &current_name {
++            expanded.push(Some((name.clone(), value)));
++        }
++    }
++    expanded.extend(order.overflow_fields().iter().cloned().map(Some));
++
++    // A response may legitimately contain tens of thousands of fields. Index
++    // each value once so restoring ASGI order stays linear instead of scanning
++    // the entire field list for every name.
++    let mut positions = HashMap::<HeaderName, VecDeque<usize>>::with_capacity(expanded.len());
++    for (index, field) in expanded.iter().enumerate() {
++        if let Some((name, _)) = field {
++            positions.entry(name.clone()).or_default().push_back(index);
++        }
++    }
++
++    let mut ordered = Vec::with_capacity(expanded.len());
++    for requested_name in order.names() {
++        if let Some(index) = positions
++            .get_mut(requested_name)
++            .and_then(|indices| indices.pop_front())
++        {
++            if let Some(field) = expanded[index].take() {
++                ordered.push(field);
++            }
++        }
++    }
++    ordered.extend(expanded.into_iter().flatten());
++
++    let mut fields = Vec::with_capacity(ordered.len());
++    let mut previous_name: Option<HeaderName> = None;
++    for (name, value) in ordered {
++        let field_name = if previous_name.as_ref() == Some(&name) {
++            None
++        } else {
++            Some(name.clone())
++        };
++        previous_name = Some(name);
++        fields.push((field_name, value));
++    }
++    HeaderFieldDrain::Ordered(fields.into_iter())
++}
++
++#[cfg(feature = "server")]
+ trait HeaderNameWriter {
+     fn write_full_header_line(
+         &mut self,
+--- a/src/proto/h2/mod.rs
++++ b/src/proto/h2/mod.rs
+@@ -12,6 +12,7 @@
+ use pin_project_lite::pin_project;
+ 
+ use crate::body::Body;
++use crate::ext::ResponseTrailerOrder;
+ 
+ pub(crate) mod ping;
+ pub(crate) mod upgrade;
+@@ -103,6 +104,7 @@
+         // it survives across `Poll::Pending` returns from `poll_capacity`; if
+         // we left the chunk in a local, it would be dropped on every repoll.
+         buffered_data: Option<Peeked<S::Data>>,
++        trailer_order: Option<ResponseTrailerOrder>,
+         #[pin]
+         stream: S,
+     }
+@@ -122,6 +124,22 @@
+             body_tx: tx,
+             data_done: false,
+             buffered_data: None,
++            trailer_order: None,
++            stream,
++        }
++    }
++
++    #[cfg(feature = "server")]
++    fn new_with_trailer_order(
++        stream: S,
++        tx: SendStream<SendBuf<S::Data>>,
++        trailer_order: Option<ResponseTrailerOrder>,
++    ) -> PipeToSendStream<S> {
++        PipeToSendStream {
++            body_tx: tx,
++            data_done: false,
++            buffered_data: None,
++            trailer_order,
+             stream,
+         }
+     }
+@@ -238,8 +256,13 @@
+                     } else if frame.is_trailers() {
+                         // no more DATA, so give any capacity back
+                         me.body_tx.reserve_capacity(0);
++                        let trailers = frame.into_trailers().unwrap_or_else(|_| unreachable!());
++                        let header_order = me
++                            .trailer_order
++                            .as_ref()
++                            .and_then(ResponseTrailerOrder::take);
+                         me.body_tx
+-                            .send_trailers(frame.into_trailers().unwrap_or_else(|_| unreachable!()))
++                            .send_trailers_with_order(trailers, header_order.as_ref())
+                             .map_err(crate::Error::new_body_write)?;
+                         return Poll::Ready(Ok(()));
+                     } else {
+--- a/src/proto/h2/server.rs
++++ b/src/proto/h2/server.rs
+@@ -5,7 +5,7 @@
+ use std::time::Duration;
+ 
+ use bytes::Bytes;
+-use futures_core::ready;
++use futures_core::{ready, Stream};
+ use h2::server::{Connection, Handshake, SendResponse};
+ use h2::{Reason, RecvStream};
+ use http::{Method, Request};
+@@ -16,7 +16,7 @@
+ use crate::common::date;
+ use crate::common::io::Compat;
+ use crate::common::time::Time;
+-use crate::ext::Protocol;
++use crate::ext::{Protocol, ResponseTrailerOrder};
+ use crate::headers;
+ use crate::proto::h2::ping::Recorder;
+ use crate::proto::Dispatched;
+@@ -306,10 +306,15 @@
+                             req.extensions_mut().insert(Protocol::from_inner(protocol));
+                         }
+ 
++                        let (informational_sender, informational_receiver) =
++                            crate::ext::Http2InformationalSender::channel();
++                        req.extensions_mut().insert(informational_sender);
++
+                         let fut = H2Stream::new(
+                             service.call(req),
+                             connect_parts,
+                             respond,
++                            informational_receiver,
+                             self.date_header,
+                             exec.clone(),
+                         );
+@@ -368,6 +373,8 @@
+         reply: SendResponse<SendBuf<B::Data>>,
+         #[pin]
+         state: H2StreamState<F, B>,
++        #[pin]
++        informational: futures_channel::mpsc::Receiver<::http::Response<()>>,
+         date_header: bool,
+         exec: E,
+     }
+@@ -405,12 +412,14 @@
+         fut: F,
+         connect_parts: Option<ConnectParts>,
+         respond: SendResponse<SendBuf<B::Data>>,
++        informational: futures_channel::mpsc::Receiver<::http::Response<()>>,
+         date_header: bool,
+         exec: E,
+     ) -> H2Stream<F, B, E> {
+         H2Stream {
+             reply: respond,
+             state: H2StreamState::Service { fut, connect_parts },
++            informational,
+             date_header,
+             exec,
+         }
+@@ -442,6 +451,17 @@
+     fn poll2(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<crate::Result<()>> {
+         let mut me = self.as_mut().project();
+         loop {
++            match me.informational.as_mut().poll_next(cx) {
++                Poll::Ready(Some(response)) => {
++                    if let Err(error) = me.reply.send_informational(response) {
++                        me.reply.send_reset(Reason::INTERNAL_ERROR);
++                        return Poll::Ready(Err(crate::Error::new_h2(error)));
++                    }
++                    continue;
++                }
++                Poll::Ready(None) | Poll::Pending => {}
++            }
++
+             let next = match me.state.as_mut().project() {
+                 H2StreamStateProj::Service {
+                     fut: h,
+@@ -476,10 +496,16 @@
+                     );
+ 
+                     // set Date header if it isn't already set if instructed
+-                    if *me.date_header {
+-                        res.headers_mut()
+-                            .entry(::http::header::DATE)
+-                            .or_insert_with(date::update_and_header_value);
++                    if *me.date_header && !res.headers().contains_key(::http::header::DATE) {
++                        if res
++                            .headers_mut()
++                            .try_append(::http::header::DATE, date::update_and_header_value())
++                            .is_err()
++                        {
++                            warn!("HTTP/2 response header capacity exceeded while adding Date");
++                            me.reply.send_reset(h2::Reason::INTERNAL_ERROR);
++                            return Poll::Ready(Err(crate::Error::new_user_header()));
++                        }
+                     }
+ 
+                     if let Some(connect_parts) = connect_parts.take() {
+@@ -518,9 +544,14 @@
+                             headers::set_content_length_if_missing(res.headers_mut(), len);
+                         }
+ 
++                        let trailer_order = res.extensions().get::<ResponseTrailerOrder>().cloned();
+                         let body_tx = reply!(me, res, false);
+                         H2StreamState::Body {
+-                            pipe: PipeToSendStream::new(body, body_tx),
++                            pipe: PipeToSendStream::new_with_trailer_order(
++                                body,
++                                body_tx,
++                                trailer_order,
++                            ),
+                         }
+                     } else {
+                         reply!(me, res, true);
+--- a/src/server/conn/http1.rs
++++ b/src/server/conn/http1.rs
+@@ -373,16 +373,17 @@
+ 
+     /// Set the maximum buffer size for the connection.
+     ///
++    /// An incomplete request head that reaches this size receives a
++    /// `400 Bad Request` response. Complete header-size violations use
++    /// `431 Request Header Fields Too Large`.
++    ///
+     /// Default is ~400kb.
+     ///
+     /// # Panics
+     ///
+-    /// The minimum value allowed is 8192. This method panics if the passed `max` is less than the minimum.
++    /// This method panics if `max` is zero.
+     pub fn max_buf_size(&mut self, max: usize) -> &mut Self {
+-        assert!(
+-            max >= proto::h1::MINIMUM_MAX_BUFFER_SIZE,
+-            "the max_buf_size cannot be smaller than the minimum that h1 specifies."
+-        );
++        assert!(max > 0, "the max_buf_size must be greater than zero.");
+         self.max_buf_size = Some(max);
+         self
+     }

@@ -634,13 +634,23 @@ jobs:
             printf '%s  %s\n' \
               27b501faa50e7a26c3d3560ca625132f4078a17771f4810baf70475ae48cbe43 \
               "$hyper_archive" | sha256sum --check
+            printf '%s  %s\n' \
+              4fc1dd7a46c617a3773f40d22e93afdbbc104a81ae99588dc041a782910c975e \
+              tools/diagnostics/hyper-1.11.1-uvicorn-rs.patch | sha256sum --check
             mkdir -p "$hyper_source"
             tar -xzf "$hyper_archive" -C "$hyper_source" --strip-components=1
+            # Keep the workspace's server-facing Hyper patches while replaying
+            # the historical upstream version used by the failing run.
+            patch --directory="$hyper_source" --strip=1 --fuzz=0 --no-backup-if-mismatch \
+              < tools/diagnostics/hyper-1.11.1-uvicorn-rs.patch
             rm -rf crates/uvicorn-rs/third-party/hyper
             mkdir -p crates/uvicorn-rs/third-party/hyper
             cp -a "$hyper_source/." crates/uvicorn-rs/third-party/hyper/
             cargo update --package hyper --precise 1.11.1
-            printf 'hyper=1.11.1 crates.io archive sha256=27b501faa50e7a26c3d3560ca625132f4078a17771f4810baf70475ae48cbe43\n' \
+            printf '%s\n' \
+              'hyper=1.11.1 crates.io archive sha256=27b501faa50e7a26c3d3560ca625132f4078a17771f4810baf70475ae48cbe43' \
+              'hyper-workspace-patch sha256=4fc1dd7a46c617a3773f40d22e93afdbbc104a81ae99588dc041a782910c975e' \
+              'h2 remains the current workspace-patched version; see h2-dependency-tree.txt' \
               > target/benchmark-preparation/historical-transport-dependencies.txt
           fi
           if [[ "$FASTAPI_TRACE_TOKIO" == "1.53.1" ]]; then
