@@ -629,6 +629,7 @@ jobs:
           BENCHMARK_WARMUP: ${{ inputs.warmup || '1' }}
           BENCHMARK_CONCURRENCY: ${{ inputs.concurrency || '64' }}
           BENCHMARK_REPETITIONS: ${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}
+          BENCHMARK_SEED: ${{ inputs.seed || '20261019' }}
           BENCHMARK_STAGE_LOOP: ${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }}
           BENCHMARK_TRACE_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-fastapi-upload-trace' }}
           BENCHMARK_TRACE_TIMER: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_trace_timer || 'pinned' }}
@@ -657,7 +658,7 @@ jobs:
             --servers "uvicorn-rs-$BENCHMARK_STAGE_LOOP" "uvicorn-$BENCHMARK_STAGE_LOOP-httptools" \
             --duration "$BENCHMARK_DURATION" --warmup "$BENCHMARK_WARMUP" \
             --concurrency "$BENCHMARK_CONCURRENCY" \
-            --repetitions "$BENCHMARK_REPETITIONS" --seed 20261019 \
+            --repetitions "$BENCHMARK_REPETITIONS" --seed "$BENCHMARK_SEED" \
             "${diagnostic_args[@]}" \
             --output "$output_dir/${BENCHMARK_FASTAPI_WORKLOAD}.json" \
             2>&1 | tee "$output_dir/${BENCHMARK_FASTAPI_WORKLOAD}.log"
