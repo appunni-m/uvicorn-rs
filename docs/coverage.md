@@ -68,12 +68,14 @@ includes both measured binaries. Archive SHA-256:
 The measured 100% result does not make the failed evidence gate successful.
 The directory-handling repair requires hosted qualification.
 
-The pending upload diagnostics also add `src/upload_trace.rs` to the explicit
-source inventory. It is source-bound and classified as having no executable
-counters in this measured configuration because `runtime-diagnostics` is
-disabled. The validator rejects unexpected counters in that file; no existing
-production source or region is removed from the gate. Independent review and
-strict replay of the final source remain required.
+The diagnostic sources also remain explicit in the source inventory.
+`src/upload_trace.rs` is the upload-trace harness, and
+`crates/uvicorn-rs/src/connection_trace.rs` is compiled only with
+`runtime-diagnostics`. Both are source-bound and classified as having no
+executable counters in this measured configuration because diagnostics are
+disabled. The validator rejects unexpected counters in either file; no
+existing production source or region is removed from the gate. Independent
+review and strict replay of the final source remain required.
 
 The preceding [CI #629](https://github.com/appunni-m/uvicorn-rs/actions/runs/41582985537)
 measured **14,740/14,740 regions** and **10,855/10,855 lines** on clean source
