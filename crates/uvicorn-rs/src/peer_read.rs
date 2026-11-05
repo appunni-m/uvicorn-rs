@@ -31,6 +31,20 @@ use super::{PeerReadHalfCloseMode, PeerReadHalfClosed};
 const READ_CHUNK_SIZE: usize = 64 * 1024;
 const READ_QUEUE_CAPACITY: usize = 2;
 
+fn peer_read_chunk_size() -> usize {
+    #[cfg(feature = "runtime-diagnostics")]
+    if let Some(size) = std::env::var_os("UVICORN_RS_DIAGNOSTIC_PEER_READ_CHUNK_SIZE") {
+        match size.to_str() {
+            Some("16k") => return 16 * 1024,
+            Some("32k") => return 32 * 1024,
+            Some("64k") => return 64 * 1024,
+            _ => {}
+        }
+    }
+
+    READ_CHUNK_SIZE
+}
+
 pub(super) enum PeerReadPumpOutcome {
     ReceiverClosed,
     ReadHalfClosed,
@@ -355,6 +369,7 @@ async fn pump_peer_read<R>(
 where
     R: AsyncRead + Unpin,
 {
+    let read_chunk_size = peer_read_chunk_size();
     #[cfg(feature = "runtime-diagnostics")]
     let mut trace = trace;
     #[cfg(coverage)]
@@ -402,8 +417,8 @@ where
             super::observe_http1_peer_read_failure_after_data_fault();
             return PeerReadPumpOutcome::ReadFailed(kind);
         }
-        let mut chunk = BytesMut::with_capacity(READ_CHUNK_SIZE);
-        let mut destination = (&mut chunk).limit(READ_CHUNK_SIZE);
+        let mut chunk = BytesMut::with_capacity(read_chunk_size);
+        let mut destination = (&mut chunk).limit(read_chunk_size);
         #[cfg(feature = "runtime-diagnostics")]
         if let Some(trace) = trace.as_mut() {
             trace.socket_read_started();

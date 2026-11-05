@@ -93,6 +93,15 @@ on:
         options:
           - proactive
           - on-read
+      fastapi_peer_read_chunk:
+        description: Diagnostic-only proactive read chunk size; the release build stays at 64 KiB
+        default: 64k
+        required: true
+        type: choice
+        options:
+          - 16k
+          - 32k
+          - 64k
       fastapi_stage_repetitions:
         description: Attempts for the focused diagnostic, each paired with stock Uvicorn (diagnostic only; up to 10)
         default: "1"
@@ -634,6 +643,7 @@ jobs:
           BENCHMARK_TRACE_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-fastapi-upload-trace' }}
           BENCHMARK_TRACE_TIMER: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_trace_timer || 'pinned' }}
           UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE: ${{ inputs.fastapi_peer_read_mode == 'on-read' && 'on-read' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-peer-read=on-read]') && 'on-read') || '' }}
+          UVICORN_RS_DIAGNOSTIC_PEER_READ_CHUNK_SIZE: ${{ inputs.fastapi_peer_read_chunk || '64k' }}
           UVICORN_RS_UPLOAD_TRACE: "1"
           UVICORN_RS_UPLOAD_TRACE_REQUESTS: ${{ inputs.upload_trace_requests || '' }}
           UVICORN_RS_HTTP_CLIENT_TCP_DIAGNOSTICS: ${{ github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-fastapi-upload-trace' && '1' || '' }}
