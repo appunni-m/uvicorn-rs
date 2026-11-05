@@ -137,6 +137,14 @@ on:
         options:
           - current
           - historical
+      fastapi_trace_source:
+        description: Rust server source for the focused ARM64 upload diagnostic; failing-94c89b79 builds the exact source revision from the timeout artifact
+        default: current
+        required: true
+        type: choice
+        options:
+          - current
+          - failing-94c89b79
       upload_trace_requests:
         description: Optional comma-separated worker:attempt pairs to trace, for example 5:2,2:17
         default: ""
@@ -575,7 +583,7 @@ jobs:
           retention-days: 90
 
   focused-fastapi-stage-diagnostic:
-    name: ${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }} · ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }} · ${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x ${{ inputs.run_mode == 'focused-fastapi-upload-trace' && 'upload trace' || 'matched ASGI stage diagnostic' }} · timer ${{ inputs.upload_trace_timer || 'pinned' }} · peer-read ${{ inputs.fastapi_peer_read_mode || 'proactive' }}-${{ inputs.fastapi_peer_read_chunk || '64k' }} · Tokio ${{ inputs.fastapi_trace_tokio || 'current' }} · Hyper ${{ inputs.fastapi_trace_http_deps == 'historical' && '1.11.1' || 'current' }}
+    name: ${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }} · ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }} · ${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x ${{ inputs.run_mode == 'focused-fastapi-upload-trace' && 'upload trace' || 'matched ASGI stage diagnostic' }} · source ${{ inputs.fastapi_trace_source || 'current' }} · timer ${{ inputs.upload_trace_timer || 'pinned' }} · peer-read ${{ inputs.fastapi_peer_read_mode || 'proactive' }}-${{ inputs.fastapi_peer_read_chunk || '64k' }} · Tokio ${{ inputs.fastapi_trace_tokio || 'current' }} · Hyper ${{ inputs.fastapi_trace_http_deps == 'historical' && '1.11.1' || 'current' }}
     if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-fastapi-upload-trace')) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-fastapi-stage]')) }}
     runs-on: ${{ inputs.fastapi_system == 'linux-aarch64-22.04' && 'ubuntu-22.04-arm' || (inputs.fastapi_system == 'linux-aarch64' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]'))) && 'ubuntu-24.04-arm' || inputs.fastapi_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
     timeout-minutes: 60
@@ -627,48 +635,96 @@ jobs:
           FASTAPI_TRACE_HTTP_DEPS: ${{ inputs.fastapi_trace_http_deps || 'current' }}
           FASTAPI_TRACE_BODY_BATCH_WAIT: ${{ inputs.upload_trace_timer == 'recreated-1ms' && '1ms' || (inputs.upload_trace_timer == 'recreated' && '5ms') || 'current' }}
           FASTAPI_TRACE_RUN_MODE: ${{ inputs.run_mode || '' }}
+          FASTAPI_TRACE_SOURCE: ${{ inputs.fastapi_trace_source || 'current' }}
+          FASTAPI_TRACE_SYSTEM: ${{ inputs.fastapi_system || '' }}
+          FASTAPI_TRACE_LOOP: ${{ inputs.fastapi_stage_loop || '' }}
+          FASTAPI_TRACE_WORKLOAD: ${{ inputs.fastapi_workload || '' }}
+          FASTAPI_TRACE_REPETITIONS: ${{ inputs.fastapi_stage_repetitions || '' }}
+          FASTAPI_TRACE_PEER_READ_MODE: ${{ inputs.fastapi_peer_read_mode || 'proactive' }}
+          FASTAPI_TRACE_PEER_READ_CHUNK: ${{ inputs.fastapi_peer_read_chunk || '64k' }}
         run: |
           set -euo pipefail
-          if [[ "$FASTAPI_TRACE_HTTP_DEPS" == "historical" ]]; then
-            hyper_archive="$RUNNER_TEMP/hyper-1.11.1.crate"
-            hyper_source="$RUNNER_TEMP/hyper-1.11.1-source"
-            curl --fail --location --silent --show-error \
-              --output "$hyper_archive" \
-              https://static.crates.io/crates/hyper/hyper-1.11.1.crate
-            printf '%s  %s\n' \
-              27b501faa50e7a26c3d3560ca625132f4078a17771f4810baf70475ae48cbe43 \
-              "$hyper_archive" | sha256sum --check
-            printf '%s  %s\n' \
-              dd12a3489b2ec46cce2a240403b2f51088964ff9da3ac6b225f005ffccbf42f0 \
-              tools/diagnostics/hyper-1.11.1-uvicorn-rs.patch | sha256sum --check
-            mkdir -p "$hyper_source"
-            tar -xzf "$hyper_archive" -C "$hyper_source" --strip-components=1
-            # Keep the workspace's server-facing Hyper patches while replaying
-            # the historical upstream version used by the failing run.
-            patch --directory="$hyper_source" --strip=1 --fuzz=0 --no-backup-if-mismatch \
-              < tools/diagnostics/hyper-1.11.1-uvicorn-rs.patch
-            rm -rf crates/uvicorn-rs/third-party/hyper
-            mkdir -p crates/uvicorn-rs/third-party/hyper
-            cp -a "$hyper_source/." crates/uvicorn-rs/third-party/hyper/
-            cargo update --package hyper --precise 1.11.1
-            printf '%s\n' \
-              'hyper=1.11.1 crates.io archive sha256=27b501faa50e7a26c3d3560ca625132f4078a17771f4810baf70475ae48cbe43' \
-              'hyper-workspace-patch sha256=dd12a3489b2ec46cce2a240403b2f51088964ff9da3ac6b225f005ffccbf42f0' \
-              'h2 remains the current workspace-patched version; see h2-dependency-tree.txt' \
-              > target/benchmark-preparation/historical-transport-dependencies.txt
-          fi
-          if [[ "$FASTAPI_TRACE_TOKIO" == "1.53.1" ]]; then
-            cargo update --package tokio --precise 1.53.1
-          fi
-          mkdir -p target/benchmark-preparation
-          overrides=target/benchmark-preparation/upload-trace-overrides.txt
-          printf 'body_batch_max_wait=%s\n' "$FASTAPI_TRACE_BODY_BATCH_WAIT" > "$overrides"
-          if [[ "$FASTAPI_TRACE_BODY_BATCH_WAIT" == "1ms" ]]; then
-            if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" || "$FASTAPI_TRACE_RUN_MODE" != "focused-fastapi-upload-trace" ]]; then
-              echo 'The 1ms body batch override is only valid for focused-fastapi-upload-trace dispatches.' >&2
+          build_root="$GITHUB_WORKSPACE"
+          if [[ "$FASTAPI_TRACE_SOURCE" == "failing-94c89b79" ]]; then
+            if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" \
+              || "$FASTAPI_TRACE_RUN_MODE" != "focused-fastapi-upload-trace" \
+              || "$FASTAPI_TRACE_SYSTEM" != "linux-aarch64-22.04" \
+              || "$FASTAPI_TRACE_LOOP" != "uvloop" \
+              || "$FASTAPI_TRACE_WORKLOAD" != "fastapi-upload-1m-write-1k" \
+              || "$FASTAPI_TRACE_REPETITIONS" != "3" \
+              || "$FASTAPI_TRACE_BODY_BATCH_WAIT" != "5ms" ]]; then
+              echo 'The failing-source overlay requires the focused 1 MiB ARM64/uvloop upload, three repetitions, and the historical 5ms timer.' >&2
               exit 1
             fi
-            python3 - <<'PY'
+            historical_sha=94c89b79c1f2a8e5f90b2171ee28ca929444a7f5
+            build_root="$RUNNER_TEMP/uvicorn-rs-failing-source"
+            git fetch --quiet --no-tags https://github.com/appunni-m/uvicorn-rs.git "$historical_sha"
+            git worktree add --detach "$build_root" "$historical_sha"
+            actual_sha="$(git -C "$build_root" rev-parse HEAD)"
+            if [[ "$actual_sha" != "$historical_sha" ]]; then
+              echo "Historical source mismatch: expected $historical_sha, got $actual_sha" >&2
+              exit 1
+            fi
+            printf 'server_source=%s\n' "$actual_sha" > target/benchmark-preparation/server-source.txt
+            uv pip install --python "$GITHUB_WORKSPACE/.venv/bin/python" maturin==1.14.1
+            uv pip uninstall --python "$GITHUB_WORKSPACE/.venv/bin/python" uvicorn-rs
+            mkdir -p "$RUNNER_TEMP/uvicorn-rs-failing-wheel"
+            (
+              cd "$build_root"
+              "$GITHUB_WORKSPACE/.venv/bin/maturin" build --locked --release \
+                --features runtime-diagnostics \
+                --interpreter "$GITHUB_WORKSPACE/.venv/bin/python" \
+                --out "$RUNNER_TEMP/uvicorn-rs-failing-wheel"
+            ) 2>&1 | tee "$GITHUB_WORKSPACE/target/benchmark-preparation/runtime-diagnostics-build.log"
+            historical_wheel="$(find "$RUNNER_TEMP/uvicorn-rs-failing-wheel" -maxdepth 1 -type f -name '*.whl' -print -quit)"
+            if [[ -z "$historical_wheel" ]]; then
+              echo 'Maturin produced no historical-source wheel.' >&2
+              exit 1
+            fi
+            uv pip install --python "$GITHUB_WORKSPACE/.venv/bin/python" --no-deps "$historical_wheel"
+            "$GITHUB_WORKSPACE/.venv/bin/python" -c 'import uvicorn_rs._native as native; print(native.__file__)' \
+              | tee "$GITHUB_WORKSPACE/target/benchmark-preparation/installed-server-extension.txt"
+          else
+            printf 'server_source=%s\n' "$(git rev-parse HEAD)" > target/benchmark-preparation/server-source.txt
+            if [[ "$FASTAPI_TRACE_HTTP_DEPS" == "historical" ]]; then
+              hyper_archive="$RUNNER_TEMP/hyper-1.11.1.crate"
+              hyper_source="$RUNNER_TEMP/hyper-1.11.1-source"
+              curl --fail --location --silent --show-error \
+                --output "$hyper_archive" \
+                https://static.crates.io/crates/hyper/hyper-1.11.1.crate
+              printf '%s  %s\n' \
+                27b501faa50e7a26c3d3560ca625132f4078a17771f4810baf70475ae48cbe43 \
+                "$hyper_archive" | sha256sum --check
+              printf '%s  %s\n' \
+                dd12a3489b2ec46cce2a240403b2f51088964ff9da3ac6b225f005ffccbf42f0 \
+                tools/diagnostics/hyper-1.11.1-uvicorn-rs.patch | sha256sum --check
+              mkdir -p "$hyper_source"
+              tar -xzf "$hyper_archive" -C "$hyper_source" --strip-components=1
+              # Keep the workspace's server-facing Hyper patches while replaying
+              # the historical upstream version used by the failing run.
+              patch --directory="$hyper_source" --strip=1 --fuzz=0 --no-backup-if-mismatch \
+                < tools/diagnostics/hyper-1.11.1-uvicorn-rs.patch
+              rm -rf crates/uvicorn-rs/third-party/hyper
+              mkdir -p crates/uvicorn-rs/third-party/hyper
+              cp -a "$hyper_source/." crates/uvicorn-rs/third-party/hyper/
+              cargo update --package hyper --precise 1.11.1
+              printf '%s\n' \
+                'hyper=1.11.1 crates.io archive sha256=27b501faa50e7a26c3d3560ca625132f4078a17771f4810baf70475ae48cbe43' \
+                'hyper-workspace-patch sha256=dd12a3489b2ec46cce2a240403b2f51088964ff9da3ac6b225f005ffccbf42f0' \
+                'h2 remains the current workspace-patched version; see h2-dependency-tree.txt' \
+                > target/benchmark-preparation/historical-transport-dependencies.txt
+            fi
+            if [[ "$FASTAPI_TRACE_TOKIO" == "1.53.1" ]]; then
+              cargo update --package tokio --precise 1.53.1
+            fi
+            overrides=target/benchmark-preparation/upload-trace-overrides.txt
+            : > "$overrides"
+            if [[ "$FASTAPI_TRACE_BODY_BATCH_WAIT" == "1ms" ]]; then
+              if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" || "$FASTAPI_TRACE_RUN_MODE" != "focused-fastapi-upload-trace" ]]; then
+                echo 'The 1ms body batch override is only valid for focused-fastapi-upload-trace dispatches.' >&2
+                exit 1
+              fi
+              python3 - <<'PY'
           from pathlib import Path
 
           source_path = Path("src/lib.rs")
@@ -679,22 +735,41 @@ jobs:
               raise SystemExit("expected exactly one current 5ms request-body deadline")
           source_path.write_text(source.replace(current, historical, 1))
           PY
-            printf 'source_overlay=historical-1ms-request-body-deadline\n' >> "$overrides"
+              printf 'source_overlay=historical-1ms-request-body-deadline\n' >> "$overrides"
+            fi
+            uv run --with maturin==1.14.1 --no-sync maturin develop --release \
+              --features runtime-diagnostics \
+              2>&1 | tee target/benchmark-preparation/runtime-diagnostics-build.log
           fi
-          sha256sum src/lib.rs >> "$overrides"
-          uv run --with maturin==1.14.1 --no-sync maturin develop --release \
-            --features runtime-diagnostics \
-            2>&1 | tee target/benchmark-preparation/runtime-diagnostics-build.log
-          cargo tree --locked -i tokio > target/benchmark-preparation/tokio-dependency-tree.txt
-          cargo tree --locked -i hyper > target/benchmark-preparation/hyper-dependency-tree.txt
-          cargo tree --locked -i h2 > target/benchmark-preparation/h2-dependency-tree.txt
-          if [[ "$FASTAPI_TRACE_TOKIO" == "1.53.1" ]]; then
+          overrides=target/benchmark-preparation/upload-trace-overrides.txt
+          [[ -f "$overrides" ]] || : > "$overrides"
+          printf 'body_batch_max_wait=%s\npeer_read_mode=%s\npeer_read_chunk=%s\n' \
+            "$FASTAPI_TRACE_BODY_BATCH_WAIT" \
+            "$FASTAPI_TRACE_PEER_READ_MODE" \
+            "$FASTAPI_TRACE_PEER_READ_CHUNK" >> "$overrides"
+          if [[ "$FASTAPI_TRACE_SOURCE" == "failing-94c89b79" ]]; then
+            sha256sum "$build_root/src/lib.rs" >> "$overrides"
+          else
+            sha256sum src/lib.rs crates/uvicorn-rs/src/lib.rs >> "$overrides"
+          fi
+          (
+            cd "$build_root"
+            cargo tree --locked -i tokio > "$GITHUB_WORKSPACE/target/benchmark-preparation/tokio-dependency-tree.txt"
+            cargo tree --locked -i hyper > "$GITHUB_WORKSPACE/target/benchmark-preparation/hyper-dependency-tree.txt"
+            cargo tree --locked -i h2 > "$GITHUB_WORKSPACE/target/benchmark-preparation/h2-dependency-tree.txt"
+            cp Cargo.lock "$GITHUB_WORKSPACE/target/benchmark-preparation/diagnostic-Cargo.lock"
+          )
+          if [[ "$FASTAPI_TRACE_SOURCE" == "failing-94c89b79" ]]; then
             grep -Fq 'tokio v1.53.1' target/benchmark-preparation/tokio-dependency-tree.txt
-          fi
-          if [[ "$FASTAPI_TRACE_HTTP_DEPS" == "historical" ]]; then
             grep -Fq 'hyper v1.11.1' target/benchmark-preparation/hyper-dependency-tree.txt
+          else
+            if [[ "$FASTAPI_TRACE_TOKIO" == "1.53.1" ]]; then
+              grep -Fq 'tokio v1.53.1' target/benchmark-preparation/tokio-dependency-tree.txt
+            fi
+            if [[ "$FASTAPI_TRACE_HTTP_DEPS" == "historical" ]]; then
+              grep -Fq 'hyper v1.11.1' target/benchmark-preparation/hyper-dependency-tree.txt
+            fi
           fi
-          cp Cargo.lock target/benchmark-preparation/diagnostic-Cargo.lock
       - name: Capture read-only host preflight
         shell: bash
         run: |
@@ -719,6 +794,7 @@ jobs:
       - name: Run one focused FastAPI diagnostic
         shell: bash
         env:
+          BENCHMARK_TRACE_SOURCE: ${{ inputs.fastapi_trace_source || 'current' }}
           BENCHMARK_FASTAPI_WORKLOAD: ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}
           BENCHMARK_DURATION: ${{ inputs.duration || '5' }}
           BENCHMARK_WARMUP: ${{ inputs.warmup || '1' }}
@@ -748,6 +824,14 @@ jobs:
           else
             diagnostic_args+=(--asgi-stage-diagnostics)
           fi
+          cat target/benchmark-preparation/server-source.txt
+          printf 'server_source_mode=%s\n' "$BENCHMARK_TRACE_SOURCE"
+          if [[ "$BENCHMARK_TRACE_SOURCE" == "failing-94c89b79" ]] \
+            && ! grep -Fxq 'server_source=94c89b79c1f2a8e5f90b2171ee28ca929444a7f5' \
+              target/benchmark-preparation/server-source.txt; then
+            echo 'The historical server source was not built; refusing the comparison.' >&2
+            exit 1
+          fi
           if [[ "$BENCHMARK_TRACE_BODY_BATCH_WAIT" == "1ms" && "$BENCHMARK_TRACE_ONLY" != "true" ]]; then
             echo 'The 1ms body batch override requires focused-fastapi-upload-trace mode.' >&2
             exit 1
@@ -772,7 +856,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ inputs.run_mode == 'focused-fastapi-upload-trace' && 'fastapi-upload-trace' || 'fastapi-stage' }}-${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }}-${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}-${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x-${{ inputs.run_mode == 'focused-fastapi-upload-trace' && inputs.upload_trace_timer || 'stage' }}-bodybatch-${{ inputs.upload_trace_timer == 'recreated-1ms' && '1ms' || 'current' }}-tokio-${{ inputs.fastapi_trace_tokio || 'current' }}-hyper-${{ inputs.fastapi_trace_http_deps == 'historical' && '1.11.1' || 'current' }}-${{ github.sha }}
+          name: ${{ inputs.run_mode == 'focused-fastapi-upload-trace' && 'fastapi-upload-trace' || 'fastapi-stage' }}-${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }}-${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}-${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x-${{ inputs.fastapi_trace_source || 'current' }}-${{ inputs.run_mode == 'focused-fastapi-upload-trace' && inputs.upload_trace_timer || 'stage' }}-bodybatch-${{ inputs.upload_trace_timer == 'recreated-1ms' && '1ms' || 'current' }}-tokio-${{ inputs.fastapi_trace_tokio || 'current' }}-hyper-${{ inputs.fastapi_trace_http_deps == 'historical' && '1.11.1' || 'current' }}-${{ github.sha }}
           path: |
             target/benchmark-preparation/
             target/fastapi-stage/

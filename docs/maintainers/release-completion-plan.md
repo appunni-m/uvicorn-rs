@@ -297,6 +297,30 @@ or kernel closely enough to trigger the timeout while preserving the dispatch,
 socket, body-pump, queue, and ASGI trace correlation. Avoid another unchanged
 current-kernel replay.
 
+Run [#338](https://github.com/appunni-m/uvicorn-rs/actions/runs/42003226583)
+tested the older Ubuntu 22.04 ARM64 runner on current `develop` commit
+`63fc1c92c61e7d5e5db5e11a447846251412373c`, kernel `6.8.0-1070-azure`. It ran
+three 5-second uvloop samples with concurrency 8, 1 MiB uploads, 1 KiB client
+writes, a 15-second timeout, proactive 16 KiB peer reads, the recreated 5 ms
+body timer, Tokio 1.53.1, and Hyper 1.11.1. Candidate requests were
+2700/2742/2690 with zero failures; the two selected attempts in every sample
+uploaded 1 MiB, received 13 bytes, and returned HTTP 200. Their pump, dispatch,
+and ASGI trace lanes were retained with zero dropped request events. The
+connection event rings evicted over 23,000 ordinary socket events each, while
+the separate dispatch ring retained each selected request ID. The diagnostic
+invalidates timing. Artifact 13403790991 has SHA-256
+`51b480ccbb5e936011f276ad4f8d197ab4f75ea1c083fe1335818f9480a36062`.
+
+This did not reproduce the timeout and does not match either historical
+dimension: it used current source and kernel 6.8, versus source
+`94c89b79c1f2a8e5f90b2171ee28ca929444a7f5` and kernel 6.17 for the failure.
+The focused workflow now has a source selector constrained to that exact old
+commit, the 22.04 ARM64 runner, the same workload, three attempts, and the old
+5 ms timer. The old commit's lockfile already pins Tokio 1.53.1 and Hyper
+1.11.1. This allows a source-only comparison on the same 6.8 host; it remains a
+diagnostic, not performance evidence. If it reproduces, instrument that source
+at the first failing body boundary before changing server behavior.
+
 ## Fixed contract and evidence
 
 - PyPI distribution: `uvicorn-rs`; imports and command: `uvicorn`; optional
