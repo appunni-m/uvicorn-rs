@@ -47,7 +47,7 @@ on:
           - focused-h2
           - focused-h3
       fastapi_system:
-        description: Runner for the focused FastAPI diagnostic; Ubuntu 22.04 ARM64 isolates an older Linux kernel
+        description: Runner for the focused FastAPI diagnostic; Linux ARM64 uses Ubuntu 24.04, and the 22.04 option isolates an older image
         default: linux-x86_64
         required: true
         type: choice
@@ -130,7 +130,7 @@ on:
           - current
           - 1.53.1
       fastapi_trace_http_deps:
-        description: Transport selection for historical Linux upload diagnosis; failing-source selects exact source 94c89b79 with its locked Hyper/Tokio versions
+        description: Transport selection for historical Linux upload diagnosis; failing-source selects exact source 94c89b79 with its locked Hyper/Tokio versions on either ARM64 runner
         default: current
         required: true
         type: choice
@@ -641,7 +641,8 @@ jobs:
           if [[ "$FASTAPI_TRACE_SOURCE" == "failing-94c89b79" ]]; then
             if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" \
               || "$FASTAPI_TRACE_RUN_MODE" != "focused-fastapi-upload-trace" \
-              || "$FASTAPI_TRACE_SYSTEM" != "linux-aarch64-22.04" \
+              || ( "$FASTAPI_TRACE_SYSTEM" != "linux-aarch64-22.04" \
+                && "$FASTAPI_TRACE_SYSTEM" != "linux-aarch64" ) \
               || "$FASTAPI_TRACE_LOOP" != "uvloop" \
               || "$FASTAPI_TRACE_WORKLOAD" != "fastapi-upload-1m-write-1k" \
               || "$FASTAPI_TRACE_REPETITIONS" != "3" \
@@ -808,15 +809,13 @@ jobs:
           UVICORN_RS_UPLOAD_TRACE_MIN_MS: ${{ inputs.upload_trace_requests != '' && '1' || '20' }}
         run: |
           set -euo pipefail
-          diagnostic_args=(--require-runtime-diagnostics)
+          diagnostic_args=(--require-runtime-diagnostics --asgi-stage-diagnostics)
           output_dir=target/fastapi-stage
           if [[ "$BENCHMARK_TRACE_ONLY" == "true" ]]; then
             output_dir=target/fastapi-upload-trace
             if [[ "$BENCHMARK_TRACE_TIMER" == "recreated" ]]; then
               export UVICORN_RS_DIAGNOSTIC_BODY_BATCH_TIMER=recreated
             fi
-          else
-            diagnostic_args+=(--asgi-stage-diagnostics)
           fi
           cat target/benchmark-preparation/server-source.txt
           printf 'server_source_mode=%s\n' "$BENCHMARK_TRACE_SOURCE"
