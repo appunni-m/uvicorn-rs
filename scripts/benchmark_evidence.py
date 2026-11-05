@@ -77,7 +77,8 @@ def workspace_rust_source_paths(root: Path) -> list[str]:
     ).decode().split("\0")
     return sorted(
         name for name in workspace_files
-        if name and (name.endswith(".rs") or Path(name).name == "Cargo.toml")
+        if name and (root / name).is_file()
+        and (name.endswith(".rs") or Path(name).name == "Cargo.toml")
     )
 
 
