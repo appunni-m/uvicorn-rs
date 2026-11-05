@@ -3175,6 +3175,10 @@ fn contains_peer_disconnect_error(error: &(dyn StdError + 'static)) -> bool {
                 std::io::ErrorKind::ConnectionReset
                     | std::io::ErrorKind::BrokenPipe
                     | std::io::ErrorKind::ConnectionAborted
+                    // Hyper can report a peer-closed Unix stream as
+                    // NotConnected while finishing TLS shutdown after the
+                    // response has already been delivered.
+                    | std::io::ErrorKind::NotConnected
             )
         }) {
             return true;
