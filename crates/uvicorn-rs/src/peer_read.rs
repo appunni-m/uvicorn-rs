@@ -1,3 +1,12 @@
+#[cfg(feature = "runtime-diagnostics")]
+use std::{
+    collections::VecDeque,
+    fmt::Write as FmtWrite,
+    io::Write as IoWrite,
+    net::SocketAddr,
+    sync::atomic::{AtomicU64, Ordering},
+    time::{Instant, SystemTime, UNIX_EPOCH},
+};
 use std::{
     future::Future,
     io,
@@ -75,6 +84,190 @@ enum ReadTerminal {
     Failed(io::ErrorKind),
 }
 
+#[cfg(feature = "runtime-diagnostics")]
+type PeerReadTraceOption = Option<PeerReadTrace>;
+#[cfg(not(feature = "runtime-diagnostics"))]
+type PeerReadTraceOption = ();
+
+#[cfg(feature = "runtime-diagnostics")]
+const RETAINED_PEER_READ_EVENTS: usize = 64;
+
+#[cfg(feature = "runtime-diagnostics")]
+static NEXT_PEER_READ_TRACE_ID: AtomicU64 = AtomicU64::new(1);
+
+#[cfg(feature = "runtime-diagnostics")]
+struct PeerReadEvent {
+    offset_ns: u64,
+    kind: &'static str,
+    bytes: u64,
+    duration_ns: u64,
+}
+
+/// Bounded observations inside the proactive reader, below its bounded queue.
+#[cfg(feature = "runtime-diagnostics")]
+struct PeerReadTrace {
+    id: u64,
+    peer_addr: SocketAddr,
+    started: Instant,
+    origin_unix_ns: u128,
+    origin_uncertainty_ns: u128,
+    socket_read_bytes: u64,
+    socket_read_calls: u64,
+    socket_read_eof: u64,
+    socket_read_errors: u64,
+    max_socket_read_wait_ns: u64,
+    queue_reserve_full_observations: u64,
+    max_queue_reserve_wait_ns: u64,
+    queue_reserve_pending_since: Option<Instant>,
+    socket_read_pending_since: Option<Instant>,
+    events_seen: u64,
+    events: VecDeque<PeerReadEvent>,
+}
+
+#[cfg(feature = "runtime-diagnostics")]
+impl PeerReadTrace {
+    fn new(peer_addr: SocketAddr) -> Self {
+        let started = Instant::now();
+        let origin_unix_ns = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let origin_uncertainty_ns = started.elapsed().as_nanos();
+        Self {
+            id: NEXT_PEER_READ_TRACE_ID.fetch_add(1, Ordering::Relaxed),
+            peer_addr,
+            started,
+            origin_unix_ns,
+            origin_uncertainty_ns,
+            socket_read_bytes: 0,
+            socket_read_calls: 0,
+            socket_read_eof: 0,
+            socket_read_errors: 0,
+            max_socket_read_wait_ns: 0,
+            queue_reserve_full_observations: 0,
+            max_queue_reserve_wait_ns: 0,
+            queue_reserve_pending_since: None,
+            socket_read_pending_since: None,
+            events_seen: 0,
+            events: VecDeque::with_capacity(RETAINED_PEER_READ_EVENTS),
+        }
+    }
+
+    fn socket_read_started(&mut self) {
+        self.socket_read_pending_since = Some(Instant::now());
+        self.record("socket-read-start", 0, 0);
+    }
+
+    fn socket_read(&mut self, kind: &'static str, bytes: u64, duration_ns: u64) {
+        self.socket_read_pending_since = None;
+        match kind {
+            "data" => {
+                self.socket_read_calls += 1;
+                self.socket_read_bytes += bytes;
+            }
+            "eof" => self.socket_read_eof += 1,
+            "error" => self.socket_read_errors += 1,
+            _ => {}
+        }
+        self.max_socket_read_wait_ns = self.max_socket_read_wait_ns.max(duration_ns);
+        self.record(kind, bytes, duration_ns);
+    }
+
+    fn queue_reserve_started(&mut self, was_full: bool) {
+        self.queue_reserve_pending_since = Some(Instant::now());
+        self.record(
+            if was_full {
+                "queue-reserve-start-full"
+            } else {
+                "queue-reserve-start-ready"
+            },
+            0,
+            0,
+        );
+    }
+
+    fn queue_reserve(&mut self, duration_ns: u64, was_full: bool) {
+        self.queue_reserve_pending_since = None;
+        if was_full {
+            self.queue_reserve_full_observations += 1;
+        }
+        self.max_queue_reserve_wait_ns = self.max_queue_reserve_wait_ns.max(duration_ns);
+        self.record(
+            if was_full {
+                "queue-reserve-full"
+            } else {
+                "queue-reserve-ready"
+            },
+            0,
+            duration_ns,
+        );
+    }
+
+    fn record(&mut self, kind: &'static str, bytes: u64, duration_ns: u64) {
+        self.events_seen += 1;
+        if self.events.len() == RETAINED_PEER_READ_EVENTS {
+            self.events.pop_front();
+        }
+        self.events.push_back(PeerReadEvent {
+            offset_ns: self.started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+            kind,
+            bytes,
+            duration_ns,
+        });
+    }
+}
+
+#[cfg(feature = "runtime-diagnostics")]
+impl Drop for PeerReadTrace {
+    fn drop(&mut self) {
+        let mut output = String::new();
+        let _ = writeln!(
+            output,
+            "uvicorn-rs-peer-read-trace schema=1 pid={} connection={} peer={} peer_port={} origin_unix_ns={} origin_uncertainty_ns={} elapsed_ns={} socket_read_bytes={} socket_read_calls={} socket_read_eof={} socket_read_errors={} max_socket_read_wait_ns={} socket_read_pending_ns={} queue_reserve_full_observations={} max_queue_reserve_wait_ns={} queue_reserve_pending_ns={} events_seen={} events_retained={} events_dropped={}",
+            std::process::id(),
+            self.id,
+            self.peer_addr,
+            self.peer_addr.port(),
+            self.origin_unix_ns,
+            self.origin_uncertainty_ns,
+            self.started.elapsed().as_nanos(),
+            self.socket_read_bytes,
+            self.socket_read_calls,
+            self.socket_read_eof,
+            self.socket_read_errors,
+            self.max_socket_read_wait_ns,
+            self.socket_read_pending_since.map_or(0, duration_ns_since),
+            self.queue_reserve_full_observations,
+            self.max_queue_reserve_wait_ns,
+            self.queue_reserve_pending_since
+                .map_or(0, duration_ns_since),
+            self.events_seen,
+            self.events.len(),
+            self.events_seen
+                .saturating_sub(RETAINED_PEER_READ_EVENTS as u64),
+        );
+        for event in &self.events {
+            let _ = writeln!(
+                output,
+                "uvicorn-rs-peer-read-event schema=1 pid={} connection={} peer_port={} offset_ns={} event={} bytes={} duration_ns={}",
+                std::process::id(),
+                self.id,
+                self.peer_addr.port(),
+                event.offset_ns,
+                event.kind,
+                event.bytes,
+                event.duration_ns,
+            );
+        }
+        let _ = io::stderr().lock().write_all(output.as_bytes());
+    }
+}
+
+#[cfg(feature = "runtime-diagnostics")]
+fn duration_ns_since(started: Instant) -> u64 {
+    started.elapsed().as_nanos().min(u64::MAX as u128) as u64
+}
+
 /// Creates one socket reader. The optional pump must be driven alongside the
 /// entire connection, including TLS acceptance and registered upgrade sessions.
 pub(super) fn observe_peer_read(
@@ -107,6 +300,16 @@ pub(super) fn observe_peer_read(
             false,
         ),
         PeerReadHalfCloseMode::Proactive => {
+            #[cfg(feature = "runtime-diagnostics")]
+            let trace = if std::env::var_os("UVICORN_RS_UPLOAD_TRACE").as_deref()
+                == Some(std::ffi::OsStr::new("1"))
+            {
+                stream.peer_addr().ok().map(PeerReadTrace::new)
+            } else {
+                None
+            };
+            #[cfg(not(feature = "runtime-diagnostics"))]
+            let trace = ();
             let (reader, writer) = stream.into_split();
             let (sender, receiver) = mpsc::channel(READ_QUEUE_CAPACITY);
             #[cfg(coverage)]
@@ -128,7 +331,7 @@ pub(super) fn observe_peer_read(
                     current: None,
                     terminal: ReadTerminal::Open,
                 }),
-                Some(pump_peer_read(reader, sender, closed, failed)),
+                Some(pump_peer_read(reader, sender, closed, failed, trace)),
                 prioritize_receiver_close_fault,
             )
         }
@@ -147,16 +350,42 @@ async fn pump_peer_read<R>(
     sender: mpsc::Sender<ReadEvent>,
     closed: watch::Sender<bool>,
     failed: watch::Sender<Option<io::ErrorKind>>,
+    trace: PeerReadTraceOption,
 ) -> PeerReadPumpOutcome
 where
     R: AsyncRead + Unpin,
 {
+    #[cfg(feature = "runtime-diagnostics")]
+    let mut trace = trace;
     #[cfg(coverage)]
     let mut delivered_data = false;
+    #[cfg(not(feature = "runtime-diagnostics"))]
+    let _ = trace;
     loop {
         // Reserve before reading so pressure from HTTP/TLS also bounds socket
         // read-ahead. The consumer may hold one additional, partly read chunk.
-        let Ok(permit) = sender.reserve().await else {
+        #[cfg(feature = "runtime-diagnostics")]
+        let queue_was_full = sender.capacity() == 0;
+        #[cfg(feature = "runtime-diagnostics")]
+        if let Some(trace) = trace.as_mut() {
+            trace.queue_reserve_started(queue_was_full);
+        }
+        #[cfg(feature = "runtime-diagnostics")]
+        let reserve_started = trace.as_ref().map(|_| Instant::now());
+        let reserve_result = sender.reserve().await;
+        #[cfg(feature = "runtime-diagnostics")]
+        let reserve_wait_ns = reserve_started
+            .map(|started| started.elapsed().as_nanos().min(u64::MAX as u128) as u64)
+            .unwrap_or(0);
+        #[cfg(feature = "runtime-diagnostics")]
+        if let Some(trace) = trace.as_mut() {
+            trace.queue_reserve(reserve_wait_ns, queue_was_full);
+        }
+        let Ok(permit) = reserve_result else {
+            #[cfg(feature = "runtime-diagnostics")]
+            if let Some(trace) = trace.as_mut() {
+                trace.record("queue-reserve-closed", 0, reserve_wait_ns);
+            }
             #[cfg(coverage)]
             super::observe_http1_peer_read_receiver_closed_fault();
             return PeerReadPumpOutcome::ReceiverClosed;
@@ -175,8 +404,23 @@ where
         }
         let mut chunk = BytesMut::with_capacity(READ_CHUNK_SIZE);
         let mut destination = (&mut chunk).limit(READ_CHUNK_SIZE);
-        match reader.read_buf(&mut destination).await {
+        #[cfg(feature = "runtime-diagnostics")]
+        if let Some(trace) = trace.as_mut() {
+            trace.socket_read_started();
+        }
+        #[cfg(feature = "runtime-diagnostics")]
+        let read_started = trace.as_ref().map(|_| Instant::now());
+        let read_result = reader.read_buf(&mut destination).await;
+        #[cfg(feature = "runtime-diagnostics")]
+        let read_wait_ns = read_started
+            .map(|started| started.elapsed().as_nanos().min(u64::MAX as u128) as u64)
+            .unwrap_or(0);
+        match read_result {
             Ok(0) => {
+                #[cfg(feature = "runtime-diagnostics")]
+                if let Some(trace) = trace.as_mut() {
+                    trace.socket_read("eof", 0, read_wait_ns);
+                }
                 // Only this nonempty raw socket read establishes peer EOF.
                 // Queue it after all data; observing it never closes writes.
                 closed.send_replace(true);
@@ -184,13 +428,27 @@ where
                 return PeerReadPumpOutcome::ReadHalfClosed;
             }
             Ok(_) => {
+                #[cfg(feature = "runtime-diagnostics")]
+                let read_bytes = chunk.len() as u64;
+                #[cfg(feature = "runtime-diagnostics")]
+                if let Some(trace) = trace.as_mut() {
+                    trace.socket_read("data", read_bytes, read_wait_ns);
+                }
                 #[cfg(coverage)]
                 {
                     delivered_data = true;
                 }
                 permit.send(ReadEvent::Data(chunk));
+                #[cfg(feature = "runtime-diagnostics")]
+                if let Some(trace) = trace.as_mut() {
+                    trace.record("queue-enqueued", read_bytes, 0);
+                }
             }
             Err(error) => {
+                #[cfg(feature = "runtime-diagnostics")]
+                if let Some(trace) = trace.as_mut() {
+                    trace.socket_read("error", 0, read_wait_ns);
+                }
                 let kind = error.kind();
                 failed.send_replace(Some(kind));
                 permit.send(ReadEvent::Error(error));
@@ -232,6 +490,10 @@ pub(super) fn observe_peer_read_unix(
         ),
         PeerReadHalfCloseMode::Proactive => {
             let (reader, writer): (UnixOwnedReadHalf, UnixOwnedWriteHalf) = stream.into_split();
+            #[cfg(feature = "runtime-diagnostics")]
+            let trace: PeerReadTraceOption = None;
+            #[cfg(not(feature = "runtime-diagnostics"))]
+            let trace: PeerReadTraceOption = ();
             let (sender, receiver) = mpsc::channel(READ_QUEUE_CAPACITY);
             #[cfg(coverage)]
             let (receiver, prioritize_receiver_close_fault) = {
@@ -252,7 +514,7 @@ pub(super) fn observe_peer_read_unix(
                     current: None,
                     terminal: ReadTerminal::Open,
                 }),
-                Some(pump_peer_read(reader, sender, closed, failed)),
+                Some(pump_peer_read(reader, sender, closed, failed, trace)),
                 prioritize_receiver_close_fault,
             )
         }
@@ -546,6 +808,10 @@ mod tests {
         let (closed, _) = watch::channel(false);
         let (failed, _) = watch::channel(None);
         let second_chunk_read = Arc::new(tokio::sync::Notify::new());
+        #[cfg(feature = "runtime-diagnostics")]
+        let trace: PeerReadTraceOption = None;
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let trace: PeerReadTraceOption = ();
         let pump = tokio::spawn(pump_peer_read(
             ChunkReader {
                 chunks: VecDeque::from([&b"first"[..], &b"second"[..], &b"third"[..]]),
@@ -555,6 +821,7 @@ mod tests {
             sender,
             closed,
             failed,
+            trace,
         ));
         let mut reader = BufferedReadAdapter(BufferedReadIo {
             writer: tokio::io::sink(),

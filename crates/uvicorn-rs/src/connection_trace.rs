@@ -1,4 +1,4 @@
-//! Opt-in, bounded TCP observations for diagnosing stalled HTTP/1 requests.
+//! Opt-in, bounded HTTP-driver stream observations for diagnosing stalled HTTP/1 requests.
 
 use std::{
     collections::VecDeque,
@@ -11,7 +11,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
     },
     task::{Context, Poll},
-    time::Instant,
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
@@ -34,6 +34,8 @@ pub(crate) struct ConnectionTrace {
     id: u64,
     peer_addr: SocketAddr,
     started: Instant,
+    origin_unix_ns: u128,
+    origin_uncertainty_ns: u128,
     read_bytes: AtomicU64,
     write_bytes: AtomicU64,
     read_ready_polls: AtomicU64,
@@ -51,10 +53,18 @@ pub(crate) struct ConnectionTrace {
 
 impl ConnectionTrace {
     pub(crate) fn new(peer_addr: SocketAddr) -> Self {
+        let started = Instant::now();
+        let origin_unix_ns = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let origin_uncertainty_ns = started.elapsed().as_nanos();
         Self {
             id: NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed),
             peer_addr,
-            started: Instant::now(),
+            started,
+            origin_unix_ns,
+            origin_uncertainty_ns,
             read_bytes: AtomicU64::new(0),
             write_bytes: AtomicU64::new(0),
             read_ready_polls: AtomicU64::new(0),
@@ -151,11 +161,13 @@ impl Drop for ConnectionTrace {
         let mut output = String::new();
         let _ = writeln!(
             output,
-            "uvicorn-rs-connection-trace schema=1 pid={} connection={} peer={} peer_port={} elapsed_ns={} read_bytes={} write_bytes={} read_ready_polls={} read_pending_polls={} read_eof={} read_errors={} write_ready_polls={} write_pending_polls={} write_errors={} max_read_wait_ns={} max_write_wait_ns={} events_seen={} events_retained={} events_dropped={}",
+            "uvicorn-rs-connection-trace schema=1 read_layer=after-peer-read-adapter pid={} connection={} peer={} peer_port={} origin_unix_ns={} origin_uncertainty_ns={} elapsed_ns={} read_bytes={} write_bytes={} read_ready_polls={} read_pending_polls={} read_eof={} read_errors={} write_ready_polls={} write_pending_polls={} write_errors={} max_read_wait_ns={} max_write_wait_ns={} events_seen={} events_retained={} events_dropped={}",
             std::process::id(),
             self.id,
             self.peer_addr,
             self.peer_addr.port(),
+            self.origin_unix_ns,
+            self.origin_uncertainty_ns,
             self.started.elapsed().as_nanos(),
             self.read_bytes.load(Ordering::Relaxed),
             self.write_bytes.load(Ordering::Relaxed),

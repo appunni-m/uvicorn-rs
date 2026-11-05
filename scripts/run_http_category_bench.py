@@ -620,14 +620,22 @@ def _server_upload_trace(server_output: str, request_id: str) -> dict:
 
 
 def _server_connection_trace(server_output: str, peer_port: int | None) -> dict:
-    """Join a libcurl local port to bounded raw TCP observations from Rust."""
+    """Join libcurl local ports to the Rust peer-read and HTTP-driver traces."""
     if not isinstance(peer_port, int) or peer_port <= 0:
-        return {"status": "client_local_port_unavailable", "connections": []}
+        return {
+            "status": "client_local_port_unavailable",
+            "connections": [],
+            "peer_read_pumps": [],
+        }
 
     traces = []
     by_id = {}
+    peer_read_pumps = []
+    peer_read_by_id = {}
     summary_prefix = "uvicorn-rs-connection-trace "
     event_prefix = "uvicorn-rs-connection-event "
+    peer_read_summary_prefix = "uvicorn-rs-peer-read-trace "
+    peer_read_event_prefix = "uvicorn-rs-peer-read-event "
     for line in server_output.splitlines():
         if line.startswith(summary_prefix):
             fields = _trace_fields(line, summary_prefix)
@@ -639,6 +647,12 @@ def _server_connection_trace(server_output: str, peer_port: int | None) -> dict:
                     "connection_id": int(fields["connection"]),
                     "peer": fields["peer"],
                     "peer_port": peer_port,
+                    "read_layer": fields.get("read_layer", "unknown"),
+                    "origin_unix_ns": (
+                        int(fields["origin_unix_ns"])
+                        if "origin_unix_ns" in fields else None
+                    ),
+                    "origin_uncertainty_ns": int(fields.get("origin_uncertainty_ns", "0")),
                     "elapsed_ns": int(fields["elapsed_ns"]),
                     "read_bytes": int(fields["read_bytes"]),
                     "write_bytes": int(fields["write_bytes"]),
@@ -681,11 +695,62 @@ def _server_connection_trace(server_output: str, peer_port: int | None) -> dict:
                 trace["events"].append(event)
             except (KeyError, ValueError):
                 continue
+        elif line.startswith(peer_read_summary_prefix):
+            fields = _trace_fields(line, peer_read_summary_prefix)
+            try:
+                if int(fields["peer_port"]) != peer_port:
+                    continue
+                trace = {
+                    "pid": int(fields["pid"]),
+                    "connection_id": int(fields["connection"]),
+                    "peer": fields["peer"],
+                    "peer_port": peer_port,
+                    "origin_unix_ns": int(fields["origin_unix_ns"]),
+                    "origin_uncertainty_ns": int(fields["origin_uncertainty_ns"]),
+                    "elapsed_ns": int(fields["elapsed_ns"]),
+                    "socket_read_bytes": int(fields["socket_read_bytes"]),
+                    "socket_read_calls": int(fields["socket_read_calls"]),
+                    "socket_read_eof": int(fields["socket_read_eof"]),
+                    "socket_read_errors": int(fields["socket_read_errors"]),
+                    "max_socket_read_wait_ns": int(fields["max_socket_read_wait_ns"]),
+                    "socket_read_pending_ns": int(fields.get("socket_read_pending_ns", "0")),
+                    "queue_reserve_full_observations": int(
+                        fields["queue_reserve_full_observations"]
+                    ),
+                    "max_queue_reserve_wait_ns": int(fields["max_queue_reserve_wait_ns"]),
+                    "queue_reserve_pending_ns": int(fields.get("queue_reserve_pending_ns", "0")),
+                    "events_seen": int(fields["events_seen"]),
+                    "events_dropped": int(fields["events_dropped"]),
+                    "events": [],
+                }
+            except (KeyError, ValueError):
+                continue
+            peer_read_pumps.append(trace)
+            peer_read_by_id[(trace["pid"], trace["connection_id"])] = trace
+        elif line.startswith(peer_read_event_prefix):
+            fields = _trace_fields(line, peer_read_event_prefix)
+            try:
+                if int(fields["peer_port"]) != peer_port:
+                    continue
+                trace = peer_read_by_id.get(
+                    (int(fields["pid"]), int(fields["connection"]))
+                )
+                if trace is None:
+                    continue
+                trace["events"].append({
+                    "offset_ns": int(fields["offset_ns"]),
+                    "event": fields["event"],
+                    "bytes": int(fields["bytes"]),
+                    "duration_ns": int(fields["duration_ns"]),
+                })
+            except (KeyError, ValueError):
+                continue
 
     return {
-        "status": "matched" if traces else "no_matching_server_peer_port",
+        "status": "matched" if traces or peer_read_pumps else "no_matching_server_peer_port",
         "peer_port": peer_port,
         "connections": traces,
+        "peer_read_pumps": peer_read_pumps,
     }
 
 
@@ -759,6 +824,23 @@ def _correlate_upload_trace(
                 if trace["lane"] == event["lane"]
             ),
         })
+    connection_trace = client_trace["server_connection_trace"]
+    for source, collection in (
+        ("uvicorn-rs-http-driver", connection_trace["connections"]),
+        ("uvicorn-rs-peer-reader", connection_trace["peer_read_pumps"]),
+    ):
+        for trace in collection:
+            origin_unix_ns = trace.get("origin_unix_ns")
+            if not isinstance(origin_unix_ns, int):
+                continue
+            for event in trace["events"]:
+                timeline.append({
+                    "source": source,
+                    "connection_id": trace["connection_id"],
+                    **event,
+                    "estimated_unix_ns": origin_unix_ns + int(event["offset_ns"]),
+                    "clock_uncertainty_ns": trace["origin_uncertainty_ns"],
+                })
     wrapper_traces = []
     if isinstance(asgi_diagnostics, dict):
         for path, path_data in asgi_diagnostics.get("paths", {}).items():
