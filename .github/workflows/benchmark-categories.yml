@@ -1191,7 +1191,16 @@ jobs:
         run: |
           set -euo pipefail
           read -r -a h3_servers <<<"$BENCHMARK_H3_SERVERS"
-          trace_args=()
+          benchmark_args=(
+            --servers "${h3_servers[@]}"
+            --repetitions "$BENCHMARK_REPETITIONS"
+            --seed "$BENCHMARK_SEED"
+            --output target/benchmark-categories/h3-focused.json
+            --workloads "$BENCHMARK_H3_WORKLOAD"
+            --duration "$BENCHMARK_DURATION"
+            --warmup "$BENCHMARK_WARMUP"
+            --concurrency "$BENCHMARK_H3_CONCURRENCY"
+          )
           if [[ "$BENCHMARK_H3_TRACE" == "true" ]]; then
             if [[ "$RUNNER_OS" != "Linux" || "$RUNNER_ARCH" != "ARM64" \
               || "${#h3_servers[@]}" != "1" || "${h3_servers[0]}" != "hypercorn-asyncio" \
@@ -1200,16 +1209,9 @@ jobs:
               echo "H3 event tracing requires Linux ARM64, Hypercorn asyncio, slow-reader-backpressure, and one repetition" >&2
               exit 2
             fi
-            trace_args+=(--trace-hypercorn-h3-events)
+            benchmark_args+=(--trace-hypercorn-h3-events)
           fi
-          .venv/bin/python scripts/run_h3_category_bench.py \
-            --servers "${h3_servers[@]}" \
-            --repetitions "$BENCHMARK_REPETITIONS" --seed "$BENCHMARK_SEED" \
-            --output target/benchmark-categories/h3-focused.json \
-            --workloads "$BENCHMARK_H3_WORKLOAD" \
-            --duration "$BENCHMARK_DURATION" --warmup "$BENCHMARK_WARMUP" \
-            --concurrency "$BENCHMARK_H3_CONCURRENCY" \
-            "${trace_args[@]}" \
+          .venv/bin/python scripts/run_h3_category_bench.py "${benchmark_args[@]}" \
             2>&1 | tee target/benchmark-preparation/h3-focused-driver.log
       - name: Retain focused diagnostic evidence
         if: always()
