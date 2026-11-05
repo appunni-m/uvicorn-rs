@@ -635,7 +635,7 @@ jobs:
               27b501faa50e7a26c3d3560ca625132f4078a17771f4810baf70475ae48cbe43 \
               "$hyper_archive" | sha256sum --check
             printf '%s  %s\n' \
-              4fc1dd7a46c617a3773f40d22e93afdbbc104a81ae99588dc041a782910c975e \
+              dd12a3489b2ec46cce2a240403b2f51088964ff9da3ac6b225f005ffccbf42f0 \
               tools/diagnostics/hyper-1.11.1-uvicorn-rs.patch | sha256sum --check
             mkdir -p "$hyper_source"
             tar -xzf "$hyper_archive" -C "$hyper_source" --strip-components=1
@@ -649,7 +649,7 @@ jobs:
             cargo update --package hyper --precise 1.11.1
             printf '%s\n' \
               'hyper=1.11.1 crates.io archive sha256=27b501faa50e7a26c3d3560ca625132f4078a17771f4810baf70475ae48cbe43' \
-              'hyper-workspace-patch sha256=4fc1dd7a46c617a3773f40d22e93afdbbc104a81ae99588dc041a782910c975e' \
+              'hyper-workspace-patch sha256=dd12a3489b2ec46cce2a240403b2f51088964ff9da3ac6b225f005ffccbf42f0' \
               'h2 remains the current workspace-patched version; see h2-dependency-tree.txt' \
               > target/benchmark-preparation/historical-transport-dependencies.txt
           fi
