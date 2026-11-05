@@ -788,6 +788,7 @@ jobs:
         shell: bash
         env:
           BENCHMARK_TRACE_SOURCE: ${{ inputs.fastapi_trace_http_deps == 'failing-source-94c89b79' && 'failing-94c89b79' || 'current' }}
+          UVICORN_RS_DIAGNOSTIC_LEGACY_CLI: ${{ inputs.fastapi_trace_http_deps == 'failing-source-94c89b79' && '1' || '' }}
           BENCHMARK_FASTAPI_WORKLOAD: ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}
           BENCHMARK_DURATION: ${{ inputs.duration || '5' }}
           BENCHMARK_WARMUP: ${{ inputs.warmup || '1' }}

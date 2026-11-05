@@ -337,7 +337,7 @@ def _command(
 ) -> list[str]:
     server_python = python if server["kind"] == "rust" else uvicorn_python
     if server["kind"] == "rust":
-        return [
+        command = [
             str(server_python),
             "-m",
             "uvicorn_rs",
@@ -348,16 +348,20 @@ def _command(
             str(port),
             "--loop",
             server["loop"],
-            "--lifespan",
-            "auto",
-            "--interface",
-            "asgi3",
-            "--no-access-log",
-            "--no-server-header",
-            "--date-header",
-            "--log-level",
-            "error",
         ]
+        if os.environ.get("UVICORN_RS_DIAGNOSTIC_LEGACY_CLI") != "1":
+            command.extend([
+                "--lifespan",
+                "auto",
+                "--interface",
+                "asgi3",
+                "--no-access-log",
+                "--no-server-header",
+                "--date-header",
+                "--log-level",
+                "error",
+            ])
+        return command
     return [
         str(server_python),
         "-m",
