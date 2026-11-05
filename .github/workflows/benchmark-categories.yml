@@ -663,10 +663,10 @@ jobs:
           cargo tree --locked -i hyper > target/benchmark-preparation/hyper-dependency-tree.txt
           cargo tree --locked -i h2 > target/benchmark-preparation/h2-dependency-tree.txt
           if [[ "$FASTAPI_TRACE_TOKIO" == "1.53.1" ]]; then
-            rg -q 'tokio v1\.53\.1 ' target/benchmark-preparation/tokio-dependency-tree.txt
+            grep -Eq 'tokio v1\.53\.1 ' target/benchmark-preparation/tokio-dependency-tree.txt
           fi
           if [[ "$FASTAPI_TRACE_HTTP_DEPS" == "historical" ]]; then
-            rg -q 'hyper v1\.11\.1 ' target/benchmark-preparation/hyper-dependency-tree.txt
+            grep -Eq 'hyper v1\.11\.1 ' target/benchmark-preparation/hyper-dependency-tree.txt
           fi
           cp Cargo.lock target/benchmark-preparation/diagnostic-Cargo.lock
       - name: Capture read-only host preflight
