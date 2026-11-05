@@ -130,21 +130,14 @@ on:
           - current
           - 1.53.1
       fastapi_trace_http_deps:
-        description: Hyper source version for isolating historical Linux upload timeouts; historical selects the exact 1.11.1 crates.io source archive
+        description: Transport selection for historical Linux upload diagnosis; failing-source selects exact source 94c89b79 with its locked Hyper/Tokio versions
         default: current
         required: true
         type: choice
         options:
           - current
           - historical
-      fastapi_trace_source:
-        description: Rust server source for the focused ARM64 upload diagnostic; failing-94c89b79 builds the exact source revision from the timeout artifact
-        default: current
-        required: true
-        type: choice
-        options:
-          - current
-          - failing-94c89b79
+          - failing-source-94c89b79
       upload_trace_requests:
         description: Optional comma-separated worker:attempt pairs to trace, for example 5:2,2:17
         default: ""
@@ -583,7 +576,7 @@ jobs:
           retention-days: 90
 
   focused-fastapi-stage-diagnostic:
-    name: ${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }} · ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }} · ${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x ${{ inputs.run_mode == 'focused-fastapi-upload-trace' && 'upload trace' || 'matched ASGI stage diagnostic' }} · source ${{ inputs.fastapi_trace_source || 'current' }} · timer ${{ inputs.upload_trace_timer || 'pinned' }} · peer-read ${{ inputs.fastapi_peer_read_mode || 'proactive' }}-${{ inputs.fastapi_peer_read_chunk || '64k' }} · Tokio ${{ inputs.fastapi_trace_tokio || 'current' }} · Hyper ${{ inputs.fastapi_trace_http_deps == 'historical' && '1.11.1' || 'current' }}
+    name: ${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }} · ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }} · ${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x ${{ inputs.run_mode == 'focused-fastapi-upload-trace' && 'upload trace' || 'matched ASGI stage diagnostic' }} · source ${{ inputs.fastapi_trace_http_deps == 'failing-source-94c89b79' && '94c89b79' || 'current' }} · timer ${{ inputs.upload_trace_timer || 'pinned' }} · peer-read ${{ inputs.fastapi_peer_read_mode || 'proactive' }}-${{ inputs.fastapi_peer_read_chunk || '64k' }} · Tokio ${{ inputs.fastapi_trace_tokio || 'current' }} · Hyper ${{ (inputs.fastapi_trace_http_deps == 'historical' || inputs.fastapi_trace_http_deps == 'failing-source-94c89b79') && '1.11.1' || 'current' }}
     if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-fastapi-upload-trace')) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-fastapi-stage]')) }}
     runs-on: ${{ inputs.fastapi_system == 'linux-aarch64-22.04' && 'ubuntu-22.04-arm' || (inputs.fastapi_system == 'linux-aarch64' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]'))) && 'ubuntu-24.04-arm' || inputs.fastapi_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
     timeout-minutes: 60
@@ -635,7 +628,7 @@ jobs:
           FASTAPI_TRACE_HTTP_DEPS: ${{ inputs.fastapi_trace_http_deps || 'current' }}
           FASTAPI_TRACE_BODY_BATCH_WAIT: ${{ inputs.upload_trace_timer == 'recreated-1ms' && '1ms' || (inputs.upload_trace_timer == 'recreated' && '5ms') || 'current' }}
           FASTAPI_TRACE_RUN_MODE: ${{ inputs.run_mode || '' }}
-          FASTAPI_TRACE_SOURCE: ${{ inputs.fastapi_trace_source || 'current' }}
+          FASTAPI_TRACE_SOURCE: ${{ inputs.fastapi_trace_http_deps == 'failing-source-94c89b79' && 'failing-94c89b79' || 'current' }}
           FASTAPI_TRACE_SYSTEM: ${{ inputs.fastapi_system || '' }}
           FASTAPI_TRACE_LOOP: ${{ inputs.fastapi_stage_loop || '' }}
           FASTAPI_TRACE_WORKLOAD: ${{ inputs.fastapi_workload || '' }}
@@ -794,7 +787,7 @@ jobs:
       - name: Run one focused FastAPI diagnostic
         shell: bash
         env:
-          BENCHMARK_TRACE_SOURCE: ${{ inputs.fastapi_trace_source || 'current' }}
+          BENCHMARK_TRACE_SOURCE: ${{ inputs.fastapi_trace_http_deps == 'failing-source-94c89b79' && 'failing-94c89b79' || 'current' }}
           BENCHMARK_FASTAPI_WORKLOAD: ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}
           BENCHMARK_DURATION: ${{ inputs.duration || '5' }}
           BENCHMARK_WARMUP: ${{ inputs.warmup || '1' }}
@@ -856,7 +849,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ inputs.run_mode == 'focused-fastapi-upload-trace' && 'fastapi-upload-trace' || 'fastapi-stage' }}-${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }}-${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}-${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x-${{ inputs.fastapi_trace_source || 'current' }}-${{ inputs.run_mode == 'focused-fastapi-upload-trace' && inputs.upload_trace_timer || 'stage' }}-bodybatch-${{ inputs.upload_trace_timer == 'recreated-1ms' && '1ms' || 'current' }}-tokio-${{ inputs.fastapi_trace_tokio || 'current' }}-hyper-${{ inputs.fastapi_trace_http_deps == 'historical' && '1.11.1' || 'current' }}-${{ github.sha }}
+          name: ${{ inputs.run_mode == 'focused-fastapi-upload-trace' && 'fastapi-upload-trace' || 'fastapi-stage' }}-${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }}-${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}-${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x-${{ inputs.fastapi_trace_http_deps == 'failing-source-94c89b79' && '94c89b79' || 'current' }}-${{ inputs.run_mode == 'focused-fastapi-upload-trace' && inputs.upload_trace_timer || 'stage' }}-bodybatch-${{ inputs.upload_trace_timer == 'recreated-1ms' && '1ms' || 'current' }}-tokio-${{ inputs.fastapi_trace_tokio || 'current' }}-hyper-${{ (inputs.fastapi_trace_http_deps == 'historical' || inputs.fastapi_trace_http_deps == 'failing-source-94c89b79') && '1.11.1' || 'current' }}-${{ github.sha }}
           path: |
             target/benchmark-preparation/
             target/fastapi-stage/
