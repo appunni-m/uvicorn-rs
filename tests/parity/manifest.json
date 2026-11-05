@@ -587,7 +587,7 @@
       "id": "startup-client-ca-invalid-utf8-prefix-valid-pem",
       "oracle": "uvicorn",
       "protocol": "http/1.1 + lifespan",
-      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "non-UTF-8 bytes before a valid PEM CA and a later bind failure"]
+      "oracle_config": ["uvicorn.Server public API", "uvicorn-rs.Server public API", "non-UTF-8 bytes before a valid PEM CA and a deterministic occupied local-port bind failure"]
     },
     {
       "id": "lifecycle",
