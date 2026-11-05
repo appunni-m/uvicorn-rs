@@ -6,7 +6,7 @@ use std::io::Write as _;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-const RETAINED_EVENTS: usize = 512;
+const RETAINED_EVENTS: usize = 2048;
 const DEFAULT_SLOW_REQUEST_TRACE_THRESHOLD_MS: u64 = 100;
 const MIN_SLOW_REQUEST_TRACE_THRESHOLD_MS: u64 = 1;
 const MAX_SLOW_REQUEST_TRACE_THRESHOLD_MS: u64 = 1_000;
@@ -289,18 +289,26 @@ mod tests {
             unreachable!();
         };
         stalled.record("read-wait", 0, false);
-        for index in 0..1000 {
+        for index in 0..(RETAINED_EVENTS + 1) {
             first.record("read-data", index, false);
         }
         let rows = first.events.lock().unwrap();
         assert_eq!(rows.rows.len(), RETAINED_EVENTS);
-        assert_eq!(rows.seen, 1001);
-        assert_eq!(rows.read_bytes, (0..1000).sum::<usize>());
-        assert_eq!(rows.rows.back().unwrap().bytes, 999);
+        assert_eq!(rows.seen, (RETAINED_EVENTS + 2) as u64);
+        assert_eq!(rows.read_bytes, (0..(RETAINED_EVENTS + 1)).sum::<usize>());
+        assert_eq!(rows.rows.front().unwrap().bytes, 1);
+        assert_eq!(rows.rows.back().unwrap().bytes, RETAINED_EVENTS);
         assert!(rows.rows.iter().map(|row| row.offset_ns).is_sorted());
         drop(rows);
         let snapshot = stalled.snapshot("test");
         assert!(snapshot.contains("events_seen=2 events_retained=2 events_dropped=0"));
+        assert!(first
+            .snapshot("test")
+            .contains(&format!(
+                "events_seen={} events_retained={} events_dropped=2",
+                RETAINED_EVENTS + 2,
+                RETAINED_EVENTS
+            )));
         assert!(snapshot.contains("event=read-wait"));
     }
 
