@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <pthread.h>
+#include <stddef.h>
 #include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -12,6 +13,12 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+
+#ifdef __linux__
+#include <linux/tcp.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#endif
 
 #define MAX_UPLOAD_TRACE_EVENTS 256
 #define MAX_SUCCESSFUL_UPLOAD_TRACES_PER_WORKER 32
@@ -23,12 +30,27 @@ typedef struct {
 } UploadTraceRequestSelector;
 
 typedef struct {
+    int sampled;
+    int available;
+    uint64_t bytes_acked;
+    uint32_t notsent_bytes;
+    uint32_t unacked_segments;
+    int send_window_available;
+    uint32_t send_window_bytes;
+    int rwnd_limited_available;
+    uint64_t rwnd_limited_us;
+    int sndbuf_limited_available;
+    uint64_t sndbuf_limited_us;
+} SocketSnapshot;
+
+typedef struct {
     const char *event;
     unsigned long long offset_ns;
     unsigned long long callback_calls;
     size_t callback_bytes;
     curl_off_t curl_uploaded_bytes;
     curl_off_t curl_downloaded_bytes;
+    SocketSnapshot tcp_info;
 } UploadTraceEvent;
 
 typedef struct {
@@ -46,6 +68,7 @@ typedef struct {
     size_t trace_event_head;
     curl_off_t curl_uploaded_bytes;
     curl_off_t curl_downloaded_bytes;
+    SocketSnapshot tcp_info_before;
     long response_code;
     long new_connections;
     long local_port;
@@ -60,6 +83,7 @@ typedef struct {
     size_t upload_bytes;
     size_t upload_chunk_bytes;
     int upload_trace;
+    int tcp_diagnostics;
     size_t upload_trace_selector_count;
     UploadTraceRequestSelector upload_trace_selectors[MAX_UPLOAD_TRACE_REQUEST_SELECTORS];
     unsigned long long max_requests;
@@ -91,6 +115,7 @@ typedef struct {
     unsigned long long trace_reused_transfers;
     size_t successful_trace_count;
     SuccessfulUploadTrace *successful_traces;
+    curl_socket_t diagnostic_socket;
 } Worker;
 
 typedef struct FirstFailure {
@@ -120,6 +145,7 @@ typedef struct FirstFailure {
     size_t trace_event_head;
     unsigned long long trace_events_seen;
     UploadTraceEvent trace_events[MAX_UPLOAD_TRACE_EVENTS];
+    SocketSnapshot tcp_info_before;
 } FirstFailure;
 
 typedef struct {
@@ -146,12 +172,84 @@ typedef struct {
     curl_off_t last_progress_sample_uploaded_bytes;
     unsigned long long trace_events_seen;
     UploadTraceEvent *trace_events;
+    Worker *worker;
+    SocketSnapshot tcp_info_before;
 } UploadCursor;
 
 static double now_seconds(void) {
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
     return (double)now.tv_sec + (double)now.tv_nsec / 1e9;
+}
+
+static SocketSnapshot read_socket_snapshot(curl_socket_t socket) {
+    SocketSnapshot snapshot = {0};
+#ifdef __linux__
+    if (socket != CURL_SOCKET_BAD) {
+        struct tcp_info info = {0};
+        socklen_t info_length = sizeof(info);
+        const socklen_t required_length = (socklen_t)(offsetof(struct tcp_info, tcpi_notsent_bytes)
+            + sizeof(info.tcpi_notsent_bytes));
+        if (getsockopt(socket, IPPROTO_TCP, TCP_INFO, &info, &info_length) == 0
+            && info_length >= required_length) {
+            snapshot.sampled = 1;
+            snapshot.available = 1;
+            snapshot.bytes_acked = info.tcpi_bytes_acked;
+            snapshot.notsent_bytes = info.tcpi_notsent_bytes;
+            snapshot.unacked_segments = info.tcpi_unacked;
+            if (info_length >= offsetof(struct tcp_info, tcpi_snd_wnd)
+                    + sizeof(info.tcpi_snd_wnd)) {
+                snapshot.send_window_available = 1;
+                snapshot.send_window_bytes = info.tcpi_snd_wnd;
+            }
+            if (info_length >= offsetof(struct tcp_info, tcpi_rwnd_limited)
+                    + sizeof(info.tcpi_rwnd_limited)) {
+                snapshot.rwnd_limited_available = 1;
+                snapshot.rwnd_limited_us = info.tcpi_rwnd_limited;
+            }
+            if (info_length >= offsetof(struct tcp_info, tcpi_sndbuf_limited)
+                    + sizeof(info.tcpi_sndbuf_limited)) {
+                snapshot.sndbuf_limited_available = 1;
+                snapshot.sndbuf_limited_us = info.tcpi_sndbuf_limited;
+            }
+        } else {
+            snapshot.sampled = 1;
+        }
+    }
+#else
+    (void)socket;
+#endif
+    return snapshot;
+}
+
+static void print_tcp_snapshot(const SocketSnapshot *snapshot) {
+    printf(
+        "{\"sampled\":%s,\"available\":%s,\"bytes_acked\":%llu,"
+        "\"notsent_bytes\":%u,\"unacked_segments\":%u,"
+        "\"peer_send_window_available\":%s,\"peer_send_window_bytes\":%u,"
+        "\"rwnd_limited_available\":%s,\"rwnd_limited_us\":%llu,"
+        "\"sndbuf_limited_available\":%s,\"sndbuf_limited_us\":%llu}",
+        snapshot->sampled ? "true" : "false",
+        snapshot->available ? "true" : "false",
+        (unsigned long long)snapshot->bytes_acked,
+        snapshot->notsent_bytes,
+        snapshot->unacked_segments,
+        snapshot->send_window_available ? "true" : "false",
+        snapshot->send_window_bytes,
+        snapshot->rwnd_limited_available ? "true" : "false",
+        (unsigned long long)snapshot->rwnd_limited_us,
+        snapshot->sndbuf_limited_available ? "true" : "false",
+        (unsigned long long)snapshot->sndbuf_limited_us
+    );
+}
+
+static int record_client_socket(void *client_data, curl_socket_t socket, curlsocktype purpose) {
+    Worker *worker = (Worker *)client_data;
+    (void)purpose;
+    if (worker != NULL && worker->shared->tcp_diagnostics) {
+        worker->diagnostic_socket = socket;
+    }
+    return CURL_SOCKOPT_OK;
 }
 
 static int is_decimal_number(const char *value) {
@@ -246,7 +344,8 @@ static void record_upload_trace_event(
     const char *event,
     double now,
     curl_off_t uploaded_bytes,
-    curl_off_t downloaded_bytes
+    curl_off_t downloaded_bytes,
+    const SocketSnapshot *tcp_info
 ) {
     if (!upload->trace_enabled) return;
     size_t slot = (size_t)(upload->trace_events_seen % MAX_UPLOAD_TRACE_EVENTS);
@@ -260,6 +359,7 @@ static void record_upload_trace_event(
     trace->callback_bytes = upload->offset;
     trace->curl_uploaded_bytes = (long long)uploaded_bytes;
     trace->curl_downloaded_bytes = (long long)downloaded_bytes;
+    trace->tcp_info = tcp_info != NULL ? *tcp_info : (SocketSnapshot){0};
     upload->trace_events_seen++;
 }
 
@@ -287,7 +387,7 @@ static size_t read_upload(char *buffer, size_t size, size_t count, void *user_da
     size_t capacity = size * count;
     if (upload->offset >= upload->bytes || capacity == 0) {
         if (upload->trace_enabled) {
-            record_upload_trace_event(upload, "read-eof", now, -1, -1);
+            record_upload_trace_event(upload, "read-eof", now, -1, -1, NULL);
         }
         return 0;
     }
@@ -302,7 +402,7 @@ static size_t read_upload(char *buffer, size_t size, size_t count, void *user_da
         && (upload->callback_calls == 1
             || upload->callback_calls % 32 == 0
             || upload->offset == upload->bytes)) {
-        record_upload_trace_event(upload, "read-callback", now, -1, -1);
+        record_upload_trace_event(upload, "read-callback", now, -1, -1, NULL);
     }
     return length;
 }
@@ -332,7 +432,15 @@ static int record_transfer_progress(
         || now - upload->last_progress_sample_monotonic >= 0.100;
     int transfer_complete = upload_total > 0 && upload_now >= upload_total;
     if (upload_sample_due || time_sample_due || transfer_complete) {
-        record_upload_trace_event(upload, "curl-progress", now, upload_now, download_now);
+        SocketSnapshot tcp_info = {0};
+        const SocketSnapshot *tcp_info_sample = NULL;
+        if (upload->worker != NULL && upload->worker->shared->tcp_diagnostics) {
+            tcp_info = read_socket_snapshot(upload->worker->diagnostic_socket);
+            tcp_info_sample = &tcp_info;
+        }
+        record_upload_trace_event(
+            upload, "curl-progress", now, upload_now, download_now, tcp_info_sample
+        );
         upload->last_progress_sample_monotonic = now;
         upload->last_progress_sample_uploaded_bytes = upload_now;
     }
@@ -388,6 +496,7 @@ static void set_transfer_failure(
         failure->last_callback_monotonic = upload->last_callback_monotonic;
         failure->completed_monotonic = now_seconds();
         failure->last_progress_monotonic = upload->last_progress_monotonic;
+        failure->tcp_info_before = upload->tcp_info_before;
         failure->trace_events_seen = upload->trace_events_seen;
         failure->trace_event_count = upload->trace_events_seen < MAX_UPLOAD_TRACE_EVENTS
             ? (size_t)upload->trace_events_seen
@@ -482,6 +591,7 @@ static void retain_successful_upload_trace(
     trace->primary_port = -1;
     trace->curl_uploaded_bytes = (curl_off_t)-1;
     trace->curl_downloaded_bytes = (curl_off_t)-1;
+    trace->tcp_info_before = upload->tcp_info_before;
     if (upload->trace_events != NULL) {
         memcpy(trace->trace_events, upload->trace_events, sizeof(trace->trace_events));
     }
@@ -522,6 +632,10 @@ static void *run_worker(void *argument) {
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 3000L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 15000L);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, shared->headers);
+    if (shared->tcp_diagnostics) {
+        curl_easy_setopt(curl, CURLOPT_SOCKOPTFUNCTION, record_client_socket);
+        curl_easy_setopt(curl, CURLOPT_SOCKOPTDATA, worker);
+    }
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, check_response);
     UploadCursor upload = {
         .body = shared->upload_body,
@@ -529,6 +643,7 @@ static void *run_worker(void *argument) {
         .chunk_bytes = shared->upload_chunk_bytes,
         .offset = 0,
         .trace_enabled = shared->upload_trace,
+        .worker = worker,
     };
     if (shared->upload_trace) {
         upload.trace_events = calloc(MAX_UPLOAD_TRACE_EVENTS, sizeof(*upload.trace_events));
@@ -573,6 +688,10 @@ static void *run_worker(void *argument) {
         upload.last_progress_downloaded_bytes = 0;
         upload.last_progress_sample_monotonic = 0;
         upload.last_progress_sample_uploaded_bytes = 0;
+        upload.tcp_info_before = (SocketSnapshot){0};
+        if (upload.trace_enabled && shared->tcp_diagnostics) {
+            upload.tcp_info_before = read_socket_snapshot(worker->diagnostic_socket);
+        }
         upload.trace_events_seen = 0;
         if (upload.trace_events != NULL) {
             memset(upload.trace_events, 0,
@@ -745,6 +864,8 @@ int main(int argc, char **argv) {
         .upload_chunk_bytes = upload_chunk_bytes,
         .upload_trace = getenv("UVICORN_RS_UPLOAD_TRACE") != NULL
             && strcmp(getenv("UVICORN_RS_UPLOAD_TRACE"), "1") == 0,
+        .tcp_diagnostics = getenv("UVICORN_RS_HTTP_CLIENT_TCP_DIAGNOSTICS") != NULL
+            && strcmp(getenv("UVICORN_RS_HTTP_CLIENT_TCP_DIAGNOSTICS"), "1") == 0,
         .max_requests = max_requests,
         .expected_body = expected_body,
         .expected_bytes = expected_bytes,
@@ -759,6 +880,12 @@ int main(int argc, char **argv) {
         .failure_lock = &failure_lock,
         .first_failure = &first_failure,
     };
+
+    if (shared.tcp_diagnostics && !shared.upload_trace) {
+        fprintf(stderr,
+            "UVICORN_RS_HTTP_CLIENT_TCP_DIAGNOSTICS=1 requires UVICORN_RS_UPLOAD_TRACE=1\n");
+        return 2;
+    }
 
     const char *trace_request_selection = getenv("UVICORN_RS_UPLOAD_TRACE_REQUESTS");
     if (!shared.upload_trace && trace_request_selection != NULL
@@ -794,6 +921,7 @@ int main(int argc, char **argv) {
     for (int index = 0; index < concurrency; index++) {
         workers[index].shared = &shared;
         workers[index].worker_index = (unsigned int)index;
+        workers[index].diagnostic_socket = CURL_SOCKET_BAD;
         if (pthread_create(&threads[index], NULL, run_worker, &workers[index]) != 0) {
             set_failure(&shared, "pthread_create failed");
             break;
@@ -877,7 +1005,7 @@ int main(int argc, char **argv) {
                     "\"last_callback\":%.9f,\"completed\":%.9f,"
                     "\"last_progress\":%.9f,\"last_progress_age_ms\":%.3f,"
                     "\"events_seen\":%llu,\"events_retained\":%zu,"
-                    "\"events_dropped\":%llu,\"events\":[",
+                    "\"events_dropped\":%llu,\"tcp_info_before\":",
                     (long)getpid(), first_failure.worker_index, first_failure.worker_attempt,
                     first_failure.callback_calls, first_failure.request_started_monotonic,
                     first_failure.first_callback_monotonic, first_failure.last_callback_monotonic,
@@ -889,6 +1017,8 @@ int main(int argc, char **argv) {
                     first_failure.trace_events_seen > first_failure.trace_event_count
                         ? first_failure.trace_events_seen - first_failure.trace_event_count
                         : 0ULL);
+                print_tcp_snapshot(&first_failure.tcp_info_before);
+                printf(",\"events\":[");
                 for (size_t index = 0; index < first_failure.trace_event_count; index++) {
                     size_t slot = (first_failure.trace_event_head + index) % MAX_UPLOAD_TRACE_EVENTS;
                     const UploadTraceEvent *event = &first_failure.trace_events[slot];
@@ -896,13 +1026,16 @@ int main(int argc, char **argv) {
                     printf(
                         "{\"event\":\"%s\",\"offset_ns\":%llu,"
                         "\"callback_calls\":%llu,\"callback_bytes\":%zu,"
-                        "\"curl_uploaded_bytes\":%lld,\"curl_downloaded_bytes\":%lld}",
+                        "\"curl_uploaded_bytes\":%lld,\"curl_downloaded_bytes\":%lld,"
+                        "\"tcp_info\":",
                         event->event != NULL ? event->event : "unknown",
                         event->offset_ns,
                         event->callback_calls,
                         event->callback_bytes,
                         (long long)event->curl_uploaded_bytes,
                         (long long)event->curl_downloaded_bytes);
+                    print_tcp_snapshot(&event->tcp_info);
+                    putchar('}');
                 }
                 putchar(']');
                 putchar('}');
@@ -938,15 +1071,17 @@ int main(int argc, char **argv) {
             }
         }
         printf(
-            "],\"callback_calls\":%llu,\"callback_bytes\":%llu,\"timeout_ms\":15000,"
+            "],\"tcp_info_enabled\":%s,\"callback_calls\":%llu,"
+            "\"callback_bytes\":%llu,\"timeout_ms\":15000,"
             "\"connection_counts\":{\"curl_successful_transfers\":%llu,"
             "\"new_connections\":%llu,\"reused_transfers\":%llu},"
             "\"failure_event_limit\":%d,"
-            "\"sampling\":\"upload callback first/every 32/final; curl progress every 64 KiB or 100 ms\","
+            "\"sampling\":\"upload callback first/every 32/final; curl progress every 64 KiB or 100 ms; selected-request TCP_INFO on curl progress\","
             "\"calibration_monotonic_before\":%.9f,\"calibration_monotonic_after\":%.9f,"
             "\"calibration_unix\":%.9f,"
             "\"successful_transfer_trace_limit_per_worker\":%d,"
             "\"successful_transfers\":[",
+            shared.tcp_diagnostics ? "true" : "false",
             calls, bytes, successful_transfers, new_connections, reused_transfers,
             MAX_UPLOAD_TRACE_EVENTS, calibration_before, calibration_after,
             (double)wall.tv_sec + (double)wall.tv_nsec / 1e9,
@@ -969,7 +1104,7 @@ int main(int argc, char **argv) {
                     "\"first_callback\":%.9f,\"last_callback\":%.9f,"
                     "\"completed\":%.9f,\"last_progress\":%.9f,"
                     "\"events_seen\":%llu,\"events_retained\":%zu,"
-                    "\"events_dropped\":%llu,\"events\":[",
+                    "\"events_dropped\":%llu,\"tcp_info_before\":",
                     (long)getpid(), (unsigned int)worker_index, trace->worker_attempt,
                     (unsigned int)worker_index,
                     trace->worker_attempt, trace->elapsed_seconds * 1000.0,
@@ -984,6 +1119,8 @@ int main(int argc, char **argv) {
                     trace->trace_events_seen > trace->trace_event_count
                         ? trace->trace_events_seen - trace->trace_event_count
                         : 0ULL);
+                print_tcp_snapshot(&trace->tcp_info_before);
+                printf(",\"events\":[");
                 for (size_t event_index = 0; event_index < trace->trace_event_count; event_index++) {
                     size_t slot = (trace->trace_event_head + event_index) % MAX_UPLOAD_TRACE_EVENTS;
                     const UploadTraceEvent *event = &trace->trace_events[slot];
@@ -991,11 +1128,14 @@ int main(int argc, char **argv) {
                     printf(
                         "{\"event\":\"%s\",\"offset_ns\":%llu,"
                         "\"callback_calls\":%llu,\"callback_bytes\":%zu,"
-                        "\"curl_uploaded_bytes\":%lld,\"curl_downloaded_bytes\":%lld}",
+                        "\"curl_uploaded_bytes\":%lld,\"curl_downloaded_bytes\":%lld,"
+                        "\"tcp_info\":",
                         event->event != NULL ? event->event : "unknown",
                         event->offset_ns, event->callback_calls, event->callback_bytes,
                         (long long)event->curl_uploaded_bytes,
                         (long long)event->curl_downloaded_bytes);
+                    print_tcp_snapshot(&event->tcp_info);
+                    putchar('}');
                 }
                 printf("]}");
             }

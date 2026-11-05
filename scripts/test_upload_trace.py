@@ -97,7 +97,8 @@ class ClientTraceTests(unittest.TestCase):
         subprocess.run(["cc", "-O2", "-std=c11", "-pthread", "-Wall", "-Wextra", "-Werror",
                         str(ROOT / "scripts/bench_http_client.c"), "-o", str(cls.binary), *flags], check=True)
 
-    def request(self, enabled, reset=False, max_requests=1, trace_requests=None):
+    def request(self, enabled, reset=False, max_requests=1, trace_requests=None,
+                tcp_diagnostics=False):
         headers = []
 
         class Handler(BaseHTTPRequestHandler):
@@ -130,6 +131,9 @@ class ClientTraceTests(unittest.TestCase):
                     **os.environ,
                     "UVICORN_RS_UPLOAD_TRACE": "1" if enabled else "",
                     "UVICORN_RS_UPLOAD_TRACE_REQUESTS": trace_requests or "",
+                    "UVICORN_RS_HTTP_CLIENT_TCP_DIAGNOSTICS": (
+                        "1" if tcp_diagnostics else ""
+                    ),
                 },
                 capture_output=True, text=True, timeout=20)
         finally:
@@ -171,9 +175,15 @@ class ClientTraceTests(unittest.TestCase):
         self.assertTrue(any(event["event"] == "curl-progress" for event in events))
 
     def test_request_selection_traces_only_the_selected_worker_attempt(self):
-        traced, headers = self.request(True, max_requests=3, trace_requests="0:2")
+        traced, headers = self.request(
+            True,
+            max_requests=3,
+            trace_requests="0:2",
+            tcp_diagnostics=True,
+        )
         diagnostics = traced["upload_trace"]
         self.assertEqual(diagnostics["request_selection"], ["0:2"])
+        self.assertTrue(diagnostics["tcp_info_enabled"])
         self.assertEqual(len(headers), 3)
         self.assertIsNone(headers[0])
         self.assertRegex(headers[1], r"^\d+-0-2$")
@@ -183,6 +193,13 @@ class ClientTraceTests(unittest.TestCase):
         self.assertEqual(transfer["request_id"], headers[1])
         self.assertEqual(transfer["worker_attempt"], 2)
         self.assertEqual(diagnostics["callback_bytes"], 8192)
+        self.assertIn("tcp_info_before", transfer)
+        self.assertIn("sampled", transfer["tcp_info_before"])
+        progress = [event for event in transfer["events"]
+                    if event["event"] == "curl-progress"]
+        self.assertTrue(progress)
+        self.assertIn("tcp_info", progress[0])
+        self.assertIn("sampled", progress[0]["tcp_info"])
 
     def test_request_selection_rejects_non_decimal_attempts(self):
         result = subprocess.run(
@@ -217,9 +234,10 @@ class ClientTraceTests(unittest.TestCase):
         self.assertIn("outside concurrency 1", result.stderr)
 
     def test_transport_failure_retains_correlated_callback_timestamps(self):
-        result, headers = self.request(True, reset=True)
+        result, headers = self.request(True, reset=True, tcp_diagnostics=True)
         trace = result["first_failure"]["upload_trace"]
         self.assertEqual(trace["request_id"], headers[0])
+        self.assertIn("tcp_info_before", trace)
         self.assertGreaterEqual(trace["completed"], trace["started"])
         if trace["callback_calls"]:
             self.assertGreaterEqual(trace["last_callback"], trace["first_callback"])

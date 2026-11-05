@@ -635,6 +635,7 @@ jobs:
           UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE: ${{ inputs.fastapi_peer_read_mode == 'on-read' && 'on-read' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-peer-read=on-read]') && 'on-read') || '' }}
           UVICORN_RS_UPLOAD_TRACE: "1"
           UVICORN_RS_UPLOAD_TRACE_REQUESTS: ${{ inputs.upload_trace_requests || '' }}
+          UVICORN_RS_HTTP_CLIENT_TCP_DIAGNOSTICS: ${{ github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-fastapi-upload-trace' && '1' || '' }}
           # Selected request traces are retained even when they finish quickly.
           UVICORN_RS_UPLOAD_TRACE_MIN_MS: ${{ inputs.upload_trace_requests != '' && '1' || '20' }}
         run: |
