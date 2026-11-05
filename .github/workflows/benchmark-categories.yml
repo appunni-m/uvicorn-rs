@@ -47,13 +47,14 @@ on:
           - focused-h2
           - focused-h3
       fastapi_system:
-        description: Runner for the focused FastAPI timing or stage diagnostic
+        description: Runner for the focused FastAPI diagnostic; Ubuntu 22.04 ARM64 isolates an older Linux kernel
         default: linux-x86_64
         required: true
         type: choice
         options:
           - linux-x86_64
           - linux-aarch64
+          - linux-aarch64-22.04
           - macos-arm64
       fastapi_workload:
         description: One maintained FastAPI workload for a focused comparison
@@ -576,7 +577,7 @@ jobs:
   focused-fastapi-stage-diagnostic:
     name: ${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }} · ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }} · ${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x ${{ inputs.run_mode == 'focused-fastapi-upload-trace' && 'upload trace' || 'matched ASGI stage diagnostic' }} · timer ${{ inputs.upload_trace_timer || 'pinned' }} · peer-read ${{ inputs.fastapi_peer_read_mode || 'proactive' }}-${{ inputs.fastapi_peer_read_chunk || '64k' }} · Tokio ${{ inputs.fastapi_trace_tokio || 'current' }} · Hyper ${{ inputs.fastapi_trace_http_deps == 'historical' && '1.11.1' || 'current' }}
     if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-fastapi-upload-trace')) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-fastapi-stage]')) }}
-    runs-on: ${{ (inputs.fastapi_system == 'linux-aarch64' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]'))) && 'ubuntu-24.04-arm' || inputs.fastapi_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
+    runs-on: ${{ inputs.fastapi_system == 'linux-aarch64-22.04' && 'ubuntu-22.04-arm' || (inputs.fastapi_system == 'linux-aarch64' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]'))) && 'ubuntu-24.04-arm' || inputs.fastapi_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
