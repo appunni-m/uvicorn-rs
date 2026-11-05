@@ -43,28 +43,34 @@ repetitions for both loops on all three systems. This is provisional develop
 evidence, not the exact-main release benchmark. The same matrix shows the stock
 FastAPI HTTP/1.1 validated route slower on all six system/loop pairs; do not
 claim a broad FastAPI speed gain. See [benchmark status](benchmark-status.md)
-for the artifact identity and the single approved ARM64 slow-reader exception.
+for the artifact identity and the exact Hypercorn H3 reference exceptions.
 
 An earlier main-branch run,
 [39689988939](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939),
 had an incomplete Linux ARM64 H3 category after Hypercorn 0.18.0 asyncio raised
 `KeyError: 52` in `slow-reader-backpressure`. The retained logs do not establish
-event order or root cause. The current matrix records only the approved
+event order or root cause. Run 282's reanalysis records only the approved
 reference exception for that exact cell; it does not hide other failures.
 
-The maintained matrix has one narrowly scoped exception for that retained
-Linux ARM64 reference failure: when both `hypercorn-asyncio` and
-`uvicorn-rs-asyncio` are selected, the runner omits only the Hypercorn 0.18.0
-`slow-reader-backpressure` cell on Linux `aarch64`. It records the policy ID,
-reason, platform, version, and omitted reference in the H3 report and driver
-receipt. The Rust asyncio candidate still runs every planned repetition and
-must pass its response and shutdown checks. That cell has no live reference,
-so it cannot produce a speedup or latency comparison. The exception does not
-apply to other workloads, servers, versions, or systems; the trace-only mode
-still runs Hypercorn so the failure can be investigated. Timeouts and server
-behavior are unchanged, and the retained logs do not establish event ordering
-or root cause. A complete exact-main three-system run is still required for
-release qualification.
+Run 351 also failed the macOS ARM64 H3 `large-response` comparison: in
+Hypercorn 0.18.0 asyncio repetition 3, request 101 received 189,714 bytes
+despite `Content-Length: 1048576`, then Hypercorn's QUIC UDP task raised
+`KeyError(400)` while indexing its H3 stream map. The retained artifact
+confirms the truncation and missing map entry but not event ordering. The run
+ended before collecting all uvicorn-rs repetitions for this workload.
+
+The maintained matrix has two exact reference exceptions. When both
+`hypercorn-asyncio` and `uvicorn-rs-asyncio` are selected, the runner omits only
+the Hypercorn 0.18.0 `slow-reader-backpressure` cell on Linux `aarch64`, or the
+Hypercorn 0.18.0 `large-response` cell on macOS `arm64`. Each H3 report and
+driver receipt records the policy ID, reason, platform, version, and omitted
+reference. The Rust candidate still runs every planned repetition and must
+pass response and shutdown checks. An excluded cell has no live reference and
+cannot produce a speedup or latency comparison. These exceptions do not apply
+to other workloads, servers, versions, or systems; the slow-reader trace-only
+mode still runs Hypercorn so the earlier failure can be investigated. Neither
+captured log establishes event ordering or root cause. A complete exact-main
+three-system run is still required for release qualification.
 
 **Timing qualification:** the category runners now explicitly match access-log,
 server-header, and date-header settings between uvicorn-rs and its reference.
@@ -902,12 +908,12 @@ slow-reader concurrency is fixed at 2 by the workload; WebSocket handshake
 concurrency is fixed at 1.
 
 The H3 comparison runner aborts on reference correctness failures except for
-the exact recorded Linux ARM64 / Hypercorn 0.18.0 asyncio slow-reader cell
-described above. That exception is applied only when both sides of that pair
-are selected; a reference-only diagnostic still runs Hypercorn and can retain
-its failure. Other failures remain correctness failures, not performance
-results. Keep the full log and partial stdout, then collect candidate-only H3
-data in a separate file if that is useful for tracking the Rust server itself:
+the exact Linux ARM64 slow-reader and macOS ARM64 large-response cells described
+above. Each exception is applied only when both sides of that pair are selected;
+a reference-only diagnostic still runs Hypercorn and can retain its failure.
+Other failures remain correctness failures, not performance results. Keep the
+full log and partial stdout, then collect candidate-only H3 data in a separate
+file if that is useful for tracking the Rust server itself:
 
 ```sh
 uv run --no-sync python scripts/run_h3_category_bench.py \
@@ -977,14 +983,17 @@ PY
 This standalone command plans 144 H1 rows for the 12 listed workloads at three
 repetitions. H3 ordinarily has 78 rows rather than 84 because its known-failing
 Hypercorn upload comparison is omitted. On the exact Linux ARM64 exception
-context, H3 has three fewer rows: the one Hypercorn asyncio slow-reader cell is
-explicitly absent from both the plan and report, while all three Rust asyncio
-candidate repetitions remain required. Check the report's `reference_exclusions`
-and `excluded_servers_by_workload` against the policy and verify that the Rust
-rows are present and correctness- and lifecycle-valid. Unlisted missing rows
-remain failures; they must be retained in the logs and cannot be silently
-dropped. Candidate-only H3 output is useful as separate correctness evidence,
-but it cannot replace a matched comparison or produce a Hypercorn speedup.
+context, H3 has three fewer rows: the Hypercorn asyncio slow-reader cell is
+absent while all three Rust asyncio repetitions remain required. On the exact
+macOS ARM64 exception context, H3 also has three fewer rows for the Hypercorn
+asyncio large-response reference; all three Rust asyncio repetitions remain
+required. The full five-repetition matrix omits five reference rows for each
+matching exception. Check the report's `reference_exclusions` and
+`excluded_servers_by_workload` against the policy and verify that the Rust rows
+are present and correctness- and lifecycle-valid. Unlisted missing rows remain
+failures; retain them in logs instead of dropping them. Candidate-only H3
+output is useful as separate correctness evidence, but it cannot replace a
+matched comparison or produce a Hypercorn speedup.
 
 Row counts and response equality are correctness checks only. For every category,
 also inspect `metadata.identity_stable`, `timing_excluded_rows`,

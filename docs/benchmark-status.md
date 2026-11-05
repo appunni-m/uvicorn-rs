@@ -4678,3 +4678,74 @@ reference pair. A reference-only diagnostic, including the dedicated event
 trace mode, still runs Hypercorn. No timeout was increased and no server
 behavior was changed. A complete exact-source three-system run after this
 harness change is still required; run 281 remains partial evidence.
+
+## Latest three-system matrix run 351: macOS H3 reference failure (2026-11-05)
+
+[Run 351](https://github.com/appunni-m/uvicorn-rs/actions/runs/42114998939)
+used `develop` source `9f28884e7d160762e1059c8f445aaa67a9b0c35e`. The macOS
+ARM64 category job uploaded artifact
+[13460933239](https://github.com/appunni-m/uvicorn-rs/actions/runs/42114998939/artifacts/13460933239),
+SHA-256 `6ed074a0a1d4391f1e1f8451733a35966982c7d6adff6828b732e58f9834f390`.
+Linux x86-64 uploaded artifact
+[13460699181](https://github.com/appunni-m/uvicorn-rs/actions/runs/42114998939/artifacts/13460699181),
+SHA-256 `6bb9f96934bd8b005a19f625034a3f9b9773274a5cd81eef9633f87e6651557a`;
+Linux ARM64 uploaded artifact
+[13460509748](https://github.com/appunni-m/uvicorn-rs/actions/runs/42114998939/artifacts/13460509748),
+SHA-256 `6939b04d90ed5d7ef01234f775369562e9215ea2577151dcf2a1e2f6cbaa0a61`.
+Both Linux jobs completed successfully with zero correctness failures. Linux
+x86-64 has H1/H2/H3/WebSocket/lifecycle row counts 320/160/140/60/20; Linux
+ARM64 has 320/160/135/60/20, with five rows omitted for the already approved
+Linux ARM64 H3 slow-reader reference exception. All included Linux rows were
+eligible and every measured pair had five valid matches.
+
+The macOS report has H1 (320), H2 (160), WebSocket (60), and lifecycle (20)
+rows; H3 stopped at 70 of 140 rows after a reference-side correctness failure.
+The macOS artifact records unrelated-host-CPU rejections in H1 (2 rows), H2
+(4), H3 (2), and lifecycle (2); those rejected timing samples remain visible
+in the category analysis.
+
+The failing case was HTTP/3 `large-response`, Hypercorn 0.18.0 asyncio,
+repetition 3. Request 101 returned 189,714 bytes while declaring
+`Content-Length: 1048576`; the client rejected the truncated body. Hypercorn's
+QUIC UDP task then raised `KeyError(400)` at `self.streams[event.stream_id]`
+inside its H3 event handler. The artifact proves the incomplete response and
+missing stream-map entry. It does not include a trace of the event ordering or
+establish the underlying race. Rust asyncio candidate repetitions 1 and 2
+passed; repetition 3 was not reached, so the full candidate repetition set
+has not yet been demonstrated for this workload.
+
+The source-audited policy now excludes only the Hypercorn asyncio large-response
+reference cell on macOS ARM64, preserving all candidate repetitions and emitting
+no ratio for that pair. The earlier Linux ARM64 slow-reader exception remains
+separate. The focused policy test passes all seven cases. Run 351 predates this
+policy change and remains incomplete for H3; the Linux artifact evidence is
+complete and does not need to be rerun for this source revision.
+
+The full HTTP/1 category analysis shows a repeatable regression on the ordinary
+FastAPI `fastapi-validated-route` workload. Throughput is uvicorn-rs divided by
+Uvicorn; p95, server CPU per operation, and sampled server RSS are shown as
+reference/candidate pairs. The artifact analysis also retains p50/p99, client
+CPU, request counts, and every rejected sample.
+
+| System | Loop | Throughput ratio | p95 ms ref/candidate | Server CPU μs/op ref/candidate | RSS MiB ref/candidate |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Linux x86-64 | asyncio | 0.530 | 9.060 / 17.614 | 105.5 / 259.5 | 48.4 / 58.5 |
+| Linux x86-64 | uvloop | 0.545 | 7.661 / 16.565 | 103.6 / 242.8 | 51.1 / 65.2 |
+| Linux ARM64 | asyncio | 0.744 | 13.178 / 21.564 | 196.4 / 343.1 | 47.5 / 55.4 |
+| Linux ARM64 | uvloop | 0.812 | 12.534 / 19.167 | 189.2 / 302.8 | 49.8 / 57.2 |
+| macOS ARM64 | asyncio | 0.550 | 16.688 / 29.808 | 128.5 / 285.2 | 46.2 / 58.0 |
+| macOS ARM64 | uvloop | 0.525 | 17.310 / 28.310 | 116.9 / 269.2 | 48.8 / 59.2 |
+
+The historical Linux ARM64 `fastapi-upload-1m-write-1k` timeout did not recur:
+the full run has five valid matches on both loops and no client timeouts or
+correctness failures. This is not a root-cause diagnosis. The measured
+throughput ratios are 0.757 (asyncio) and 0.814 (uvloop); p95 is 16.978/21.077
+ms and 16.871/19.444 ms reference/candidate, server CPU is 1435/1910 and
+1449/1706 μs per operation, and sampled server RSS is 56.1/62.7 and 58.3/65.0
+MiB. The previous timeout still needs a reproducible request-level trace before
+it can be called fixed or explained.
+
+A focused five-run macOS H3 `large-response` asyncio-pair run is still needed
+to check all candidate repetitions under the new exact reference exception.
+The PR candidate also needs the exact-main three-system benchmark after merge;
+run 351 is useful development evidence, not final main-source qualification.
