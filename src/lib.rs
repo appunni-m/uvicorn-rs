@@ -6040,7 +6040,10 @@ async fn pump_http_request_body(
     let body_batch_max_wait = HTTP_REQUEST_BODY_BATCH_MAX_WAIT;
     let mut body_segments = Vec::new();
     let mut body_len = 0usize;
-    let mut body_started: Option<tokio::time::Instant> = None;
+    // The timeout branch is enabled only while a batch is nonempty, and its
+    // first segment always records the batch start. Keep that invariant in the
+    // type instead of carrying an unreachable `None` timeout case.
+    let mut body_started = tokio::time::Instant::now();
     #[cfg(feature = "runtime-diagnostics")]
     let mut body_frame_pending_since = diagnostics
         .upload_trace_enabled()
@@ -6065,8 +6068,8 @@ async fn pump_http_request_body(
             return;
         }
         #[cfg(feature = "runtime-diagnostics")]
-        let flush_deadline = if recreate_body_batch_timer {
-            body_started.map(|started| started + body_batch_max_wait)
+        let flush_deadline = if recreate_body_batch_timer && !body_segments.is_empty() {
+            Some(body_started + body_batch_max_wait)
         } else {
             None
         };
@@ -6132,16 +6135,14 @@ async fn pump_http_request_body(
                 } => {
                     diagnostics.http_body_frame_wait_finished(frame_wait_started);
                     diagnostics.http_body_batch_timeout_flush();
-                    if let Some(started) = body_started {
-                        diagnostics.upload_event_with_duration(
-                            "read-batch-timeout-flush",
-                            body_len,
-                            false,
-                            started.elapsed(),
-                        );
-                        diagnostics.http_request_body_batch_deadline_flush(started.elapsed());
-                    }
-                    body_started = None;
+                    let body_batch_elapsed = body_started.elapsed();
+                    diagnostics.upload_event_with_duration(
+                        "read-batch-timeout-flush",
+                        body_len,
+                        false,
+                        body_batch_elapsed,
+                    );
+                    diagnostics.http_request_body_batch_deadline_flush(body_batch_elapsed);
                     None
                 },
                 frame = body.frame() => {
@@ -6222,7 +6223,6 @@ async fn pump_http_request_body(
                             {
                                 return;
                             }
-                            body_started = None;
                         }
                         if data.len() > body_batch_limit {
                             let message = RequestMessage {
@@ -6260,7 +6260,7 @@ async fn pump_http_request_body(
                             body_batch_timer
                                 .as_mut()
                                 .reset(started + body_batch_max_wait);
-                            body_started = Some(started);
+                            body_started = started;
                         }
                         body_len = body_len.saturating_add(data.len());
                         body_segments.push(data);
