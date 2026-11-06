@@ -14,34 +14,33 @@
 
 ## Current unified coverage status (2026-11-07)
 
-Exact-main CI [#42189108870](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870)
-on `24f5b6a2afcab0b58adb945427e585a16d7b0e0d` passed all 1,453 cases (1,194
-ASGI and 259 native), with three ASGI and three native repeats, zero failures,
-and complete attribution. The raw report records **15,061/15,061 regions and
-11,075/11,075 lines**. Its artifact is
-[#13494831300](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870/artifacts/13494831300),
-SHA-256 `d1f71e1c23bbc5a88e5620dc668f0809ec0caf48e4bf964a893da90f1ae09015`.
+PR CI [#42277312616](https://github.com/appunni-m/uvicorn-rs/actions/runs/42277312616),
+attempt 1, tests PR head `df77c111533c8060384d7b5dad174951c9dd8518` at merge
+source `1a296b99b9525411a6cdcef74d1d7d89fedf114d`. All 1,453 cases (1,194 ASGI
+and 259 native) passed through three ASGI and three native repeats with complete
+attribution. The raw report records **15,061/15,061 regions and 11,075/11,075
+lines**. Coverage artifact
+[#13539917811](https://github.com/appunni-m/uvicorn-rs/actions/runs/42277312616/artifacts/13539917811)
+has archive SHA-256
+`be266bf7c9c12c3b45c13d091f62fac70306e11eeb57c43189b920556b313639`; report
+SHA-256 is `d727c43ac9f5603cb0e3ce2ae66702c65b8e45daae23c5655cbd9b000bb929d3`.
 
-This clears the coverage amount gate on the main baseline, but not the final
-candidate. PR CI [#714](https://github.com/appunni-m/uvicorn-rs/actions/runs/42265761156)
-was shut down by the runner after pass 1/3 and produced no report. The required
-independent Coverage-MCP review is still missing. The review attempt against
-the main report failed because the local daemon did not become healthy; its log
-reports a busy daemon on port 59471 and closed connections. Re-run the review
-after restoring the daemon, then repeat it on the final exact-source report.
-
-The main report qualifies only commit `24f5b6a2afcab0b58adb945427e585a16d7b0e0d`;
-it does not qualify the later PR #24 source.
+The compact, source-bound Coverage-MCP projection received all 45 unfiltered
+region pages and the complete line page. The attached receipt validates
+`source=matches_receipt`, `tests=passed`, and `gate=passed`; its SHA-256 is
+`dc70fd196b08a515af593d146e582a598fe5e26dd9955e4d7e99eeb0241c9501`. This
+review qualifies the PR merge source only. After merge, record the final
+main-source CI report, raw artifact identity, build identity, and 100% region
+and line totals. Per the maintainer's current direction, a separate
+Coverage-MCP review receipt is not a release requirement.
 
 ### Historical unified coverage status (2026-11-05)
 
 The exact-source unified report must have 100% measured production regions and
-lines, and the complete matrix must pass three times. An accepted independent
-Coverage-MCP review must inspect every unfiltered region and line page for that
-same final-source report. The candidate records and revalidates the source, CI
-run and attempt, artifact digest, report, context, build, raw-file hashes, and
-actual MCP transcript and receipt. The waiver recorded on 2026-11-05 was later
-superseded by the active release goal.
+lines, and the complete matrix must pass three times. The candidate records and
+revalidates the source, CI run and attempt, artifact digest, report, context,
+build, and raw-file hashes. Per the maintainer's current direction, an
+independent Coverage-MCP transcript and receipt are not required.
 
 Exact-main CI [#661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
 passed on clean source `feb955d2758166ad8c4b519903fd1318b29e7d2d`, run
@@ -73,9 +72,9 @@ batch-timer invariant in the type and removes that unreachable state.
 A later follow-up handles the macOS TLS-over-Unix-socket `NotConnected`
 shutdown log mismatch found by CI #689. Because that follow-up changes
 `src/lib.rs`, CI #689 cannot be accepted as exact-source coverage even if its
-job completes; a fresh full report is required. The temporary waiver recorded
-for that historical snapshot does not apply to the active release goal, which
-requires a separate source-bound Coverage-MCP review.
+job completes; a fresh full report is required. The maintainer later confirmed
+that a separate source-bound Coverage-MCP receipt is not required; the final
+source still needs its own exact 100% raw coverage report.
 
 The matching three-system benchmark [#283](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681)
 also passed. Its aggregate artifact is
@@ -127,8 +126,9 @@ Those issues motivated the latest evidence-tooling batch. The historical
 measurement does not qualify current source or complete release acceptance.
 
 The final-source report must retain both measured objects, pass strict replay,
-and obtain actual unfiltered Coverage-MCP region/line pages through the
-source-bound handoff. Coverage thresholds and source exclusions are unchanged.
+and record the exact source, run, artifact, report, context, and build
+identities. Coverage thresholds and source exclusions are unchanged. A
+separate Coverage-MCP receipt is not required by the maintainer.
 See the [release sequence](releases.md).
 
 ### Historical full report: CI #596 (2026-11-01)
@@ -161,9 +161,10 @@ six selected multi-worker CLI parity cases (6/6, zero infrastructure
 failures). Its artifact is
 [13086090330](https://github.com/appunni-m/uvicorn-rs/actions/runs/41311364502/artifacts/13086090330).
 This selected run is not a full parity matrix or a coverage report. There is
-still no exact-current-source 100% unified coverage result and no accepted
-independent Coverage-MCP receipt; `7t4g` remains open. The normal build
-excludes fault controls.
+still no exact-current-source 100% unified coverage result at that historical
+checkpoint. PR #24 later passed the 100% gate on its merge source; `7t4g`
+remains open for final-main raw coverage evidence. The normal build excludes
+fault controls.
 
 ### Earlier focused coverage batches
 

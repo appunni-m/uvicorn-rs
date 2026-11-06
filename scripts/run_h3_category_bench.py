@@ -358,14 +358,23 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=20261002)
     parser.add_argument("--output", type=Path, default=ROOT / "benchmarks" / "results" / "http3-categories-2026-10-02.json")
     args = parser.parse_args()
+    trace_workload_repetitions = {
+        ("slow-reader-backpressure", 1),
+        # The hosted Linux ARM64 matrix lost one response after thousands of
+        # successful FastAPI route requests. Five traced repetitions retain
+        # the same request volume/order as the failed category while marking
+        # every measurement invalid for performance use.
+        ("fastapi-validated-route", 5),
+    }
     if args.trace_hypercorn_h3_events and (
-        args.workloads != ["slow-reader-backpressure"]
+        len(args.workloads) != 1
+        or (args.workloads[0], args.repetitions) not in trace_workload_repetitions
         or args.servers != ["hypercorn-asyncio"]
-        or args.repetitions != 1
     ):
         parser.error(
-            "--trace-hypercorn-h3-events requires exactly --workloads slow-reader-backpressure "
-            "--servers hypercorn-asyncio --repetitions 1"
+            "--trace-hypercorn-h3-events requires exactly --servers hypercorn-asyncio and "
+            "either --workloads slow-reader-backpressure --repetitions 1 or "
+            "--workloads fastapi-validated-route --repetitions 5"
         )
     assert_clean_coverage_environment()
     if not PYTHON.exists():

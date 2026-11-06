@@ -9,17 +9,18 @@ a drop-in replacement.
 
 ## Current qualification status — 2026-11-07
 
-Main CI [#42189108870](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870)
-on `24f5b6a2afcab0b58adb945427e585a16d7b0e0d` passed installed-wheel parity,
-the named custom HTTP/WebSocket hooks, `ssl_context_factory`, ALPN,
-response-capacity inputs, candidate consumers, and three-repeat unified
-coverage at 100% regions and lines. PR CI
-[#714](https://github.com/appunni-m/uvicorn-rs/actions/runs/42265761156)
-passed parity and candidate consumers, but its coverage runner shut down after
-pass 1/3. The PR source has no accepted independent Coverage-MCP review and no
-complete benchmark. The current release goal requires both for the final
-source. See the [current user-facing status](../uvicorn-compatibility.md#current-status-2026-11-07)
-for the release gate view.
+PR CI [#42277312616](https://github.com/appunni-m/uvicorn-rs/actions/runs/42277312616)
+passed installed-wheel parity, the named custom HTTP/WebSocket hooks,
+`ssl_context_factory`, ALPN, response-capacity inputs, candidate consumers,
+native composition, and three-repeat unified coverage at 100% regions and
+lines. A source-bound Coverage-MCP review of its merge source is complete. The
+current matched benchmark [#42288036588](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588)
+completed partially: x86-64 and macOS ARM64 completed all categories, while
+Linux ARM64 stopped in the HTTP/3 Hypercorn asyncio reference at
+`fastapi-validated-route` repetition 4 after a response-header timeout. The
+candidate parity gates passed on all systems, but a complete three-system
+benchmark and final main-source CI/artifact evidence remain required. See the
+[current user-facing status](../uvicorn-compatibility.md#current-status-2026-11-07).
 
 ## Acceptance of known differences
 
@@ -45,8 +46,10 @@ cleanup, second signal, or diagnostic wakeup connection needed for success.
 The stock-only reproducer and captured blocked-accept evidence are retained in
 [`tools/upstream/uvicorn-windows`](https://github.com/appunni-m/uvicorn-rs/tree/f0eef8911fa334c7a37a723db9fefc4ffee810f6/tools/upstream/uvicorn-windows).
 This rule does not waive raw 100% coverage, benchmark or artifact requirements.
-The maintainer waived a separate independent Coverage-MCP review on
-2026-11-05.
+Per the maintainer's current direction, a separate independent Coverage-MCP
+review or receipt is not required. Final-main CI must still record the exact
+source raw report at 100% regions and lines with the complete passing matrix
+and retained run/artifact/build identities.
 
 The executable exception is
 `uvicorn-0.54.0-windows-two-worker-sigint-tcp-wakeup@2`, implemented in

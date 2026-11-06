@@ -24,10 +24,10 @@ source lines**. The retained raw artifact is
 [13313323556](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662/artifacts/13313323556),
 SHA-256 `d7ce785d590e7195be7eaa57e7761b8acb182ac4475599e2ab43cbd45567745d`.
 The owner temporarily waived a separate Coverage-MCP review for this exact-main
-baseline; no review receipt is claimed. The active 2026-11-05 release goal
-supersedes that waiver and requires an accepted independent review of the final
-source report. The candidate workflow records and revalidates the exact report,
-context, build, artifact and raw-file identities.
+baseline; no review receipt is claimed. The maintainer's 2026-11-07 direction
+confirms that a separate MCP receipt is not required. The candidate workflow
+records and revalidates the exact report, context, build, artifact, and raw-file
+identities for the final source.
 
 The same CI run passed Linux x86-64, macOS ARM64 and Windows x86-64 package
 consumers, the Python 3.9 floor consumer, and the native FastAPI-RS →

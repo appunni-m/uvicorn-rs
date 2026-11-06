@@ -23,29 +23,31 @@ Use these state labels precisely:
 ## Current release gates (2026-11-07)
 
 PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) is open from
-`develop` to `main`. Exact-main CI [#42189108870](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870)
-on `24f5b6a2afcab0b58adb945427e585a16d7b0e0d` passed installed-wheel parity,
-native composition, package consumers, and three-repeat coverage at 100%
-(15,061/15,061 regions and 11,075/11,075 lines). This is a baseline, not final
-candidate evidence. PR CI [#714](https://github.com/appunni-m/uvicorn-rs/actions/runs/42265761156)
-passed parity and candidate consumers, but the runner shut down its coverage
-job after pass 1/3, before producing a report. The PyPI metadata summary
-correction must be included in the final source and its candidate artifacts
-rebuilt. That final source still needs complete CI and an accepted independent
-Coverage-MCP review.
+`develop` to `main`. PR CI [#42277312616](https://github.com/appunni-m/uvicorn-rs/actions/runs/42277312616),
+attempt 1, passed installed-wheel parity, native composition, candidate package
+and consumer checks on Linux, macOS, and Windows, the Python 3.9 consumer, and
+three-repeat coverage at 100% (15,061/15,061 regions and 11,075/11,075 lines).
+An independent Coverage-MCP review covered all unfiltered pages for its PR
+merge source as supplemental evidence. Per the maintainer's current direction,
+another MCP receipt is not required. Final main-source CI must still record
+the exact-source 100% coverage report.
 
-The latest main benchmark [#42189108882](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
-passed Linux x86-64 and Linux ARM64. macOS ARM64 failed at the stock-Uvicorn
-WebSocket oracle timeout before categories ran, so the aggregate is incomplete.
-The focused Linux ARM64 upload trace was skipped. A final matched three-system
-matrix and honest performance decision remain required. Prior complete results
-show workload-specific gains and regressions, with no broad FastAPI speedup.
+The matched benchmark [#42288036588](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588)
+completed with a partial aggregate. Linux x86-64 and macOS ARM64 completed all
+categories; Linux ARM64 stopped in HTTP/3 after Hypercorn 0.18.0 asyncio
+`fastapi-validated-route` repetition 4 hit a client timeout waiting for
+response headers. All candidate public-parity gates passed, but the matrix is
+not complete across all three systems. Available HTTP/1.1 FastAPI
+validated-route throughput is slower for the candidate, so no broad speedup
+claim is supported. Focused upload diagnostic
+[#42285812866](https://github.com/appunni-m/uvicorn-rs/actions/runs/42285812866)
+did not reproduce the separate historical HTTP/1 upload timeout on its Linux
+ARM64 kernel 7.0 host; it does not explain the new HTTP/3 reference timeout.
 
-Main CI #421891 built the Linux Cargo archives, wheel, and sdist, and passed
-its Linux, macOS, Windows, and Python-floor consumer checks. The artifacts are
-from the main baseline and predate the PyPI metadata summary correction, so
-they are not the final candidate. Earlier PR CI #712 artifacts below are also
-superseded and must not be published.
+The current PR CI candidate package and clean-consumer jobs passed, but final
+main-source Cargo and PyPI archives must be rebuilt, inspected, and verified
+after merge. Earlier artifact tables below are historical and must not be
+published. No 0.3.0 package or tag has been published.
 Registry queries on 2026-11-06 found both Cargo releases at 0.2.1, with no
 0.3.0; PyPI returns 404 for `uvicorn-rs`.
 

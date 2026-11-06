@@ -17,26 +17,32 @@ release targets are the Python-free `uvicorn-rs` server crate with optional
 
 ## Current verification status (2026-11-07)
 
-Main CI [#42189108870](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870)
-on `24f5b6a2afcab0b58adb945427e585a16d7b0e0d` passed installed-wheel parity,
-native composition, candidate package consumers, and three-repeat coverage at
-15,061/15,061 regions and 11,075/11,075 lines. This qualifies the main
-baseline, not the current final candidate. PR CI
-[#714](https://github.com/appunni-m/uvicorn-rs/actions/runs/42265761156)
-passed public parity and candidate consumers, but its coverage job was stopped
-by runner shutdown after pass 1/3 and produced no report. The active release
-gate still requires a full exact-source run and accepted Coverage-MCP receipt.
+PR CI [#42277312616](https://github.com/appunni-m/uvicorn-rs/actions/runs/42277312616),
+attempt 1, passed the installed-wheel public parity matrix, native composition,
+and Linux x86-64, macOS ARM64, Windows x86-64 and Python 3.9 candidate consumers.
+All 16 indexed custom HTTP/WebSocket protocol, `ssl_context_factory`, ALPN,
+HTTP/1 and HTTP/2 header/trailer, and WebSocket response-capacity cases passed
+in that source-bound matrix. Unified coverage passed all 1,453 cases through
+three ASGI and native repeats at 15,061/15,061 regions and 11,075/11,075 lines.
+Coverage-MCP reviewed the complete unfiltered region and line pages for the PR
+merge source as supplemental evidence. Per the maintainer's current direction,
+another MCP receipt is not required; final main-source CI must record its
+exact-source 100% coverage result.
 
-The latest main benchmark [#42189108882](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
-passed Linux x86-64 and Linux ARM64. macOS ARM64 failed before category
-measurements when the stock Uvicorn WebSocket oracle timed out, so the
-three-system aggregate is incomplete. The focused Linux ARM64 upload trace was
-skipped. Candidate artifacts built before the PyPI metadata summary correction
-must be rebuilt and checked from the final PR source.
+The matched benchmark [#42288036588](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588)
+completed with a partial aggregate: Linux x86-64 and macOS ARM64 completed all
+categories, but Linux ARM64 stopped in HTTP/3 when Hypercorn's asyncio
+`fastapi-validated-route` client timed out waiting for response headers in
+repetition 4. Candidate parity passed on all three systems. The historical
+Linux ARM64 HTTP/1 upload timeout was not reproduced by focused diagnostic
+[#42285812866](https://github.com/appunni-m/uvicorn-rs/actions/runs/42285812866)
+on kernel 7.0; its cause remains unknown. The new HTTP/3 reference timeout is a
+separate failure. The partial results do not establish a broad FastAPI speedup.
 
-The package scope remains a Python-free Cargo `uvicorn-rs` server crate with
-optional `http3`, `asgi-lifespan-protocol-rs`, and PyPI `uvicorn-rs` exposing
-the `uvicorn` namespace. No 0.3.0 release has been qualified or published.
+The package scope is one Python-free Cargo `uvicorn-rs` server crate with
+optional `http3`, the `asgi-lifespan-protocol-rs` crate, and the PyPI
+distribution `uvicorn-rs` exposing the `uvicorn` namespace and command. PR #24
+remains open; final main-source artifacts and publication are pending.
 
 ### Historical status (2026-11-05)
 
@@ -60,10 +66,10 @@ retries, but measured 15,056/15,057 regions and 11,078/11,078 lines. The one
 uncovered region was an unreachable optional request-body timer state, removed
 by the invariant change on the #689 head.
 
-That historical snapshot's waiver wording was superseded by the current release
-goal: an accepted independent Coverage-MCP review of the final-source report
-is required. Exact-source 100% regions/lines and a final-source three-system
-benchmark also remain required. No 0.3.0 package has been published.
+That historical snapshot's waiver wording has since been restored by the
+maintainer's decision that a separate Coverage-MCP receipt is not required.
+Exact-source 100% regions/lines and a final-source three-system benchmark still
+remain required. No 0.3.0 package has been published.
 
 ## Last complete exact-main release baseline (2026-11-04)
 

@@ -3,26 +3,50 @@
 <!-- BEGIN GENERATED LATEST ATTEMPT -->
 ## Latest automated benchmark attempt
 
-- Run: [42189108882 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
-- Commit: [`24f5b6a2afcab0b58adb945427e585a16d7b0e0d`](https://github.com/appunni-m/uvicorn-rs/commit/24f5b6a2afcab0b58adb945427e585a16d7b0e0d)
-- Recorded: 2026-11-06T10:16:38Z
-- Category matrix job: `failure`
-- Aggregate job: `failure`
+- Run: [42288036588 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588)
+- Commit: [`df77c111533c8060384d7b5dad174951c9dd8518`](https://github.com/appunni-m/uvicorn-rs/commit/df77c111533c8060384d7b5dad174951c9dd8518)
+- Recorded: 2026-11-06T22:03:25Z
+- Linux x86-64 category matrix job: `success` (`validated_complete_system`)
+- Linux ARM64 category matrix job: `failure` (`validated_partial_system`)
+- macOS ARM64 category matrix job: `success` (`validated_complete_system`)
+- Aggregate job: `success` (`validated_partial_matrix`)
 
-This attempt did not produce a validated three-system aggregate. No performance result was generated or substituted. The last complete exact-main report in [benchmark-results.md](benchmark-results.md) remains unchanged; the later complete develop matrix #358 is linked below and does not qualify PR #24. Inspect the [workflow artifacts and logs](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882) for this attempt.
+All three systems passed their exact-binary public-parity gates. Linux x86-64 and macOS ARM64 completed all categories. Linux ARM64 stopped in HTTP/3 when Hypercorn 0.18.0 asyncio, `fastapi-validated-route`, repetition 4, hit one client timeout waiting for response headers. Its category retained 15/135 rows and is incomplete; this reference timeout is not a candidate parity failure. The aggregate remains partial and does not qualify a complete three-system matrix. The candidate was slower on the HTTP/1.1 FastAPI validated route on each system; do not claim a broad FastAPI speedup. See the retained [aggregate artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588/artifacts/13544691498) and system artifacts. Do not rerun unchanged categories; isolate or explicitly resolve the reference timeout before requesting replacement evidence.
 <!-- END GENERATED LATEST ATTEMPT -->
 
 ## PR #24 benchmark status (2026-11-07)
 
-The current final PR source has not completed a benchmark. The latest main run
-[#42189108882](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
-passed Linux x86-64 and Linux ARM64. macOS ARM64 stopped at the stock Uvicorn
-WebSocket oracle timeout before category measurements, and the aggregate
-failed. The focused Linux ARM64 upload trace was skipped. The retained log
-shows the timeout on an encoded `/ws-scope-echo` request with duplicate headers
-and subprotocols. The run does not establish a candidate failure or a valid
-three-system result. Isolate that reference case and record candidate-side
-behavior before accepting a narrow reference-only exception.
+Benchmark run [#42288036588](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588)
+completed on develop head `df77c111533c8060384d7b5dad174951c9dd8518`. The
+exact-binary public-parity gate passed on all three systems. Linux x86-64 and
+macOS ARM64 completed their category matrices; Linux ARM64 failed the HTTP/3
+category on Hypercorn 0.18.0 asyncio, `fastapi-validated-route`, repetition 4:
+the client recorded one failure, `timed out waiting for H3 response headers`,
+after 4,954 successful responses. The Hypercorn server output was empty. The
+Linux ARM64 artifact retains only 15 of 135 planned H3 rows, so this is not a
+complete three-system matrix. The aggregate status is `validated_partial_matrix`.
+
+Available HTTP/1.1 FastAPI validated-route throughput ratios (Rust/reference)
+are 0.603/0.717 on Linux x86-64 and 0.661/0.655 on macOS ARM64 for asyncio and
+uvloop respectively. The partial Linux ARM64 report also shows lower HTTP/1.1
+throughput. H2/H3 results vary by workload. These results do not support a broad
+FastAPI speedup claim. Aggregate artifact [13544691498](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588/artifacts/13544691498)
+contains the per-system report and raw evidence.
+
+Focused Linux ARM64 upload diagnostic [#42285812866](https://github.com/appunni-m/uvicorn-rs/actions/runs/42285812866)
+completed three paired runs on kernel 7.0 with zero request failures or
+timeouts. It did not reproduce the historical HTTP/1 15-second upload timeout,
+so that cause remains unverified. This diagnostic is separate from the new
+HTTP/3 Hypercorn reference timeout above; it does not explain that failure.
+
+The focused H3 diagnostic now supports this exact FastAPI route on Linux ARM64
+with Hypercorn asyncio for five repetitions. It keeps a bounded 512-event
+server trace per sample, including received QUIC/H3 events, stream creation and
+closure, and response event type/status/body length. It records no header values
+or body contents. Traced rows are explicitly invalid for timing and cannot be
+used as benchmark results. This path is meant to establish whether the last
+timed-out client request reached Hypercorn and whether Hypercorn emitted its
+response before the timeout; it has not yet been run.
 
 ## Latest complete three-system matrix before PR #24 (2026-11-06)
 
@@ -41,8 +65,10 @@ This older complete matrix finds HTTP/1 FastAPI validated-route throughput
 below Uvicorn on all six system/loop pairs, while HTTP/2 and HTTP/3 gains vary
 by workload and WebSocket text echo is slower. It supports no general FastAPI
 speedup claim. The later main attempt #359 failed in the macOS reference
-WebSocket cases and has no validated aggregate. The current source needs its
-own focused ARM64 upload diagnosis and complete matched matrix.
+WebSocket cases and has no validated aggregate. The current source's upload
+diagnostic did not reproduce the historical HTTP/1 timeout; run #42288036588
+now has a separate Linux ARM64 HTTP/3 Hypercorn reference timeout and remains
+partial.
 
 ## Last complete exact-main result and performance interpretation (2026-11-04)
 

@@ -1,28 +1,13 @@
 # Can I replace Uvicorn?
 
 PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) is the active
-replacement candidate. Main CI [#42189108870](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870)
-passed installed-wheel parity, all three-repeat unified coverage (1,453/1,453
-cases, 15,061/15,061 regions, 11,075/11,075 lines), and candidate package
-consumers on `24f5b6a2afcab0b58adb945427e585a16d7b0e0d`. That report is bound to
-the main baseline, not the final PR source. Earlier PR CI
-[#714](https://github.com/appunni-m/uvicorn-rs/actions/runs/42265761156)
-passed public parity and package consumers, but its coverage runner shut down
-after the first of three passes and produced no report. A PyPI metadata summary
-correction is prepared on `develop`; wheels built before that correction must
-be rebuilt and checked on the final PR source.
-
-The custom HTTP/WebSocket protocol, `ssl_context_factory`, ALPN, and
-header/trailer-capacity inputs are included in the passing public parity
-evidence. Current-source receipts and user-facing support claims still need to
-be reconciled. The current PR head has not been benchmarked. Earlier
-measurements are workload-specific and do not support a general FastAPI speed
-advantage.
-
-Both distributions install files under the `uvicorn` import namespace. Keep
-upstream `uvicorn` and `uvicorn-rs` in separate environments. Use the
-[quickstart](quickstart.md) after publication and retain the
-[rollback environment](fastapi-evaluation.md#restore-upstream-uvicorn).
+replacement candidate from `develop` to `main`. The PyPI distribution is
+`uvicorn-rs`; it provides the `uvicorn` command and import namespace. The
+optional internal Python adapter remains `uvicorn-rs-py`. Keep upstream
+`uvicorn` and `uvicorn-rs` in separate environments because they install
+overlapping `uvicorn` files. The [quickstart](quickstart.md) and
+[rollback guide](fastapi-evaluation.md#restore-upstream-uvicorn) describe the
+candidate workflow.
 
 <a id="current-status-2026-11-02"></a>
 <a id="current-status-2026-11-04"></a>
@@ -32,23 +17,45 @@ upstream `uvicorn` and `uvicorn-rs` in separate environments. Use the
 
 ## Current status (2026-11-07)
 
-Main CI [#42189108870](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870)
-on `24f5b6a2afcab0b58adb945427e585a16d7b0e0d` passed installed-wheel public
-parity, native composition, package consumers, and the full three-repeat
-coverage gate at 100% regions and lines. This is a baseline result. PR #24's
-later CI [#714](https://github.com/appunni-m/uvicorn-rs/actions/runs/42265761156)
-passed public parity and candidate consumers, but the coverage runner was shut
-down after pass 1/3, before it produced a report. The required independent
-Coverage-MCP receipt is still missing; the local daemon did not become healthy
-when queried against the main report.
+PR CI [#42277312616](https://github.com/appunni-m/uvicorn-rs/actions/runs/42277312616),
+attempt 1, tests PR head `df77c111533c8060384d7b5dad174951c9dd8518` at synthetic
+merge source `1a296b99b9525411a6cdcef74d1d7d89fedf114d`. The installed-wheel
+public parity matrix, native FastAPI-RS → Starlette-RS → Uvicorn-RS composition,
+Rust checks, Python 3.9 consumer, and Linux, macOS, and Windows candidate package
+and consumer jobs passed. The three-repeat unified matrix passed all 1,453
+cases, recording **15,061/15,061 regions and 11,075/11,075 lines**.
 
-The latest main benchmark [#42189108882](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
-passed Linux x86-64 and Linux ARM64, but macOS ARM64 stopped at the stock
-Uvicorn WebSocket oracle timeout and the aggregate failed. The focused Linux
-ARM64 upload trace was skipped. A complete current-source matrix and its
-performance decision remain open. Final candidate rebuild, qualification, and
-publication remain open. The maintainer's real application trial follows
-repository completion.
+Coverage artifact [13539917811](https://github.com/appunni-m/uvicorn-rs/actions/runs/42277312616/artifacts/13539917811)
+has archive SHA-256
+`be266bf7c9c12c3b45c13d091f62fac70306e11eeb57c43189b920556b313639`; its raw
+report SHA-256 is `d727c43ac9f5603cb0e3ce2ae66702c65b8e45daae23c5655cbd9b000bb929d3`.
+An independent Coverage-MCP review of the compact projection covered all 45
+unfiltered region pages and the line page and validated against that merge
+source. This is supplemental PR evidence. Per the maintainer's current
+direction, no separate main-source MCP receipt is required; after merge, record
+the final main-source CI report and its 100% raw coverage totals.
+
+The current three-system benchmark
+[#42288036588](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588)
+completed with a partial aggregate: Linux x86-64 and macOS ARM64 completed all
+categories, while Linux ARM64 stopped in HTTP/3 after Hypercorn 0.18.0 asyncio
+`fastapi-validated-route` repetition 4 had one client timeout waiting for
+response headers. All three exact-binary public-parity gates passed. The
+aggregate does not qualify a complete three-system matrix, and available
+HTTP/1.1 FastAPI validated-route results are slower for the candidate. Focused upload diagnostic
+[#42285812866](https://github.com/appunni-m/uvicorn-rs/actions/runs/42285812866)
+completed three paired Linux ARM64 runs on kernel 7.0 with no request failures
+or timeouts; it did not reproduce the historical HTTP/1 15-second upload
+timeout or establish its cause. That diagnostic does not explain the distinct
+HTTP/3 Hypercorn timeout in #42288036588.
+
+Documentation build
+[#42277312707](https://github.com/appunni-m/uvicorn-rs/actions/runs/42277312707)
+passed for the PR source; deployment was skipped because this is not a `main`
+push. PR #24 remains open and no 0.3.0 package or tag has been published. Final
+main-source review, benchmark completion, and final candidate rebuild remain
+release gates. The maintainer's real FastAPI application trial follows release
+qualification.
 
 ### Historical PR #23 follow-up
 

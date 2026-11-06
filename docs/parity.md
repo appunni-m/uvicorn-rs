@@ -8,27 +8,29 @@
 
 ## Current source status (2026-11-07)
 
-Main CI [#42189108870](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870)
-on `24f5b6a2afcab0b58adb945427e585a16d7b0e0d` passed installed-wheel public
-parity and candidate package/consumer checks. PR CI
-[#714](https://github.com/appunni-m/uvicorn-rs/actions/runs/42265761156)
-also passed its installed-wheel parity and platform candidate checks. The named
-custom protocol, TLS factory/ALPN, and response-capacity inputs are included in
-that parity evidence.
+PR CI [#42277312616](https://github.com/appunni-m/uvicorn-rs/actions/runs/42277312616),
+attempt 1, ran the installed normal-wheel parity matrix against Uvicorn 0.54.0
+on PR head `df77c111533c8060384d7b5dad174951c9dd8518` at merge source
+`1a296b99b9525411a6cdcef74d1d7d89fedf114d`. The indexed public cases passed,
+including the custom protocol, TLS factory/ALPN, and response-capacity inputs.
+Native composition and Linux, macOS, Windows, and Python 3.9 candidate consumers
+also passed. The coverage job completed 1,453/1,453 cases through three ASGI
+and native repeats at 100% regions and lines. Coverage-MCP also reviewed the
+pre-merge projection, but the maintainer does not require a separate MCP
+receipt. Final main-source CI must still record its exact-source 100% report.
 
-The main baseline's unified report is 100% (15,061/15,061 regions and
-11,075/11,075 lines, three repeats). PR CI #714's coverage runner shut down
-after its first pass, so it produced no report for that source. An accepted
-independent Coverage-MCP review is also required for the final exact-source
-report.
-
-The latest main benchmark [#42189108882](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
-passed Linux x86-64 and Linux ARM64, but macOS ARM64 failed before benchmark
-categories when its stock Uvicorn WebSocket oracle timed out. The aggregate
-failed, and the focused Linux ARM64 upload trace was skipped. The final matched
-three-system matrix and performance decision remain open. A prior-source
-complete matrix shows workload-specific results and HTTP/1/WebSocket
-regressions; it does not establish a broad FastAPI speedup.
+The current matched benchmark [#42288036588](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588)
+completed on all three systems, but the aggregate is partial: Linux x86-64 and
+macOS ARM64 completed all categories; Linux ARM64 stopped in HTTP/3 when the
+Hypercorn asyncio reference timed out waiting for response headers in
+`fastapi-validated-route` repetition 4. Candidate exact-binary parity passed
+on all systems. The failure leaves the three-system benchmark gate open, and
+the available HTTP/1.1 validated-route results do not show a broad speedup.
+Focused diagnostic [#42285812866](https://github.com/appunni-m/uvicorn-rs/actions/runs/42285812866)
+did not reproduce the historical Linux ARM64 HTTP/1 upload timeout on its
+kernel 7.0 host; this does not establish the timeout's cause. Earlier complete
+measurements show workload-specific gains and regressions, not a broad FastAPI
+speedup.
 
 ### Historical source status (2026-11-03)
 

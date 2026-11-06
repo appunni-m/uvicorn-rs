@@ -20,12 +20,18 @@ sys.path.insert(0, str(ROOT))
 from aioquic.h3.connection import H3Connection
 from aioquic.h3.events import DataReceived, HeadersReceived
 from hypercorn.__main__ import main as hypercorn_main
-from hypercorn.protocol.events import StreamClosed
+from hypercorn.protocol.events import (
+    Data,
+    EndData,
+    InformationalResponse,
+    Response,
+    Trailers,
+)
 from hypercorn.protocol.h3 import H3Protocol
 
 
 MAX_TRACE_EVENTS = 512
-TRACE_SCHEMA = "hypercorn-h3-stream-v5"
+TRACE_SCHEMA = "hypercorn-h3-stream-v6"
 _protocols_by_connection: dict[int, H3Protocol] = {}
 _trace_records: deque[dict[str, object]] = deque(maxlen=MAX_TRACE_EVENTS)
 _recorded_events = 0
@@ -218,25 +224,43 @@ _original_stream_send = H3Protocol.stream_send
 
 
 async def _traced_stream_send(self: H3Protocol, event: object) -> None:
-    if isinstance(event, StreamClosed):
-        mapped_before = event.stream_id in self.streams
+    """Record bounded response-side events without retaining header/body data."""
+    stream_id = getattr(event, "stream_id", None)
+    fields: dict[str, object] = {
+        "stream_id": stream_id,
+        "stream_present_before": (
+            stream_id in self.streams if isinstance(stream_id, int) else None
+        ),
+    }
+    if isinstance(event, (InformationalResponse, Response)):
+        fields["status_code"] = event.status_code
+        fields["header_count"] = len(event.headers)
+    elif isinstance(event, Data):
+        fields["data_length"] = len(event.data)
+    elif isinstance(event, Trailers):
+        fields["trailer_count"] = len(event.headers)
+
+    event_type = type(event).__name__
+    _record(self, "stream_send_start", stream_event_type=event_type, **fields)
+    error_type: str | None = None
+    try:
+        await _original_stream_send(self, event)
+    except BaseException as error:
+        error_type = type(error).__name__
+        raise
+    finally:
+        mapped_after = (
+            stream_id in self.streams if isinstance(stream_id, int) else None
+        )
         _record(
             self,
-            "StreamClosed_before_pop",
-            stream_id=event.stream_id,
-            mapped_before=mapped_before,
+            "stream_send_error" if error_type is not None else "stream_send_end",
+            stream_event_type=event_type,
+            stream_id=stream_id,
+            error_type=error_type,
+            stream_present_after=mapped_after,
+            end_data=isinstance(event, EndData),
         )
-        try:
-            await _original_stream_send(self, event)
-        finally:
-            _record(
-                self,
-                "StreamClosed_after_pop",
-                stream_id=event.stream_id,
-                mapped_after=event.stream_id in self.streams,
-            )
-        return
-    await _original_stream_send(self, event)
 
 
 H3Protocol.stream_send = _traced_stream_send  # type: ignore[method-assign]
@@ -253,6 +277,14 @@ async def _traced_create_stream(self: H3Protocol, request: HeadersReceived) -> N
     fields = {
         "stream_id": stream_id,
         "request_method": method,
+        "request_path": next(
+            (
+                value.decode("utf-8", errors="replace")
+                for name, value in request.headers
+                if name == b":path"
+            ),
+            None,
+        ),
         "stream_ended": request.stream_ended,
     }
     _record(

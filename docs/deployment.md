@@ -1,15 +1,14 @@
 # Deployment guidance
 
 The `uvicorn-rs` 0.3.0 PyPI release is still being qualified and is not
-published. Main CI [#42189108870](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870)
+published. PR #24 CI [#42277312616](https://github.com/appunni-m/uvicorn-rs/actions/runs/42277312616)
 passed installed-wheel parity, package consumers, and three-repeat unified
-coverage at 15,061/15,061 regions and 11,075/11,075 lines. The independent
-Coverage-MCP receipt is still missing, and that main report does not qualify
-the final PR source. The latest benchmark [#42189108882](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
-is incomplete because the stock Uvicorn WebSocket oracle timed out on macOS;
-the focused Linux ARM64 upload trace also remains open. Final-source CI and
-candidate artifact verification are required after the PyPI metadata summary
-correction. See the [source-bound receipts](uvicorn-compatibility.md) and
+coverage at 15,061/15,061 regions and 11,075/11,075 lines for its merge source.
+The current benchmark [#42288036588](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588)
+is partial because the Linux ARM64 Hypercorn HTTP/3 reference timed out waiting
+for response headers; x86-64 and macOS ARM64 completed. After merge, run final
+main-source CI and qualify the exact Cargo/PyPI candidate artifacts and clean
+consumers. See the [compatibility status](uvicorn-compatibility.md) and
 [support matrix](support-matrix.md), then evaluate the released candidate with
 your application before deploying it.
 
