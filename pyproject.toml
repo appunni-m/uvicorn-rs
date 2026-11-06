@@ -12,7 +12,7 @@ license-files = [
     "LICENSE-MIT",
     "LICENSE-PSF-2.0",
 ]
-description = "Python ASGI client for the Rust-native Uvicorn-RS server"
+description = "Rust-native Uvicorn-compatible server for Python ASGI applications"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
