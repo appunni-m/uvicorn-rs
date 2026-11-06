@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Focused acceptance fixtures for raw release coverage and optional MCP evidence."""
+"""Focused acceptance fixtures for exact-source raw and MCP release evidence."""
 
 from __future__ import annotations
 
@@ -299,7 +299,7 @@ def main() -> int:
             "--output", str(coverage_evidence_path))
         recorded_coverage = json.loads(coverage_evidence_path.read_text(encoding="utf-8"))
         review = recorded_coverage.get("coverage_review", {})
-        if (recorded_coverage.get("schema") != "uvicorn-rs-coverage-evidence@3"
+        if (recorded_coverage.get("schema") != "uvicorn-rs-coverage-evidence@4"
                 or review.get("status") != "accepted"
                 or review.get("source_commit") != SOURCE
                 or review.get("coverage_mcp_receipt_sha256") != json.loads(selection_path.read_text())[
@@ -312,18 +312,9 @@ def main() -> int:
         run(str(COVERAGE), "verify", "--report", str(report), "--raw-inventory", str(coverage_snapshot_path),
             "--handoff-selection", str(selection_path), "--source", SOURCE)
         run(str(COVERAGE), "record", "--report", str(report), "--raw-inventory", str(coverage_snapshot_path),
-            "--no-independent-review", "--source", SOURCE, "--output", str(coverage_evidence_path))
-        waived_coverage = json.loads(coverage_evidence_path.read_text(encoding="utf-8"))
-        if (waived_coverage.get("schema") != "uvicorn-rs-coverage-evidence@3"
-                or waived_coverage.get("coverage_review") != {
-                    "status": "waived_by_maintainer",
-                    "decision": "Separate Coverage-MCP review waived; exact-source 100% raw coverage remains mandatory.",
-                    "recorded_date": "2026-11-05",
-                }
-                or waived_coverage.get("coverage") != recorded_coverage.get("coverage")):
-            raise AssertionError("raw-only coverage record did not preserve the exact 100% gate and waiver")
-        run(str(COVERAGE), "verify", "--report", str(report), "--raw-inventory", str(coverage_snapshot_path),
-            "--no-independent-review", "--source", SOURCE)
+            "--handoff-selection", str(selection_path), "--no-independent-review",
+            "--source", SOURCE, "--output", str(coverage_evidence_path),
+            expected=2, detail="unrecognized arguments")
         alternate_report_root = root / "valid" / "alternate-coverage-path"
         shutil.copytree(report.parent, alternate_report_root)
         run(str(COVERAGE), "verify", "--report", str(alternate_report_root / report.name),
@@ -374,7 +365,7 @@ def main() -> int:
         run(str(ATTACH), "--report", str(broken_projection), "--output", str(broken_reviewed),
             "--receipt", str(broken_receipt),
             expected=1, detail="receipt omits later pages")
-    print("PASS coverage evidence: exact raw artifact, 100% record, accepted optional MCP review, explicit waiver, and handoff cases")
+    print("PASS coverage evidence: exact raw artifact, 100% record, accepted source-bound MCP review, and handoff cases")
     return 0
 
 

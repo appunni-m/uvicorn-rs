@@ -185,8 +185,18 @@ jobs:
           python scripts/coverage_evidence.py verify \
             --report target/asgi-coverage/coverage-report.json \
             --raw-inventory target/release-candidate/evidence/coverage/raw-inventory.json \
-            --no-independent-review \
+            --handoff-selection target/release-candidate/evidence/coverage/coverage-mcp-selection.json \
             --source "$RELEASE_COMMIT"
+          mkdir -p target/publication-recheck
+          python scripts/coverage_mcp_handoff.py verify-selection \
+            --manifest target/release-candidate/evidence/coverage-mcp/coverage-handoff/handoff.json \
+            --selection target/release-candidate/evidence/coverage/coverage-mcp-selection.json \
+            --source "$RELEASE_COMMIT" \
+            --ci-raw-root target/asgi-coverage \
+            --review-root target/release-candidate/evidence/coverage-mcp/asgi-coverage-review \
+            --output target/publication-recheck/coverage-mcp-selection.reverified.json
+          cmp target/release-candidate/evidence/coverage/coverage-mcp-selection.json \
+            target/publication-recheck/coverage-mcp-selection.reverified.json
           python - "$RELEASE_VERSION" "$RELEASE_COMMIT" <<'PY'
           import hashlib
           import json
@@ -196,7 +206,7 @@ jobs:
 
           version, commit = sys.argv[1:]
           candidate = json.loads(Path("target/release-candidate/candidate.json").read_text())
-          if (candidate.get("schema") != "uvicorn-rs-release-candidate@6"
+          if (candidate.get("schema") != "uvicorn-rs-release-candidate@7"
                   or candidate.get("state") != "verified candidate; publication disabled"
                   or candidate.get("version") != version
                   or candidate.get("commit") != commit
@@ -208,11 +218,9 @@ jobs:
           coverage_evidence = json.loads(evidence_path.read_text())
           coverage = candidate.get("coverage", {})
           coverage_review = coverage_evidence.get("coverage_review")
-          expected_review = {
-              "status": "waived_by_maintainer",
-              "decision": "Separate Coverage-MCP review waived; exact-source 100% raw coverage remains mandatory.",
-              "recorded_date": "2026-11-05",
-          }
+          expected_ci = {"id": int(candidate["ci_run_id"]),
+                         "attempt": int(candidate["ci_run_attempt"]),
+                         "branch": "main", "event": "push"}
           expected_coverage = {
               "evidence_sha256": hashlib.sha256(evidence_path.read_bytes()).hexdigest(),
               "raw_inventory_sha256": coverage_evidence.get("raw_inventory_sha256"),
@@ -224,17 +232,18 @@ jobs:
               "matrix": coverage_evidence.get("matrix"),
               "coverage_review": coverage_review,
           }
-          if (coverage_evidence.get("schema") != "uvicorn-rs-coverage-evidence@3"
+          if (coverage_evidence.get("schema") != "uvicorn-rs-coverage-evidence@4"
                   or coverage_evidence.get("status") != "passed"
-                  or coverage_review != expected_review
+                  or not isinstance(coverage_review, dict)
+                  or coverage_review.get("status") != "accepted"
+                  or coverage_review.get("source_commit") != commit
+                  or coverage_review.get("ci_run") != expected_ci
                   or coverage_evidence.get("source_commit") != commit
-                  or coverage_evidence.get("ci_run") != {"id": int(candidate["ci_run_id"]),
-                                                           "attempt": int(candidate["ci_run_attempt"]),
-                                                           "branch": "main", "event": "push"}
+                  or coverage_evidence.get("ci_run") != expected_ci
                   or coverage != expected_coverage):
               raise SystemExit("candidate exact-source 100% coverage evidence is missing or inconsistent")
           if os.environ["RELEASE_ACTION"] == "pypi":
-              print("PyPI publication is independent of Cargo registry publication; Cargo candidate archives remain part of local candidate verification.")
+              print("PyPI publication requires both exact candidate Cargo archives to be published and registry-verified first.")
           PY
           rm -rf target/publication-recheck
           mkdir -p target/publication-recheck/packages target/publication-recheck/evidence
@@ -325,11 +334,23 @@ jobs:
 
           pypi_selected = action == "pypi"
           inspect_all = action == "prepare-only"
-          crate_exists = {name: check_crate_exists(name) for name in crate_names} if inspect_all else {}
-          crate_absent = {
-              name: check_crate(name) if crate_exists[name] else True
-              for name in crate_names
-          } if inspect_all else {}
+          crate_exists = {}
+          crate_absent = {}
+          if pypi_selected or inspect_all:
+              crate_exists = {name: check_crate_exists(name) for name in crate_names}
+              if pypi_selected:
+                  missing_names = [name for name, exists in crate_exists.items() if not exists]
+                  if missing_names:
+                      raise SystemExit("create these crates before the PyPI release: " + ", ".join(missing_names))
+              crate_absent = {
+                  name: check_crate(name) if crate_exists[name] else True
+                  for name in crate_names
+              }
+              if pypi_selected:
+                  unpublished = [name for name, absent in crate_absent.items() if absent]
+                  if unpublished:
+                      raise SystemExit("publish these exact candidate Cargo versions before PyPI: "
+                                       + ", ".join(f"{name} {version}" for name in unpublished))
           pypi_absent = None
           if pypi_selected or inspect_all:
               pypi_absent = check_pypi()

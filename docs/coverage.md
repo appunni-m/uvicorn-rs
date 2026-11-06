@@ -13,28 +13,28 @@
 
 ## Current unified coverage status (2026-11-06)
 
-PR #24 head `170c39f5553574f8ed1f76f3e5d441a4a700ef79` is being checked by CI
-[#710](https://github.com/appunni-m/uvicorn-rs/actions/runs/42235051720). Its
+PR #24 head `a9974d21b8ec06f444c629f175ecd363a1c760c9` is being checked by CI
+[#712](https://github.com/appunni-m/uvicorn-rs/actions/runs/42255484334). Its
 full three-repeat parity/coverage job is still running, so no final coverage
-report or totals are available yet. The release gate remains 100% raw executable
-regions and lines, complete attribution, three passing ASGI and native repeats,
-and recorded source, build, run, artifact, report, context and file hashes.
-The maintainer waived a separate Coverage-MCP review on 2026-11-05; no MCP
-transcript or review receipt is required for release.
+report or totals are available yet. The release gate requires 100% raw
+executable regions and lines, complete attribution, three passing ASGI and
+native repeats, and recorded source, build, run, artifact, report, context and
+file hashes. The current release goal also requires an accepted independent
+Coverage-MCP review bound to this exact report; the previous waiver wording is
+superseded.
 
 The previous exact-main and PR #23 reports below are historical and do not
 qualify PR #24.
 
 ### Historical unified coverage status (2026-11-05)
 
-**Historical release requirement:** the exact-source unified report must have
-100% measured production regions and lines, and the complete matrix must pass
-three times. An accepted independent Coverage-MCP review must inspect every
-unfiltered region and line page for that same final-source report. The
-candidate records and revalidates the source, CI run and attempt, artifact
-digest, report, context, build, raw-file hashes, and actual MCP transcript and
-receipt. The maintainer waived this separate review on 2026-11-05; the raw
-coverage and source-identity requirements remain active.
+The exact-source unified report must have 100% measured production regions and
+lines, and the complete matrix must pass three times. An accepted independent
+Coverage-MCP review must inspect every unfiltered region and line page for that
+same final-source report. The candidate records and revalidates the source, CI
+run and attempt, artifact digest, report, context, build, raw-file hashes, and
+actual MCP transcript and receipt. The waiver recorded on 2026-11-05 was later
+superseded by the active release goal.
 
 Exact-main CI [#661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
 passed on clean source `feb955d2758166ad8c4b519903fd1318b29e7d2d`, run
@@ -66,8 +66,9 @@ batch-timer invariant in the type and removes that unreachable state.
 A later follow-up handles the macOS TLS-over-Unix-socket `NotConnected`
 shutdown log mismatch found by CI #689. Because that follow-up changes
 `src/lib.rs`, CI #689 cannot be accepted as exact-source coverage even if its
-job completes; a fresh full report is required. The maintainer waived a
-separate Coverage-MCP review; final raw coverage remains mandatory.
+job completes; a fresh full report is required. The temporary waiver recorded
+for that historical snapshot does not apply to the active release goal, which
+requires a separate source-bound Coverage-MCP review.
 
 The matching three-system benchmark [#283](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681)
 also passed. Its aggregate artifact is
@@ -3474,20 +3475,21 @@ uv run --python 3.12 --locked --group benchmark python scripts/check_ci_evidence
   build/asgi-coverage/unified/coverage-report.json
 ```
 
-CI accepts the exact-source raw report with `--allow-pending-mcp`; this enables
-the raw evidence gate while no independent review is attached. It still
-validates the complete indexed matrix, all three repeats, clean source and
-100% normalized regions and lines. A failed matrix, missing counter, or
-uncovered region/line remains a failure.
+CI accepts the exact-source raw report with `--allow-pending-mcp` during the
+raw evidence stage. This validates the complete indexed matrix, all three
+repeats, clean source and 100% normalized regions and lines before the separate
+review handoff. Candidate and publication verification additionally require an
+accepted Coverage-MCP receipt. A failed matrix, missing counter, or uncovered
+region/line remains a failure.
 
 ## Record exact-source release coverage
 
 Release coverage requires the complete exact-source report to pass 100% regions
 and lines, three full passing repeats, complete attribution, and clean source,
-build, run, artifact, report, context and raw-file identity checks. The
-maintainer waived a separate Coverage-MCP review on 2026-11-05. Candidate and
-publication jobs record that waiver and revalidate the raw coverage evidence;
-they do not require an MCP transcript or review receipt.
+build, run, artifact, report, context and raw-file identity checks. The active
+goal also requires the accepted independent Coverage-MCP handoff. Candidate and
+publication jobs revalidate the exact handoff selection, retained MCP pages,
+reviewed report, receipt, and raw coverage evidence.
 
 For a local audit of a downloaded artifact, retain the artifact at
 `target/asgi-coverage/`, then create and validate the raw inventory:
@@ -3507,14 +3509,15 @@ python scripts/check_ci_evidence.py coverage \
 python scripts/coverage_evidence.py record \
   --report target/asgi-coverage/coverage-report.json \
   --raw-inventory target/asgi-coverage/raw-inventory.json \
-  --no-independent-review \
+  --handoff-selection target/release-candidate/evidence/coverage/coverage-mcp-selection.json \
   --source FULL_COMMIT_SHA \
   --output target/asgi-coverage/coverage-evidence.json
 ```
 
-The evidence file records the waiver explicitly; it does not synthesize a
-review receipt. Keep generated reports, profiles, and logs in Actions
-artifacts; do not commit them to the repository.
+The selection is emitted only after the handoff validator accepts the MCP
+pages, source, build, CI attempt, and artifact identities. Keep generated
+reports, profiles, and logs in Actions artifacts; do not commit them to the
+repository.
 
 ## Measure an incremental case or profile
 

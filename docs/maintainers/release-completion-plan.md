@@ -6,15 +6,15 @@ FastAPI evaluation. Kata remains the system of record. The maintainer will run
 their application trial; collecting their application or running its load is not
 a prerequisite for completing the repository work.
 
-## Active release goal — 2026-11-05
+## Active release goal — 2026-11-06
 
 The current user-provided release goal requires exact-source raw unified
-coverage at 100% regions and lines, with the source, run and attempt, raw
-artifact ID and digest, report and context hashes, and build identity recorded.
-The maintainer explicitly waived a separate Coverage-MCP review on 2026-11-05;
-this supersedes the later reinstatement recorded below. Candidate qualification
-must revalidate the coverage identity against the same source, run, artifact,
-and report.
+coverage at 100% regions and lines, plus an accepted independent Coverage-MCP
+review bound to the same report. Record the source, run and attempt, raw
+artifact ID and digest, report and context hashes, build identity, full MCP
+pages, and accepted receipt. Candidate qualification must revalidate both the
+coverage identity and review receipt against the same source, run, artifact,
+and report. The 2026-11-05 waiver is historical and no longer applies.
 
 The raw coverage gate remains 100% for regions and lines, with three passing
 ASGI and native repeats, complete attribution, and zero failures or
@@ -24,10 +24,9 @@ qualification.
 
 ## Historical review decisions — 2026-11-04 to 2026-11-05
 
-The owner first waived independent review on 2026-11-04, later reinstated it,
-then reconfirmed on 2026-11-05 that no independent Coverage-MCP review is
-required. The current contract is the recorded 100% exact-source raw coverage
-gate above.
+The owner waived independent review on 2026-11-04, reinstated it, and waived it
+again on 2026-11-05. The active release goal dated 2026-11-06 reinstates the
+source-bound independent review requirement.
 
 ## Benchmark update — 2026-11-06
 
@@ -441,8 +440,9 @@ main. The hosted exact-main handoff remains open under `7t4g`.
 Interim `[skip ci]` commits avoid broad unchanged reruns while focused tooling
 and Windows checks qualify their changes. Required PR checks remain pending;
 complete final-source CI is still required before merge and release. Coverage
-acceptance precedes benchmark timing; the maintainer waived a separate
-Coverage-MCP review, while the exact-source 100% raw gate remains active. Compatibility
+acceptance precedes benchmark timing; the active release goal requires both
+the exact-source 100% raw gate and a source-bound independent Coverage-MCP
+review. Compatibility
 task `x3az` and all ten children are closed. The capped Linux ARM64
 [upload diagnostic #275](https://github.com/appunni-m/uvicorn-rs/actions/runs/41632864829)
 completes three candidate/reference pairs with zero failures; it does not
@@ -718,7 +718,8 @@ complete platform candidate qualification is available. Keep the PR head
 unchanged until all active parity, coverage, and package verification jobs
 reach terminal results. Then record raw coverage totals and artifact identities
 and carry the verified package artifacts and consumer receipts into candidate
-assembly. The maintainer waived a separate Coverage-MCP review on 2026-11-05.
+assembly. That earlier checkpoint recorded a waiver; the active 2026-11-06
+release goal requires an accepted independent Coverage-MCP review.
 Start the
 matched three-system ordinary-FastAPI benchmark only after full parity passes.
 Benchmarks use one Tokio thread and report system/workload details alongside
@@ -1462,17 +1463,18 @@ gap against the raw LLVM profile/source identity before adding another case.
 **Close with:** One clean source/build report has 100% executable regions and
 lines, complete per-case attribution and three complete passing repeats with no
 case, infrastructure, retry or unrun failure. Record integer totals and hashes.
-The source-bound report and artifact identity are recorded by 7t4g. The
-maintainer waived a separate Coverage-MCP review; the raw coverage gate remains.
+The source-bound report, accepted Coverage-MCP receipt, and artifact identity
+are recorded by 7t4g.
 
 ## 7t4g — Record final exact-source coverage evidence
 
 **Work:** After the final-source unified coverage job passes, retain the exact
 raw artifact and record its source, CI run/attempt, artifact ID/digest, report
 and context hashes, build identity, complete file inventory, totals, and matrix
-status with `scripts/coverage_evidence.py`. Do not rerun the matrix just to
-create the evidence record. No separate Coverage-MCP query or review receipt
-is required under the maintainer's waiver.
+status. Obtain an independent Coverage-MCP review of all unfiltered region and
+line pages for the exact report through `coverage-mcp-handoff.yml`. Record and
+revalidate its receipt with `scripts/coverage_evidence.py`. Do not rerun the
+matrix just to create the evidence record.
 
 **Close with:** The exact final-source report passes the complete three-repeat
 matrix, attribution and 100% regions/lines checks; the retained raw artifact
@@ -1612,16 +1614,14 @@ compatibility acceptance or the start of benchmarks.
 ## m8mx — Publish and verify the consolidated release
 
 **Work:** Once zep3, x3az and v5fe qualify, recheck the exact source, immutable
-tag, selected artifacts and current registry state. The maintainer's latest
-instruction on 2026-11-06 is to publish the PyPI `uvicorn-rs` 0.3.0
-distribution first and defer Cargo registry publication until tomorrow, from
-the local clean checkout. Accordingly, `release.yml` publishes only PyPI and
-must not require the 0.3.0 Cargo crates to be registry-visible. The verified
-candidate still includes both local `.crate` archives and their checksums.
-After PyPI is verified, publish `asgi-lifespan-protocol-rs` first and dependent
-`uvicorn-rs` locally when authorized, then check exact registry checksums and
-clean consumers. Recheck registries before retrying any upload; never overwrite
-an existing version. Do not publish while any required release gate is open.
+tag, selected artifacts and current registry state. The current release order
+is to publish `asgi-lifespan-protocol-rs` and then dependent `uvicorn-rs`
+locally, verify exact registry checksums and clean consumers, and publish the
+PyPI `uvicorn-rs` 0.3.0 distribution through `release.yml`. The workflow
+preflight requires the exact Cargo versions to be registry-visible with bytes
+matching the verified candidate. Recheck registries before retrying any upload;
+never overwrite an existing version. Do not publish while any required release
+gate is open.
 
 **Close with:** Registry versions and bytes match the accepted candidate,
 registry-based Cargo/Python consumers pass, documentation/docs.rs reflects the

@@ -1,21 +1,20 @@
 # Can I replace Uvicorn?
 
 PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) is the active
-replacement candidate. On its head `170c39f5553574f8ed1f76f3e5d441a4a700ef79`,
-CI [#710](https://github.com/appunni-m/uvicorn-rs/actions/runs/42235051720)
-passed installed-wheel parity on Linux x86-64 and macOS ARM64 (786/786 each).
-Windows x86-64 reports 757/759 raw comparisons; two exact Uvicorn worker
-failures are retained and accepted by separate narrow policies, and all six
-candidate worker contracts pass. The Windows raw result is not a 759/759 parity
-pass.
+replacement candidate. On its current hosted head `a9974d21b8ec06f444c629f175ecd363a1c760c9`,
+CI [#712](https://github.com/appunni-m/uvicorn-rs/actions/runs/42255484334)
+has passed installed-wheel public parity (786/786), native composition, Rust
+checks, all three candidate package/consumer jobs, and the Python 3.9 floor
+consumer. The three-repeat unified coverage job is still running; no final
+100% report exists for this source yet. The current release goal also requires
+an accepted independent Coverage-MCP review bound to that exact raw report.
 
-The named custom HTTP/WebSocket protocol, `ssl_context_factory`, ALPN, and
-header/trailer-capacity cases pass on Linux and macOS. Candidate package and
-consumer jobs also pass on Linux, macOS, and Windows, with the Python 3.9 floor
-consumer passing. Unified coverage is still running on this source; no final
-100% report has been recorded. The maintainer waived a separate Coverage-MCP
-review. The current PR head has not been benchmarked. Earlier results remain
-workload-specific and do not support a general FastAPI speed advantage claim.
+The custom HTTP/WebSocket protocol, `ssl_context_factory`, ALPN, and
+header/trailer-capacity inputs are included in the passing public parity
+evidence. Current-source receipts and user-facing support claims still need to
+be reconciled. The current PR head has not been benchmarked. Earlier
+measurements are workload-specific and do not support a general FastAPI speed
+advantage.
 
 Both distributions install files under the `uvicorn` import namespace. Keep
 upstream `uvicorn` and `uvicorn-rs` in separate environments. Use the
@@ -29,22 +28,22 @@ upstream `uvicorn` and `uvicorn-rs` in separate environments. Use the
 
 ## Current status (2026-11-06)
 
-CI #710 on PR #24 is the latest hosted compatibility evidence. Linux x86-64
-and macOS ARM64 each pass all 786 public inputs. Windows x86-64 retains two raw
-Uvicorn worker-reference failures (757/759 raw) under separate, exact policies;
-the candidate's own worker lifecycle contracts pass. The raw failures and
-candidate outcomes remain visible in the CI artifacts.
+CI #712 on PR #24 is the latest hosted compatibility evidence. The installed-
+wheel public parity job passed 786/786; the macOS ARM64 and Windows x86-64
+candidate jobs also completed their platform parity and consumer checks
+successfully. The three-repeat coverage job remains in progress. The active
+release goal requires final-source 100% raw coverage plus an accepted
+independent Coverage-MCP review; the earlier waiver wording is superseded.
 
 The complete three-system benchmark [#358](https://github.com/appunni-m/uvicorn-rs/actions/runs/42179655798)
-is on earlier develop commit
+uses earlier develop commit
 [`5ac287dbcd375b3d4e8967c10b2f43b2e97c278b`](https://github.com/appunni-m/uvicorn-rs/commit/5ac287dbcd375b3d4e8967c10b2f43b2e97c278b),
 not PR #24. The later main attempt
 [#359](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
-failed in the macOS Uvicorn WebSocket oracle and produced no aggregate. Neither
-run qualifies PR #24. Exact-source 100% coverage recording, a current-source
-benchmark, final artifact verification, and publication remain open. A
-separate Coverage-MCP review is waived by the maintainer. The maintainer's real
-application trial follows repository completion.
+failed in the macOS Uvicorn WebSocket oracle and produced no aggregate. A
+focused ARM64 upload trace and a complete current-source benchmark remain
+open. Final artifact qualification and publication remain open. The
+maintainer's real application trial follows repository completion.
 
 ### Historical PR #23 follow-up
 

@@ -17,26 +17,22 @@ release targets are the Python-free `uvicorn-rs` server crate with optional
 ## Current verification status (2026-11-06)
 
 PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) head
-`170c39f5553574f8ed1f76f3e5d441a4a700ef79` has current hosted evidence in CI
-[#710](https://github.com/appunni-m/uvicorn-rs/actions/runs/42235051720).
-Linux x86-64 and macOS ARM64 installed-wheel parity each pass 786/786. Windows
-x86-64 retains 757/759 raw comparisons: two exact Uvicorn worker-reference
-failures are accepted separately, with the candidate's six worker contracts
-passing and no infrastructure or not-run rows. The named custom HTTP and
-WebSocket protocol classes, TLS context factories/HTTP/2 ALPN, and response
-capacity cases pass on Linux and macOS; the Windows candidate job passes under
-its narrowly scoped reference policies.
+`a9974d21b8ec06f444c629f175ecd363a1c760c9` is being checked by CI
+[#712](https://github.com/appunni-m/uvicorn-rs/actions/runs/42255484334).
+At the latest check, installed-wheel parity passed 786/786; native
+FastAPI-RS composition, Rust quality, minimum-version compilation, all three
+candidate platform builds and consumers, and the CPython 3.9 floor consumer
+also passed. The final unified three-repeat coverage job is still running, so
+there is no current-source raw report or final total yet. An accepted
+independent Coverage-MCP review bound to that same report is required once it
+is available.
 
-Rust quality, minimum-version compilation, native FastAPI-RS composition,
-candidate consumers on all three package systems, and the CPython 3.9 floor
-consumer pass in CI #710. The complete unified coverage step is still running;
-there is not yet a final raw 100% report. The maintainer waived a separate
-Coverage-MCP review; the raw report and its source/run/build/artifact identities
-must still be recorded. After coverage, a current-source three-system
-benchmark is still required. The
-last complete matrix is run #358 on earlier develop commit `5ac287d`; the later
-main attempt #359 failed in the macOS Uvicorn WebSocket oracle and produced no
-aggregate. Neither qualifies the PR #24 source.
+The latest complete three-system benchmark is still run #358 on earlier
+develop commit `5ac287d`; the later main attempt #359 failed in the macOS
+stock-Uvicorn WebSocket oracle and produced no aggregate. Neither qualifies
+PR #24. A focused Linux ARM64 upload trace and a complete matched current-source
+matrix remain open. Main is still at `24f5b6a`; PR #24 is open. Local release
+gate changes have not yet been pushed and are not covered by CI #712.
 
 The package scope remains a Python-free Cargo `uvicorn-rs` server crate with
 optional `http3`, `asgi-lifespan-protocol-rs`, and PyPI `uvicorn-rs` exposing
@@ -64,10 +60,10 @@ retries, but measured 15,056/15,057 regions and 11,078/11,078 lines. The one
 uncovered region was an unreachable optional request-body timer state, removed
 by the invariant change on the #689 head.
 
-At that historical snapshot, release acceptance still listed an independent
-Coverage-MCP review. The maintainer waived that separate review on 2026-11-05;
-exact-source 100% regions/lines and a final-source three-system benchmark
-remain required. No 0.3.0 package has been published.
+That historical snapshot's waiver wording was superseded by the current release
+goal: an accepted independent Coverage-MCP review of the final-source report
+is required. Exact-source 100% regions/lines and a final-source three-system
+benchmark also remain required. No 0.3.0 package has been published.
 
 ## Last complete exact-main release baseline (2026-11-04)
 

@@ -14,10 +14,10 @@ This attempt did not produce a validated three-system aggregate. No performance 
 
 ## PR #24 benchmark status (2026-11-06)
 
-The current PR #24 head `170c39f5553574f8ed1f76f3e5d441a4a700ef79` has not
-been benchmarked. CI #710 parity is complete; its exact-source coverage job is
-still running. The latest complete three-system report below uses an earlier
-develop source and cannot qualify this candidate.
+The current PR #24 head `a9974d21b8ec06f444c629f175ecd363a1c760c9` has not
+been benchmarked. CI #712 parity and candidate platform consumers passed; its
+exact-source coverage job is still running. The latest complete three-system
+report below uses an earlier develop source and cannot qualify this candidate.
 
 ## Latest complete three-system matrix before PR #24 (2026-11-06)
 

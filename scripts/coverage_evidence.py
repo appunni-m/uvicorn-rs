@@ -13,7 +13,7 @@ import sys
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA = "uvicorn-rs-coverage-evidence@3"
+SCHEMA = "uvicorn-rs-coverage-evidence@4"
 COMMIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 ARTIFACT_SHA = re.compile(r"^sha256:[0-9a-f]{64}$")
 SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
@@ -21,11 +21,6 @@ RAW_ARTIFACT_NAME = "uvicorn-rs-unified-coverage"
 CI_IDENTITY_NAME = "ci-run.json"
 REPORT_NAME = "coverage-report.json"
 HANDOFF_WORKFLOW = ".github/workflows/coverage-mcp-handoff.yml"
-WAIVED_REVIEW = {
-    "status": "waived_by_maintainer",
-    "decision": "Separate Coverage-MCP review waived; exact-source 100% raw coverage remains mandatory.",
-    "recorded_date": "2026-11-05",
-}
 REPORT_SCHEMAS = {"uvicorn_rs_coverage/unified@9", "uvicorn_rs_coverage/unified@10",
                   "uvicorn-rs-coverage/unified@9", "uvicorn-rs-coverage/unified@10"}
 
@@ -234,9 +229,7 @@ def accepted_review(selection_path: Path, *, source: str, ci_run: dict[str, Any]
 
 
 def verified_record(report_path: Path, inventory_path: Path, source: str,
-                    handoff_selection_path: Path | None, *, no_independent_review: bool) -> dict[str, Any]:
-    require((handoff_selection_path is None) == no_independent_review,
-            "provide exactly one accepted review selection or explicit maintainer waiver")
+                    handoff_selection_path: Path) -> dict[str, Any]:
     require(COMMIT_SHA.fullmatch(source) is not None, "expected source must be a full commit SHA")
     report_path = report_path.resolve()
     inventory_path = inventory_path.resolve()
@@ -307,18 +300,15 @@ def verified_record(report_path: Path, inventory_path: Path, source: str,
             and inventory.get("context_sha256") == file_hash(report_path.with_name(report_path.name + ".context.json"))
             and inventory.get("build_id") == validated["build_id"],
             "raw coverage inventory hashes or build identity differ from the report")
-    if no_independent_review:
-        coverage_review = WAIVED_REVIEW.copy()
-    else:
-        assert handoff_selection_path is not None
-        coverage_review = accepted_review(
-            handoff_selection_path, source=source, ci_run=ci_run, raw_artifact=artifact,
-            report_sha256=inventory["report_sha256"], build_id=inventory["build_id"],
-        )
+    coverage_review = accepted_review(
+        handoff_selection_path, source=source, ci_run=ci_run, raw_artifact=artifact,
+        report_sha256=inventory["report_sha256"], build_id=inventory["build_id"],
+    )
     return {
         "schema": SCHEMA,
         "status": "passed",
-        "acceptance": "exact-source raw unified coverage at 100% for regions and lines; complete three-repeat matrix passed",
+        "acceptance": ("exact-source raw unified coverage at 100% for regions and lines; complete three-repeat "
+                       "matrix passed; accepted source-bound Coverage-MCP review"),
         "coverage_review": coverage_review,
         "source_commit": source,
         "ci_run": ci_run,
@@ -366,10 +356,8 @@ def main() -> int:
         subparser = subparsers.add_parser(command)
         subparser.add_argument("--report", type=Path, required=True)
         subparser.add_argument("--raw-inventory", type=Path, required=True)
-        review = subparser.add_mutually_exclusive_group(required=True)
-        review.add_argument("--handoff-selection", type=Path)
-        review.add_argument("--no-independent-review", action="store_true",
-                            help="record the maintainer waiver; the raw 100%% gate remains required")
+        subparser.add_argument("--handoff-selection", type=Path, required=True,
+                               help="accepted source-bound Coverage-MCP handoff selection")
         subparser.add_argument("--source", required=True)
         subparser.add_argument("--output", type=Path, help="required for record; evidence file for verify")
         subparser.set_defaults(func=command)
@@ -379,8 +367,7 @@ def main() -> int:
             command_snapshot(args)
             return 0
         expected = verified_record(args.report, args.raw_inventory, args.source,
-                                   args.handoff_selection,
-                                   no_independent_review=args.no_independent_review)
+                                   args.handoff_selection)
         if args.command == "record":
             if args.output is None:
                 raise EvidenceError("record requires --output")
