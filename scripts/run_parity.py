@@ -9819,6 +9819,7 @@ def http3_request(
     *,
     events_path: Path | None = None,
     events_before: int = 0,
+    trace_client: bool = False,
 ) -> dict[str, Any]:
     specification = {
         "method": request["method"],
@@ -10069,6 +10070,11 @@ def http3_request(
                 capture_output=True,
                 text=True,
                 timeout=20,
+                env=(
+                    {**os.environ, "UVICORN_RS_PARITY_H3_TRACE": "1"}
+                    if trace_client
+                    else None
+                ),
             )
         except subprocess.TimeoutExpired as error:
             def output_tail(value: str | bytes | None) -> str:
@@ -10465,6 +10471,7 @@ def http3_request_sequence(
     *,
     concurrent: bool = False,
     pause_before_read_ms: int = 0,
+    trace_client: bool = False,
 ) -> dict[str, Any]:
     """Observe sequential streams and optional task diagnostics before peer close."""
     result_path = server["events"].with_suffix(".http3-sequence-result")
@@ -10500,6 +10507,11 @@ def http3_request_sequence(
             [str(client), f"127.0.0.1:{server['port']}", str(trust_anchor)],
             cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, text=True,
+            env=(
+                {**os.environ, "UVICORN_RS_PARITY_H3_TRACE": "1"}
+                if trace_client
+                else None
+            ),
         )
         assert process.stdin is not None
         process.stdin.write(json.dumps(specification))
@@ -10593,6 +10605,7 @@ def load_status_request(
     h3_client: Path | None,
     *,
     kind: str = "http",
+    trace_client: bool = False,
 ) -> dict[str, Any]:
     request = {
         "method": "GET",
@@ -10605,7 +10618,10 @@ def load_status_request(
     if profile_id == "http3":
         if trust_anchor is None or h3_client is None:
             raise ParityError("HTTP/3 load status is missing its certificate or client")
-        return http3_request(server["port"], trust_anchor, request, h3_client)
+        return http3_request(
+            server["port"], trust_anchor, request, h3_client,
+            trace_client=trace_client,
+        )
     ssl_context = None
     if profile_id == "websocket-tls":
         if trust_anchor is None:
@@ -10688,6 +10704,10 @@ def run_http_load_case(
     h3_client: Path | None,
 ) -> dict[str, Any]:
     load = case["load"]
+    trace_http3 = (
+        case["case_id"] == "http3.concurrent-stream-load-slow-reader-resource-bound"
+        and os.environ.get("ASGI_PARITY_TRACE_HTTP3_CASE") == case["case_id"]
+    )
     requests = case["request_sequence"]
     if len(requests) != 1:
         raise ParityError("HTTP load input must use one reusable request stimulus")
@@ -10731,6 +10751,7 @@ def run_http_load_case(
                 h3_grease=False,
                 concurrent=True,
                 pause_before_read_ms=load["pause_before_read_ms"],
+                trace_client=trace_http3,
             )
             responses = response_group["responses"]
         else:
@@ -10738,7 +10759,8 @@ def run_http_load_case(
 
         time.sleep(0.05)
         status_response = load_status_request(
-            server, profile["id"], key, trust_anchor, h3_client
+            server, profile["id"], key, trust_anchor, h3_client,
+            trace_client=trace_http3,
         )
         time.sleep(0.05)
         resource = sampler.finish()
@@ -16306,10 +16328,17 @@ def start_profile_servers(
         case.get("fault", {}).get("contract")
         == "http3-connection-error-cancels-held-response-followup-200"
         for case in cases
+    ) or (
+        os.environ.get("ASGI_PARITY_TRACE_HTTP3_CASE")
+        == "http3.concurrent-stream-load-slow-reader-resource-bound"
+        and any(
+            case.get("case_id") == os.environ["ASGI_PARITY_TRACE_HTTP3_CASE"]
+            for case in cases
+        )
     ):
-        # Emit the legacy/native dispatch decision before the case clears the
-        # startup selector. This makes the held-response fault deterministic
-        # even when the HTTP/3 listener task is scheduled after HTTP/1 readiness.
+        # The held-response fault needs its dispatch trace before its request
+        # clears the selector. For the load case, collect the same trace only
+        # when the focused diagnostic workflow opts into that exact case.
         server_options["http3_trace"] = True
     client_tls = any(case.get("client_tls") is True for case in cases)
     if any(case.get("client_tls", False) != client_tls for case in cases):
