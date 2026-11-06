@@ -320,7 +320,11 @@ def validate_parity(
     allow_macos_reference_wss_handshake_timeout=False,
 ):
     from run_parity import load_contract, validate_result_shape
-    from macos_reference_exceptions import validate_reference_row, POLICY_ID
+    from macos_reference_exceptions import (
+        MACOS_REFERENCE_CASE_IDS,
+        POLICY_ID,
+        validate_reference_row,
+    )
 
     before = json.loads(before_path.read_text())
     if before.get("schema") != "uvicorn-rs-benchmark-freeze@2" or before.get("identity") != current:
@@ -363,7 +367,7 @@ def validate_parity(
             result["status"] != "failed"
             or result["infrastructure_errors"] != []
             or len(failed_rows) != 1
-            or failed_rows[0].get("case_id") != "websocket-tls.text-round-trip-with-query-and-subprotocol"
+            or failed_rows[0].get("case_id") not in MACOS_REFERENCE_CASE_IDS
             or summary != {
                 "selected": len(selected), "executed": len(selected), "passed": len(selected) - 1,
                 "failed": 0, "not_run": 0, "infrastructure_failed": 1,
