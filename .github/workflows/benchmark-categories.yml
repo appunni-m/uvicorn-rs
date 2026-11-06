@@ -43,16 +43,18 @@ on:
           - focused-fastapi-match
           - peer-read-comparison
           - focused-fastapi-stage
+          - focused-fastapi-upload-trace
           - focused-h2
           - focused-h3
       fastapi_system:
-        description: Runner for the focused FastAPI timing or stage diagnostic
+        description: Runner for the focused FastAPI diagnostic; Linux ARM64 uses Ubuntu 24.04, and the 22.04 option isolates an older image
         default: linux-x86_64
         required: true
         type: choice
         options:
           - linux-x86_64
           - linux-aarch64
+          - linux-aarch64-22.04
           - macos-arm64
       fastapi_workload:
         description: One maintained FastAPI workload for a focused comparison
@@ -69,20 +71,78 @@ on:
           - fastapi-request-upload
           - fastapi-request-upload-small-chunks
           - fastapi-upload-1m-write-1k
+          - fastapi-upload-1m-write-1k-close
           - fastapi-upload-1m-write-16k
           - fastapi-upload-1m-write-256k
           - fastapi-upload-1m-write-1m
           - fastapi-slow-reader-backpressure
           - fastapi-scope-32-headers
           - fastapi-contextvars
+      fastapi_stage_loop:
+        description: Python event loop used by both servers in the focused ASGI stage diagnostic
+        default: asyncio
+        required: true
+        type: choice
+        options:
+          - asyncio
+          - uvloop
+      fastapi_peer_read_mode:
+        description: Diagnostic-only peer-read path for the Rust candidate; release builds keep the production default
+        default: proactive
+        required: true
+        type: choice
+        options:
+          - proactive
+          - on-read
+      fastapi_peer_read_chunk:
+        description: Diagnostic-only proactive read chunk size; the release build stays at 64 KiB
+        default: 64k
+        required: true
+        type: choice
+        options:
+          - 16k
+          - 32k
+          - 64k
       fastapi_stage_repetitions:
-        description: Candidate attempts, each paired with stock Uvicorn asyncio (diagnostic only)
+        description: Attempts for the focused diagnostic, each paired with stock Uvicorn (diagnostic only; up to 10)
         default: "1"
         required: true
         type: choice
         options:
           - "1"
           - "3"
+          - "10"
+      upload_trace_timer:
+        description: Timer behavior for the Rust candidate; recreated matches failing commit 94c89b79's 5ms deadline, while recreated-1ms is a separate 1ms probe
+        default: pinned
+        required: true
+        type: choice
+        options:
+          - pinned
+          - recreated
+          - recreated-1ms
+      fastapi_trace_tokio:
+        description: Optional Tokio version for isolating historical Linux upload timeouts; the repository lockfile remains unchanged
+        default: current
+        required: true
+        type: choice
+        options:
+          - current
+          - 1.53.1
+      fastapi_trace_http_deps:
+        description: Transport selection for historical Linux upload diagnosis; failing-source selects exact source 94c89b79 with its locked Hyper/Tokio versions on either ARM64 runner
+        default: current
+        required: true
+        type: choice
+        options:
+          - current
+          - historical
+          - failing-source-94c89b79
+      upload_trace_requests:
+        description: Optional comma-separated worker:attempt pairs to trace, for example 5:2,2:17
+        default: ""
+        required: false
+        type: string
       h2_system:
         description: Runner for the focused HTTP/2 diagnostic
         default: linux-x86_64
@@ -345,6 +405,7 @@ jobs:
           shutil.copyfile(native, Path("target/benchmark-preparation/native-extension.bin"))
           PY
       - name: Gate the exact normal binary on every indexed public parity case
+        continue-on-error: ${{ runner.os == 'macOS' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -352,6 +413,7 @@ jobs:
             --oracle-python "$UVICORN_ORACLE_PYTHON" \
             --installed-candidate \
             --prebuilt-http3-client \
+            --continue-after-macos-reference-wss-handshake-timeout \
             --output target/benchmark-preparation/parity.json \
             2>&1 | tee target/benchmark-preparation/parity.log
       - name: Summarize exact-binary public parity
@@ -444,7 +506,7 @@ jobs:
       - name: Run a FastAPI-only comparison against Uvicorn
         shell: bash
         env:
-          BENCHMARK_DURATION: ${{ inputs.duration || '5' }}
+          BENCHMARK_DURATION: ${{ inputs.duration || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-duration=30]') && '30') || '5' }}
           BENCHMARK_WARMUP: ${{ inputs.warmup || '1' }}
           BENCHMARK_CONCURRENCY: ${{ inputs.concurrency || '64' }}
           BENCHMARK_REPETITIONS: ${{ inputs.repetitions || '5' }}
@@ -453,6 +515,7 @@ jobs:
           set -euo pipefail
           .venv/bin/python scripts/run_benchmark_categories.py \
             --uvicorn-python "$UVICORN_ORACLE_PYTHON" \
+            --allow-macos-reference-wss-handshake-timeout \
             --parity-before-identity target/benchmark-preparation/parity-before.json \
             --parity-report target/benchmark-preparation/parity.json \
             --output-dir target/fastapi-only \
@@ -475,6 +538,7 @@ jobs:
           set -euo pipefail
           .venv/bin/python scripts/run_benchmark_categories.py \
             --uvicorn-python "$UVICORN_ORACLE_PYTHON" \
+            --allow-macos-reference-wss-handshake-timeout \
             --parity-before-identity target/benchmark-preparation/parity-before.json \
             --parity-report target/benchmark-preparation/parity.json \
             --output-dir target/benchmark-categories \
@@ -516,9 +580,9 @@ jobs:
           retention-days: 90
 
   focused-fastapi-stage-diagnostic:
-    name: ${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }} · matched ASGI stage diagnostic
-    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-fastapi-stage') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-fastapi-stage]')) }}
-    runs-on: ${{ (inputs.fastapi_system == 'linux-aarch64' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]'))) && 'ubuntu-24.04-arm' || inputs.fastapi_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
+    name: ${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }} · ${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }} · ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }} · ${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x ${{ inputs.run_mode == 'focused-fastapi-upload-trace' && 'upload trace' || 'matched ASGI stage diagnostic' }} · source ${{ inputs.fastapi_trace_http_deps == 'failing-source-94c89b79' && '94c89b79' || 'current' }} · timer ${{ inputs.upload_trace_timer || 'pinned' }} · peer-read ${{ inputs.fastapi_peer_read_mode || 'proactive' }}-${{ inputs.fastapi_peer_read_chunk || '64k' }} · Tokio ${{ inputs.fastapi_trace_tokio || 'current' }} · Hyper ${{ (inputs.fastapi_trace_http_deps == 'historical' || inputs.fastapi_trace_http_deps == 'failing-source-94c89b79') && '1.11.1' || 'current' }}
+    if: ${{ (github.event_name == 'workflow_dispatch' && (inputs.run_mode == 'focused-fastapi-stage' || inputs.run_mode == 'focused-fastapi-upload-trace')) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[focused-fastapi-stage]')) }}
+    runs-on: ${{ inputs.fastapi_system == 'linux-aarch64-22.04' && 'ubuntu-22.04-arm' || (inputs.fastapi_system == 'linux-aarch64' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]'))) && 'ubuntu-24.04-arm' || inputs.fastapi_system == 'macos-arm64' && 'macos-15' || 'ubuntu-24.04' }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -535,7 +599,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p target/benchmark-preparation target/fastapi-stage
+          mkdir -p target/benchmark-preparation target/fastapi-stage target/fastapi-upload-trace
           if [[ "$RUNNER_OS" == "Linux" ]]; then
             sudo apt-get update
             sudo apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev libcurl4-openssl-dev
@@ -563,11 +627,147 @@ jobs:
           uname -a > target/benchmark-preparation/uname.txt
       - name: Build Rust runtime diagnostics extension
         shell: bash
+        env:
+          FASTAPI_TRACE_TOKIO: ${{ inputs.fastapi_trace_tokio || 'current' }}
+          FASTAPI_TRACE_HTTP_DEPS: ${{ inputs.fastapi_trace_http_deps || 'current' }}
+          FASTAPI_TRACE_BODY_BATCH_WAIT: ${{ inputs.upload_trace_timer == 'recreated-1ms' && '1ms' || (inputs.upload_trace_timer == 'recreated' && '5ms') || 'current' }}
+          FASTAPI_TRACE_RUN_MODE: ${{ inputs.run_mode || '' }}
+          FASTAPI_TRACE_SOURCE: ${{ inputs.fastapi_trace_http_deps == 'failing-source-94c89b79' && 'failing-94c89b79' || 'current' }}
+          FASTAPI_TRACE_SYSTEM: ${{ inputs.fastapi_system || '' }}
+          FASTAPI_TRACE_LOOP: ${{ inputs.fastapi_stage_loop || '' }}
+          FASTAPI_TRACE_WORKLOAD: ${{ inputs.fastapi_workload || '' }}
+          FASTAPI_TRACE_REPETITIONS: ${{ inputs.fastapi_stage_repetitions || '' }}
+          FASTAPI_TRACE_PEER_READ_MODE: ${{ inputs.fastapi_peer_read_mode || 'proactive' }}
+          FASTAPI_TRACE_PEER_READ_CHUNK: ${{ inputs.fastapi_peer_read_chunk || '64k' }}
         run: |
           set -euo pipefail
-          uv run --with maturin==1.14.1 --no-sync maturin develop --release \
-            --features runtime-diagnostics \
-            2>&1 | tee target/benchmark-preparation/runtime-diagnostics-build.log
+          build_root="$GITHUB_WORKSPACE"
+          if [[ "$FASTAPI_TRACE_SOURCE" == "failing-94c89b79" ]]; then
+            if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" \
+              || "$FASTAPI_TRACE_RUN_MODE" != "focused-fastapi-upload-trace" \
+              || ( "$FASTAPI_TRACE_SYSTEM" != "linux-aarch64-22.04" \
+                && "$FASTAPI_TRACE_SYSTEM" != "linux-aarch64" ) \
+              || "$FASTAPI_TRACE_LOOP" != "uvloop" \
+              || "$FASTAPI_TRACE_WORKLOAD" != "fastapi-upload-1m-write-1k" \
+              || "$FASTAPI_TRACE_REPETITIONS" != "3" \
+              || "$FASTAPI_TRACE_BODY_BATCH_WAIT" != "5ms" ]]; then
+              echo 'The failing-source overlay requires the focused 1 MiB ARM64/uvloop upload, three repetitions, and the historical 5ms timer.' >&2
+              exit 1
+            fi
+            historical_sha=94c89b79c1f2a8e5f90b2171ee28ca929444a7f5
+            build_root="$RUNNER_TEMP/uvicorn-rs-failing-source"
+            git fetch --quiet --no-tags https://github.com/appunni-m/uvicorn-rs.git "$historical_sha"
+            git worktree add --detach "$build_root" "$historical_sha"
+            actual_sha="$(git -C "$build_root" rev-parse HEAD)"
+            if [[ "$actual_sha" != "$historical_sha" ]]; then
+              echo "Historical source mismatch: expected $historical_sha, got $actual_sha" >&2
+              exit 1
+            fi
+            printf 'server_source=%s\n' "$actual_sha" > target/benchmark-preparation/server-source.txt
+            uv pip install --python "$GITHUB_WORKSPACE/.venv/bin/python" maturin==1.14.1
+            uv pip uninstall --python "$GITHUB_WORKSPACE/.venv/bin/python" uvicorn-rs
+            mkdir -p "$RUNNER_TEMP/uvicorn-rs-failing-wheel"
+            (
+              cd "$build_root"
+              "$GITHUB_WORKSPACE/.venv/bin/maturin" build --locked --release \
+                --features runtime-diagnostics \
+                --interpreter "$GITHUB_WORKSPACE/.venv/bin/python" \
+                --out "$RUNNER_TEMP/uvicorn-rs-failing-wheel"
+            ) 2>&1 | tee "$GITHUB_WORKSPACE/target/benchmark-preparation/runtime-diagnostics-build.log"
+            historical_wheel="$(find "$RUNNER_TEMP/uvicorn-rs-failing-wheel" -maxdepth 1 -type f -name '*.whl' -print -quit)"
+            if [[ -z "$historical_wheel" ]]; then
+              echo 'Maturin produced no historical-source wheel.' >&2
+              exit 1
+            fi
+            uv pip install --python "$GITHUB_WORKSPACE/.venv/bin/python" --no-deps "$historical_wheel"
+            "$GITHUB_WORKSPACE/.venv/bin/python" -c 'import uvicorn_rs._native as native; print(native.__file__)' \
+              | tee "$GITHUB_WORKSPACE/target/benchmark-preparation/installed-server-extension.txt"
+          else
+            printf 'server_source=%s\n' "$(git rev-parse HEAD)" > target/benchmark-preparation/server-source.txt
+            if [[ "$FASTAPI_TRACE_HTTP_DEPS" == "historical" ]]; then
+              hyper_archive="$RUNNER_TEMP/hyper-1.11.1.crate"
+              hyper_source="$RUNNER_TEMP/hyper-1.11.1-source"
+              curl --fail --location --silent --show-error \
+                --output "$hyper_archive" \
+                https://static.crates.io/crates/hyper/hyper-1.11.1.crate
+              printf '%s  %s\n' \
+                27b501faa50e7a26c3d3560ca625132f4078a17771f4810baf70475ae48cbe43 \
+                "$hyper_archive" | sha256sum --check
+              printf '%s  %s\n' \
+                dd12a3489b2ec46cce2a240403b2f51088964ff9da3ac6b225f005ffccbf42f0 \
+                tools/diagnostics/hyper-1.11.1-uvicorn-rs.patch | sha256sum --check
+              mkdir -p "$hyper_source"
+              tar -xzf "$hyper_archive" -C "$hyper_source" --strip-components=1
+              # Keep the workspace's server-facing Hyper patches while replaying
+              # the historical upstream version used by the failing run.
+              patch --directory="$hyper_source" --strip=1 --fuzz=0 --no-backup-if-mismatch \
+                < tools/diagnostics/hyper-1.11.1-uvicorn-rs.patch
+              rm -rf crates/uvicorn-rs/third-party/hyper
+              mkdir -p crates/uvicorn-rs/third-party/hyper
+              cp -a "$hyper_source/." crates/uvicorn-rs/third-party/hyper/
+              cargo update --package hyper --precise 1.11.1
+              printf '%s\n' \
+                'hyper=1.11.1 crates.io archive sha256=27b501faa50e7a26c3d3560ca625132f4078a17771f4810baf70475ae48cbe43' \
+                'hyper-workspace-patch sha256=dd12a3489b2ec46cce2a240403b2f51088964ff9da3ac6b225f005ffccbf42f0' \
+                'h2 remains the current workspace-patched version; see h2-dependency-tree.txt' \
+                > target/benchmark-preparation/historical-transport-dependencies.txt
+            fi
+            if [[ "$FASTAPI_TRACE_TOKIO" == "1.53.1" ]]; then
+              cargo update --package tokio --precise 1.53.1
+            fi
+            overrides=target/benchmark-preparation/upload-trace-overrides.txt
+            : > "$overrides"
+            if [[ "$FASTAPI_TRACE_BODY_BATCH_WAIT" == "1ms" ]]; then
+              if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" || "$FASTAPI_TRACE_RUN_MODE" != "focused-fastapi-upload-trace" ]]; then
+                echo 'The 1ms body batch override is only valid for focused-fastapi-upload-trace dispatches.' >&2
+                exit 1
+              fi
+              python3 - <<'PY'
+          from pathlib import Path
+
+          source_path = Path("src/lib.rs")
+          source = source_path.read_text()
+          current = "const HTTP_REQUEST_BODY_BATCH_MAX_WAIT: std::time::Duration = std::time::Duration::from_millis(5);"
+          historical = "const HTTP_REQUEST_BODY_BATCH_MAX_WAIT: std::time::Duration = std::time::Duration::from_millis(1);"
+          if source.count(current) != 1:
+              raise SystemExit("expected exactly one current 5ms request-body deadline")
+          source_path.write_text(source.replace(current, historical, 1))
+          PY
+              printf 'source_overlay=historical-1ms-request-body-deadline\n' >> "$overrides"
+            fi
+            uv run --with maturin==1.14.1 --no-sync maturin develop --release \
+              --features runtime-diagnostics \
+              2>&1 | tee target/benchmark-preparation/runtime-diagnostics-build.log
+          fi
+          overrides=target/benchmark-preparation/upload-trace-overrides.txt
+          [[ -f "$overrides" ]] || : > "$overrides"
+          printf 'body_batch_max_wait=%s\npeer_read_mode=%s\npeer_read_chunk=%s\n' \
+            "$FASTAPI_TRACE_BODY_BATCH_WAIT" \
+            "$FASTAPI_TRACE_PEER_READ_MODE" \
+            "$FASTAPI_TRACE_PEER_READ_CHUNK" >> "$overrides"
+          if [[ "$FASTAPI_TRACE_SOURCE" == "failing-94c89b79" ]]; then
+            sha256sum "$build_root/src/lib.rs" >> "$overrides"
+          else
+            sha256sum src/lib.rs crates/uvicorn-rs/src/lib.rs >> "$overrides"
+          fi
+          (
+            cd "$build_root"
+            cargo tree --locked -i tokio > "$GITHUB_WORKSPACE/target/benchmark-preparation/tokio-dependency-tree.txt"
+            cargo tree --locked -i hyper > "$GITHUB_WORKSPACE/target/benchmark-preparation/hyper-dependency-tree.txt"
+            cargo tree --locked -i h2 > "$GITHUB_WORKSPACE/target/benchmark-preparation/h2-dependency-tree.txt"
+            cp Cargo.lock "$GITHUB_WORKSPACE/target/benchmark-preparation/diagnostic-Cargo.lock"
+          )
+          if [[ "$FASTAPI_TRACE_SOURCE" == "failing-94c89b79" ]]; then
+            grep -Fq 'tokio v1.53.1' target/benchmark-preparation/tokio-dependency-tree.txt
+            grep -Fq 'hyper v1.11.1' target/benchmark-preparation/hyper-dependency-tree.txt
+          else
+            if [[ "$FASTAPI_TRACE_TOKIO" == "1.53.1" ]]; then
+              grep -Fq 'tokio v1.53.1' target/benchmark-preparation/tokio-dependency-tree.txt
+            fi
+            if [[ "$FASTAPI_TRACE_HTTP_DEPS" == "historical" ]]; then
+              grep -Fq 'hyper v1.11.1' target/benchmark-preparation/hyper-dependency-tree.txt
+            fi
+          fi
       - name: Capture read-only host preflight
         shell: bash
         run: |
@@ -575,6 +775,7 @@ jobs:
           .venv/bin/python scripts/benchmark_host_preflight.py \
             --output target/benchmark-preparation/host-preflight.json
       - name: Check lifecycle diagnostics and bounded upload trace tooling without a performance workload
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_mode != 'focused-fastapi-upload-trace' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -588,31 +789,75 @@ jobs:
             -o "$RUNNER_TEMP/uvicorn-rs-upload-trace-tests"
           "$RUNNER_TEMP/uvicorn-rs-upload-trace-tests" \
             >> target/benchmark-preparation/upload-trace-tooling.log 2>&1
-      - name: Run one FastAPI workload with matched ASGI stage diagnostics
+      - name: Run one focused FastAPI diagnostic
         shell: bash
         env:
+          BENCHMARK_TRACE_SOURCE: ${{ inputs.fastapi_trace_http_deps == 'failing-source-94c89b79' && 'failing-94c89b79' || 'current' }}
+          UVICORN_RS_DIAGNOSTIC_LEGACY_CLI: ${{ inputs.fastapi_trace_http_deps == 'failing-source-94c89b79' && '1' || '' }}
           BENCHMARK_FASTAPI_WORKLOAD: ${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}
-          UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-peer-read=on-read]') && 'on-read' || '' }}
+          BENCHMARK_DURATION: ${{ inputs.duration || '5' }}
+          BENCHMARK_WARMUP: ${{ inputs.warmup || '1' }}
+          BENCHMARK_CONCURRENCY: ${{ inputs.concurrency || '64' }}
+          BENCHMARK_REPETITIONS: ${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}
+          BENCHMARK_SEED: ${{ inputs.seed || '20261019' }}
+          BENCHMARK_STAGE_LOOP: ${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }}
+          BENCHMARK_TRACE_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-fastapi-upload-trace' }}
+          BENCHMARK_TRACE_TIMER: ${{ (inputs.upload_trace_timer == 'recreated' || inputs.upload_trace_timer == 'recreated-1ms') && 'recreated' || 'pinned' }}
+          BENCHMARK_TRACE_BODY_BATCH_WAIT: ${{ inputs.upload_trace_timer == 'recreated-1ms' && '1ms' || 'current' }}
+          UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE: ${{ inputs.fastapi_peer_read_mode == 'on-read' && 'on-read' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-peer-read=on-read]') && 'on-read') || '' }}
+          UVICORN_RS_DIAGNOSTIC_PEER_READ_CHUNK_SIZE: ${{ inputs.fastapi_peer_read_chunk || '64k' }}
           UVICORN_RS_UPLOAD_TRACE: "1"
+          UVICORN_RS_UPLOAD_TRACE_REQUESTS: ${{ inputs.upload_trace_requests || '' }}
+          UVICORN_RS_HTTP_CLIENT_TCP_DIAGNOSTICS: ${{ github.event_name == 'workflow_dispatch' && inputs.run_mode == 'focused-fastapi-upload-trace' && '1' || '' }}
+          # Selected request traces are retained even when they finish quickly.
+          UVICORN_RS_UPLOAD_TRACE_MIN_MS: ${{ inputs.upload_trace_requests != '' && '1' || '20' }}
         run: |
           set -euo pipefail
+          diagnostic_args=(--require-runtime-diagnostics --asgi-stage-diagnostics)
+          output_dir=target/fastapi-stage
+          if [[ "$BENCHMARK_TRACE_ONLY" == "true" ]]; then
+            output_dir=target/fastapi-upload-trace
+            if [[ "$BENCHMARK_TRACE_TIMER" == "recreated" ]]; then
+              export UVICORN_RS_DIAGNOSTIC_BODY_BATCH_TIMER=recreated
+            fi
+          fi
+          cat target/benchmark-preparation/server-source.txt
+          printf 'server_source_mode=%s\n' "$BENCHMARK_TRACE_SOURCE"
+          if [[ "$BENCHMARK_TRACE_SOURCE" == "failing-94c89b79" ]] \
+            && ! grep -Fxq 'server_source=94c89b79c1f2a8e5f90b2171ee28ca929444a7f5' \
+              target/benchmark-preparation/server-source.txt; then
+            echo 'The historical server source was not built; refusing the comparison.' >&2
+            exit 1
+          fi
+          if [[ "$BENCHMARK_TRACE_BODY_BATCH_WAIT" == "1ms" && "$BENCHMARK_TRACE_ONLY" != "true" ]]; then
+            echo 'The 1ms body batch override requires focused-fastapi-upload-trace mode.' >&2
+            exit 1
+          fi
+          printf 'timer=%s\n' "$BENCHMARK_TRACE_TIMER" >> target/benchmark-preparation/upload-trace-overrides.txt
+          printf 'peer_read_mode=%s\npeer_read_chunk=%s\n' \
+            "${UVICORN_RS_DIAGNOSTIC_PEER_READ_MODE:-proactive}" \
+            "${UVICORN_RS_DIAGNOSTIC_PEER_READ_CHUNK_SIZE:-64k}" \
+            >> target/benchmark-preparation/upload-trace-overrides.txt
+          mkdir -p "$output_dir"
           .venv/bin/python scripts/run_http_category_bench.py \
             --uvicorn-python "$UVICORN_ORACLE_PYTHON" \
             --workloads "$BENCHMARK_FASTAPI_WORKLOAD" \
-            --servers uvicorn-rs-asyncio uvicorn-asyncio-httptools \
-            --duration 5 --warmup 1 --concurrency 64 \
-            --repetitions "${{ inputs.fastapi_stage_repetitions || '1' }}" --seed 20261019 \
-            --require-runtime-diagnostics --asgi-stage-diagnostics \
-            --output "target/fastapi-stage/${BENCHMARK_FASTAPI_WORKLOAD}.json" \
-            2>&1 | tee "target/fastapi-stage/${BENCHMARK_FASTAPI_WORKLOAD}.log"
+            --servers "uvicorn-rs-$BENCHMARK_STAGE_LOOP" "uvicorn-$BENCHMARK_STAGE_LOOP-httptools" \
+            --duration "$BENCHMARK_DURATION" --warmup "$BENCHMARK_WARMUP" \
+            --concurrency "$BENCHMARK_CONCURRENCY" \
+            --repetitions "$BENCHMARK_REPETITIONS" --seed "$BENCHMARK_SEED" \
+            "${diagnostic_args[@]}" \
+            --output "$output_dir/${BENCHMARK_FASTAPI_WORKLOAD}.json" \
+            2>&1 | tee "$output_dir/${BENCHMARK_FASTAPI_WORKLOAD}.log"
       - name: Retain focused FastAPI diagnostic evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: fastapi-stage-${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}-${{ github.sha }}
+          name: ${{ inputs.run_mode == 'focused-fastapi-upload-trace' && 'fastapi-upload-trace' || 'fastapi-stage' }}-${{ inputs.fastapi_system || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-system=linux-aarch64]') && 'linux-aarch64') || 'linux-x86_64' }}-${{ inputs.fastapi_stage_loop || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-loop=uvloop]') && 'uvloop') || 'asyncio' }}-${{ inputs.fastapi_workload || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-workload=fastapi-upload-1m-write-1k]') && 'fastapi-upload-1m-write-1k') || 'fastapi-validated-route' }}-${{ inputs.fastapi_stage_repetitions || (github.event_name == 'push' && contains(github.event.head_commit.message, '[fastapi-stage-repetitions=3]') && '3') || '1' }}x-${{ inputs.fastapi_trace_http_deps == 'failing-source-94c89b79' && '94c89b79' || 'current' }}-${{ inputs.run_mode == 'focused-fastapi-upload-trace' && inputs.upload_trace_timer || 'stage' }}-bodybatch-${{ inputs.upload_trace_timer == 'recreated-1ms' && '1ms' || 'current' }}-tokio-${{ inputs.fastapi_trace_tokio || 'current' }}-hyper-${{ (inputs.fastapi_trace_http_deps == 'historical' || inputs.fastapi_trace_http_deps == 'failing-source-94c89b79') && '1.11.1' || 'current' }}-${{ github.sha }}
           path: |
             target/benchmark-preparation/
             target/fastapi-stage/
+            target/fastapi-upload-trace/
           if-no-files-found: warn
           retention-days: 90
 
@@ -950,7 +1195,16 @@ jobs:
         run: |
           set -euo pipefail
           read -r -a h3_servers <<<"$BENCHMARK_H3_SERVERS"
-          trace_args=()
+          benchmark_args=(
+            --servers "${h3_servers[@]}"
+            --repetitions "$BENCHMARK_REPETITIONS"
+            --seed "$BENCHMARK_SEED"
+            --output target/benchmark-categories/h3-focused.json
+            --workloads "$BENCHMARK_H3_WORKLOAD"
+            --duration "$BENCHMARK_DURATION"
+            --warmup "$BENCHMARK_WARMUP"
+            --concurrency "$BENCHMARK_H3_CONCURRENCY"
+          )
           if [[ "$BENCHMARK_H3_TRACE" == "true" ]]; then
             if [[ "$RUNNER_OS" != "Linux" || "$RUNNER_ARCH" != "ARM64" \
               || "${#h3_servers[@]}" != "1" || "${h3_servers[0]}" != "hypercorn-asyncio" \
@@ -959,16 +1213,9 @@ jobs:
               echo "H3 event tracing requires Linux ARM64, Hypercorn asyncio, slow-reader-backpressure, and one repetition" >&2
               exit 2
             fi
-            trace_args+=(--trace-hypercorn-h3-events)
+            benchmark_args+=(--trace-hypercorn-h3-events)
           fi
-          .venv/bin/python scripts/run_h3_category_bench.py \
-            --servers "${h3_servers[@]}" \
-            --repetitions "$BENCHMARK_REPETITIONS" --seed "$BENCHMARK_SEED" \
-            --output target/benchmark-categories/h3-focused.json \
-            --workloads "$BENCHMARK_H3_WORKLOAD" \
-            --duration "$BENCHMARK_DURATION" --warmup "$BENCHMARK_WARMUP" \
-            --concurrency "$BENCHMARK_H3_CONCURRENCY" \
-            "${trace_args[@]}" \
+          .venv/bin/python scripts/run_h3_category_bench.py "${benchmark_args[@]}" \
             2>&1 | tee target/benchmark-preparation/h3-focused-driver.log
       - name: Retain focused diagnostic evidence
         if: always()

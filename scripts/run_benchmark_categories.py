@@ -310,8 +310,17 @@ def capture_identity(root, python, evidence_class):
         }
 
 
-def validate_parity(root, before_path, parity_path, current, expected_count):
+def validate_parity(
+    root,
+    before_path,
+    parity_path,
+    current,
+    expected_count,
+    *,
+    allow_macos_reference_wss_handshake_timeout=False,
+):
     from run_parity import load_contract, validate_result_shape
+    from macos_reference_exceptions import validate_reference_row, POLICY_ID
 
     before = json.loads(before_path.read_text())
     if before.get("schema") != "uvicorn-rs-benchmark-freeze@2" or before.get("identity") != current:
@@ -334,8 +343,47 @@ def validate_parity(root, before_path, parity_path, current, expected_count):
             f"expected {oracle_python}, found {oracle_argument}"
         )
     summary = result["summary"]
-    if result["status"] != "completed" or summary["selected"] != len(selected) or summary["executed"] != len(selected) or summary["passed"] != len(selected) or any(summary[key] != 0 for key in ("failed", "not_run", "infrastructure_failed")) or result["infrastructure_errors"]:
-        raise RuntimeError("all currently indexed public parity cases must pass without infrastructure failures")
+    accepted_reference_exceptions = []
+    all_passed = (
+        result["status"] == "completed"
+        and summary == {
+            "selected": len(selected), "executed": len(selected), "passed": len(selected),
+            "failed": 0, "not_run": 0, "infrastructure_failed": 0,
+        }
+        and result["infrastructure_errors"] == []
+    )
+    if not all_passed:
+        if not allow_macos_reference_wss_handshake_timeout:
+            raise RuntimeError("all currently indexed public parity cases must pass without infrastructure failures")
+        if "--continue-after-macos-reference-wss-handshake-timeout" not in parity_command:
+            raise RuntimeError("raw parity did not explicitly enable the narrow macOS reference continuation")
+        case_by_id = {case["case_id"]: case for case in selected}
+        failed_rows = [row for row in result["cases"] if row["status"] != "passed"]
+        if (
+            result["status"] != "failed"
+            or result["infrastructure_errors"] != []
+            or len(failed_rows) != 1
+            or failed_rows[0].get("case_id") != "websocket-tls.text-round-trip-with-query-and-subprotocol"
+            or summary != {
+                "selected": len(selected), "executed": len(selected), "passed": len(selected) - 1,
+                "failed": 0, "not_run": 0, "infrastructure_failed": 1,
+            }
+        ):
+            raise RuntimeError("parity has failures outside the one eligible macOS reference timeout")
+        try:
+            exception = validate_reference_row(
+                failed_rows[0],
+                case_by_id[failed_rows[0]["case_id"]],
+                result["run"]["environment"],
+            )
+        except (ValueError, KeyError, TypeError) as error:
+            raise RuntimeError(f"macOS reference exception rejected: {error}") from error
+        expected_policy_hash = current.get("harness", {}).get(
+            "scripts/macos_reference_exceptions.py"
+        )
+        if expected_policy_hash != sha256(root / "scripts/macos_reference_exceptions.py"):
+            raise RuntimeError("macOS reference exception policy is not bound to the frozen harness identity")
+        accepted_reference_exceptions.append(exception)
     target = result["run"]["target"]
     if target["native_extension"]["sha256"] != current["native"] or target["cargo_lock_sha256"] != sha256(root / "Cargo.lock") or target["revision"] != current["git_revision"]:
         raise RuntimeError("parity did not execute this exact native binary, Cargo.lock, and Git revision")
@@ -359,9 +407,25 @@ def validate_parity(root, before_path, parity_path, current, expected_count):
         raise RuntimeError("parity result does not cover the exact current indexed input files")
     if result["run"]["environment"]["python"] != current["python_runtime"]["version"].split()[0]:
         raise RuntimeError("parity used a different Python version")
-    return {"status": "passed", "public_cases": len(selected), "parity_report": str(parity_path),
-            "parity_report_sha256": sha256(parity_path), "before_parity_identity": str(before_path),
-            "before_parity_identity_sha256": sha256(before_path), "native_sha256": current["native"]}
+    gate = {
+        "status": "accepted_with_reference_exception" if accepted_reference_exceptions else "passed",
+        "public_cases": len(selected),
+        "parity_report": str(parity_path),
+        "parity_report_sha256": sha256(parity_path),
+        "raw_parity_status": result["status"],
+        "raw_parity_summary": summary,
+        "accepted_reference_exceptions": accepted_reference_exceptions,
+        "before_parity_identity": str(before_path),
+        "before_parity_identity_sha256": sha256(before_path),
+        "native_sha256": current["native"],
+    }
+    if accepted_reference_exceptions:
+        gate.update({
+            "exception_policy_id": POLICY_ID,
+            "exception_policy_sha256": sha256(root / "scripts/macos_reference_exceptions.py"),
+            "performance_pair": None,
+        })
+    return gate
 
 
 def main():
@@ -389,6 +453,11 @@ def main():
     parser.add_argument("--expected-source-sha256", type=sha_argument)
     parser.add_argument("--expected-native-sha256", type=sha_argument)
     parser.add_argument("--expected-public-cases", type=positive_integer)
+    parser.add_argument(
+        "--allow-macos-reference-wss-handshake-timeout",
+        action="store_true",
+        help="accept only the exact retained macOS ARM64 stock-Uvicorn WSS timeout with a successful candidate exchange",
+    )
     parser.add_argument("--capture-identity", type=Path, help="capture normal prebuilt identities before public parity; runs no benchmarks")
     parser.add_argument("--parity-before-identity", type=Path)
     parser.add_argument("--parity-report", type=Path)
@@ -464,7 +533,14 @@ def main():
         print(json.dumps({"identity": str(destination), "source_sha256": before["source"], "native_sha256": before["native"]}))
         return 0
 
-    parity = validate_parity(root, args.parity_before_identity.absolute(), args.parity_report.absolute(), before, args.expected_public_cases)
+    parity = validate_parity(
+        root,
+        args.parity_before_identity.absolute(),
+        args.parity_report.absolute(),
+        before,
+        args.expected_public_cases,
+        allow_macos_reference_wss_handshake_timeout=args.allow_macos_reference_wss_handshake_timeout,
+    )
     out = args.output_dir.absolute() if args.output_dir else root / "target/benchmark-categories" / f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid.uuid4().hex[:12]}"
     out.mkdir(parents=True, exist_ok=False)
     record = {

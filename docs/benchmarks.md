@@ -43,28 +43,34 @@ repetitions for both loops on all three systems. This is provisional develop
 evidence, not the exact-main release benchmark. The same matrix shows the stock
 FastAPI HTTP/1.1 validated route slower on all six system/loop pairs; do not
 claim a broad FastAPI speed gain. See [benchmark status](benchmark-status.md)
-for the artifact identity and the single approved ARM64 slow-reader exception.
+for the artifact identity and the exact Hypercorn H3 reference exceptions.
 
 An earlier main-branch run,
 [39689988939](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939),
 had an incomplete Linux ARM64 H3 category after Hypercorn 0.18.0 asyncio raised
 `KeyError: 52` in `slow-reader-backpressure`. The retained logs do not establish
-event order or root cause. The current matrix records only the approved
+event order or root cause. Run 282's reanalysis records only the approved
 reference exception for that exact cell; it does not hide other failures.
 
-The maintained matrix has one narrowly scoped exception for that retained
-Linux ARM64 reference failure: when both `hypercorn-asyncio` and
-`uvicorn-rs-asyncio` are selected, the runner omits only the Hypercorn 0.18.0
-`slow-reader-backpressure` cell on Linux `aarch64`. It records the policy ID,
-reason, platform, version, and omitted reference in the H3 report and driver
-receipt. The Rust asyncio candidate still runs every planned repetition and
-must pass its response and shutdown checks. That cell has no live reference,
-so it cannot produce a speedup or latency comparison. The exception does not
-apply to other workloads, servers, versions, or systems; the trace-only mode
-still runs Hypercorn so the failure can be investigated. Timeouts and server
-behavior are unchanged, and the retained logs do not establish event ordering
-or root cause. A complete exact-main three-system run is still required for
-release qualification.
+Run 351 also failed the macOS ARM64 H3 `large-response` comparison: in
+Hypercorn 0.18.0 asyncio repetition 3, request 101 received 189,714 bytes
+despite `Content-Length: 1048576`, then Hypercorn's QUIC UDP task raised
+`KeyError(400)` while indexing its H3 stream map. The retained artifact
+confirms the truncation and missing map entry but not event ordering. The run
+ended before collecting all uvicorn-rs repetitions for this workload.
+
+The maintained matrix has two exact reference exceptions. When both
+`hypercorn-asyncio` and `uvicorn-rs-asyncio` are selected, the runner omits only
+the Hypercorn 0.18.0 `slow-reader-backpressure` cell on Linux `aarch64`, or the
+Hypercorn 0.18.0 `large-response` cell on macOS `arm64`. Each H3 report and
+driver receipt records the policy ID, reason, platform, version, and omitted
+reference. The Rust candidate still runs every planned repetition and must
+pass response and shutdown checks. An excluded cell has no live reference and
+cannot produce a speedup or latency comparison. These exceptions do not apply
+to other workloads, servers, versions, or systems; the slow-reader trace-only
+mode still runs Hypercorn so the earlier failure can be investigated. Neither
+captured log establishes event ordering or root cause. A complete exact-main
+three-system run is still required for release qualification.
 
 **Timing qualification:** the category runners now explicitly match access-log,
 server-header, and date-header settings between uvicorn-rs and its reference.
@@ -240,18 +246,27 @@ runner only; it is not a whole-server or cross-system performance claim.
 
 Use `workflow_dispatch` with `Run mode: focused-fastapi-stage` to profile one
 upstream FastAPI workload on one hosted runner. The defaults select the Linux
-x86-64 `fastapi-validated-route` workload. The job builds the Rust server with
-`runtime-diagnostics`, captures a read-only host preflight, and runs the same
-FastAPI app through Rust/asyncio, Uvicorn/asyncio, Rust/uvloop, and
-Uvicorn/uvloop for three repetitions. It skips the full category matrix,
-aggregate, and generated benchmark documentation jobs.
+x86-64 `fastapi-validated-route` workload and asyncio loop. Select `uvloop` to
+compare Rust/uvloop with Uvicorn/uvloop; both servers always use the same loop.
+The job builds the Rust server with `runtime-diagnostics`, captures a read-only
+host preflight, and runs the selected FastAPI workload for one or three
+repetitions. It skips the full category matrix, aggregate, and generated
+benchmark documentation jobs.
 
-To trigger the default case through Git, push a commit to `main` whose subject
-contains `[focused-fastapi-stage]`. This workflow file is included in the
-benchmark push filter. The push also starts regular CI; use the workflow's
-`workflow_dispatch` inputs when avoiding that additional run. The manual inputs
-can select one of the maintained FastAPI workloads and one runner. The Git
-trigger defaults to Linux x86-64 and `fastapi-validated-route`.
+To trigger the diagnostic through Git, include `[focused-fastapi-stage]` in the
+commit subject. This workflow file is included in the benchmark push filter.
+The push also starts regular CI; use the workflow's `workflow_dispatch` inputs
+when avoiding that additional run. The manual inputs can select one of the
+maintained FastAPI workloads, one runner, the Python event loop, and the
+repetition count. Historical Linux ARM64 upload timeouts
+occurred under both loops. The latest focused trace used asyncio; select Linux
+ARM64, `fastapi-upload-1m-write-1k`, `uvloop`, and three repetitions to probe
+the remaining uvloop failures. The Git trigger accepts
+`[fastapi-stage-system=linux-aarch64]`, `[fastapi-stage-loop=uvloop]`, and
+`[fastapi-stage-workload=fastapi-upload-1m-write-1k]`; the loop defaults to
+asyncio. Add `[fastapi-stage-duration=30]` for 30-second samples and
+`[fastapi-stage-repetitions=3]` for three attempts; defaults are five seconds
+and one attempt.
 
 The host preflight must pass before the timer starts, and each measured row is
 still checked by the category runner's live contention guard. A rejected
@@ -893,12 +908,12 @@ slow-reader concurrency is fixed at 2 by the workload; WebSocket handshake
 concurrency is fixed at 1.
 
 The H3 comparison runner aborts on reference correctness failures except for
-the exact recorded Linux ARM64 / Hypercorn 0.18.0 asyncio slow-reader cell
-described above. That exception is applied only when both sides of that pair
-are selected; a reference-only diagnostic still runs Hypercorn and can retain
-its failure. Other failures remain correctness failures, not performance
-results. Keep the full log and partial stdout, then collect candidate-only H3
-data in a separate file if that is useful for tracking the Rust server itself:
+the exact Linux ARM64 slow-reader and macOS ARM64 large-response cells described
+above. Each exception is applied only when both sides of that pair are selected;
+a reference-only diagnostic still runs Hypercorn and can retain its failure.
+Other failures remain correctness failures, not performance results. Keep the
+full log and partial stdout, then collect candidate-only H3 data in a separate
+file if that is useful for tracking the Rust server itself:
 
 ```sh
 uv run --no-sync python scripts/run_h3_category_bench.py \
@@ -968,14 +983,30 @@ PY
 This standalone command plans 144 H1 rows for the 12 listed workloads at three
 repetitions. H3 ordinarily has 78 rows rather than 84 because its known-failing
 Hypercorn upload comparison is omitted. On the exact Linux ARM64 exception
-context, H3 has three fewer rows: the one Hypercorn asyncio slow-reader cell is
-explicitly absent from both the plan and report, while all three Rust asyncio
-candidate repetitions remain required. Check the report's `reference_exclusions`
-and `excluded_servers_by_workload` against the policy and verify that the Rust
-rows are present and correctness- and lifecycle-valid. Unlisted missing rows
-remain failures; they must be retained in the logs and cannot be silently
-dropped. Candidate-only H3 output is useful as separate correctness evidence,
-but it cannot replace a matched comparison or produce a Hypercorn speedup.
+context, H3 omits the Hypercorn asyncio slow-reader reference; all five Rust
+asyncio repetitions remain required. This exact slow-reader exception also
+applies to Linux x86-64 after the same Hypercorn 0.18.0 `KeyError(52)` and five
+passing candidate-only repetitions were retained. On the exact macOS ARM64
+exception context, H3 omits the Hypercorn asyncio large-response reference;
+all five Rust asyncio repetitions remain required. The full five-repetition
+matrix omits five reference rows for each matching exception. Check the report's `reference_exclusions` and
+`excluded_servers_by_workload` against the policy and verify that the Rust rows
+are present and correctness- and lifecycle-valid. Unlisted missing rows remain
+failures; retain them in logs instead of dropping them. Candidate-only H3 cells
+establish correctness and lifecycle behavior but provide no matched speed
+comparison.
+
+The public parity gate also has one narrowly scoped candidate-only policy for
+the intermittent macOS ARM64 stock Uvicorn 0.54.0 TLS-WebSocket handshake
+timeout. It applies only to
+`websocket-tls.text-round-trip-with-query-and-subprotocol` with websockets
+17.1, when the retained trace shows that stock Uvicorn stopped before the
+WebSocket scope and `uvicorn-rs` completed the exact expected subprotocol and
+message exchange. The raw parity report remains failed with an
+`infrastructure_failed` row; every sibling case and both server cleanups must
+pass. The failure's cause remains unknown, and it supplies no performance
+ratio. Any other case, error signature, candidate result, or cleanup failure
+blocks the matrix.
 
 Row counts and response equality are correctness checks only. For every category,
 also inspect `metadata.identity_stable`, `timing_excluded_rows`,
@@ -1488,9 +1519,9 @@ Uvicorn was faster in every measured pair. The cap effects varied by loop and
 write size, and separate runner instances do not isolate causality, so no cap
 showed a repeatable end-to-end gain. The experimental
 `UVICORN_RS_MAX_BLOCKING_THREADS` override and its startup contracts were
-removed; Tokio's default behavior remains. The [full results](benchmark-results.md#final-tokio-blocking-pool-cap-experiment-2026-10-17)
-include throughput, latency percentiles, CPU, memory, valid-pair counts, and
-host exclusions.
+removed; Tokio's default behavior remains. The [recorded decision](benchmark-status.md#tokio-blocking-pool-cap-decision-2026-10-17)
+summarizes throughput, latency percentiles, CPU, memory, valid-pair counts,
+and host exclusions.
 
 ### Separate event-loop CPU from other server threads
 

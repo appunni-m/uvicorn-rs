@@ -746,6 +746,7 @@ def command_verify(args: argparse.Namespace) -> None:
             "digest": args.handoff_artifact_digest,
         },
         "handoff_manifest_sha256": file_hash(args.manifest),
+        "raw_inventory_sha256": measurement["raw_inventory_sha256"],
         "raw_report_sha256": measurement["raw_report_sha256"],
         "reviewed_report_sha256": reviewed_identity["report_sha256"],
         "reviewed_context_sha256": reviewed_identity["context_sha256"],

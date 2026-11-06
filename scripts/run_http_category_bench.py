@@ -226,6 +226,17 @@ WORKLOADS = {
         # disconnects during warm-up across every server implementation.
         "concurrency": 8,
     },
+    "fastapi-upload-1m-write-1k-close": {
+        "app": "examples.bench_fastapi:app",
+        "client": {
+            "mode": "upload",
+            "path": "/upload/1048576",
+            "upload_bytes": 1_048_576,
+            "upload_chunk_bytes": 1024,
+            "headers": [["Connection", "close"]],
+        },
+        "concurrency": 8,
+    },
     "fastapi-upload-1m-write-16k": {
         "app": "examples.bench_fastapi:app",
         "client": {
@@ -326,7 +337,7 @@ def _command(
 ) -> list[str]:
     server_python = python if server["kind"] == "rust" else uvicorn_python
     if server["kind"] == "rust":
-        return [
+        command = [
             str(server_python),
             "-m",
             "uvicorn_rs",
@@ -337,16 +348,20 @@ def _command(
             str(port),
             "--loop",
             server["loop"],
-            "--lifespan",
-            "auto",
-            "--interface",
-            "asgi3",
-            "--no-access-log",
-            "--no-server-header",
-            "--date-header",
-            "--log-level",
-            "error",
         ]
+        if os.environ.get("UVICORN_RS_DIAGNOSTIC_LEGACY_CLI") != "1":
+            command.extend([
+                "--lifespan",
+                "auto",
+                "--interface",
+                "asgi3",
+                "--no-access-log",
+                "--no-server-header",
+                "--date-header",
+                "--log-level",
+                "error",
+            ])
+        return command
     return [
         str(server_python),
         "-m",
@@ -426,6 +441,11 @@ def _uses_node_client(case: dict) -> bool:
 def _client_description(case: dict) -> str:
     if _uses_node_client(case):
         return "Node.js HTTP/1.1 with complete response-body checks"
+    if any(
+        name.lower() == "connection" and value.lower() == "close"
+        for name, value in case.get("headers", [])
+    ):
+        return "threaded libcurl C workers closing each HTTP/1.1 connection"
     return (
         "threaded libcurl C workers with persistent HTTP/1.1 connections "
         "and complete response-body checks"
@@ -510,6 +530,503 @@ def _checked_client_metrics(returncode: int, stdout: str, stderr: str) -> dict:
     return metrics
 
 
+def _trace_fields(line: str, prefix: str) -> dict[str, str]:
+    return {
+        key: value
+        for item in line[len(prefix):].split()
+        if "=" in item
+        for key, value in [item.split("=", 1)]
+    }
+
+
+def _server_upload_trace(server_output: str, request_id: str) -> dict:
+    """Extract the bounded Rust trace records matching one libcurl request."""
+    traces = []
+    current = None
+    for line in server_output.splitlines():
+        summary_prefix = "uvicorn-rs-upload-trace "
+        event_prefix = "uvicorn-rs-upload-event "
+        if line.startswith(summary_prefix):
+            fields = _trace_fields(line, summary_prefix)
+            current = None
+            if fields.get("request") != request_id:
+                continue
+            try:
+                current = {
+                    "request_id": request_id,
+                    "lane": fields["lane"],
+                    "origin_unix_ns": int(fields["origin_unix_ns"]),
+                    "origin_uncertainty_ns": int(fields["origin_uncertainty_ns"]),
+                    "expected_bytes": (
+                        int(fields["expected_bytes"])
+                        if fields.get("expected_bytes", "unknown").isdigit()
+                        else None
+                    ),
+                    "emission_reason": fields.get("emission_reason"),
+                    "snapshot_index": int(fields.get("snapshot_index", "0")),
+                    "read_bytes": int(fields["read_bytes"]),
+                    "offered_bytes": int(fields["offered_bytes"]),
+                    "delivered_bytes": int(fields["delivered_bytes"]),
+                    "events_seen": int(fields["events_seen"]),
+                    "events_dropped": int(fields["events_dropped"]),
+                    "events": [],
+                }
+            except (KeyError, ValueError):
+                continue
+            traces.append(current)
+        elif line.startswith(event_prefix):
+            fields = _trace_fields(line, event_prefix)
+            if fields.get("request") != request_id:
+                continue
+            if current is None or current["lane"] != fields.get("lane"):
+                current = next(
+                    (trace for trace in reversed(traces)
+                     if trace["lane"] == fields.get("lane")),
+                    None,
+                )
+            if current is None:
+                continue
+            try:
+                offset_ns = int(fields["offset_ns"])
+                event = {
+                    "request_id": request_id,
+                    "lane": fields["lane"],
+                    "event_index": int(
+                        fields.get("event_index", str(len(current["events"]) + 1))
+                    ),
+                    "event": fields["event"],
+                    "offset_ns": offset_ns,
+                    "estimated_unix_ns": current["origin_unix_ns"] + offset_ns,
+                    "bytes": int(fields["bytes"]),
+                    "flag": fields["flag"] == "true",
+                }
+                if "value" in fields:
+                    event["value"] = int(fields["value"])
+                if "duration_ns" in fields:
+                    event["duration_ns"] = int(fields["duration_ns"])
+                current["events"].append(event)
+            except (KeyError, ValueError):
+                continue
+
+    # Checkpoints repeat the bounded event tail so a timeout preserves a live
+    # trace. Collapse repeated copies by their per-request sequence number.
+    events_by_index = {}
+    for trace in traces:
+        for event in trace["events"]:
+            events_by_index.setdefault(
+                (event["request_id"], event["lane"], event["event_index"]), event,
+            )
+    events = list(events_by_index.values())
+    events.sort(key=lambda event: event["estimated_unix_ns"])
+    previous_by_lane = {}
+    for event in events:
+        lane = event["lane"]
+        previous = previous_by_lane.get(lane)
+        if previous is not None:
+            event["delta_from_previous_lane_event_ns"] = max(
+                0, event["estimated_unix_ns"] - previous
+            )
+        previous_by_lane[lane] = event["estimated_unix_ns"]
+    return {
+        "request_id": request_id,
+        "status": "matched" if traces else "no_matching_server_request_id",
+        "trace_records": traces,
+        "events": events,
+    }
+
+
+def _server_connection_trace(server_output: str, peer_port: int | None) -> dict:
+    """Join libcurl local ports to the Rust peer-read and HTTP-driver traces."""
+    if not isinstance(peer_port, int) or peer_port <= 0:
+        return {
+            "status": "client_local_port_unavailable",
+            "connections": [],
+            "peer_read_pumps": [],
+        }
+
+    traces = []
+    by_id = {}
+    peer_read_pumps = []
+    peer_read_by_id = {}
+    summary_prefix = "uvicorn-rs-connection-trace "
+    event_prefix = "uvicorn-rs-connection-event "
+    peer_read_summary_prefix = "uvicorn-rs-peer-read-trace "
+    peer_read_event_prefix = "uvicorn-rs-peer-read-event "
+    for line in server_output.splitlines():
+        if line.startswith(summary_prefix):
+            fields = _trace_fields(line, summary_prefix)
+            try:
+                if int(fields["peer_port"]) != peer_port:
+                    continue
+                trace = {
+                    "pid": int(fields["pid"]),
+                    "connection_id": int(fields["connection"]),
+                    "peer": fields["peer"],
+                    "peer_port": peer_port,
+                    "read_layer": fields.get("read_layer", "unknown"),
+                    "origin_unix_ns": (
+                        int(fields["origin_unix_ns"])
+                        if "origin_unix_ns" in fields else None
+                    ),
+                    "origin_uncertainty_ns": int(fields.get("origin_uncertainty_ns", "0")),
+                    "elapsed_ns": int(fields["elapsed_ns"]),
+                    "read_bytes": int(fields["read_bytes"]),
+                    "write_bytes": int(fields["write_bytes"]),
+                    "read_ready_polls": int(fields["read_ready_polls"]),
+                    "read_pending_polls": int(fields["read_pending_polls"]),
+                    "read_eof": int(fields["read_eof"]),
+                    "read_errors": int(fields["read_errors"]),
+                    "write_ready_polls": int(fields["write_ready_polls"]),
+                    "write_pending_polls": int(fields["write_pending_polls"]),
+                    "write_errors": int(fields["write_errors"]),
+                    "max_read_wait_ns": int(fields["max_read_wait_ns"]),
+                    "max_write_wait_ns": int(fields["max_write_wait_ns"]),
+                    "events_seen": int(fields["events_seen"]),
+                    "events_dropped": int(fields["events_dropped"]),
+                    "events": [],
+                }
+            except (KeyError, ValueError):
+                continue
+            traces.append(trace)
+            by_id[(trace["pid"], trace["connection_id"])] = trace
+        elif line.startswith(event_prefix):
+            fields = _trace_fields(line, event_prefix)
+            try:
+                if int(fields["peer_port"]) != peer_port:
+                    continue
+                trace = by_id.get((int(fields["pid"]), int(fields["connection"])))
+                if trace is None:
+                    continue
+                event = {
+                    "offset_ns": int(fields["offset_ns"]),
+                    "event": fields["event"],
+                    "bytes": int(fields["bytes"]),
+                    "read_total": int(fields["read_total"]),
+                    "write_total": int(fields["write_total"]),
+                }
+                if "wait_ns" in fields:
+                    event["wait_ns"] = int(fields["wait_ns"])
+                if "request_id" in fields:
+                    event["request_id"] = fields["request_id"]
+                trace["events"].append(event)
+            except (KeyError, ValueError):
+                continue
+        elif line.startswith(peer_read_summary_prefix):
+            fields = _trace_fields(line, peer_read_summary_prefix)
+            try:
+                if int(fields["peer_port"]) != peer_port:
+                    continue
+                trace = {
+                    "pid": int(fields["pid"]),
+                    "connection_id": int(fields["connection"]),
+                    "peer": fields["peer"],
+                    "peer_port": peer_port,
+                    "origin_unix_ns": int(fields["origin_unix_ns"]),
+                    "origin_uncertainty_ns": int(fields["origin_uncertainty_ns"]),
+                    "elapsed_ns": int(fields["elapsed_ns"]),
+                    "socket_read_bytes": int(fields["socket_read_bytes"]),
+                    "socket_read_calls": int(fields["socket_read_calls"]),
+                    "socket_read_eof": int(fields["socket_read_eof"]),
+                    "socket_read_errors": int(fields["socket_read_errors"]),
+                    "max_socket_read_wait_ns": int(fields["max_socket_read_wait_ns"]),
+                    "socket_read_pending_ns": int(fields.get("socket_read_pending_ns", "0")),
+                    "queue_reserve_full_observations": int(
+                        fields["queue_reserve_full_observations"]
+                    ),
+                    "max_queue_reserve_wait_ns": int(fields["max_queue_reserve_wait_ns"]),
+                    "queue_reserve_pending_ns": int(fields.get("queue_reserve_pending_ns", "0")),
+                    "events_seen": int(fields["events_seen"]),
+                    "events_dropped": int(fields["events_dropped"]),
+                    "events": [],
+                }
+            except (KeyError, ValueError):
+                continue
+            peer_read_pumps.append(trace)
+            peer_read_by_id[(trace["pid"], trace["connection_id"])] = trace
+        elif line.startswith(peer_read_event_prefix):
+            fields = _trace_fields(line, peer_read_event_prefix)
+            try:
+                if int(fields["peer_port"]) != peer_port:
+                    continue
+                trace = peer_read_by_id.get(
+                    (int(fields["pid"]), int(fields["connection"]))
+                )
+                if trace is None:
+                    continue
+                trace["events"].append({
+                    "offset_ns": int(fields["offset_ns"]),
+                    "event": fields["event"],
+                    "bytes": int(fields["bytes"]),
+                    "duration_ns": int(fields["duration_ns"]),
+                })
+            except (KeyError, ValueError):
+                continue
+
+    return {
+        "status": "matched" if traces or peer_read_pumps else "no_matching_server_peer_port",
+        "peer_port": peer_port,
+        "connections": traces,
+        "peer_read_pumps": peer_read_pumps,
+    }
+
+
+def _correlate_upload_trace(
+    client_metrics: dict,
+    server_output: str,
+    asgi_diagnostics: dict | None = None,
+) -> None:
+    """Join client progress with the Rust read/queue/ASGI trace by request ID."""
+    first_failure = client_metrics.get("first_failure")
+    if not isinstance(first_failure, dict):
+        return
+    client_trace = first_failure.get("upload_trace")
+    if not isinstance(client_trace, dict):
+        return
+    request_id = client_trace.get("request_id")
+    if not isinstance(request_id, str):
+        return
+
+    server_trace = _server_upload_trace(server_output, request_id)
+    client_trace["server_trace"] = server_trace
+    transfer = first_failure.get("transfer")
+    local_port = transfer.get("local_port") if isinstance(transfer, dict) else None
+    client_trace["server_connection_trace"] = _server_connection_trace(
+        server_output,
+        local_port if isinstance(local_port, int) else None,
+    )
+    calibration = client_metrics.get("upload_trace")
+    aligned = isinstance(calibration, dict) and all(
+        isinstance(calibration.get(key), (int, float))
+        for key in (
+            "calibration_monotonic_before",
+            "calibration_monotonic_after",
+            "calibration_unix",
+        )
+    )
+    timeline = []
+    if aligned:
+        calibration_mono = (
+            calibration["calibration_monotonic_before"]
+            + calibration["calibration_monotonic_after"]
+        ) / 2
+        calibration_uncertainty_ns = round(
+            (calibration["calibration_monotonic_after"]
+             - calibration["calibration_monotonic_before"]) * 500_000_000
+        )
+        started = client_trace.get("started")
+        client_events = client_trace.get("events", [])
+        if not isinstance(client_events, list):
+            client_events = []
+        for event in client_events:
+            if not isinstance(event, dict) or not isinstance(started, (int, float)):
+                continue
+            event_monotonic = started + int(event.get("offset_ns", 0)) / 1_000_000_000
+            timeline.append({
+                "source": "libcurl",
+                **event,
+                "monotonic_seconds": event_monotonic,
+                "estimated_unix_ns": round((
+                    calibration["calibration_unix"]
+                    + event_monotonic - calibration_mono
+                ) * 1_000_000_000),
+                "clock_uncertainty_ns": calibration_uncertainty_ns,
+            })
+    for event in server_trace["events"]:
+        timeline.append({
+            "source": "uvicorn-rs",
+            **event,
+            "clock_uncertainty_ns": next(
+                trace["origin_uncertainty_ns"] for trace in server_trace["trace_records"]
+                if trace["lane"] == event["lane"]
+            ),
+        })
+    connection_trace = client_trace["server_connection_trace"]
+    for source, collection in (
+        ("uvicorn-rs-http-driver", connection_trace["connections"]),
+        ("uvicorn-rs-peer-reader", connection_trace["peer_read_pumps"]),
+    ):
+        for trace in collection:
+            origin_unix_ns = trace.get("origin_unix_ns")
+            if not isinstance(origin_unix_ns, int):
+                continue
+            for event in trace["events"]:
+                timeline.append({
+                    "source": source,
+                    "connection_id": trace["connection_id"],
+                    **event,
+                    "estimated_unix_ns": origin_unix_ns + int(event["offset_ns"]),
+                    "clock_uncertainty_ns": trace["origin_uncertainty_ns"],
+                })
+    wrapper_traces = []
+    if isinstance(asgi_diagnostics, dict):
+        for path, path_data in asgi_diagnostics.get("paths", {}).items():
+            if not isinstance(path_data, dict):
+                continue
+            upload_data = path_data.get("upload_trace")
+            if not isinstance(upload_data, dict):
+                continue
+            for trace in upload_data.get("traces", []):
+                if not isinstance(trace, dict) or trace.get("request_id") != request_id:
+                    continue
+                wrapper_traces.append({"path": path, **trace})
+                origin_unix_ns = trace.get("origin_unix_ns")
+                uncertainty_ns = trace.get("origin_uncertainty_ns", 0)
+                for event in trace.get("events", []):
+                    if not isinstance(event, dict) or not isinstance(origin_unix_ns, int):
+                        continue
+                    timeline.append({
+                        "source": "asgi-wrapper",
+                        "path": path,
+                        **event,
+                        "estimated_unix_ns": origin_unix_ns + int(event.get("offset_ns", 0)),
+                        "clock_uncertainty_ns": uncertainty_ns,
+                    })
+    client_trace["asgi_wrapper_traces"] = wrapper_traces
+    timeline.sort(key=lambda event: event.get("estimated_unix_ns", 0))
+    client_trace["timeline_clock"] = (
+        "estimated Unix alignment; Rust offsets are per-process monotonic and "
+        "client offsets use the libcurl process calibration"
+    )
+    client_trace["correlated_timeline"] = timeline
+
+
+def _upload_trace_min_duration_ms() -> int:
+    """Return the bounded server-side trace threshold used by this process."""
+    try:
+        value = int(os.environ.get("UVICORN_RS_UPLOAD_TRACE_MIN_MS", "100"))
+    except ValueError:
+        return 100
+    return value if 1 <= value <= 1_000 else 100
+
+
+def _correlate_asgi_upload_traces(
+    asgi_diagnostics: dict,
+    server_output: str,
+    client_metrics: dict | None = None,
+) -> dict[str, int]:
+    """Join slow ASGI samples to libcurl and Rust request-level traces."""
+    wrapper_trace_count = 0
+    matched_request_count = 0
+    matched_lane_trace_count = 0
+    matched_client_trace_count = 0
+    successful_client_traces = {}
+    client_calibration = None
+    if isinstance(client_metrics, dict):
+        upload_trace = client_metrics.get("upload_trace")
+        if isinstance(upload_trace, dict):
+            client_calibration = upload_trace
+            successful_transfers = upload_trace.get("successful_transfers", [])
+            if isinstance(successful_transfers, list):
+                successful_client_traces = {
+                    trace["request_id"]: trace
+                    for trace in successful_transfers
+                    if isinstance(trace, dict)
+                    and isinstance(trace.get("request_id"), str)
+                }
+
+    for path, path_data in asgi_diagnostics.get("paths", {}).items():
+        if not isinstance(path_data, dict):
+            continue
+        upload_data = path_data.get("upload_trace")
+        if not isinstance(upload_data, dict):
+            continue
+        traces = upload_data.get("traces", [])
+        if not isinstance(traces, list):
+            continue
+        for wrapper_trace in traces:
+            if not isinstance(wrapper_trace, dict):
+                continue
+            request_id = wrapper_trace.get("request_id")
+            if not isinstance(request_id, str):
+                continue
+            wrapper_trace_count += 1
+            client_trace = successful_client_traces.get(request_id)
+            if client_trace is not None:
+                wrapper_trace["libcurl_client_trace_status"] = "matched"
+                matched_client_trace_count += 1
+            else:
+                wrapper_trace["libcurl_client_trace_status"] = "not_retained"
+
+            server_trace = _server_upload_trace(server_output, request_id)
+            if server_trace["status"] == "matched":
+                wrapper_trace["uvicorn_rs_server_trace"] = server_trace
+            timeline = []
+            origin_unix_ns = wrapper_trace.get("origin_unix_ns")
+            uncertainty_ns = wrapper_trace.get("origin_uncertainty_ns", 0)
+            for event in wrapper_trace.get("events", []):
+                if not isinstance(event, dict) or not isinstance(origin_unix_ns, int):
+                    continue
+                timeline.append({
+                    "source": "asgi-wrapper",
+                    "path": path,
+                    **event,
+                    "estimated_unix_ns": origin_unix_ns + int(event.get("offset_ns", 0)),
+                    "clock_uncertainty_ns": uncertainty_ns,
+                })
+            if client_trace is not None and isinstance(client_calibration, dict):
+                calibration_fields = (
+                    "calibration_monotonic_before",
+                    "calibration_monotonic_after",
+                    "calibration_unix",
+                )
+                if all(isinstance(client_calibration.get(key), (int, float))
+                       for key in calibration_fields):
+                    calibration_mono = (
+                        client_calibration["calibration_monotonic_before"]
+                        + client_calibration["calibration_monotonic_after"]
+                    ) / 2
+                    calibration_uncertainty_ns = round((
+                        client_calibration["calibration_monotonic_after"]
+                        - client_calibration["calibration_monotonic_before"]
+                    ) * 500_000_000)
+                    started = client_trace.get("started")
+                    client_events = client_trace.get("events", [])
+                    if isinstance(started, (int, float)) and isinstance(client_events, list):
+                        for event in client_events:
+                            if not isinstance(event, dict):
+                                continue
+                            event_monotonic = (
+                                started + int(event.get("offset_ns", 0)) / 1_000_000_000
+                            )
+                            timeline.append({
+                                "source": "libcurl",
+                                **event,
+                                "request_id": request_id,
+                                "monotonic_seconds": event_monotonic,
+                                "estimated_unix_ns": round((
+                                    client_calibration["calibration_unix"]
+                                    + event_monotonic - calibration_mono
+                                ) * 1_000_000_000),
+                                "clock_uncertainty_ns": calibration_uncertainty_ns,
+                            })
+            if server_trace["status"] == "matched":
+                for event in server_trace["events"]:
+                    lane_trace = next(
+                        (trace for trace in server_trace["trace_records"]
+                         if trace["lane"] == event["lane"]),
+                        None,
+                    )
+                    timeline.append({
+                        "source": "uvicorn-rs",
+                        **event,
+                        "clock_uncertainty_ns": (
+                            lane_trace["origin_uncertainty_ns"] if lane_trace else None
+                        ),
+                    })
+            timeline.sort(key=lambda event: event.get("estimated_unix_ns", 0))
+            wrapper_trace["correlated_timeline"] = timeline
+            if server_trace["status"] == "matched":
+                matched_request_count += 1
+                matched_lane_trace_count += len(server_trace["trace_records"])
+
+    return {
+        "wrapper_slow_trace_count": wrapper_trace_count,
+        "matched_request_count": matched_request_count,
+        "matched_rust_lane_trace_count": matched_lane_trace_count,
+        "matched_client_upload_trace_count": matched_client_trace_count,
+    }
+
+
 def _client(port: int, seconds: float, concurrency: int, case: dict, server) -> dict:
     result = run_bounded_client(
         _client_command(port, seconds, concurrency, case),
@@ -563,7 +1080,9 @@ def _sample(
         if warmup > 0:
             result = _client(port, warmup, concurrency, case, process)
             if result["failures"]:
-                raise RuntimeError(f"warm-up correctness gate failed: {result}")
+                error = RuntimeError(f"warm-up correctness gate failed: {result}")
+                error.partial_client_metrics = result
+                raise error
 
         server_process = psutil.Process(process.pid)
         client = owned_process(
@@ -604,9 +1123,33 @@ def _sample(
             metrics["asgi_stage_diagnostics"] = json.loads(
                 asgi_timings_path.read_text(encoding="utf-8")
             )
+            if (
+                server_name.startswith("uvicorn-rs-")
+                and os.environ.get("UVICORN_RS_UPLOAD_TRACE") == "1"
+            ):
+                log.flush()
+                server_output = Path(log.name).read_text(
+                    encoding="utf-8",
+                    errors="replace",
+                )
+                correlation = _correlate_asgi_upload_traces(
+                    metrics["asgi_stage_diagnostics"],
+                    server_output,
+                    metrics,
+                )
+                correlation["server_trace_min_duration_ms"] = (
+                    _upload_trace_min_duration_ms()
+                )
+                metrics["asgi_stage_diagnostics"]["rust_trace_correlation"] = correlation
             metrics["timing_valid"] = False
             metrics.setdefault("timing_invalid_reasons", []).append(
                 "instrumented_asgi_stage_diagnostics"
+            )
+            metrics["performance_evidence_status"] = "diagnostic_only"
+        if os.environ.get("UVICORN_RS_UPLOAD_TRACE") == "1":
+            metrics["timing_valid"] = False
+            metrics.setdefault("timing_invalid_reasons", []).append(
+                "instrumented_upload_trace"
             )
             metrics["performance_evidence_status"] = "diagnostic_only"
         return metrics
@@ -635,6 +1178,25 @@ def _sample(
         runtime_diagnostics_error = "; ".join(diagnostic_errors) or None
         log.seek(0)
         server_output = log.read()
+        partial_client_metrics = getattr(error, "partial_client_metrics", None)
+        asgi_diagnostics = None
+        if isinstance(asgi_timings_path, Path) and asgi_timings_path.is_file():
+            try:
+                asgi_diagnostics = json.loads(
+                    asgi_timings_path.read_text(encoding="utf-8")
+                )
+            except (OSError, json.JSONDecodeError):
+                pass
+        if isinstance(partial_client_metrics, dict):
+            try:
+                _correlate_upload_trace(
+                    partial_client_metrics,
+                    server_output,
+                    asgi_diagnostics,
+                )
+            except (KeyError, TypeError, ValueError):
+                # Keep the original sample failure visible if a trace row is malformed.
+                pass
         if evidence is not None and identity_before is not None and identity_result is None:
             try:
                 identity_result = evidence.after_sample(identity_before)
@@ -648,7 +1210,7 @@ def _sample(
             f"{server_name} {workload} failed: {error}\n"
             f"server output (last 4000 characters):\n{server_output[-4000:]}",
             identity_result,
-            getattr(error, "partial_client_metrics", None) or metrics,
+            partial_client_metrics or metrics,
             asgi_timings_path,
             runtime_diagnostics,
             runtime_diagnostics_error,
@@ -692,7 +1254,11 @@ def _median(rows: list[dict], metric: str):
     return statistics.median(values) if values else None
 
 
-def _source_digest(workloads: list[str], asgi_stage_diagnostics: bool = False) -> str:
+def _source_digest(
+    workloads: list[str],
+    asgi_stage_diagnostics: bool = False,
+    upload_trace: bool = False,
+) -> str:
     paths = [
         "scripts/uvicorn_oracle.py",
         "pyproject.toml",
@@ -716,6 +1282,7 @@ def _source_digest(workloads: list[str], asgi_stage_diagnostics: bool = False) -
     )
     if asgi_stage_diagnostics:
         paths.append("examples/profile_fastapi.py")
+    if asgi_stage_diagnostics or upload_trace:
         paths.append("src/upload_trace.rs")
     digest = hashlib.sha256()
     for path in paths:
@@ -785,12 +1352,17 @@ def main() -> None:
     assert_clean_coverage_environment()
     native_client = _build_native_client()
     upload_trace = os.environ.get("UVICORN_RS_UPLOAD_TRACE") == "1"
+    upload_trace_timer = os.environ.get("UVICORN_RS_DIAGNOSTIC_BODY_BATCH_TIMER", "pinned")
+    if upload_trace_timer not in {"pinned", "recreated"}:
+        parser.error("UVICORN_RS_DIAGNOSTIC_BODY_BATCH_TIMER must be pinned or recreated")
+    if upload_trace_timer != "pinned" and not upload_trace:
+        parser.error("the diagnostic body batch timer override requires UVICORN_RS_UPLOAD_TRACE=1")
     if upload_trace and (
-        not args.asgi_stage_diagnostics or not args.require_runtime_diagnostics or native_client is None
+        not args.require_runtime_diagnostics or native_client is None
     ):
-        parser.error("UVICORN_RS_UPLOAD_TRACE=1 requires ASGI-stage diagnostics, runtime diagnostics and the native libcurl client")
-    if upload_trace and args.repetitions > 3:
-        parser.error("upload tracing is limited to three planned attempts per server")
+        parser.error("UVICORN_RS_UPLOAD_TRACE=1 requires runtime diagnostics and the native libcurl client")
+    if upload_trace and args.repetitions > 10:
+        parser.error("upload tracing is limited to ten planned attempts per server")
     node_executable = shutil.which("node")
     node_required = native_client is None or any(
         WORKLOADS[name]["client"].get("read_delay_ms", 0) > 0
@@ -833,6 +1405,8 @@ def main() -> None:
     ]
     if args.asgi_stage_diagnostics:
         source_files.append("examples/profile_fastapi.py")
+    if args.asgi_stage_diagnostics or upload_trace:
+        source_files.append("src/upload_trace.rs")
     client_identities = [native_client] if native_client is not None else []
     if node_executable is not None:
         client_identities.append(Path(node_executable))
@@ -1077,7 +1651,11 @@ def main() -> None:
             "uvicorn_oracle": uvicorn_identity,
             "node": node_version,
             "rustc": evidence.rustc_version,
-            "source_sha256": _source_digest(args.workloads, args.asgi_stage_diagnostics),
+            "source_sha256": _source_digest(
+                args.workloads,
+                args.asgi_stage_diagnostics,
+                upload_trace,
+            ),
             "workloads": args.workloads,
             "workload_parameters": {
                 name: {
@@ -1105,8 +1683,13 @@ def main() -> None:
             "runtime_diagnostics_required": args.require_runtime_diagnostics,
             "asgi_stage_diagnostics": args.asgi_stage_diagnostics,
             "upload_trace": upload_trace,
-            "diagnostic_only": args.asgi_stage_diagnostics,
+            "upload_trace_timer": upload_trace_timer,
+            "diagnostic_only": args.asgi_stage_diagnostics or upload_trace,
             "diagnostic_interpretation": (
+                "Upload tracing and any ASGI stage instrumentation are diagnostic only and "
+                "invalidate performance timing. The request ID joins libcurl callback events "
+                "to bounded Rust body-pump and ASGI receive events."
+                if upload_trace else
                 "Instrumented wall-time stages are not CPU time or normal benchmark evidence. "
                 "Per-request ASGI send/receive waits are directly comparable at the app boundary; "
                 "Rust-only internal counters include bridge and scheduling work."

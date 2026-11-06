@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
+import socket
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -215,23 +216,33 @@ def main() -> None:
             key_password = None
         host = (
             "does-not-exist.invalid"
-            if scenario in {
-                "startup-invalid-host",
-                "startup-client-ca-invalid-utf8-prefix-valid-pem",
-            }
+            if scenario == "startup-invalid-host"
             else "127.0.0.1"
         )
         ca_certs = client_ca_path_for(scenario, temporary, trust_anchor)
         cert_reqs = 3 if scenario == "startup-client-ca-invalid-verify-mode" else (
             2 if scenario.startswith("startup-client-ca-") else 0
         )
+        port = 0
+        bind_conflict_socket = None
+        if scenario == "startup-client-ca-invalid-utf8-prefix-valid-pem":
+            # Keep this probe local and deterministic. An unresolvable hostname
+            # made Uvicorn's asynchronous DNS lookup race the parity harness's
+            # five-second startup-failure window on hosted runners.
+            bind_conflict_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            exclusive_addr = getattr(socket, "SO_EXCLUSIVEADDRUSE", None)
+            if exclusive_addr is not None:
+                bind_conflict_socket.setsockopt(socket.SOL_SOCKET, exclusive_addr, 1)
+            bind_conflict_socket.bind((host, 0))
+            bind_conflict_socket.listen()
+            port = bind_conflict_socket.getsockname()[1]
         try:
             if server_id == "uvicorn-rs":
                 from uvicorn_rs import Server
 
                 options = {
                     "host": host,
-                    "port": 0,
+                    "port": port,
                     "certfile": certfile,
                     "keyfile": keyfile,
                 }
@@ -250,7 +261,7 @@ def main() -> None:
 
                 options = {
                     "host": host,
-                    "port": 0,
+                    "port": port,
                     "loop": "uvloop",
                     "ssl_certfile": certfile,
                     "ssl_keyfile": keyfile,
@@ -276,6 +287,9 @@ def main() -> None:
         except Exception:
             print("ASGI_PARITY_SERVER_STARTUP_FAILURE", file=sys.stderr, flush=True)
             raise
+        finally:
+            if bind_conflict_socket is not None:
+                bind_conflict_socket.close()
 
 
 if __name__ == "__main__":

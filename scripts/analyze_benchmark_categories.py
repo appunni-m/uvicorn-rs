@@ -18,6 +18,7 @@ from pathlib import Path
 import statistics
 
 from benchmark_reference_exceptions import reference_exclusion_metadata_errors
+from macos_reference_exceptions import parity_gate_errors
 
 
 MINIMUM_MATCHES = 3
@@ -273,8 +274,17 @@ def metadata_reasons(category, metadata, driver):
         if not driver.get("finished_at"):
             reasons.append("driver_completion_metadata_missing")
         parity = driver.get("public_parity_gate")
-        if not isinstance(parity, dict) or parity.get("status") != "passed":
-            reasons.append("driver_complete_public_parity_gate_missing_or_failed")
+        frozen_policy_hash = (
+            driver_before.get("harness", {}).get("scripts/macos_reference_exceptions.py")
+            if isinstance(driver_before, dict)
+            else None
+        )
+        reasons.extend(
+            f"driver_{reason}"
+            for reason in parity_gate_errors(
+                parity, expected_policy_sha256=frozen_policy_hash
+            )
+        )
         expected = driver.get("identity_before", {})
         if isinstance(before, dict) and isinstance(expected, dict) and expected:
             if before.get("native_extension", {}).get("sha256") != expected.get("native"):

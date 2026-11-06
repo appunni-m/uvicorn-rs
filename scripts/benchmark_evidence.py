@@ -77,7 +77,8 @@ def workspace_rust_source_paths(root: Path) -> list[str]:
     ).decode().split("\0")
     return sorted(
         name for name in workspace_files
-        if name and (name.endswith(".rs") or Path(name).name == "Cargo.toml")
+        if name and (root / name).is_file()
+        and (name.endswith(".rs") or Path(name).name == "Cargo.toml")
     )
 
 
@@ -324,21 +325,23 @@ def run_bounded_client(argv, seconds: float, server, *, cwd: Path):
 
 
 def collect_bounded_client(process, seconds: float, server, monitor, *, interval: float = 0.25):
-    """Monitor a load client until completion or its absolute wall deadline."""
+    """Drain client output while monitoring until its absolute wall deadline."""
     if not math.isfinite(seconds) or seconds <= 0:
         raise ValueError("client duration must be finite and positive")
     deadline = process.benchmark_started + seconds + 30
-    while process.poll() is None:
+    while True:
         check_server_alive(server)
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise TimeoutError(f"load client exceeded its {seconds + 30:g}s absolute wall limit")
         _refresh_owned(process)
-        time.sleep(min(interval, remaining))
-        monitor.sample()
-    check_server_alive(server)
-    stdout, stderr = process.communicate(timeout=max(0.001, deadline - time.monotonic()))
-    return stdout, stderr
+        try:
+            stdout, stderr = process.communicate(timeout=min(interval, remaining))
+        except subprocess.TimeoutExpired:
+            monitor.sample()
+            continue
+        check_server_alive(server)
+        return stdout, stderr
 
 
 _EXPECTED_H2_PEER_CLOSE = re.compile(
@@ -446,11 +449,19 @@ class BenchmarkEvidence:
         self.validate_native_extension = validate_native_extension
         if validate_native_extension:
             code = (
-                "import importlib.metadata as metadata,json,sys,uvicorn_rs,uvicorn_rs._native as n; "
-                "from pathlib import Path; "
-                "dist=metadata.distribution('uvicorn-rs'); "
-                "direct=dist.read_text('direct_url.json'); "
+                "import importlib.metadata as metadata\n"
+                "import json\n"
+                "import sys\n"
+                "import uvicorn_rs\n"
+                "import uvicorn_rs._native as n\n"
+                "from pathlib import Path\n"
+                "try:\n"
+                "    dist=metadata.distribution('uvicorn-rs')\n"
+                "except metadata.PackageNotFoundError:\n"
+                "    dist=metadata.distribution('uvicorn-rs-py')\n"
+                "direct=dist.read_text('direct_url.json')\n"
                 "print(json.dumps({'native':n.__file__,'python':sys.executable,'version':sys.version,"
+                "'distribution_name':dist.metadata['Name'],"
                 "'python_package':uvicorn_rs.__file__,"
                 "'python_package_root':str(Path(uvicorn_rs.__file__).resolve().parent),"
                 "'direct_url':json.loads(direct) if direct else None}))"
@@ -543,10 +554,19 @@ extra=json.loads(sys.argv[1])
 modules={name:[name.replace("-","_")] for name in ("uvicorn","hypercorn","h11","h2","hpack","hyperframe","aioquic","uvloop","httptools","websockets","wsproto","cryptography","pylsqpack")}
 modules.update(extra)
 for name,module_names in modules.items():
- try: distribution=m.distribution(name)
+ distribution_name=name
+ try: distribution=m.distribution(distribution_name)
  except m.PackageNotFoundError:
-  if name in extra: raise RuntimeError("selected optional workload requires installed distribution "+name)
-  continue
+  if name == "uvicorn-rs":
+   distribution_name="uvicorn-rs-py"
+   try: distribution=m.distribution(distribution_name)
+   except m.PackageNotFoundError:
+    if name in extra: raise RuntimeError("selected optional workload requires installed distribution "+name)
+    continue
+  elif name in extra:
+   raise RuntimeError("selected optional workload requires installed distribution "+name)
+  else:
+   continue
  roots=[]; resolutions={}
  for module_name in module_names:
   spec=importlib.util.find_spec(module_name)
@@ -580,7 +600,7 @@ for name,module_names in modules.items():
   except subprocess.CalledProcessError:
    external={"path":str(checkout),"revision":None,"dirty":None,"source_sha256":None,"compiled_source_binding":"editable path has no readable Git identity"}
  record_text=distribution.read_text("RECORD")
- result[name]={"version":distribution.version,"modules":resolutions,"package_roots":[str(p) for p in roots],"files":files,"source_sha256":hashlib.sha256(json.dumps(files,sort_keys=True).encode()).hexdigest(),"record_sha256":hashlib.sha256(record_text.encode()).hexdigest() if record_text else None,"record_content_mismatches":mismatches,"unrecorded_source_files":unrecorded,"direct_url":direct,"direct_url_sha256":hashlib.sha256(direct_text.encode()).hexdigest() if direct_text else None,"external_checkout":external,"native_instrumentation_detected":instrumented}
+ result[name]={"distribution_name":distribution.metadata.get("Name",distribution_name),"version":distribution.version,"modules":resolutions,"package_roots":[str(p) for p in roots],"files":files,"source_sha256":hashlib.sha256(json.dumps(files,sort_keys=True).encode()).hexdigest(),"record_sha256":hashlib.sha256(record_text.encode()).hexdigest() if record_text else None,"record_content_mismatches":mismatches,"unrecorded_source_files":unrecorded,"direct_url":direct,"direct_url_sha256":hashlib.sha256(direct_text.encode()).hexdigest() if direct_text else None,"external_checkout":external,"native_instrumentation_detected":instrumented}
 print(json.dumps(result))
 '''
         return json.loads(subprocess.check_output([str(python), "-c", code, json.dumps(self.extra_dependencies)], cwd=self.root, text=True))

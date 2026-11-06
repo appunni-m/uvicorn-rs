@@ -3,16 +3,83 @@
 <!-- BEGIN GENERATED LATEST ATTEMPT -->
 ## Latest automated benchmark attempt
 
-- Run: [40228012455 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/40228012455)
-- Commit: [`7811b2392b60cd8eadc8a951c1eff47d57ace2d6`](https://github.com/appunni-m/uvicorn-rs/commit/7811b2392b60cd8eadc8a951c1eff47d57ace2d6)
-- Recorded: 2026-10-25T23:51:23Z
-- Category matrix job: `failure`
-- Aggregate job: `failure`
+- Run: [41802594681 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681)
+- Commit: [`feb955d2758166ad8c4b519903fd1318b29e7d2d`](https://github.com/appunni-m/uvicorn-rs/commit/feb955d2758166ad8c4b519903fd1318b29e7d2d)
+- Recorded: 2026-11-04T10:30:31Z
+- Category matrix job: `success`
+- Aggregate job: `success`
 
-This attempt did not produce a validated three-system aggregate or a complete performance report. Partial per-system measurements remain in this run's artifacts. The [previous complete report](benchmark-results.md) remains the latest complete measurement; inspect the [workflow artifacts and logs](https://github.com/appunni-m/uvicorn-rs/actions/runs/40228012455) for this attempt.
+All three systems produced a complete validated matrix. The [latest complete benchmark report](benchmark-results.md) is included in this documentation update. Hashed machine-readable receipts and raw system bundles remain in this run's GitHub Actions artifacts for 90 days; generated logs and per-run files are not committed.
 <!-- END GENERATED LATEST ATTEMPT -->
 
-## Provisional complete three-system matrix on develop (2026-11-04)
+## Exact-main result and performance interpretation (2026-11-04)
+
+Benchmark #283 ran against exact-main commit
+[`feb955d2758166ad8c4b519903fd1318b29e7d2d`](https://github.com/appunni-m/uvicorn-rs/commit/feb955d2758166ad8c4b519903fd1318b29e7d2d).
+Its aggregate artifact is
+[13313622768](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681/artifacts/13313622768),
+SHA-256 `99b295b2b5fcea8d04604aa8e3b55f16919403a48ed1fa94c716d9b2474931aa`.
+All category and FastAPI comparisons passed their correctness and identity
+gates on Linux x86-64, Linux ARM64 and macOS ARM64: respectively 68/28,
+67/27 and 66/26 qualified category/FastAPI pairs.
+
+This closes the three-system measurement gate; it does not support a general
+FastAPI speedup claim. HTTP/1 validated-route throughput, p95 latency and
+server CPU per operation are worse on all six system/loop pairs. H2/H3 gains
+are workload-specific, and WebSocket text echo is slower. `docs/performance-acceptance.json`
+therefore retains `scope_revised` with no Python ASGI superiority claim; the
+maintainer's Rust-native performance objective remains separate and unproven
+by this FastAPI comparison.
+
+## Focused exact-main HTTP/1 upload trace (2026-11-04)
+
+Focused diagnostic [run #284](https://github.com/appunni-m/uvicorn-rs/actions/runs/41816958680)
+used exact-main commit
+[`feb955d2758166ad8c4b519903fd1318b29e7d2d`](https://github.com/appunni-m/uvicorn-rs/commit/feb955d2758166ad8c4b519903fd1318b29e7d2d)
+on Linux ARM64 for only `fastapi-upload-1m-write-1k` (1 MiB request bodies,
+1 KiB client writes, effective concurrency 8). The instrumented five-second
+load completed 2,307 Rust and 3,227 Uvicorn requests with zero failures; both
+servers passed the lifecycle gate. Client traces retained 2,362,368 Rust and
+3,304,448 Uvicorn upload callbacks, with the expected full request bytes and
+the 15-second timeout unchanged. Both ASGI reports have no receive waits above
+100 ms. The stage trace therefore does not identify a stalled boundary: the
+historical timeout did not reproduce. The [diagnostic artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/41816958680/artifacts/13315456620)
+has SHA-256 `18f2d482353e1427c32cecade84d7da960d389a35ed31ec2fbd982e0af8671a8`.
+
+Tracing invalidates timing, and this clean run is not a performance result or
+a root-cause explanation. Keep Kata `nbmg` open for review of the missing
+failing-run evidence; do not repeat this unchanged diagnostic without a
+relevant source, input, or runner change.
+
+## Focused upload timer A/B (2026-11-05)
+
+Runs [#295](https://github.com/appunni-m/uvicorn-rs/actions/runs/41903988660)
+and [#296](https://github.com/appunni-m/uvicorn-rs/actions/runs/41905701684)
+used exact `develop` source `80cb48fa87113b960c3da1b32c260ea5ec80fe65` on
+Linux ARM64 / uvloop. Both ran only `fastapi-upload-1m-write-1k`: 1 MiB
+uploads, 1 KiB client writes, effective concurrency eight, 5 s load, 1 s
+warmup, and the unchanged 15 s client timeout. #295 used the pinned resettable
+timer; #296 selected the prior recreated-timer behavior. Each run completed
+three matched Rust/Uvicorn pairs, with zero request failures and clean server
+lifecycle.
+
+Candidate median throughput was 530.9 requests/s with the pinned timer and
+532.9 requests/s with the recreated timer. Uvicorn medians were 644.7 and
+645.8 requests/s. These instrumented diagnostic timings are not performance
+evidence. Neither artifact contains per-request trace events because no
+request failed or exceeded the 100 ms slow-trace threshold. This A/B result
+does not support the timer change as the timeout cause; it also cannot exclude
+a rare race. The historical failure rows all report `new_connections=0`, so
+the next focused diagnostic compares persistent connections with
+`Connection: close` while keeping the upload, runner, loop, concurrency and
+timeout fixed. The trace-only libcurl output now counts completed transfers,
+new connections, and reused transfers; its focused loopback check verified two
+persistent requests as one new plus one reused connection, and two
+`Connection: close` requests as two new connections. The selectable
+`fastapi-upload-1m-write-1k-close` case changes only that request header. No
+server fix is established.
+
+## Earlier complete three-system matrix on develop (2026-11-04)
 
 [Benchmark run 282](https://github.com/appunni-m/uvicorn-rs/actions/runs/41760326495)
 completed on develop commit
@@ -41,9 +108,8 @@ superiority claim. The aggregate report now includes process-level server and
 client CPU per operation alongside CPU percent and RSS; per-thread CPU is not
 collected. The Rust adapter uses one Tokio worker thread.
 
-This run is source-bound to its recorded develop commit, but it does not prove
-the release gates for exact `main`. A complete benchmark on the final main
-commit is still required before artifact promotion or publication.
+This run is source-bound to its recorded develop commit and is superseded for
+release evidence by exact-main benchmark #283 above.
 
 ## Buffer recycling decision and ARM64 trace (2026-11-03)
 
@@ -522,8 +588,8 @@ The completed Linux x86-64 FastAPI upload comparison found no repeatable
 benefit from limiting Tokio's blocking pool. Uvicorn was faster in all twelve
 matched workload/loop cells; the Rust/Uvicorn throughput ratios ranged from
 0.247x to 0.445x. The custom runtime cap and its five startup contracts were
-removed. See the [complete measurements](benchmark-results.md#final-tokio-blocking-pool-cap-experiment-2026-10-17)
-and the [benchmark runbook](benchmarks.md#historical-tokio-blocking-pool-cap-experiment).
+removed. The [historical benchmark detail](benchmarks.md#historical-tokio-blocking-pool-cap-experiment)
+retains the measurement table and its limits.
 
 ## Focused current-main upload-timeout reproduction (Linux x86-64; 2026-10-20; unqualified)
 
@@ -3856,7 +3922,7 @@ passed 24/24 response checks. Its 0.2-second duration is exploratory; although
 the analyzer formed one matched H3 uvloop pair, the fresh host preflight had
 rejected and the run is not a performance result. Older rows that sent a
 one-byte GET body are a different input identity. See the [HTTP/3 request-shape
-details](benchmark-results.md#http3-request-shape-correction-2026-10-11).
+details](#http3-request-semantics).
 Thirteen subsequent preflights rejected timed work for aggregate unrelated CPU
 above 100% of one core and a process above the per-process threshold in
 consecutive intervals. The latest receipt (`benchmarks/results/2026-10-11/wh9k-after-native-core-20261011-1.json`)
@@ -4612,3 +4678,74 @@ reference pair. A reference-only diagnostic, including the dedicated event
 trace mode, still runs Hypercorn. No timeout was increased and no server
 behavior was changed. A complete exact-source three-system run after this
 harness change is still required; run 281 remains partial evidence.
+
+## Latest three-system matrix run 351: macOS H3 reference failure (2026-11-05)
+
+[Run 351](https://github.com/appunni-m/uvicorn-rs/actions/runs/42114998939)
+used `develop` source `9f28884e7d160762e1059c8f445aaa67a9b0c35e`. The macOS
+ARM64 category job uploaded artifact
+[13460933239](https://github.com/appunni-m/uvicorn-rs/actions/runs/42114998939/artifacts/13460933239),
+SHA-256 `6ed074a0a1d4391f1e1f8451733a35966982c7d6adff6828b732e58f9834f390`.
+Linux x86-64 uploaded artifact
+[13460699181](https://github.com/appunni-m/uvicorn-rs/actions/runs/42114998939/artifacts/13460699181),
+SHA-256 `6bb9f96934bd8b005a19f625034a3f9b9773274a5cd81eef9633f87e6651557a`;
+Linux ARM64 uploaded artifact
+[13460509748](https://github.com/appunni-m/uvicorn-rs/actions/runs/42114998939/artifacts/13460509748),
+SHA-256 `6939b04d90ed5d7ef01234f775369562e9215ea2577151dcf2a1e2f6cbaa0a61`.
+Both Linux jobs completed successfully with zero correctness failures. Linux
+x86-64 has H1/H2/H3/WebSocket/lifecycle row counts 320/160/140/60/20; Linux
+ARM64 has 320/160/135/60/20, with five rows omitted for the already approved
+Linux ARM64 H3 slow-reader reference exception. All included Linux rows were
+eligible and every measured pair had five valid matches.
+
+The macOS report has H1 (320), H2 (160), WebSocket (60), and lifecycle (20)
+rows; H3 stopped at 70 of 140 rows after a reference-side correctness failure.
+The macOS artifact records unrelated-host-CPU rejections in H1 (2 rows), H2
+(4), H3 (2), and lifecycle (2); those rejected timing samples remain visible
+in the category analysis.
+
+The failing case was HTTP/3 `large-response`, Hypercorn 0.18.0 asyncio,
+repetition 3. Request 101 returned 189,714 bytes while declaring
+`Content-Length: 1048576`; the client rejected the truncated body. Hypercorn's
+QUIC UDP task then raised `KeyError(400)` at `self.streams[event.stream_id]`
+inside its H3 event handler. The artifact proves the incomplete response and
+missing stream-map entry. It does not include a trace of the event ordering or
+establish the underlying race. Rust asyncio candidate repetitions 1 and 2
+passed; repetition 3 was not reached, so the full candidate repetition set
+has not yet been demonstrated for this workload.
+
+The source-audited policy now excludes only the Hypercorn asyncio large-response
+reference cell on macOS ARM64, preserving all candidate repetitions and emitting
+no ratio for that pair. The earlier Linux ARM64 slow-reader exception remains
+separate. The focused policy test passes all seven cases. Run 351 predates this
+policy change and remains incomplete for H3; the Linux artifact evidence is
+complete and does not need to be rerun for this source revision.
+
+The full HTTP/1 category analysis shows a repeatable regression on the ordinary
+FastAPI `fastapi-validated-route` workload. Throughput is uvicorn-rs divided by
+Uvicorn; p95, server CPU per operation, and sampled server RSS are shown as
+reference/candidate pairs. The artifact analysis also retains p50/p99, client
+CPU, request counts, and every rejected sample.
+
+| System | Loop | Throughput ratio | p95 ms ref/candidate | Server CPU μs/op ref/candidate | RSS MiB ref/candidate |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Linux x86-64 | asyncio | 0.530 | 9.060 / 17.614 | 105.5 / 259.5 | 48.4 / 58.5 |
+| Linux x86-64 | uvloop | 0.545 | 7.661 / 16.565 | 103.6 / 242.8 | 51.1 / 65.2 |
+| Linux ARM64 | asyncio | 0.744 | 13.178 / 21.564 | 196.4 / 343.1 | 47.5 / 55.4 |
+| Linux ARM64 | uvloop | 0.812 | 12.534 / 19.167 | 189.2 / 302.8 | 49.8 / 57.2 |
+| macOS ARM64 | asyncio | 0.550 | 16.688 / 29.808 | 128.5 / 285.2 | 46.2 / 58.0 |
+| macOS ARM64 | uvloop | 0.525 | 17.310 / 28.310 | 116.9 / 269.2 | 48.8 / 59.2 |
+
+The historical Linux ARM64 `fastapi-upload-1m-write-1k` timeout did not recur:
+the full run has five valid matches on both loops and no client timeouts or
+correctness failures. This is not a root-cause diagnosis. The measured
+throughput ratios are 0.757 (asyncio) and 0.814 (uvloop); p95 is 16.978/21.077
+ms and 16.871/19.444 ms reference/candidate, server CPU is 1435/1910 and
+1449/1706 μs per operation, and sampled server RSS is 56.1/62.7 and 58.3/65.0
+MiB. The previous timeout still needs a reproducible request-level trace before
+it can be called fixed or explained.
+
+A focused five-run macOS H3 `large-response` asyncio-pair run is still needed
+to check all candidate repetitions under the new exact reference exception.
+The PR candidate also needs the exact-main three-system benchmark after merge;
+run 351 is useful development evidence, not final main-source qualification.

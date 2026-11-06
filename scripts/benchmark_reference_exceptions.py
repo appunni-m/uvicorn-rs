@@ -23,6 +23,75 @@ HYPERCORN_H3_SLOW_READER_LINUX_AARCH64 = {
     ),
 }
 
+HYPERCORN_H3_SLOW_READER_LINUX_X86_64 = {
+    "policy_id": "hypercorn-0.18.0-h3-slow-reader-linux-x86-64-stream-keyerror",
+    "category": "http3",
+    "workload": "slow-reader-backpressure",
+    "reference": "hypercorn-asyncio",
+    "candidate": "uvicorn-rs-asyncio",
+    "platform_system": "Linux",
+    "machine": "x86_64",
+    "hypercorn_version": "0.18.0",
+    "reason": (
+        "Hypercorn 0.18.0 asyncio raised KeyError(52) for an HTTP/3 stream ID "
+        "absent from its stream map during slow-reader backpressure. The client "
+        "completed 28 requests before two requests timed out waiting for response "
+        "headers; the retained log does not establish event ordering or causal "
+        "direction. On the same source, uvicorn-rs asyncio passed five "
+        "candidate-only repetitions of 40 requests each with zero failures and "
+        "clean shutdown. Keep this exact reference cell candidate-only; no "
+        "matched speed comparison is available."
+    ),
+}
+
+HYPERCORN_H3_LARGE_RESPONSE_MACOS_ARM64 = {
+    "policy_id": "hypercorn-0.18.0-h3-large-response-macos-arm64-stream-keyerror",
+    "category": "http3",
+    "workload": "large-response",
+    "reference": "hypercorn-asyncio",
+    "candidate": "uvicorn-rs-asyncio",
+    "platform_system": "Darwin",
+    "machine": "arm64",
+    "hypercorn_version": "0.18.0",
+    "reason": (
+        "On macOS ARM64, Hypercorn 0.18.0 asyncio raised KeyError(400) while "
+        "serving a 1 MiB HTTP/3 large response. The client received 189,714 "
+        "of 1,048,576 declared bytes before the QUIC UDP task failed. The "
+        "retained log confirms the missing stream-map lookup and truncated "
+        "body, but does not establish event ordering. Keep the uvicorn-rs "
+        "asyncio candidate as a full correctness- and lifecycle-checked "
+        "candidate-only cell; no matched speedup is available for this pair."
+    ),
+}
+
+HYPERCORN_H3_LARGE_RESPONSE_LINUX_X86_64 = {
+    "policy_id": "hypercorn-0.18.0-h3-large-response-linux-x86-64-stream-keyerror",
+    "category": "http3",
+    "workload": "large-response",
+    "reference": "hypercorn-asyncio",
+    "candidate": "uvicorn-rs-asyncio",
+    "platform_system": "Linux",
+    "machine": "x86_64",
+    "hypercorn_version": "0.18.0",
+    "reason": (
+        "On Linux x86-64, Hypercorn 0.18.0 asyncio raised KeyError(96) while "
+        "looking up an HTTP/3 stream during a 1 MiB large response. The client "
+        "received 997,497 of 1,048,576 declared bytes before the reference "
+        "failed. The retained trace confirms the missing stream-map lookup and "
+        "truncated response, but does not establish event ordering. On the same "
+        "source, uvicorn-rs asyncio passed five candidate-only repetitions with "
+        "zero failures and clean shutdown. Keep this exact reference cell "
+        "candidate-only; no matched speed comparison is available."
+    ),
+}
+
+HYPERCORN_H3_REFERENCE_EXCEPTIONS = (
+    HYPERCORN_H3_SLOW_READER_LINUX_AARCH64,
+    HYPERCORN_H3_SLOW_READER_LINUX_X86_64,
+    HYPERCORN_H3_LARGE_RESPONSE_MACOS_ARM64,
+    HYPERCORN_H3_LARGE_RESPONSE_LINUX_X86_64,
+)
+
 
 def installed_hypercorn_version() -> str | None:
     try:
@@ -41,20 +110,20 @@ def active_reference_exclusions(
     hypercorn_version: str | None,
     enabled: bool = True,
 ) -> list[dict]:
-    """Return only the confirmed exception matching this exact run context."""
-    policy = HYPERCORN_H3_SLOW_READER_LINUX_AARCH64
-    if (
-        enabled
-        and category == policy["category"]
+    """Return only confirmed exceptions matching this exact run context."""
+    if not enabled:
+        return []
+    return [
+        dict(policy)
+        for policy in HYPERCORN_H3_REFERENCE_EXCEPTIONS
+        if category == policy["category"]
         and policy["workload"] in workloads
         and policy["reference"] in servers
         and policy["candidate"] in servers
         and platform_system == policy["platform_system"]
         and machine == policy["machine"]
         and hypercorn_version == policy["hypercorn_version"]
-    ):
-        return [dict(policy)]
-    return []
+    ]
 
 
 def exclusions_by_workload(records: list[dict]) -> dict[str, dict[str, str]]:
@@ -69,7 +138,7 @@ def exclusions_by_workload(records: list[dict]) -> dict[str, dict[str, str]]:
 
 def reference_exclusion_metadata_errors(category: str, metadata: dict) -> list[str]:
     """Reject unrecognized, missing, or context-mismatched reference skips."""
-    if category != HYPERCORN_H3_SLOW_READER_LINUX_AARCH64["category"]:
+    if category != "http3":
         if metadata.get("reference_exclusions", []) or metadata.get("excluded_servers_by_workload", {}):
             return ["reference_exclusions_are_not_allowed_for_this_category"]
         return []

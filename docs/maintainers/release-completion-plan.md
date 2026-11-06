@@ -6,6 +6,359 @@ FastAPI evaluation. Kata remains the system of record. The maintainer will run
 their application trial; collecting their application or running its load is not
 a prerequisite for completing the repository work.
 
+## Active release goal — 2026-11-05
+
+The current user-provided release goal requires exact-source raw unified
+coverage at 100% regions and lines, with the source, run and attempt, raw
+artifact ID and digest, report and context hashes, and build identity recorded.
+The maintainer explicitly waived a separate Coverage-MCP review on 2026-11-05;
+this supersedes the later reinstatement recorded below. Candidate qualification
+must revalidate the coverage identity against the same source, run, artifact,
+and report.
+
+The raw coverage gate remains 100% for regions and lines, with three passing
+ASGI and native repeats, complete attribution, and zero failures or
+infrastructure retries. Retain the source, run/attempt, artifact ID/digest,
+report/context hashes, build identity, and revalidate them during candidate
+qualification.
+
+## Historical review decisions — 2026-11-04 to 2026-11-05
+
+The owner first waived independent review on 2026-11-04, later reinstated it,
+then reconfirmed on 2026-11-05 that no independent Coverage-MCP review is
+required. The current contract is the recorded 100% exact-source raw coverage
+gate above.
+
+## Benchmark update — 2026-11-06
+
+CI #693 on develop commit `1859f1946b4df2fc361521ef412f882c5698ed49` passed
+the unified coverage gate: 15,053/15,053 regions and 11,072/11,072 lines, with
+three passing ASGI and native repeats. This is candidate evidence; main still
+needs final-source qualification after PR #23 merges.
+
+Benchmark #354 failed on Linux x86-64 because Hypercorn 0.18.0 asyncio raised
+`KeyError(52)` in the HTTP/3 slow-reader case after 28 requests; two client
+requests timed out waiting for response headers. The same source's focused
+candidate-only run #355 passed `uvicorn-rs-asyncio` for five repetitions, 40
+requests each, with zero failures and clean shutdown. The exception is limited
+to that exact Hypercorn reference cell; it provides no matched speed ratio.
+Linux ARM64 passed #354. macOS parity remains incomplete because stock Uvicorn
+timed out during the TLS WebSocket handshake before the application received a
+WebSocket scope, while the candidate reached the scope. The only allowed
+candidate-only decision is the exact TLS WebSocket input and trace described
+below: keep its raw `infrastructure_failed` row, require the candidate's
+expected subprotocol/message and clean process lifecycle, require every sibling
+case to pass, and record no performance ratio. The cause remains unknown. The
+full matrix has not been rerun with this acceptance path, so #354 is still
+incomplete.
+
+Focused reproduction on the local macOS ARM64 host used the same Python 3.12.13,
+Uvicorn 0.54.0, and websockets 17.1 versions. Across six runs of only
+`websocket-tls.text-round-trip-with-query-and-subprotocol`, stock Uvicorn timed
+out before the handshake once; its process stayed alive with only
+`lifespan.startup` recorded and no WebSocket scope. The candidate completed the
+TLS handshake, selected `parity`, and echoed `tls-websocket` in all six runs.
+Five runs passed against both servers. The failure also appears in hosted run
+#354 on macOS 15.8.2. This confirms an intermittent oracle-only failure for
+this exact case; the underlying Uvicorn/TLS scheduling cause remains unknown.
+The parity diagnostic now retains the candidate observation when the oracle
+fails, so the two sides remain independently reviewable. These local runs used
+revision `1859f19` with a dirty worktree containing harness, benchmark-policy,
+and documentation edits; treat them as diagnostic evidence, not release
+qualification.
+
+## Exact-main evidence update — 2026-11-04
+
+CI #661 passed on `feb955d2758166ad8c4b519903fd1318b29e7d2d`: 1,453 unified
+coverage cases passed, with three ASGI and three native repeats and 100%
+coverage (14,965/14,965 regions; 10,984/10,984 lines). Raw artifact
+13313323556 has GitHub digest
+`sha256:d7ce785d590e7195be7eaa57e7761b8acb182ac4475599e2ab43cbd45567745d`.
+The main CI package and consumer jobs for Linux x86-64, macOS ARM64, Windows
+x86-64 and the Python 3.9 floor passed.
+
+Benchmark #283 completed the exact-source Linux x86-64, Linux ARM64 and macOS
+ARM64 matrix. Its aggregate artifact 13313622768 has digest
+`sha256:99b295b2b5fcea8d04604aa8e3b55f16919403a48ed1fa94c716d9b2474931aa`.
+The HTTP/1 FastAPI validated route is slower on all six system/loop pairs;
+H2/H3 gains vary by workload, and WebSocket text echo regresses. No general
+FastAPI performance advantage is claimed. Raw-only candidate/release evidence
+workflow changes are on `develop`; candidate assembly and publication still
+require the reviewed changes on `main` and a candidate for the resulting
+commit.
+
+Focused upload diagnostic #284 ran only `fastapi-upload-1m-write-1k` on Linux
+ARM64 at the same exact-main source. Rust and Uvicorn completed 2,307 and 3,227
+requests, respectively, with zero failures and passing lifecycle gates; the
+15-second client timeout remained unchanged. Both ASGI traces report no receive
+wait above 100 ms. Artifact 13315456620 has SHA-256
+`18f2d482353e1427c32cecade84d7da960d389a35ed31ec2fbd982e0af8671a8`. Tracing
+invalidates timing, and no stalled request was available to trace. Keep `nbmg`
+open for review of the missing first-failure evidence; this run is neither a
+root-cause finding nor a performance result.
+
+## Upload timeout investigation correction — 2026-11-04
+
+Historical ARM64 failures occurred under both event loops. Artifact
+12103983742 from run
+[#39036702600](https://github.com/appunni-m/uvicorn-rs/actions/runs/39036702600)
+records `uvicorn-rs-asyncio` failures in repetitions 2, 3 and 5, plus a
+`uvicorn-rs-uvloop` failure in repetition 5. A later ARM64 run
+[#39185987961](https://github.com/appunni-m/uvicorn-rs/actions/runs/39185987961)
+records `uvicorn-rs-uvloop` failures in repetitions 2 and 3. In the later
+artifact, both libcurl records show all 1 MiB supplied and uploaded, no response
+bytes or status, no first response byte, a 15-second timeout, and
+`new_connections=0` (the failing attempt reused an HTTP/1.1 connection).
+The exact failed transfers were worker 2 / attempt 4 and worker 3 / attempt 25;
+both had 1 MiB of upload-callback bytes and 1 MiB reported uploaded, with zero
+downloaded bytes. The retained server log is empty, so there is still no server
+request ID or first-stall event for either transfer.
+FastAPI then observed `ClientDisconnect`; that is the timeout consequence, not
+the first divergence.
+
+Focused diagnostic [#287](https://github.com/appunni-m/uvicorn-rs/actions/runs/41862563840)
+on commit `372463a438bcce50df6850077175e6097e7aa378` used
+`uvicorn-rs-asyncio` and `uvicorn-asyncio-httptools`: the focused workflow
+hard-coded asyncio. Its three 30-second samples completed with zero failures,
+and all traced Rust requests delivered the full 1 MiB body to ASGI. Focused
+diagnostic [#288](https://github.com/appunni-m/uvicorn-rs/actions/runs/41879387733)
+on `af6c544cbac9ed99756772b2cfe355dc341c789a` selected uvloop and likewise
+completed three 30-second Linux ARM64 samples with zero timeouts. That run
+printed every request trace and generated hundreds of megabytes of logs, which
+could perturb scheduling. The trace now retains bounded per-request events in
+memory and emits only a request that lasts at least 100 ms, reports an abnormal
+read/queue/cancellation event, or delivers fewer bytes than Content-Length. The
+record also states the expected byte count and why it was emitted. The next
+diagnostic is limited to this same Linux ARM64 uvloop upload pair, ten attempts,
+concurrency eight, and the unchanged 15-second timeout. This is an explicit
+follow-up to the user's request for more trace and a root cause; it is not a
+broad matrix or performance measurement. No runtime cause or fix is established
+yet.
+
+## Upload timer hypothesis — 2026-11-05
+
+Comparing the failing source from run #391859 with current `develop` found one
+HTTP/1 request-body-path change that falls between the failure and the
+non-reproducing current runs. The failing source `94c89b79` recreated
+`sleep_until(deadline)` on each body-pump loop. Commit `3fe4206bc` changed that
+to a pinned, resettable Tokio `Sleep`; both versions use the same 5 ms batch
+window. Current trace run #289 used the pinned version and had ten clean 30 s
+samples, but its Python ASGI timing wrapper changes scheduling, so it is not a
+controlled comparison. This is a plausible lead, not a confirmed cause.
+
+The focused upload-trace mode runs the historical 5 s workload without the
+Python timing wrapper and can select the old recreated timer only in a
+`runtime-diagnostics` build. It retains libcurl's callback/progress trace and
+the bounded Rust body-pump/ASGI trace; warm-up failures retain the same partial
+client metrics as measured failures.
+
+Same-source A/B evidence is now available. Run [#295](https://github.com/appunni-m/uvicorn-rs/actions/runs/41903988660)
+used the pinned timer for three Linux ARM64 / uvloop pairs; run [#296](https://github.com/appunni-m/uvicorn-rs/actions/runs/41905701684)
+used the recreated timer for three pairs. Both kept the 1 MiB body, 1 KiB
+writes, concurrency eight, and 15 s client timeout fixed. All 12 candidate and
+reference rows passed with zero failures. Candidate median throughput was
+530.9 requests/s pinned and 532.9 requests/s recreated; reference medians
+were 644.7 and 645.8 requests/s. The trace artifacts contain no per-request
+event records because no request failed or exceeded the 100 ms trace threshold.
+These diagnostic timings are invalid as performance evidence. The result does
+not support the timer refactor as the timeout cause, though the small sample
+cannot rule out a rare schedule-sensitive race.
+
+The historical failure rows all reused their HTTP/1.1 connections
+(`new_connections=0`). The planned focused discriminator was a matched
+`Connection: close` workload against the existing persistent-connection case,
+keeping Linux ARM64, uvloop, 1 MiB body, 1 KiB writes, concurrency eight, and
+the 15 s timeout fixed. The diagnostic C client now reports completed
+transfer counts split into new and reused connections; a two-request loopback
+check confirmed that persistent and `Connection: close` modes produce the
+expected counts. The changed input was limited to three attempts; no matrix
+was run. No runtime fix is claimed until a failing trace identifies the first
+stalled boundary and a focused regression passes.
+
+The bounded comparison is complete on source `422c731fcf45cbd77c4a4ce2c1ecd20b8cedfbb5`.
+Run [#302](https://github.com/appunni-m/uvicorn-rs/actions/runs/41919147440)
+replayed the persistent-connection input for three Linux ARM64 / uvloop pairs
+with the request-level client, ASGI, and Rust traces enabled. All six rows had
+zero failures. Each candidate row opened eight connections and reused them for
+the remaining 14,685, 15,333, and 15,038 transfers. Across the retained slow
+candidate traces, 24–29 of 32 ASGI requests per repetition matched a libcurl
+trace; maximum body-frame, ASGI receive, and body-queue waits were 12.92 ms,
+14.42 ms, and 14.47 ms. Artifact `13367385136`, ZIP SHA-256
+`f09478e6c992bb8fcabf5de88a2e60244c4c4b13ebfd89c338743e0d739adf3d`.
+
+Run [#303](https://github.com/appunni-m/uvicorn-rs/actions/runs/41921247555)
+changed only the client connection policy to `Connection: close`, again for
+three matched Linux ARM64 / uvloop pairs. All six rows had zero failures. Every
+candidate request used a new connection; none were reused. The retained slow
+candidate traces matched 23–27 of 32 ASGI requests per repetition to libcurl.
+Artifact `13366034345`, ZIP SHA-256
+`c9d2fe4404cd562571b288ed79f30f159a06ba073b9e0929c500e631b2252259`.
+
+Neither workload reproduced the historical 15 s timeout, so neither supplies
+a failing request ID or a first-divergence boundary. The old failures being on
+reused connections makes connection reuse a lead, but current persistent
+connections also pass; reuse is not established as a cause. Both runs include
+runtime and ASGI instrumentation and have invalid timing for performance
+claims. Keep `nbmg` open and do not repeat these inputs without a new trigger
+source-level lead.
+
+## Targeted historical request traces — 2026-11-05
+
+The original worker/attempt IDs were used as the selector for run
+[#304](https://github.com/appunni-m/uvicorn-rs/actions/runs/41926096472), on
+source `cc387d56da792057e9002dcd601a90232743fba9`. The focused trace-only run
+selected Linux ARM64, uvloop, `fastapi-upload-1m-write-1k`, three 5 s samples
+with 1 s warmup, concurrency 8, 1 MiB uploads in 1 KiB callbacks, the
+recreated body-batch timer, and the unchanged 15 s timeout. It traced only
+workers `2:4` and `3:25`, without the ASGI timing wrapper. Artifact
+`13370345234`, ZIP SHA-256
+`5e20189668deda55cd6749538d19b9f4d2b707fc885a62c690b27dd7a34a3eb8`.
+
+All six selected candidate transfers and all six matched Uvicorn transfers
+completed with zero failures. Each selected transfer reused its connection
+(`new_connections=0`); candidate client durations were 9.59–18.58 ms. For each
+candidate request, the Rust pump read and offered exactly 1 MiB, ASGI received
+1 MiB, and the response completed with status 200. Maximum selected ASGI
+receive wait was 6.65 ms and maximum body-queue send wait was 4.39 ms. No
+15-second stall occurred, including at the exact worker/attempt positions and
+with the timer behavior from the historical source. These diagnostics have
+invalid timing for performance evidence.
+
+This weakens the hypotheses that the observed attempt positions, connection
+reuse alone, or the timer refactor are sufficient triggers. The traces show a
+complete request path, not the first stalled boundary from the historical
+failure. No production behavior change is supported. Keep `nbmg` open pending
+a captured failure with a request ID or a new, concrete trigger.
+
+## Live upload checkpoints — 2026-11-05
+
+Review of the trace lifecycle found that request events were emitted only when
+the traced request was dropped. A task that remained pending through client
+timeout and process cleanup could therefore lose the live state at the actual
+stall. The focused diagnostic build now emits a bounded one-second snapshot
+only for requests carrying the selected upload trace ID. Checkpoints identify
+whether the Rust pump is waiting for another Hyper body frame, blocked sending
+body data to the ASGI queue, or the application is waiting in `receive()`. Each
+event retains elapsed wait duration and the existing per-request byte totals;
+the final drop record remains available, and the report parser deduplicates
+events repeated across snapshots. Normal builds and nonselected requests do
+not enable heartbeat timers.
+
+The focused parser and trace-ring tests pass, and both the normal and
+`runtime-diagnostics` Cargo checks pass. This adds observability, not a runtime
+fix. ARM64 replay [#332](https://github.com/appunni-m/uvicorn-rs/actions/runs/41981466609)
+completed on `develop` commit `0eb523b5cf2b210b7f8f618bae35bf3a0c135d3f` with
+10 paired 30-second attempts, Linux ARM64/uvloop,
+`fastapi-upload-1m-write-1k`, concurrency 8, a 15 s client timeout, the
+recreated 1 ms body timer, Hyper 1.11.1, and Tokio 1.53.1. The candidate
+completed 151,024 requests with zero failures; all 2,560 retained successful
+upload traces delivered 1 MiB and returned HTTP 200, with zero dropped events.
+No pending wait reached the one-second checkpoint interval, so the checkpoints
+did not fire. This is diagnostic evidence, not a performance result.
+
+Source comparison found that #332 retained the current 64 KiB proactive
+peer-read chunk size, while the failing source `94c89b79` used 16 KiB. Replay
+[#333](https://github.com/appunni-m/uvicorn-rs/actions/runs/41985002109) changed
+that override to 16 KiB and completed 133,317 candidate requests without a
+failure. All 2,560 retained candidate transfers sent 1 MiB and returned HTTP
+200, with no dropped trace events or one-second pending checkpoints. However,
+both #332 and #333 were dispatched with `recreated-1ms`. The failing source
+uses a 5 ms request-body batch deadline, so these runs do not test its timer
+value. Their zero-failure result only shows that 16 KiB did not fail with the
+altered 1 ms deadline on Linux kernel `7.0.0-1017-azure`; the historical run
+used kernel `6.17.0-1022-azure`.
+
+The original ARM64 report has two uvloop failures: worker/attempt `2:4` and
+`3:25`. Both reused an HTTP/1 connection, reported all 1 MiB uploaded, returned
+no response bytes or status, and timed out at 15 seconds. The server log has
+no request trace for either failure. The workflow now records the peer-read
+mode and chunk size in the artifact, and reports the timer value accurately.
+
+Focused replay [#334](https://github.com/appunni-m/uvicorn-rs/actions/runs/41989359988)
+restored the historical `5 ms` body-batch deadline and `16 KiB` proactive
+peer-read, with Linux ARM64/uvloop, Hyper 1.11.1, Tokio 1.53.1, concurrency 8,
+and the 15 s client timeout. It selected attempts `2:4` and `3:25` across 10
+repetitions on `develop` commit
+`3eeffe388040cb62115a9f941b1535bcd3c4e637`. All 10 candidate repetitions
+completed without failure. All 20 selected client transfers uploaded 1 MiB,
+received the 13-byte HTTP 200 response, and dropped no client trace events.
+ID-matched server records show 20 pump, 20 ASGI, and 20 dispatch lane traces;
+all have zero dropped events, each pump read/offered 1 MiB, and each ASGI lane
+delivered 1 MiB. No selected transfer stalled or reached the 15 s timeout.
+The downloaded artifact SHA-256 is
+`fa655d3aec5c0f2e035569ac754069e27f687ada1f4ae7e3298b04bc5fe6c7f0`.
+
+This confirms the instrumented path and selected requests complete on Linux
+kernel `7.0.0-1017-azure`; it does not reproduce the timeout or prove a fix.
+The historical failure used source `94c89b79` and kernel
+`6.17.0-1022-azure`. The replay used the recreated timer matching the historical
+5 ms deadline, while the current production path uses a pinned timer. Replay
+#336 below compares the current pinned timer with every other replay input held
+constant. Keep `nbmg` open; do not run a benchmark matrix from this diagnostic.
+
+The controlled pinned-timer replay [#336](https://github.com/appunni-m/uvicorn-rs/actions/runs/41994749937)
+used the same 16 KiB peer-read, Tokio 1.53.1, Hyper 1.11.1, Linux ARM64/uvloop,
+concurrency 8, client timeout, request selectors, and 10 repetitions. Its
+production timer path uses the same 5 ms interval. All 10 candidate repetitions
+and all 20 selected transfers completed successfully with HTTP 200; the
+ID-matched pump, ASGI, and dispatch traces again show full 1 MiB delivery and
+zero dropped request events. Artifact 13400985178 has SHA-256
+`ca2b786e57a165991472b2b8064b7ae2c3a9ced18522fb19a3f344e610878bb3`. The timer
+implementation difference therefore does not reproduce the timeout on the
+current kernel; neither replay establishes a production fix.
+
+The raw connection layer exposed an additional trace-retention gap. Matching
+the 20 selected client ports to server connections succeeded in each replay,
+but each connection's 64-event ring had already dropped its request-dispatch
+marker: the 40 connections across #334 and #336 each saw at least 124,022
+events, with up to 130,851 dropped. The runtime-diagnostics connection trace
+now retains the latest 16 request-dispatch events independently of the socket
+event ring and reports dispatch retention/drop counts. This is diagnostics-only
+and does not change server behavior. Its focused retention tests pass. Run
+[#337](https://github.com/appunni-m/uvicorn-rs/actions/runs/41998722661) on
+commit `f128d37f134c5b39aab3065024e5878704fe5397` verified that the hosted
+artifact preserves the two selected dispatch IDs even while each socket ring
+dropped over 121,000 events. Both selected requests reached the ASGI path,
+delivered 1 MiB, and returned HTTP 200; no timeout reproduced. The selected
+connection summaries report dispatch `seen=1`, `retained=1`, `dropped=0` for
+both requests. Artifact 13400839796 has SHA-256
+`4ab02e4b2705a4e694687d5043e2eb39c4e4ba9612f753eacacd4d9c9e7bfae3`.
+
+The trace is explicitly diagnostic-only and invalid for timing claims. The
+original timeout used source `94c89b79c1f2a8e5f90b2171ee28ca929444a7f5` on
+Linux kernel `6.17.0-1022-azure`; #337 used current `develop` source on kernel
+`7.0.0-1017-azure`. The matched 16 KiB peer-read setting and both body-timer
+implementations have passed on the current kernel. No first stalled boundary
+or supported root cause has been captured, so no production fix is justified.
+Keep `nbmg` open. The next reproduction must match the historical server source
+or kernel closely enough to trigger the timeout while preserving the dispatch,
+socket, body-pump, queue, and ASGI trace correlation. Avoid another unchanged
+current-kernel replay.
+
+Run [#338](https://github.com/appunni-m/uvicorn-rs/actions/runs/42003226583)
+tested the older Ubuntu 22.04 ARM64 runner on current `develop` commit
+`63fc1c92c61e7d5e5db5e11a447846251412373c`, kernel `6.8.0-1070-azure`. It ran
+three 5-second uvloop samples with concurrency 8, 1 MiB uploads, 1 KiB client
+writes, a 15-second timeout, proactive 16 KiB peer reads, the recreated 5 ms
+body timer, Tokio 1.53.1, and Hyper 1.11.1. Candidate requests were
+2700/2742/2690 with zero failures; the two selected attempts in every sample
+uploaded 1 MiB, received 13 bytes, and returned HTTP 200. Their pump, dispatch,
+and ASGI trace lanes were retained with zero dropped request events. The
+connection event rings evicted over 23,000 ordinary socket events each, while
+the separate dispatch ring retained each selected request ID. The diagnostic
+invalidates timing. Artifact 13403790991 has SHA-256
+`51b480ccbb5e936011f276ad4f8d197ab4f75ea1c083fe1335818f9480a36062`.
+
+This did not reproduce the timeout and does not match either historical
+dimension: it used current source and kernel 6.8, versus source
+`94c89b79c1f2a8e5f90b2171ee28ca929444a7f5` and kernel 6.17 for the failure.
+The focused workflow now has a source selector constrained to that exact old
+commit, the 22.04 ARM64 runner, the same workload, three attempts, and the old
+5 ms timer. The old commit's lockfile already pins Tokio 1.53.1 and Hyper
+1.11.1. This allows a source-only comparison on the same 6.8 host; it remains a
+diagnostic, not performance evidence. If it reproduces, instrument that source
+at the first failing body boundary before changing server behavior.
+
 ## Fixed contract and evidence
 
 - PyPI distribution: `uvicorn-rs`; imports and command: `uvicorn`; optional
@@ -31,9 +384,10 @@ a prerequisite for completing the repository work.
   A PR merge ref and its branch head are different revisions: retain both and
   let the existing identity validators decide applicability.
 
-No original release gate is waived by this plan. Historical measurements remain
-historical. A task closes on its own deliverable; downstream publication gates
-belong to the release tasks rather than being copied into every prerequisite.
+The owner decision above changes only the independent-review requirement.
+Historical measurements remain historical. A task closes on its own deliverable;
+downstream publication gates belong to the release tasks rather than being
+copied into every prerequisite.
 
 ### Release audit — 2026-11-03 (PR #21 / CI #637–639)
 
@@ -87,7 +441,8 @@ main. The hosted exact-main handoff remains open under `7t4g`.
 Interim `[skip ci]` commits avoid broad unchanged reruns while focused tooling
 and Windows checks qualify their changes. Required PR checks remain pending;
 complete final-source CI is still required before merge and release. Coverage
-acceptance and independent review precede benchmark timing. Compatibility
+acceptance precedes benchmark timing; independent Coverage-MCP review remains
+required by the active release goal. Compatibility
 task `x3az` and all ten children are closed. The capped Linux ARM64
 [upload diagnostic #275](https://github.com/appunni-m/uvicorn-rs/actions/runs/41632864829)
 completes three candidate/reference pairs with zero failures; it does not
@@ -1112,20 +1467,21 @@ lines, complete per-case attribution and three complete passing repeats with no
 case, infrastructure, retry or unrun failure. Record integer totals and hashes.
 Independent acceptance of that report is tracked by 7t4g; neither gate is waived.
 
-## 7t4g — Coverage-MCP recovery and exact-report handoff
+## 7t4g — Coverage-MCP review of the final exact-source report
 
-**Work:** Diagnose the service/import failure once from its current logs. Use the
-existing canonical-report projection (`scripts/project_coverage_mcp.py`) and
-handoff tooling rather than repeatedly importing the large raw report. Recover
-in an isolated store when necessary; preserve the shared database and unchanged
-raw CI artifact. Query and retain every region and line page for the passing
-source, attach the receipt, strict-check it offline and publish the existing
-reviewed handoff artifact for the exact main run/attempt.
+**Work:** After the final-source unified coverage job passes, use the existing
+canonical-report projection (`scripts/project_coverage_mcp.py`) and handoff
+tooling rather than repeatedly importing the large raw report. Query Coverage-
+MCP 0.16.0 for every unfiltered region and line page. Preserve the shared
+database and unchanged raw CI artifact. Retain the complete MCP transcript,
+source/build identity, passing test status, and accepted receipt; attach and
+strict-check the handoff artifact for the exact final-source run and attempt.
 
-**Close with:** Complete zero-gap independent page chains with source/build
-identity, successful attachment/offline verification, and one digest-checked
-handoff artifact selected by the candidate workflow. A timeout, pending status,
-raw LLVM summary, or synthetic receipt cannot satisfy this task.
+**Close with:** Complete zero-gap independent page chains with matching
+source/build identity and passing tests, successful attachment/offline
+verification, and one digest-checked handoff artifact selected and revalidated
+by candidate qualification. A timeout, pending status, raw LLVM summary, or
+synthetic receipt cannot satisfy this task.
 
 ## nbmg — HTTP/1 upload timeout root cause
 
@@ -1137,11 +1493,12 @@ ClientDisconnect. Keep the 15-second client timeout. Limit the first diagnostic
 batch to three attempts; if it does not reproduce, record that and the missing
 evidence instead of launching an unrelated matrix.
 
-The focused stage workflow uses one asyncio candidate/reference pair and one
-planned repeat by default; it allows at most three repeats. Select
-`focused-fastapi-stage`, `linux-aarch64`, and `fastapi-upload-1m-write-1k` only
-after the preceding acceptance gates. The workload overrides concurrency to
-eight. Its `runtime-diagnostics` build and `UVICORN_RS_UPLOAD_TRACE=1` opt-in
+The focused stage workflow uses one selected candidate/reference loop pair and
+one planned repeat by default; it allows up to ten diagnostic repeats. For the
+historical failure, select `focused-fastapi-stage`, `linux-aarch64`, `uvloop`,
+and `fastapi-upload-1m-write-1k` only after the preceding acceptance gates. The
+workload overrides concurrency to eight. Its `runtime-diagnostics` build and
+`UVICORN_RS_UPLOAD_TRACE=1` opt-in
 record client PID/worker/attempt IDs in a diagnostic request header. The same
 IDs join libcurl callback counts and first/last callback timestamps, Rust body
 frame/queue/cancellation events, and the ASGI receive/send/cancellation timeline.

@@ -53,11 +53,13 @@ PRODUCTION_SOURCE_SET = (
     "crates/uvicorn-rs/src/peer_read.rs",
     "crates/asgi-lifespan-protocol-rs/src/lib.rs",
     "src/upload_trace.rs",
+    "crates/uvicorn-rs/src/connection_trace.rs",
 )
-EXECUTABLE_SOURCE_SET = PRODUCTION_SOURCE_SET[:-2]
-# Match the measured feature configuration, without dropping either source
-# file from identity checks. Unexpected counters in these files are rejected.
-NO_COUNTER_SOURCE_SET = PRODUCTION_SOURCE_SET[-2:]
+EXECUTABLE_SOURCE_SET = PRODUCTION_SOURCE_SET[:-3]
+# Match the measured feature configuration, without dropping diagnostic and
+# contract-only sources from identity checks. Unexpected counters in these
+# files are rejected.
+NO_COUNTER_SOURCE_SET = PRODUCTION_SOURCE_SET[-3:]
 COVERAGE_SUPPORT_SOURCE_SET = (
     "crates/uvicorn-rs/src/coverage.rs",
     "crates/uvicorn-rs/src/http3/coverage.rs",

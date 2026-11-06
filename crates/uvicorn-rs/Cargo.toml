@@ -25,6 +25,7 @@ required-features = ["http3"]
 default = []
 http3 = ["dep:fastrand", "dep:futures", "dep:quinn", "dep:tokio-util", "futures-util/io"]
 h3-tracing = ["http3"]
+runtime-diagnostics = []
 # Reserved for the workspace Python adapter; requires the patched workspace Hyper.
 workspace-hyper-buffer-limit = []
 

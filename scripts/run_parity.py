@@ -61,6 +61,7 @@ from h2.settings import SettingCodes
 from websockets.exceptions import ConnectionClosed, InvalidHandshake, InvalidStatus
 from websockets.sync.client import connect as websocket_connect
 from parity_identity import runtime_source_digest, runtime_source_hashes
+from macos_reference_exceptions import validate_reference_failure
 from windows_reference_hang import diagnostic_input as windows_reference_hang_input
 from windows_reference_startup import diagnostic_input as windows_reference_startup_input
 
@@ -10288,6 +10289,32 @@ def http3_connection_error_with_held_response(
     control_path = server.get("coverage_fault_control_path")
     if control_path is None:
         raise ParityError("HTTP/3 held-response cleanup requires the coverage-only fault control")
+    legacy_dispatch = "uvicorn-rs: coverage HTTP/3 dispatch selected legacy path"
+    native_dispatch = "uvicorn-rs: coverage HTTP/3 dispatch selected native path"
+    deadline = time.monotonic() + 5
+    while True:
+        startup_log = read_server_log(server)
+        if legacy_dispatch in startup_log:
+            break
+        if native_dispatch in startup_log:
+            raise ParityError(
+                "HTTP/3 held-response cleanup started on the native path; "
+                "the legacy dispatch selector must run before its startup fault is cleared"
+            )
+        if server["process"].poll() is not None:
+            raise ParityError(
+                "HTTP/3 server exited before selecting its instrumented dispatch path: "
+                f"{startup_log.splitlines()[-12:]}"
+            )
+        if time.monotonic() >= deadline:
+            raise ParityError(
+                "HTTP/3 server did not report its instrumented dispatch path before timeout: "
+                f"{startup_log.splitlines()[-12:]}"
+            )
+        time.sleep(0.01)
+    # Keep the startup selector armed until the background HTTP/3 task has
+    # selected the legacy path; the HTTP/1 readiness probe does not guarantee
+    # that this task has been scheduled yet.
     control_path.write_text("", encoding="utf-8")
     result_path = server["events"].with_suffix(".http3-held-response-result")
     release_path = server["events"].with_suffix(".http3-held-response-release")
@@ -10350,7 +10377,19 @@ def http3_connection_error_with_held_response(
         release_path.touch()
         stdout, stderr = process.communicate(timeout=5)
         if process.returncode != 0:
-            raise ParityError(f"HTTP/3 held-response client failed: {(stderr or stdout)[-800:]}")
+            fault_pending = control_path.read_text(encoding="utf-8").strip() == fault["point"]
+            case_log = read_server_log(server)[log_offset:]
+            case_events = read_events(server["events"])[events_offset:]
+            raise ParityError(
+                "HTTP/3 held-response client failed: "
+                f"fault_pending={fault_pending}; "
+                f"events={case_events[-8:]}; "
+                f"server_log_tail={case_log.splitlines()[-12:]}; "
+                f"client={(stderr or stdout)[-1200:]}"
+            )
+        if os.environ.get("ASGI_PARITY_HTTP3_TRACE") == "1" and stderr:
+            print("--- HTTP/3 held-response client trace ---", file=sys.stderr)
+            print(stderr, end="" if stderr.endswith("\n") else "\n", file=sys.stderr)
         wire_observation = json.loads(stdout)
         exact_keys(wire_observation, {
             "status", "content_type", "body_hex", "body_stream_error", "stream_reset",
@@ -16260,9 +16299,18 @@ def start_profile_servers(
     coverage_profile_dir: Path | None = None,
 ) -> tuple[dict[str, Any] | None, dict[str, Any], Path | None]:
     profile_id = profile["id"]
-    server_options = cases[0].get("server_options", {}) if cases else {}
+    server_options = dict(cases[0].get("server_options", {})) if cases else {}
     if any(case.get("server_options", {}) != server_options for case in cases):
         raise ParityError("profile cases with different server options must use separate processes")
+    if any(
+        case.get("fault", {}).get("contract")
+        == "http3-connection-error-cancels-held-response-followup-200"
+        for case in cases
+    ):
+        # Emit the legacy/native dispatch decision before the case clears the
+        # startup selector. This makes the held-response fault deterministic
+        # even when the HTTP/3 listener task is scheduled after HTTP/1 readiness.
+        server_options["http3_trace"] = True
     client_tls = any(case.get("client_tls") is True for case in cases)
     if any(case.get("client_tls", False) != client_tls for case in cases):
         raise ParityError("profile cases with different client TLS settings must use separate processes")
@@ -16462,6 +16510,8 @@ def execute_profile(
     h3_client: Path | None,
     operations: dict[str, dict[str, Any]],
     coverage_profile_dir: Path | None = None,
+    environment: dict[str, Any] | None = None,
+    continue_after_macos_reference_wss_handshake_timeout: bool = False,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     if profile["id"] == "cli":
         return execute_cli_profile(
@@ -16492,6 +16542,8 @@ def execute_profile(
                 h3_client,
                 operations,
                 coverage_profile_dir,
+                environment,
+                continue_after_macos_reference_wss_handshake_timeout,
             )
             grouped_outcomes.update(
                 (outcome["case_id"], outcome) for outcome in group_outcomes
@@ -16541,6 +16593,8 @@ def execute_profile(
                 h3_client,
                 operations,
                 coverage_profile_dir,
+                environment,
+                continue_after_macos_reference_wss_handshake_timeout,
             )
             grouped_outcomes.update(
                 (outcome["case_id"], outcome) for outcome in group_outcomes
@@ -16605,6 +16659,7 @@ def execute_profile(
                 # but their TLS transports can still be draining when the
                 # next case starts on the shared profile listener.
                 or case["case_id"] == "websocket-tls.scope-headers-path-query-and-subprotocols"
+                or case["case_id"] == "websocket-tls.text-round-trip-with-query-and-subprotocol"
                 or case["case_id"] in {
                     "http3.client-cancels-large-response-after-headers",
                     "http3.post-first-upload-response-with-queued-chunks",
@@ -16955,6 +17010,7 @@ def execute_profile(
                                 "server_log": read_server_log(oracle)[-2000:],
                                 "oracle_process": server_process_diagnostic(oracle),
                                 "target_process": server_process_diagnostic(target),
+                                "target_observation": target_result,
                                 "target_server_log": read_server_log(target)[-2000:],
                             }
                             raise ParityError(
@@ -17017,15 +17073,32 @@ def execute_profile(
                             None if is_fault_contract else target_comparison,
                         )
                 except Exception as error:  # Preserve adapter failures in the generated result.
+                    error_message = str(error)
                     outcomes.append({
                         "case_id": case["case_id"],
                         "profile": profile["id"],
                         "operation": case["operation"],
                         "requirements": case["covers"],
                         "status": "infrastructure_failed",
-                        "error": {"class": type(error).__name__, "message": str(error)[:5000]},
+                        "error": {"class": type(error).__name__, "message": error_message[:5000]},
                     })
                     print(f"ERROR {profile['id']}: {case['case_id']}: {error}", flush=True)
+                    if (
+                        continue_after_macos_reference_wss_handshake_timeout
+                        and type(error) is ParityError
+                        and environment is not None
+                    ):
+                        try:
+                            receipt = validate_reference_failure(error_message, case, environment)
+                        except ValueError:
+                            pass
+                        else:
+                            print(
+                                "REFERENCE-ONLY FAILURE PRESERVED (not a parity pass): "
+                                f"{receipt['policy_id']}; continuing to collect sibling cases",
+                                flush=True,
+                            )
+                            continue
                     for unrun_case in execution_cases[case_index + 1:]:
                         outcomes.append({
                             "case_id": unrun_case["case_id"],
@@ -17398,6 +17471,14 @@ def main() -> int:
             "requires exactly --case-id http3.early-response-with-open-upload"
         ),
     )
+    parser.add_argument(
+        "--continue-after-macos-reference-wss-handshake-timeout",
+        action="store_true",
+        help=(
+            "continue the raw public parity matrix only after the exact captured "
+            "macOS ARM64 Uvicorn TLS-WebSocket oracle timeout; preserve its failed row"
+        ),
+    )
     args = parser.parse_args()
     global INSTALLED_CANDIDATE_MODE, ORACLE_PYTHON, TRACE_HYPERCORN_H3_EVENTS
     # Keep the venv's python symlink intact; resolving it points at the base
@@ -17491,6 +17572,8 @@ def main() -> int:
                 h3_client,
                 operations,
                 coverage_profile_dir,
+                environment,
+                args.continue_after_macos_reference_wss_handshake_timeout,
             )
             case_results.extend(profile_results)
             infrastructure_errors.extend(profile_errors)

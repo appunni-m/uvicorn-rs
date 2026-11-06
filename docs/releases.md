@@ -15,9 +15,35 @@ Use these state labels precisely:
 - **Released:** the authorized distribution decision and required verification
   are complete.
 
-<a id="current-release-gates-2026-11-02"></a>
+<a id="current-release-gates-2026-11-04"></a>
+<a id="current-release-gates-2026-11-05"></a>
 
-## Current release gates (2026-11-03)
+## Current release gates (2026-11-05)
+
+The active release contract requires an accepted independent Coverage-MCP
+review bound to the final clean source and its exact raw unified coverage
+report. The 2026-11-04 waiver is superseded. The report must show 100% regions
+and lines across the complete three-repeat matrix, and the candidate must
+preserve and revalidate the source, run, artifact, report, context, build, and
+raw-file identities. The exact-main #661 report below is historical evidence;
+the final candidate still needs its own exact-source report and review receipt.
+
+Exact-main CI [#661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
+passed on `feb955d2758166ad8c4b519903fd1318b29e7d2d`: all 1,453 coverage
+cases and three repeats passed, with 14,965/14,965 regions and
+10,984/10,984 lines. Raw artifact [13313323556](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662/artifacts/13313323556)
+has SHA-256 `d7ce785d590e7195be7eaa57e7761b8acb182ac4475599e2ab43cbd45567745d`.
+Linux x86-64, macOS ARM64, Windows x86-64 package and consumer jobs passed.
+The matching [three-system benchmark #283](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681)
+passed on Linux x86-64, Linux ARM64 and macOS ARM64. Its aggregate artifact is
+[13313622768](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681/artifacts/13313622768),
+SHA-256 `99b295b2b5fcea8d04604aa8e3b55f16919403a48ed1fa94c716d9b2474931aa`.
+It qualifies 68/67/66 category pairs and 28/27/26 matched ordinary-FastAPI
+pairs on those systems. HTTP/1 FastAPI validated-route throughput is lower on
+all six system/loop pairs; H2/H3 results vary by workload, and WebSocket
+text-echo is slower. The evidence makes no general FastAPI speedup claim.
+Candidate assembly and publication wait for PR promotion of the revised
+raw-coverage evidence workflow and a candidate for the resulting exact commit.
 
 The release set is the Python-free **uvicorn-rs** crate with optional **http3**,
 **asgi-lifespan-protocol-rs**, and the PyPI distribution **uvicorn-rs**.
@@ -30,6 +56,8 @@ are `appunni-m/uvicorn-rs / release.yml / pypi` for PyPI and
 The registry audit on 2026-11-03 at 09:20 UTC found both Cargo crates at 0.2.1
 with no 0.3.0 version, and HTTP 404 for PyPI `uvicorn-rs`. Recheck the
 registries immediately before publication.
+
+### Earlier candidate evidence from PR #21
 
 [CI #640](https://github.com/appunni-m/uvicorn-rs/actions/runs/41641278412)
 uses PR #21 head `8e0f792a7dc00597c580fb7ddc6d5222e0310ec2` and clean
@@ -76,13 +104,17 @@ of the updated checker remains pending. See the
 
 The measured buffer decision is complete: recycling was removed after the
 small-response uvloop regression failed the frozen retention rule. The
-three-system ordinary-FastAPI matrix and upload investigation remain open.
+three-system ordinary-FastAPI matrix is now complete; the separate upload
+timeout root-cause issue remains open because exact-main benchmark #283 and
+the focused stage trace #284 did not reproduce it. The focused trace contains
+no receive wait above 100 ms, so it does not identify the original stalled
+boundary; see [benchmark status](benchmark-status.md#focused-exact-main-http1-upload-trace-2026-11-04).
 [Documentation #264](https://github.com/appunni-m/uvicorn-rs/actions/runs/41641278411)
 built successfully for its recorded source, with PR deployment skipped; this
 subsequent documentation refresh needs its own strict build.
 
-After all gates pass, merge through PR #21, verify exact-main CI, independent
-Coverage-MCP handoff and benchmark evidence, assemble the complete candidate,
+After all gates pass, verify exact-main CI, raw 100% coverage and benchmark
+evidence, assemble the complete candidate,
 publish Cargo locally in lifecycle/server order, then publish PyPI `uvicorn-rs`
 through `release.yml`. Verify registry bytes and clean installs. No 0.3.0 tag
 or publication has been made. See the [completion plan](maintainers/release-completion-plan.md).
@@ -124,8 +156,10 @@ session error contracts also passed 2/2 in
 `target/asgi-coverage/coverage-yawc-session-errors-final-20261027.json`; this
 is selected-case evidence, not full-suite coverage. The later Rust error-mapping
 fix, WebSocket close-path simplification, and parity input additions make the
-earlier full draft report stale for the current source and inventory; full
-coverage and an accepted independent Coverage-MCP review are still required.
+earlier full draft report stale for the current source and inventory. This
+historical snapshot recorded a temporary waiver of separate Coverage-MCP
+review; the active 2026-11-05 release goal supersedes it and requires an
+accepted independent review bound to the final exact-source report.
 
 Benchmark run
 [`39689988939`](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939)
@@ -427,11 +461,11 @@ version.
 2. Pass complete CI, including the maintained live parity matrix, all three
    coverage repeats, 100% measured native regions and lines, exact Rust MSRV,
    installed-package checks, and native composition inputs.
-3. Run Coverage-MCP against the complete, source-matched hosted coverage report.
-   Use the [Coverage-MCP release handoff](coverage.md#release-coverage-mcp-handoff).
-   Hosted CI coverage and independent Coverage-MCP review are separate evidence;
-   the tag workflow requires one successful handoff for the same commit and CI
-   run attempt.
+3. Record the exact-source raw coverage report and its artifact, report,
+   context, build, and full-matrix identities. Require 100% of normalized
+   regions and lines, plus an accepted independent Coverage-MCP review receipt
+   for that same report. Candidate validation must recheck the receipt and
+   source identities before the tag can be published.
 4. Complete the correctness-gated three-system performance matrix. Require
    matching valid repetitions and report throughput, p50/p95/p99 latency,
    server CPU per operation, and sampled peak RSS. Keep stock FastAPI and

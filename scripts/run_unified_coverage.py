@@ -62,6 +62,7 @@ PRODUCTION_SOURCE_SET = (
     "crates/uvicorn-rs/src/peer_read.rs",
     "crates/asgi-lifespan-protocol-rs/src/lib.rs",
     "src/upload_trace.rs",
+    "crates/uvicorn-rs/src/connection_trace.rs",
 )
 # Sources compiled only to drive coverage contracts, not production code.
 COVERAGE_SUPPORT_SOURCE_SET = (
@@ -122,11 +123,11 @@ THIRD_PARTY_SOURCE_SET = (
     "crates/uvicorn-rs/src/http3/h3/webtransport/session_id.rs",
     "crates/uvicorn-rs/src/http3/h3_quinn.rs",
 )
-EXECUTABLE_SOURCE_SET = PRODUCTION_SOURCE_SET[:-2]
-# The lifecycle contract contains types only; upload tracing is compiled only
-# with runtime-diagnostics, which is disabled in the measured configuration.
-# Both files remain source-bound, and any LLVM counters here fail validation.
-NO_COUNTER_SOURCE_SET = PRODUCTION_SOURCE_SET[-2:]
+EXECUTABLE_SOURCE_SET = PRODUCTION_SOURCE_SET[:-3]
+# The lifecycle contract contains types only. The upload and connection trace
+# modules are diagnostic-only; runtime-diagnostics is disabled in the measured
+# configuration. Keep all three source-bound and reject unexpected counters.
+NO_COUNTER_SOURCE_SET = PRODUCTION_SOURCE_SET[-3:]
 PYTHON_SOURCE_SET = (
     "python/uvicorn_rs/__init__.py",
     "python/uvicorn_rs/__main__.py",

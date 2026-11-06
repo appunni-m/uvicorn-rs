@@ -1305,6 +1305,30 @@ const RESPONSE_BODY_QUEUE_CAPACITY: usize = 16;
 const HTTP_REQUEST_BODY_BATCH_BYTES: usize = 256 * 1024;
 const HTTP_REQUEST_BODY_BATCH_MAX_WAIT: std::time::Duration = std::time::Duration::from_millis(5);
 
+// Keep opt-in trace heartbeats out of normal builds so they add neither runtime
+// work nor unreachable regions to the production coverage profile.
+macro_rules! select_with_upload_trace_heartbeat {
+    ($heartbeat:ident, $on_heartbeat:block, { $($branches:tt)* }) => {{
+        #[cfg(feature = "runtime-diagnostics")]
+        {
+            tokio::select! {
+                $($branches)*
+                _ = async {
+                    if let Some(heartbeat) = $heartbeat.as_mut() {
+                        heartbeat.tick().await;
+                    } else {
+                        std::future::pending::<()>().await;
+                    }
+                }, if $heartbeat.is_some() => $on_heartbeat,
+            }
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        {
+            tokio::select! { $($branches)* }
+        }
+    }};
+}
+
 /// Optional counters for attributing Python/Rust bridge work in diagnostic builds.
 ///
 /// The default build keeps this type zero-sized, and its inline methods compile
@@ -1389,7 +1413,13 @@ impl RuntimeDiagnostics {
                 diagnostics.upload_trace = headers
                     .get("x-uvicorn-rs-upload-trace")
                     .and_then(|value| value.to_str().ok())
-                    .and_then(|id| upload_trace::RequestUploadTrace::new(id, lane))
+                    .and_then(|id| {
+                        let expected_bytes = headers
+                            .get(http::header::CONTENT_LENGTH)
+                            .and_then(|value| value.to_str().ok())
+                            .and_then(|value| value.parse::<usize>().ok());
+                        upload_trace::RequestUploadTrace::new(id, lane, expected_bytes)
+                    })
                     .map(Arc::new);
             }
             diagnostics
@@ -1409,6 +1439,64 @@ impl RuntimeDiagnostics {
         }
         #[cfg(not(feature = "runtime-diagnostics"))]
         let _ = (kind, bytes, flag);
+    }
+
+    #[inline]
+    fn upload_event_with_value(&self, kind: &'static str, bytes: usize, flag: bool, value: u64) {
+        #[cfg(feature = "runtime-diagnostics")]
+        if let Some(trace) = &self.upload_trace {
+            trace.record_with_value(kind, bytes, flag, value);
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let _ = (kind, bytes, flag, value);
+    }
+
+    #[inline]
+    fn upload_event_with_duration(
+        &self,
+        kind: &'static str,
+        bytes: usize,
+        flag: bool,
+        duration: std::time::Duration,
+    ) {
+        #[cfg(feature = "runtime-diagnostics")]
+        if let Some(trace) = &self.upload_trace {
+            trace.record_with_duration(
+                kind,
+                bytes,
+                flag,
+                duration.as_nanos().min(u64::MAX as u128) as u64,
+            );
+        }
+        #[cfg(not(feature = "runtime-diagnostics"))]
+        let _ = (kind, bytes, flag, duration);
+    }
+
+    #[cfg(feature = "runtime-diagnostics")]
+    #[inline]
+    fn upload_checkpoint(&self, kind: &'static str, elapsed: std::time::Duration) {
+        if let Some(trace) = &self.upload_trace {
+            trace.checkpoint(kind, elapsed);
+        }
+    }
+
+    #[cfg(feature = "runtime-diagnostics")]
+    #[inline]
+    fn upload_trace_heartbeat(&self) -> Option<tokio::time::Interval> {
+        if self.upload_trace.is_some() {
+            let period = std::time::Duration::from_secs(1);
+            let mut heartbeat =
+                tokio::time::interval_at(tokio::time::Instant::now() + period, period);
+            heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            return Some(heartbeat);
+        }
+        None
+    }
+
+    #[cfg(feature = "runtime-diagnostics")]
+    #[inline]
+    fn upload_trace_enabled(&self) -> bool {
+        self.upload_trace.is_some()
     }
 
     #[inline]
@@ -2606,6 +2694,27 @@ impl tower_service::Service<Request<Incoming>> for NativeAsgiService {
                 ))
             });
         }
+        #[cfg(feature = "runtime-diagnostics")]
+        let upload_dispatch_diagnostics = self
+            .server
+            .diagnostics
+            .for_upload_trace(request.headers(), "dispatch");
+        #[cfg(feature = "runtime-diagnostics")]
+        {
+            let version = match request.version() {
+                Version::HTTP_10 => 10,
+                Version::HTTP_11 => 11,
+                Version::HTTP_2 => 20,
+                Version::HTTP_3 => 30,
+                _ => 0,
+            };
+            upload_dispatch_diagnostics.upload_event_with_value("service-enter", 0, false, version);
+        }
+        #[cfg(feature = "runtime-diagnostics")]
+        let request_lifetime = request
+            .extensions()
+            .get::<uvicorn_rs::RequestLifetime>()
+            .cloned();
         let connection_info = request
             .extensions()
             .get::<uvicorn_rs::ConnectionInfo>()
@@ -2708,19 +2817,81 @@ impl tower_service::Service<Request<Incoming>> for NativeAsgiService {
         };
         let server = Arc::clone(&context.server);
         Box::pin(async move {
+            #[cfg(feature = "runtime-diagnostics")]
+            if upload_dispatch_diagnostics.upload_trace_enabled() {
+                if let Some(mut request_lifetime) = request_lifetime {
+                    let diagnostics = upload_dispatch_diagnostics.clone();
+                    tokio::spawn(async move {
+                        let event = match request_lifetime.wait_until_ended().await {
+                            Some(uvicorn_rs::RequestEndReason::ServiceFutureDropped) => {
+                                "protocol-request-ended-service-future-dropped"
+                            }
+                            Some(uvicorn_rs::RequestEndReason::ServiceFailed) => {
+                                "protocol-request-ended-service-failed"
+                            }
+                            Some(uvicorn_rs::RequestEndReason::ResponseBodyConsumed) => {
+                                "protocol-request-ended-response-body-consumed"
+                            }
+                            Some(uvicorn_rs::RequestEndReason::ResponseBodyFailed) => {
+                                "protocol-request-ended-response-body-failed"
+                            }
+                            Some(uvicorn_rs::RequestEndReason::ResponseBodyDropped) => {
+                                "protocol-request-ended-response-body-dropped"
+                            }
+                            None => "protocol-request-ended-without-reason",
+                        };
+                        let abnormal = matches!(
+                            event,
+                            "protocol-request-ended-without-reason"
+                                | "protocol-request-ended-service-failed"
+                                | "protocol-request-ended-response-body-failed"
+                                | "protocol-request-ended-response-body-dropped"
+                        );
+                        diagnostics.upload_event(event, 0, abnormal);
+                    });
+                } else {
+                    upload_dispatch_diagnostics.upload_event(
+                        "protocol-request-lifetime-missing",
+                        0,
+                        true,
+                    );
+                }
+            }
             let websocket_upgrade =
                 context.server.websocket_enabled && is_websocket_upgrade(&request);
-            let response = if websocket_upgrade {
+            let response = match if websocket_upgrade {
                 Ok(handle_websocket_request(request, context).await)
             } else {
                 handle_request(request, context).await
-            }?;
+            } {
+                Ok(response) => response,
+                Err(error) => {
+                    #[cfg(feature = "runtime-diagnostics")]
+                    upload_dispatch_diagnostics.upload_event("service-response-error", 0, true);
+                    return Err(error);
+                }
+            };
             let response = if websocket_upgrade {
                 response
             } else {
                 apply_request_limit(&server, response)
             };
-            apply_default_response_headers(&server, response)
+            let response = match apply_default_response_headers(&server, response) {
+                Ok(response) => response,
+                Err(error) => {
+                    #[cfg(feature = "runtime-diagnostics")]
+                    upload_dispatch_diagnostics.upload_event("service-response-error", 0, true);
+                    return Err(error);
+                }
+            };
+            #[cfg(feature = "runtime-diagnostics")]
+            upload_dispatch_diagnostics.upload_event_with_value(
+                "service-response-ready",
+                0,
+                false,
+                u64::from(response.status().as_u16()),
+            );
+            Ok(response)
         })
     }
 }
@@ -3004,6 +3175,10 @@ fn contains_peer_disconnect_error(error: &(dyn StdError + 'static)) -> bool {
                 std::io::ErrorKind::ConnectionReset
                     | std::io::ErrorKind::BrokenPipe
                     | std::io::ErrorKind::ConnectionAborted
+                    // Hyper can report a peer-closed Unix stream as
+                    // NotConnected while finishing TLS shutdown after the
+                    // response has already been delivered.
+                    | std::io::ErrorKind::NotConnected
             )
         }) {
             return true;
@@ -3854,6 +4029,8 @@ impl AsgiIo {
             slf.preserve_application_on_disconnect
                 .store(true, Ordering::Release);
             slf.diagnostics.http_receive_immediate();
+            slf.diagnostics
+                .upload_event("asgi-receive-disconnect", 0, true);
             #[cfg(coverage)]
             let request_message = if coverage_fault_is_armed(
                 CoverageFaultPoint::HttpReceiveImmediateDisconnectMessageError,
@@ -3869,6 +4046,13 @@ impl AsgiIo {
                 make_http_request_message(py, None, &slf.request_disconnected, &slf.diagnostics);
             return Ok(request_message?.into_bound(py));
         }
+
+        #[cfg(feature = "runtime-diagnostics")]
+        let receive_trace_started = slf
+            .diagnostics
+            .upload_trace_enabled()
+            .then(std::time::Instant::now);
+        slf.diagnostics.upload_event("asgi-receive-start", 0, false);
 
         #[cfg(coverage)]
         let receive_call = slf.receive_calls.fetch_add(1, Ordering::AcqRel);
@@ -3902,9 +4086,30 @@ impl AsgiIo {
         };
         if let Some(request) = immediate {
             slf.diagnostics.http_receive_immediate();
-            if request.as_ref().is_none_or(|request| request.disconnected) {
+            let disconnected = request.as_ref().is_none_or(|request| request.disconnected);
+            #[cfg(feature = "runtime-diagnostics")]
+            let body_bytes = request
+                .as_ref()
+                .filter(|request| !request.disconnected)
+                .map_or(0, |request| request.body.len());
+            #[cfg(feature = "runtime-diagnostics")]
+            let more_body = request.as_ref().is_some_and(|request| request.more_body);
+            if disconnected {
                 slf.preserve_application_on_disconnect
                     .store(true, Ordering::Release);
+            }
+            #[cfg(feature = "runtime-diagnostics")]
+            if let Some(started) = receive_trace_started {
+                slf.diagnostics.upload_event_with_duration(
+                    if disconnected {
+                        "asgi-receive-disconnect"
+                    } else {
+                        "asgi-receive-ready"
+                    },
+                    body_bytes,
+                    more_body,
+                    started.elapsed(),
+                );
             }
             return Ok(make_http_request_message(
                 py,
@@ -3925,6 +4130,7 @@ impl AsgiIo {
             Arc::clone(&request_disconnected),
         );
         slf.diagnostics.http_receive_bridge_future();
+        slf.diagnostics.upload_event("asgi-receive-wait", 0, false);
         let diagnostics = slf.diagnostics.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let _receive_guard = receive_guard;
@@ -3935,19 +4141,52 @@ impl AsgiIo {
             let request = if request_disconnected.load(Ordering::Acquire) {
                 None
             } else {
-                tokio::select! {
-                    biased;
-                    message = async { request_messages.lock().await.recv().await } => message,
-                    _ = wait_for_connection_close(&mut connection_closed, receive_call > 0) => {
-                        request_disconnected.store(true, Ordering::Release);
-                        None
-                    }
-                    _ = request_cancellation.cancelled() => {
-                        request_disconnected.store(true, Ordering::Release);
-                        None
-                    }
+                #[cfg(feature = "runtime-diagnostics")]
+                let mut heartbeat = diagnostics.upload_trace_heartbeat();
+                loop {
+                    let message = select_with_upload_trace_heartbeat!(
+                        heartbeat,
+                        {
+                            let elapsed = receive_trace_started
+                                .map_or(std::time::Duration::ZERO, |started| started.elapsed());
+                            diagnostics.upload_checkpoint("asgi-receive-pending", elapsed);
+                            continue;
+                        },
+                        {
+                            biased;
+                            message = async { request_messages.lock().await.recv().await } => message,
+                            _ = wait_for_connection_close(&mut connection_closed, receive_call > 0) => {
+                                request_disconnected.store(true, Ordering::Release);
+                                None
+                            }
+                            _ = request_cancellation.cancelled() => {
+                                request_disconnected.store(true, Ordering::Release);
+                                None
+                            },
+                        }
+                    );
+                    break message;
                 }
             };
+            #[cfg(feature = "runtime-diagnostics")]
+            if let Some(started) = receive_trace_started {
+                let disconnected = request.as_ref().is_none_or(|request| request.disconnected);
+                let body_bytes = request
+                    .as_ref()
+                    .filter(|request| !request.disconnected)
+                    .map_or(0, |request| request.body.len());
+                let more_body = request.as_ref().is_some_and(|request| request.more_body);
+                diagnostics.upload_event_with_duration(
+                    if disconnected {
+                        "asgi-receive-disconnect"
+                    } else {
+                        "asgi-receive-ready"
+                    },
+                    body_bytes,
+                    more_body,
+                    started.elapsed(),
+                );
+            }
             Python::attach(|py| {
                 if request.as_ref().is_none_or(|request| request.disconnected) {
                     preserve_application_on_disconnect.store(true, Ordering::Release);
@@ -3978,6 +4217,12 @@ impl AsgiIo {
                     coverage_value!(HttpResponseStartStatusExtract, status_value.extract())?;
                 let status = StatusCode::from_u16(status)
                     .map_err(|_| PyRuntimeError::new_err("Invalid HTTP response status code."))?;
+                slf.diagnostics.upload_event_with_value(
+                    "asgi-response-start",
+                    0,
+                    false,
+                    u64::from(status.as_u16()),
+                );
                 let trailers = coverage_value!(
                     HttpResponseStartTrailersGetItem,
                     message.get_item("trailers")
@@ -4102,6 +4347,12 @@ impl AsgiIo {
                         "server response channel closed: {error}"
                     )));
                 }
+                slf.diagnostics.upload_event_with_value(
+                    "asgi-response-start-queued",
+                    0,
+                    false,
+                    u64::from(status.as_u16()),
+                );
                 Ok(py.None().into_bound(py))
             }
             AsgiEventType::HttpResponseBody => {
@@ -4149,6 +4400,9 @@ impl AsgiIo {
                     }
                     None => false,
                 };
+                let body_len = body.len();
+                slf.diagnostics
+                    .upload_event("asgi-response-body", body_len, more_body);
                 let body_completed = (!more_body).then(|| Arc::clone(&slf.response_body_completed));
                 let chunk = ResponseChunk::Body(BodyChunk { body, more_body });
                 slf.diagnostics.http_response_body();
@@ -4166,6 +4420,11 @@ impl AsgiIo {
                         if let Some(body_completed) = body_completed {
                             body_completed.store(true, Ordering::Release);
                         }
+                        slf.diagnostics.upload_event(
+                            "asgi-response-body-queued",
+                            body_len,
+                            more_body,
+                        );
                         Ok(py.None().into_bound(py))
                     }
                     Err(TrySendError::Closed(_)) => {
@@ -4182,6 +4441,20 @@ impl AsgiIo {
                             })?;
                             if let Some(body_completed) = body_completed {
                                 body_completed.store(true, Ordering::Release);
+                            }
+                            diagnostics.upload_event(
+                                "asgi-response-body-queued",
+                                body_len,
+                                more_body,
+                            );
+                            #[cfg(feature = "runtime-diagnostics")]
+                            if let Some(started) = wait_started {
+                                diagnostics.upload_event_with_duration(
+                                    "asgi-response-body-queue-wait-finished",
+                                    body_len,
+                                    more_body,
+                                    started.elapsed(),
+                                );
                             }
                             diagnostics.http_response_body_full_send_wait_finished(wait_started);
                             Python::attach(|py| Ok(py.None()))
@@ -5653,6 +5926,8 @@ struct AsgiBody {
     response_timing_diagnostics: RuntimeDiagnostics,
     #[cfg(feature = "runtime-diagnostics")]
     response_latency_started: Option<std::time::Instant>,
+    #[cfg(feature = "runtime-diagnostics")]
+    response_pending_since: Option<std::time::Instant>,
     #[cfg(coverage)]
     body_consumer_pause: Option<Pin<Box<tokio::time::Sleep>>>,
     #[cfg(coverage)]
@@ -5665,6 +5940,15 @@ struct AsgiBody {
 
 impl Drop for AsgiBody {
     fn drop(&mut self) {
+        #[cfg(feature = "runtime-diagnostics")]
+        if let Some(started) = self.response_pending_since.take() {
+            self.response_timing_diagnostics.upload_event_with_duration(
+                "http-response-poll-abandoned",
+                0,
+                true,
+                started.elapsed(),
+            );
+        }
         let Some(application) = self.application.take() else {
             return;
         };
@@ -5760,9 +6044,24 @@ async fn pump_http_request_body(
     let body_batch_max_wait = HTTP_REQUEST_BODY_BATCH_MAX_WAIT;
     let mut body_segments = Vec::new();
     let mut body_len = 0usize;
+    // The timeout branch is enabled only while a batch is nonempty, and its
+    // first segment always records the batch start. Keep that invariant in the
+    // type instead of carrying an unreachable `None` timeout case.
     let mut body_started = tokio::time::Instant::now();
+    #[cfg(feature = "runtime-diagnostics")]
+    let mut body_frame_pending_since = diagnostics
+        .upload_trace_enabled()
+        .then(std::time::Instant::now);
+    #[cfg(feature = "runtime-diagnostics")]
+    let mut upload_heartbeat = diagnostics.upload_trace_heartbeat();
     let mut body_batch_timer =
         std::pin::pin!(tokio::time::sleep_until(tokio::time::Instant::now()));
+    // Compare the timer refactor with its pre-refactor behavior on a focused
+    // diagnostic run. This switch exists only in runtime-diagnostics builds;
+    // normal server builds always use the pinned timer.
+    #[cfg(feature = "runtime-diagnostics")]
+    let recreate_body_batch_timer = std::env::var_os("UVICORN_RS_DIAGNOSTIC_BODY_BATCH_TIMER")
+        .is_some_and(|value| value == std::ffi::OsStr::new("recreated"));
     loop {
         if connection_closed.is_closed()
             || cancellation.is_cancelled()
@@ -5772,52 +6071,104 @@ async fn pump_http_request_body(
             diagnostics.upload_stop(&connection_closed, &cancellation, &request_cancellation);
             return;
         }
+        #[cfg(feature = "runtime-diagnostics")]
+        let flush_deadline = if recreate_body_batch_timer && !body_segments.is_empty() {
+            Some(body_started + body_batch_max_wait)
+        } else {
+            None
+        };
         diagnostics.upload_event("read-wait", 0, false);
         let frame_wait_started = diagnostics.http_body_frame_wait_started();
-        let frame = tokio::select! {
-            biased;
-            _ = wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation) => {
-                diagnostics.upload_event("read-cancelled", 0, true);
-                diagnostics.upload_stop(&connection_closed, &cancellation, &request_cancellation);
-                return;
+        let frame = select_with_upload_trace_heartbeat!(
+            upload_heartbeat,
+            {
+                diagnostics.upload_checkpoint(
+                    "read-frame-pending",
+                    body_frame_pending_since
+                        .map_or(std::time::Duration::ZERO, |started| started.elapsed()),
+                );
+                continue;
             },
-            _ = sender.closed() => {
-                diagnostics.upload_event("queue-closed", 0, true);
-                #[cfg(coverage)]
-                if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpDrainStopWait) {
-                    wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation).await;
+            {
+                biased;
+                _ = wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation) => {
+                    diagnostics.upload_event("read-cancelled", 0, true);
+                    diagnostics.upload_stop(&connection_closed, &cancellation, &request_cancellation);
+                    return;
+                },
+                _ = sender.closed() => {
+                    diagnostics.upload_event("queue-closed", 0, true);
+                    #[cfg(coverage)]
+                    if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpDrainStopWait) {
+                        wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation).await;
+                        return;
+                    }
+                    #[cfg(coverage)]
+                    if coverage_fault_is_armed(
+                        CoverageFaultPoint::HttpBodyPumpShutdownCompleteTaskBeforeAbort,
+                    ) {
+                        log_error(format_args!(
+                            "uvicorn-rs: request-body pump entered shutdown-hold fault"
+                        ));
+                        wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation).await;
+                        std::future::pending::<()>().await;
+                    }
+                    #[cfg(coverage)]
+                    if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpShutdownHang) {
+                        wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation).await;
+                        std::future::pending::<()>().await;
+                    }
+                    drain_http_request_body(&mut body, &mut connection_closed, &cancellation, &request_cancellation).await;
                     return;
                 }
-                #[cfg(coverage)]
-                if coverage_fault_is_armed(
-                    CoverageFaultPoint::HttpBodyPumpShutdownCompleteTaskBeforeAbort,
-                ) {
-                    log_error(format_args!(
-                        "uvicorn-rs: request-body pump entered shutdown-hold fault"
-                    ));
-                    wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation).await;
-                    std::future::pending::<()>().await;
-                }
-                #[cfg(coverage)]
-                if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpShutdownHang) {
-                    wait_for_body_pump_stop(&mut connection_closed, &cancellation, &request_cancellation).await;
-                    std::future::pending::<()>().await;
-                }
-                drain_http_request_body(&mut body, &mut connection_closed, &cancellation, &request_cancellation).await;
-                return;
+                _ = async {
+                    #[cfg(feature = "runtime-diagnostics")]
+                    if recreate_body_batch_timer {
+                        if let Some(deadline) = flush_deadline {
+                            tokio::time::sleep_until(deadline).await;
+                        } else {
+                            std::future::pending::<()>().await;
+                        }
+                        return;
+                    }
+                    if !body_segments.is_empty() {
+                        body_batch_timer.as_mut().await;
+                    } else {
+                        std::future::pending::<()>().await;
+                    }
+                } => {
+                    diagnostics.http_body_frame_wait_finished(frame_wait_started);
+                    diagnostics.http_body_batch_timeout_flush();
+                    let body_batch_elapsed = body_started.elapsed();
+                    diagnostics.upload_event_with_duration(
+                        "read-batch-timeout-flush",
+                        body_len,
+                        false,
+                        body_batch_elapsed,
+                    );
+                    diagnostics.http_request_body_batch_deadline_flush(body_batch_elapsed);
+                    None
+                },
+                frame = body.frame() => {
+                    diagnostics.http_body_frame_wait_finished(frame_wait_started);
+                    #[cfg(feature = "runtime-diagnostics")]
+                    if let Some(started) = frame_wait_started {
+                        diagnostics.upload_event_with_duration(
+                            "read-frame-ready",
+                            0,
+                            false,
+                            started.elapsed(),
+                        );
+                    }
+                    Some(frame)
+                },
             }
-            _ = &mut body_batch_timer, if !body_segments.is_empty() => {
-                diagnostics.http_body_frame_wait_finished(frame_wait_started);
-                diagnostics.http_body_batch_timeout_flush();
-                diagnostics.http_request_body_batch_deadline_flush(body_started.elapsed());
-                None
-            },
-            frame = body.frame() => {
-                diagnostics.http_body_frame_wait_finished(frame_wait_started);
-                Some(frame)
-            },
-        };
+        );
         if frame.is_some() {
+            #[cfg(feature = "runtime-diagnostics")]
+            if let Some(started) = &mut body_frame_pending_since {
+                *started = std::time::Instant::now();
+            }
             diagnostics.http_request_body_frame_poll_finished(frame_wait_started);
         }
         let Some(frame) = frame else {
@@ -5903,6 +6254,13 @@ async fn pump_http_request_body(
                         }
                         if body_segments.is_empty() {
                             let started = tokio::time::Instant::now();
+                            #[cfg(feature = "runtime-diagnostics")]
+                            if !recreate_body_batch_timer {
+                                body_batch_timer
+                                    .as_mut()
+                                    .reset(started + body_batch_max_wait);
+                            }
+                            #[cfg(not(feature = "runtime-diagnostics"))]
                             body_batch_timer
                                 .as_mut()
                                 .reset(started + body_batch_max_wait);
@@ -6050,45 +6408,76 @@ async fn send_http_request_message(
     let channel_was_full = false;
     let send_wait_started = diagnostics.http_body_channel_send_started(channel_was_full);
     diagnostics.upload_event("queue-offer", message.body.len(), message.more_body);
-    let result = tokio::select! {
-        biased;
-        _ = async {
-            #[cfg(coverage)]
-            if _send_mode == RequestBodySendMode::ContinueAfterStop {
-                std::future::pending::<()>().await;
+    let send = sender.send(message);
+    tokio::pin!(send);
+    #[cfg(feature = "runtime-diagnostics")]
+    let mut upload_heartbeat = diagnostics.upload_trace_heartbeat();
+    let result = loop {
+        select_with_upload_trace_heartbeat!(
+            upload_heartbeat,
+            {
+                let elapsed = send_wait_started
+                    .map_or(std::time::Duration::ZERO, |started| started.elapsed());
+                diagnostics.upload_checkpoint("queue-send-pending", elapsed);
+            },
+            {
+                biased;
+                _ = async {
+                    #[cfg(coverage)]
+                    if _send_mode == RequestBodySendMode::ContinueAfterStop {
+                        std::future::pending::<()>().await;
+                    }
+                    #[cfg(coverage)]
+                    if _send_mode == RequestBodySendMode::Final {
+                        if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpFinalSendConnectionClosed) {
+                            return;
+                        }
+                    } else if coverage_fault_take(
+                        CoverageFaultPoint::HttpBodyPumpBatchThresholdSendConnectionClosed,
+                    ) {
+                        return;
+                    } else if coverage_fault_take(
+                        CoverageFaultPoint::HttpBodyPumpOversizedSendConnectionClosed,
+                    ) {
+                        return;
+                    } else if coverage_fault_take(
+                        CoverageFaultPoint::HttpBodyPumpErrorBufferedSendConnectionClosed,
+                    ) {
+                        return;
+                    } else if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpSendConnectionClosed) {
+                        return;
+                    }
+                    wait_for_body_pump_stop(connection_closed, cancellation, request_cancellation).await;
+                } => {
+                    diagnostics.http_body_channel_send_finished(send_wait_started, channel_was_full);
+                    #[cfg(feature = "runtime-diagnostics")]
+                    if let Some(started) = send_wait_started {
+                        diagnostics.upload_event_with_duration(
+                            "queue-send-cancelled",
+                            0,
+                            true,
+                            started.elapsed(),
+                        );
+                    }
+                    diagnostics.upload_stop(connection_closed, cancellation, request_cancellation);
+                    return false;
+                },
+                result = &mut send => {
+                    diagnostics.http_body_channel_send_finished(send_wait_started, channel_was_full);
+                    #[cfg(feature = "runtime-diagnostics")]
+                    if let Some(started) = send_wait_started {
+                        diagnostics.upload_event_with_duration(
+                            "queue-send-finished",
+                            0,
+                            result.is_err(),
+                            started.elapsed(),
+                        );
+                    }
+                    diagnostics.upload_event("queue-send-result", 0, result.is_err());
+                    break result;
+                },
             }
-            #[cfg(coverage)]
-            if _send_mode == RequestBodySendMode::Final {
-                if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpFinalSendConnectionClosed) {
-                    return;
-                }
-            } else if coverage_fault_take(
-                CoverageFaultPoint::HttpBodyPumpBatchThresholdSendConnectionClosed,
-            ) {
-                return;
-            } else if coverage_fault_take(
-                CoverageFaultPoint::HttpBodyPumpOversizedSendConnectionClosed,
-            ) {
-                return;
-            } else if coverage_fault_take(
-                CoverageFaultPoint::HttpBodyPumpErrorBufferedSendConnectionClosed,
-            ) {
-                return;
-            } else if coverage_fault_take(CoverageFaultPoint::HttpBodyPumpSendConnectionClosed) {
-                return;
-            }
-            wait_for_body_pump_stop(connection_closed, cancellation, request_cancellation).await;
-        } => {
-            diagnostics.http_body_channel_send_finished(send_wait_started, channel_was_full);
-            diagnostics.upload_event("queue-send-cancelled", 0, true);
-            diagnostics.upload_stop(connection_closed, cancellation, request_cancellation);
-            return false;
-        },
-        result = sender.send(message) => {
-            diagnostics.http_body_channel_send_finished(send_wait_started, channel_was_full);
-            diagnostics.upload_event("queue-send-result", 0, result.is_err());
-            result
-        },
+        );
     };
     if result.is_err() {
         drain_http_request_body(body, connection_closed, cancellation, request_cancellation).await;
@@ -6364,6 +6753,27 @@ impl<I: AsyncWrite + Unpin> AsyncWrite for ConnectionIo<I> {
 }
 
 impl AsgiBody {
+    #[cfg(feature = "runtime-diagnostics")]
+    fn record_response_poll_resumed(&mut self) {
+        if let Some(started) = self.response_pending_since.take() {
+            self.response_timing_diagnostics.upload_event_with_duration(
+                "http-response-poll-resumed",
+                0,
+                false,
+                started.elapsed(),
+            );
+        }
+    }
+
+    #[cfg(feature = "runtime-diagnostics")]
+    fn record_response_poll_pending(&mut self) {
+        if self.response_pending_since.is_none()
+            && self.response_timing_diagnostics.upload_trace_enabled()
+        {
+            self.response_pending_since = Some(std::time::Instant::now());
+        }
+    }
+
     fn record_final_body_available(&mut self) {
         #[cfg(feature = "runtime-diagnostics")]
         self.response_timing_diagnostics
@@ -6374,6 +6784,9 @@ impl AsgiBody {
         // A final ASGI body completes the transport, while the application may
         // still run background work. Transfer that work to the server now so
         // neither another body poll nor transport teardown delays completion.
+        #[cfg(feature = "runtime-diagnostics")]
+        self.response_timing_diagnostics
+            .upload_event("http-response-finished", 0, false);
         if let Some(task) = application.observe_completed() {
             self.app_task_tracker.spawn(async move {
                 observe_app_after_response(task.await);
@@ -6388,6 +6801,23 @@ impl AsgiBody {
         chunk: ResponseChunk,
     ) -> Poll<Option<Result<Frame<Bytes>, BoxError>>> {
         let response_complete = chunk.completes_response(self.trailers_expected);
+        #[cfg(feature = "runtime-diagnostics")]
+        match &chunk {
+            ResponseChunk::Body(body) => self.response_timing_diagnostics.upload_event(
+                "http-response-body-polled",
+                body.body.len(),
+                body.more_body,
+            ),
+            ResponseChunk::Trailers(_) => self.response_timing_diagnostics.upload_event(
+                "http-response-trailers-polled",
+                0,
+                false,
+            ),
+            ResponseChunk::End => {
+                self.response_timing_diagnostics
+                    .upload_event("http-response-end-polled", 0, false)
+            }
+        }
         match chunk {
             ResponseChunk::Body(chunk) => {
                 self.response_body_bytes = self
@@ -6496,58 +6926,67 @@ impl Body for AsgiBody {
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
         let this = self.get_mut();
-        #[cfg(coverage)]
-        if !this.body_consumer_pause_started
-            && coverage_fault_is_armed(CoverageFaultPoint::HttpResponseBodyConsumerPause)
-        {
-            // Test-only transport pressure: stop consuming the real body
-            // channel briefly so the ASGI producer reaches its bounded-send path.
-            this.body_consumer_pause_started = true;
-            this.body_consumer_pause = Some(Box::pin(tokio::time::sleep(
-                std::time::Duration::from_millis(100),
-            )));
-        }
-        #[cfg(coverage)]
-        if let Some(pause) = this.body_consumer_pause.as_mut() {
-            if pause.as_mut().poll(cx).is_pending() {
-                return Poll::Pending;
+        #[cfg(feature = "runtime-diagnostics")]
+        this.record_response_poll_resumed();
+        let result = (|| {
+            #[cfg(coverage)]
+            if !this.body_consumer_pause_started
+                && coverage_fault_is_armed(CoverageFaultPoint::HttpResponseBodyConsumerPause)
+            {
+                // Test-only transport pressure: stop consuming the real body
+                // channel briefly so the ASGI producer reaches its bounded-send path.
+                this.body_consumer_pause_started = true;
+                this.body_consumer_pause = Some(Box::pin(tokio::time::sleep(
+                    std::time::Duration::from_millis(100),
+                )));
             }
-            this.body_consumer_pause = None;
-        }
-        #[cfg(coverage)]
-        if this.receiver_pending_pause_active {
-            if this.receiver_pending_pause.as_mut().poll(cx).is_pending() {
-                return Poll::Pending;
-            }
-            this.receiver_pending_pause_active = false;
-            return this.poll_app_task(cx);
-        }
-        let Some(application) = this.application.take() else {
-            return this.poll_app_task(cx);
-        };
-
-        match this.receiver.poll_recv(cx) {
-            Poll::Ready(Some(chunk)) => this.poll_response_chunk(application, chunk),
-            Poll::Ready(None) => {
-                this.application = Some(application);
-                this.poll_app_task(cx)
-            }
-            Poll::Pending => {
-                this.application = Some(application);
-                #[cfg(coverage)]
-                if coverage_fault_take(CoverageFaultPoint::HttpResponseBodyPollPendingPause) {
-                    // Yield to the runtime after the receiver reports Pending,
-                    // then poll app completion before polling the receiver again.
-                    // This exercises queued-body recovery without blocking Tokio.
-                    this.receiver_pending_pause
-                        .as_mut()
-                        .reset(tokio::time::Instant::now() + std::time::Duration::from_millis(100));
-                    this.receiver_pending_pause_active = true;
+            #[cfg(coverage)]
+            if let Some(pause) = this.body_consumer_pause.as_mut() {
+                if pause.as_mut().poll(cx).is_pending() {
                     return Poll::Pending;
                 }
-                this.poll_app_task(cx)
+                this.body_consumer_pause = None;
             }
+            #[cfg(coverage)]
+            if this.receiver_pending_pause_active {
+                if this.receiver_pending_pause.as_mut().poll(cx).is_pending() {
+                    return Poll::Pending;
+                }
+                this.receiver_pending_pause_active = false;
+                return this.poll_app_task(cx);
+            }
+            let Some(application) = this.application.take() else {
+                return this.poll_app_task(cx);
+            };
+
+            match this.receiver.poll_recv(cx) {
+                Poll::Ready(Some(chunk)) => this.poll_response_chunk(application, chunk),
+                Poll::Ready(None) => {
+                    this.application = Some(application);
+                    this.poll_app_task(cx)
+                }
+                Poll::Pending => {
+                    this.application = Some(application);
+                    #[cfg(coverage)]
+                    if coverage_fault_take(CoverageFaultPoint::HttpResponseBodyPollPendingPause) {
+                        // Yield to the runtime after the receiver reports Pending,
+                        // then poll app completion before polling the receiver again.
+                        // This exercises queued-body recovery without blocking Tokio.
+                        this.receiver_pending_pause.as_mut().reset(
+                            tokio::time::Instant::now() + std::time::Duration::from_millis(100),
+                        );
+                        this.receiver_pending_pause_active = true;
+                        return Poll::Pending;
+                    }
+                    this.poll_app_task(cx)
+                }
+            }
+        })();
+        #[cfg(feature = "runtime-diagnostics")]
+        if result.is_pending() {
+            this.record_response_poll_pending();
         }
+        result
     }
 
     fn is_end_stream(&self) -> bool {
@@ -9352,47 +9791,54 @@ fn spawn_native_http3(
 fn coverage_legacy_http3_fault_is_armed() -> bool {
     // This coverage-only selector lets a real peer-close input exercise the
     // retained legacy HTTP/3 path without injecting a runtime failure.
-    if coverage_fault_take(CoverageFaultPoint::Http3LegacyPathSelection) {
-        return true;
+    let selected_legacy = if coverage_fault_take(CoverageFaultPoint::Http3LegacyPathSelection) {
+        true
+    } else if coverage_fault_is_armed(CoverageFaultPoint::Http3NativePeerCloseReasonUnavailable) {
+        // The native crate consumes this point itself. Keep that coverage case
+        // on the native dispatch path instead of selecting the legacy adapter.
+        false
+    } else {
+        [
+            CoverageFaultPoint::Http3RequestTaskPanic,
+            CoverageFaultPoint::Http3RequestTaskPanicAfterResponse,
+            CoverageFaultPoint::Http3ConnectionAcceptFinished,
+            CoverageFaultPoint::Http3ConnectionTaskPanic,
+            CoverageFaultPoint::Http3EndpointAcceptClosed,
+            CoverageFaultPoint::Http3ConnectionTaskPanicDuringShutdown,
+            CoverageFaultPoint::Http3ConnectionTaskShutdownHang,
+            CoverageFaultPoint::Http3ConnectionCreateError,
+            CoverageFaultPoint::Http3ConnectionAcceptError,
+            CoverageFaultPoint::HttpAppTaskPanicBeforeResponseStart,
+            CoverageFaultPoint::Http3PeerCloseUnexpectedError,
+            CoverageFaultPoint::Http3PeerCloseReasonUnavailable,
+            CoverageFaultPoint::Http3RequestResolveError,
+            CoverageFaultPoint::Http3ResponseBuilderError,
+            CoverageFaultPoint::Http3ResponseSendError,
+            CoverageFaultPoint::Http3ResponseBodyFrameError,
+            CoverageFaultPoint::Http3ResponseNonDataFrame,
+            CoverageFaultPoint::Http3ResponseBodySendError,
+            CoverageFaultPoint::Http3ResponseFinishError,
+            CoverageFaultPoint::Http3BodyPumpConnectionClosed,
+            CoverageFaultPoint::Http3BodyPumpConnectionClosedSelect,
+            CoverageFaultPoint::Http3BodyPumpSenderClosedSelect,
+            CoverageFaultPoint::Http3BodyPumpFinalMessageConnectionClosedSelect,
+            CoverageFaultPoint::Http3BodyPumpFinalMessageSendError,
+            CoverageFaultPoint::Http3BodyPumpEmptyData,
+            CoverageFaultPoint::Http3BodyPumpSendError,
+            CoverageFaultPoint::Http3BodyPumpSendConnectionClosed,
+            CoverageFaultPoint::Http3BodyPumpErrorStop,
+            CoverageFaultPoint::ServerHttp3TaskShutdownHang,
+        ]
+        .into_iter()
+        .any(coverage_fault_is_armed)
+    };
+    if std::env::var_os("UVICORN_RS_TRACE_HTTP3").as_deref() == Some(std::ffi::OsStr::new("1")) {
+        log_coverage_marker(format_args!(
+            "uvicorn-rs: coverage HTTP/3 dispatch selected {} path",
+            if selected_legacy { "legacy" } else { "native" }
+        ));
     }
-    // The native crate consumes this point itself. Keep that coverage case on
-    // the native dispatch path instead of selecting the legacy adapter.
-    if coverage_fault_is_armed(CoverageFaultPoint::Http3NativePeerCloseReasonUnavailable) {
-        return false;
-    }
-    [
-        CoverageFaultPoint::Http3RequestTaskPanic,
-        CoverageFaultPoint::Http3RequestTaskPanicAfterResponse,
-        CoverageFaultPoint::Http3ConnectionAcceptFinished,
-        CoverageFaultPoint::Http3ConnectionTaskPanic,
-        CoverageFaultPoint::Http3EndpointAcceptClosed,
-        CoverageFaultPoint::Http3ConnectionTaskPanicDuringShutdown,
-        CoverageFaultPoint::Http3ConnectionTaskShutdownHang,
-        CoverageFaultPoint::Http3ConnectionCreateError,
-        CoverageFaultPoint::Http3ConnectionAcceptError,
-        CoverageFaultPoint::HttpAppTaskPanicBeforeResponseStart,
-        CoverageFaultPoint::Http3PeerCloseUnexpectedError,
-        CoverageFaultPoint::Http3PeerCloseReasonUnavailable,
-        CoverageFaultPoint::Http3RequestResolveError,
-        CoverageFaultPoint::Http3ResponseBuilderError,
-        CoverageFaultPoint::Http3ResponseSendError,
-        CoverageFaultPoint::Http3ResponseBodyFrameError,
-        CoverageFaultPoint::Http3ResponseNonDataFrame,
-        CoverageFaultPoint::Http3ResponseBodySendError,
-        CoverageFaultPoint::Http3ResponseFinishError,
-        CoverageFaultPoint::Http3BodyPumpConnectionClosed,
-        CoverageFaultPoint::Http3BodyPumpConnectionClosedSelect,
-        CoverageFaultPoint::Http3BodyPumpSenderClosedSelect,
-        CoverageFaultPoint::Http3BodyPumpFinalMessageConnectionClosedSelect,
-        CoverageFaultPoint::Http3BodyPumpFinalMessageSendError,
-        CoverageFaultPoint::Http3BodyPumpEmptyData,
-        CoverageFaultPoint::Http3BodyPumpSendError,
-        CoverageFaultPoint::Http3BodyPumpSendConnectionClosed,
-        CoverageFaultPoint::Http3BodyPumpErrorStop,
-        CoverageFaultPoint::ServerHttp3TaskShutdownHang,
-    ]
-    .into_iter()
-    .any(coverage_fault_is_armed)
+    selected_legacy
 }
 
 #[cfg(any(not(uvicorn_rs_native_transport), coverage))]
@@ -10473,6 +10919,12 @@ async fn handle_request_parts(
             (start, ResponseApplication::Completed(result))
         }
     };
+    response_timing_diagnostics.upload_event_with_value(
+        "http-response-start-ready",
+        0,
+        false,
+        u64::from(start.status.as_u16()),
+    );
     response_timing_diagnostics.http_response_start_latency_finished(response_latency_started);
     let defer_completed_app_result_once = matches!(application, ResponseApplication::Completed(_));
     let trailers_expected = start.trailers;
@@ -10493,6 +10945,8 @@ async fn handle_request_parts(
         response_timing_diagnostics,
         #[cfg(feature = "runtime-diagnostics")]
         response_latency_started,
+        #[cfg(feature = "runtime-diagnostics")]
+        response_pending_since: None,
         #[cfg(coverage)]
         body_consumer_pause: None,
         #[cfg(coverage)]

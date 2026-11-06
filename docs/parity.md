@@ -43,7 +43,7 @@ source-line totals. The repair retains raw JSON checks and independently
 replays LCOV line/hit sets; Linux acceptance is pending. Actual Coverage-MCP
 review finds zero gaps over all 46 pages and attaches successfully for this
 producer. Final-main review handoff remains required.
-The [compatibility record](uvicorn-compatibility.md#current-status-2026-11-03)
+The [compatibility record](uvicorn-compatibility.md#current-status-2026-11-04)
 links report and acceptance artifacts; [release status](releases.md) records
 package hashes. Later source changes require their own qualification.
 

@@ -1004,6 +1004,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut body = Vec::new();
     let mut body_stream_error = false;
     if let Some(trigger) = request_after_first_response_chunk {
+        let trace_stage = |stage: &str| {
+            if std::env::var_os("ASGI_PARITY_HTTP3_TRACE").as_deref()
+                == Some(std::ffi::OsStr::new("1"))
+            {
+                let _ = writeln!(
+                    std::io::stderr().lock(),
+                    "HTTP/3 probe: held-response stage={stage}"
+                );
+            }
+        };
         let connection = sequence_connection
             .as_ref()
             .ok_or("held response trigger is missing its connection monitor")?;
@@ -1076,6 +1086,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let length = first_data.remaining();
         body.extend_from_slice(first_data.chunk());
         first_data.advance(length);
+        trace_stage("first-body-chunk-received");
         let first_chunk_observation = json!({
             "status": status,
             "content_type": content_type,
@@ -1092,6 +1103,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             serde_json::to_vec(&first_chunk_observation)?,
         )?;
         std::fs::rename(temporary_result, result_file)?;
+        trace_stage("first-chunk-barrier-published");
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(15);
         while !std::path::Path::new(release_file).exists() {
             if let Some(error) = connection.close_reason() {
@@ -1107,13 +1119,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         if let Some(error) = connection.close_reason() {
             return Err(format!("HTTP/3 peer closed before held response trigger: {error}").into());
         }
+        trace_stage("release-barrier-observed");
         // Retain both streams until peer failure so local stream destruction
         // cannot manufacture the cancellation observed by the runner.
+        trace_stage("trigger-request-sending");
         let mut trigger_stream = tokio::time::timeout(
             std::time::Duration::from_secs(2),
             sender.send_request(trigger_request),
         )
         .await??;
+        trace_stage("trigger-request-sent");
         let mut trigger_error = None;
         if !trigger_body.is_empty() {
             if let Err(error) = tokio::time::timeout(
@@ -1126,6 +1141,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         }
         if trigger_error.is_none() {
+            trace_stage("trigger-request-finishing");
             if let Err(error) =
                 tokio::time::timeout(std::time::Duration::from_secs(2), trigger_stream.finish())
                     .await?
@@ -1133,8 +1149,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 trigger_error = Some(error.to_string());
             }
         }
+        trace_stage("waiting-for-connection-close");
         let peer_error =
             tokio::time::timeout(std::time::Duration::from_secs(2), connection.closed()).await?;
+        trace_stage("connection-close-observed");
         let peer_close_code = match peer_error {
             quinn::ConnectionError::ApplicationClosed(close) => close.error_code.into_inner(),
             error => {
@@ -1156,6 +1174,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 }
             }
         };
+        trace_stage("held-response-drained");
         let observation = json!({
             "status": status,
             "content_type": content_type,
@@ -1173,6 +1192,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         drop(stream);
         drop(sender);
         tokio::time::timeout(std::time::Duration::from_secs(2), endpoint.wait_idle()).await?;
+        trace_stage("endpoint-idle");
         writeln!(std::io::stdout().lock(), "{}", observation)?;
         return Ok(());
     }

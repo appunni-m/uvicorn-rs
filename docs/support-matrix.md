@@ -10,20 +10,52 @@ release targets are the Python-free `uvicorn-rs` server crate with optional
 `http3`, and `asgi-lifespan-protocol-rs`. The publisher is `release.yml`.
 
 <a id="current-verification-status-2026-11-02"></a>
+<a id="current-verification-status-2026-11-04"></a>
+<a id="current-verification-status-2026-11-05"></a>
 
-## Current verification status (2026-11-03)
+## Current verification status (2026-11-05)
 
-The latest [CI #637 receipts](uvicorn-compatibility.md#current-status-2026-11-03)
-bind to clean merge source `00f38c82dd869ba0dcc7068cbc5cc769cd0f6294`,
-testing PR head `b9ed5c693`. Focused Windows CI #638 tests
-`68c063f623852bcfd0dfe937fe2a6eca189aeb65` with the same runtime-source digest.
+PR [#23](https://github.com/appunni-m/uvicorn-rs/pull/23) has newer hosted
+evidence than the exact-main baseline below. CI
+[#689](https://github.com/appunni-m/uvicorn-rs/actions/runs/42061360886) passed
+Linux installed-wheel parity (786/786), Windows parity (759/759, with 27
+declared POSIX-inapplicable cases), and their candidate consumers. macOS ARM64
+parity was 785/786. In the sole failed TLS-over-Unix-domain-socket case, both
+servers returned HTTP 200 and exited cleanly, but the candidate logged an extra
+Hyper NotConnected error during TLS shutdown; no macOS candidate archive was
+produced.
+
+A focused follow-up treats this post-response NotConnected error as a peer
+disconnect, and its selected case passed locally after rebuilding the native
+extension. Hosted confirmation remains required. The full coverage job in #689
+was still running against the earlier PR head when this status was recorded;
+it does not qualify the follow-up source. The preceding #688 report completed
+all 1,453 cases through three repeats with zero failures or infrastructure
+retries, but measured 15,056/15,057 regions and 11,078/11,078 lines. The one
+uncovered region was an unreachable optional request-body timer state, removed
+by the invariant change on the #689 head.
+
+Release acceptance requires exact-source 100% regions and lines, followed by
+an accepted independent Coverage-MCP review of the same complete report. The
+final-source three-system benchmark and exact candidate qualification follow
+those gates. No 0.3.0 package has been published.
+
+## Exact-main release baseline (2026-11-04)
+
+The latest exact-main [CI #661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
+binds to clean commit `feb955d2758166ad8c4b519903fd1318b29e7d2d`. The
+installed-wheel public parity matrix, Linux x86-64/macOS ARM64/Windows x86-64
+candidate package consumers, Python 3.9 floor consumer, and native
+FastAPI-RS → Starlette-RS → Uvicorn-RS composition passed. Unified coverage
+passed all 1,453 cases with three ASGI and three native repeats: 14,965/14,965
+regions and 10,984/10,984 lines.
 
 | Profile | Result | Scope |
 | --- | --- | --- |
-| Linux x86-64 / CPython 3.12.13 | 786/786 raw parity passed | Installed normal wheel against Uvicorn 0.54.0 |
-| macOS ARM64 / CPython 3.12.13 | 786/786 raw parity passed | Installed normal wheel and clean package consumer pass |
-| Windows x86-64 / CPython 3.12.13 | 758/759 raw parity passed | Captured stock-reference startup defect; separate local acceptance. Focused CI #638 qualifies both reference-defect policies and passes all three candidate lifecycle contracts |
-| Linux x86-64 / CPython 3.9.25 | Clean consumer passed | Exact abi3 wheel; not the full versioned parity matrix |
+| Linux x86-64 / CPython 3.12.13 | Passed | Exact-main installed-wheel parity and clean candidate consumer |
+| macOS ARM64 / CPython 3.12.13 | Passed | Exact-main installed-wheel parity and clean candidate consumer |
+| Windows x86-64 / CPython 3.12.13 | Passed | Exact-main reference-defect acceptance, candidate package and clean consumer |
+| Linux x86-64 / CPython 3.9.25 | Passed | Exact abi3 wheel consumer; not the full versioned parity matrix |
 
 Windows has 27 declared platform-inapplicable inputs. The
 [reference exception](uvicorn-compatibility.md#windows-reference-hang-acceptance)
@@ -31,11 +63,13 @@ preserves raw failed parity and requires clean candidate behavior; other
 failures remain failures. All 16 custom protocol, TLS-context-factory and
 response-capacity inputs pass on all three tested systems.
 
-Linux and macOS artifact/consumer jobs and the Python 3.9 floor consumer pass.
-Full Windows package qualification, strict coverage acceptance, final-main
-review handoff, final-source qualification and matched FastAPI benchmarks
-remain open. The 0.3.0 PyPI distribution is unpublished. Later source changes
-require qualification; these receipts do not prove the current checkout or
+The exact-main benchmark [#283](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681)
+completed on Linux x86-64, Linux ARM64 and macOS ARM64. HTTP/1 FastAPI
+validated-route throughput is lower on all six system/loop pairs; H2/H3 gains
+are workload-specific, and WebSocket text-echo is slower. No general FastAPI
+performance advantage is claimed. The 0.3.0 PyPI distribution remains
+unpublished, and compatibility acceptance and exact-tag candidate assembly
+remain open. These receipts cover their recorded source and test inputs, not
 arbitrary applications.
 
 ## Can I replace Uvicorn?
@@ -82,10 +116,10 @@ rollback for the maintainer's own application trial after release acceptance.
 
 ## Known behavior limits
 
-- The current HTTP/2 inputs are included in the complete platform matrices
-  above. HTTP/2 and HTTP/3 performance measurements and final-source release
-  qualification remain pending. Earlier HTTP/2 receipts using Hypercorn are
-  historical.
+- The current HTTP/2 and HTTP/3 inputs are included in the complete platform
+  matrices above. Their exact-main performance measurements are complete, but
+  protocol-specific gains do not establish a broad FastAPI speed advantage.
+  Earlier HTTP/2 receipts using Hypercorn are historical.
 - The adapter preserves the original path bytes in `raw_path`, including
   when `root_path` is configured. Uvicorn 0.54.0 adds the configured root path
   there. The candidate follows the [ASGI HTTP/WebSocket scope contract](https://asgi.readthedocs.io/en/stable/specs/www.html#http-connection-scope),
