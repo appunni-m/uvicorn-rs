@@ -15,7 +15,8 @@ fn trace_client_event(started: &Instant, event: impl std::fmt::Display) {
         std::env::var("UVICORN_RS_PARITY_H3_TRACE"),
         Ok(value) if value == "1"
     ) {
-        eprintln!(
+        let _ = writeln!(
+            std::io::stderr().lock(),
             "HTTP/3 client trace elapsed_us={} {event}",
             started.elapsed().as_micros()
         );

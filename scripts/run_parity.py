@@ -16322,6 +16322,7 @@ def start_profile_servers(
 ) -> tuple[dict[str, Any] | None, dict[str, Any], Path | None]:
     profile_id = profile["id"]
     server_options = dict(cases[0].get("server_options", {})) if cases else {}
+    target_server_options = dict(server_options)
     if any(case.get("server_options", {}) != server_options for case in cases):
         raise ParityError("profile cases with different server options must use separate processes")
     if any(
@@ -16339,7 +16340,10 @@ def start_profile_servers(
         # The held-response fault needs its dispatch trace before its request
         # clears the selector. For the load case, collect the same trace only
         # when the focused diagnostic workflow opts into that exact case.
-        server_options["http3_trace"] = True
+        # This option controls only candidate-side diagnostics. Do not pass it
+        # to the reference adapter: Hypercorn does not accept candidate server
+        # options and would fail before the selected parity case starts.
+        target_server_options["http3_trace"] = True
     client_tls = any(case.get("client_tls") is True for case in cases)
     if any(case.get("client_tls", False) != client_tls for case in cases):
         raise ParityError("profile cases with different client TLS settings must use separate processes")
@@ -16521,7 +16525,11 @@ def start_profile_servers(
                     case["operation"] in {"http3.peer-close", "http3.peer-close-registered"}
                     for case in cases
                 ),
-                server_options=server_options,
+                server_options=(
+                    target_server_options
+                    if server_id == "uvicorn-rs"
+                    else server_options
+                ),
                 trust_anchor=trust_anchor,
                 client_certificate=client_certificate,
                 client_key=client_key,
