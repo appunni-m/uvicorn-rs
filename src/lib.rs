@@ -9791,47 +9791,54 @@ fn spawn_native_http3(
 fn coverage_legacy_http3_fault_is_armed() -> bool {
     // This coverage-only selector lets a real peer-close input exercise the
     // retained legacy HTTP/3 path without injecting a runtime failure.
-    if coverage_fault_take(CoverageFaultPoint::Http3LegacyPathSelection) {
-        return true;
+    let selected_legacy = if coverage_fault_take(CoverageFaultPoint::Http3LegacyPathSelection) {
+        true
+    } else if coverage_fault_is_armed(CoverageFaultPoint::Http3NativePeerCloseReasonUnavailable) {
+        // The native crate consumes this point itself. Keep that coverage case
+        // on the native dispatch path instead of selecting the legacy adapter.
+        false
+    } else {
+        [
+            CoverageFaultPoint::Http3RequestTaskPanic,
+            CoverageFaultPoint::Http3RequestTaskPanicAfterResponse,
+            CoverageFaultPoint::Http3ConnectionAcceptFinished,
+            CoverageFaultPoint::Http3ConnectionTaskPanic,
+            CoverageFaultPoint::Http3EndpointAcceptClosed,
+            CoverageFaultPoint::Http3ConnectionTaskPanicDuringShutdown,
+            CoverageFaultPoint::Http3ConnectionTaskShutdownHang,
+            CoverageFaultPoint::Http3ConnectionCreateError,
+            CoverageFaultPoint::Http3ConnectionAcceptError,
+            CoverageFaultPoint::HttpAppTaskPanicBeforeResponseStart,
+            CoverageFaultPoint::Http3PeerCloseUnexpectedError,
+            CoverageFaultPoint::Http3PeerCloseReasonUnavailable,
+            CoverageFaultPoint::Http3RequestResolveError,
+            CoverageFaultPoint::Http3ResponseBuilderError,
+            CoverageFaultPoint::Http3ResponseSendError,
+            CoverageFaultPoint::Http3ResponseBodyFrameError,
+            CoverageFaultPoint::Http3ResponseNonDataFrame,
+            CoverageFaultPoint::Http3ResponseBodySendError,
+            CoverageFaultPoint::Http3ResponseFinishError,
+            CoverageFaultPoint::Http3BodyPumpConnectionClosed,
+            CoverageFaultPoint::Http3BodyPumpConnectionClosedSelect,
+            CoverageFaultPoint::Http3BodyPumpSenderClosedSelect,
+            CoverageFaultPoint::Http3BodyPumpFinalMessageConnectionClosedSelect,
+            CoverageFaultPoint::Http3BodyPumpFinalMessageSendError,
+            CoverageFaultPoint::Http3BodyPumpEmptyData,
+            CoverageFaultPoint::Http3BodyPumpSendError,
+            CoverageFaultPoint::Http3BodyPumpSendConnectionClosed,
+            CoverageFaultPoint::Http3BodyPumpErrorStop,
+            CoverageFaultPoint::ServerHttp3TaskShutdownHang,
+        ]
+        .into_iter()
+        .any(coverage_fault_is_armed)
+    };
+    if std::env::var_os("UVICORN_RS_TRACE_HTTP3").as_deref() == Some(std::ffi::OsStr::new("1")) {
+        log_coverage_marker(format_args!(
+            "uvicorn-rs: coverage HTTP/3 dispatch selected {} path",
+            if selected_legacy { "legacy" } else { "native" }
+        ));
     }
-    // The native crate consumes this point itself. Keep that coverage case on
-    // the native dispatch path instead of selecting the legacy adapter.
-    if coverage_fault_is_armed(CoverageFaultPoint::Http3NativePeerCloseReasonUnavailable) {
-        return false;
-    }
-    [
-        CoverageFaultPoint::Http3RequestTaskPanic,
-        CoverageFaultPoint::Http3RequestTaskPanicAfterResponse,
-        CoverageFaultPoint::Http3ConnectionAcceptFinished,
-        CoverageFaultPoint::Http3ConnectionTaskPanic,
-        CoverageFaultPoint::Http3EndpointAcceptClosed,
-        CoverageFaultPoint::Http3ConnectionTaskPanicDuringShutdown,
-        CoverageFaultPoint::Http3ConnectionTaskShutdownHang,
-        CoverageFaultPoint::Http3ConnectionCreateError,
-        CoverageFaultPoint::Http3ConnectionAcceptError,
-        CoverageFaultPoint::HttpAppTaskPanicBeforeResponseStart,
-        CoverageFaultPoint::Http3PeerCloseUnexpectedError,
-        CoverageFaultPoint::Http3PeerCloseReasonUnavailable,
-        CoverageFaultPoint::Http3RequestResolveError,
-        CoverageFaultPoint::Http3ResponseBuilderError,
-        CoverageFaultPoint::Http3ResponseSendError,
-        CoverageFaultPoint::Http3ResponseBodyFrameError,
-        CoverageFaultPoint::Http3ResponseNonDataFrame,
-        CoverageFaultPoint::Http3ResponseBodySendError,
-        CoverageFaultPoint::Http3ResponseFinishError,
-        CoverageFaultPoint::Http3BodyPumpConnectionClosed,
-        CoverageFaultPoint::Http3BodyPumpConnectionClosedSelect,
-        CoverageFaultPoint::Http3BodyPumpSenderClosedSelect,
-        CoverageFaultPoint::Http3BodyPumpFinalMessageConnectionClosedSelect,
-        CoverageFaultPoint::Http3BodyPumpFinalMessageSendError,
-        CoverageFaultPoint::Http3BodyPumpEmptyData,
-        CoverageFaultPoint::Http3BodyPumpSendError,
-        CoverageFaultPoint::Http3BodyPumpSendConnectionClosed,
-        CoverageFaultPoint::Http3BodyPumpErrorStop,
-        CoverageFaultPoint::ServerHttp3TaskShutdownHang,
-    ]
-    .into_iter()
-    .any(coverage_fault_is_armed)
+    selected_legacy
 }
 
 #[cfg(any(not(uvicorn_rs_native_transport), coverage))]

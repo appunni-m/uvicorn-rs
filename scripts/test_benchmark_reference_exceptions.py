@@ -7,6 +7,7 @@ from pathlib import Path
 
 from benchmark_reference_exceptions import (
     HYPERCORN_H3_LARGE_RESPONSE_MACOS_ARM64,
+    HYPERCORN_H3_LARGE_RESPONSE_LINUX_X86_64,
     HYPERCORN_H3_SLOW_READER_LINUX_AARCH64,
     HYPERCORN_H3_SLOW_READER_LINUX_X86_64,
     active_reference_exclusions,
@@ -47,6 +48,19 @@ def matching_macos_large_response_exclusion(**overrides):
         "servers": SERVERS,
         "platform_system": "Darwin",
         "machine": "arm64",
+        "hypercorn_version": "0.18.0",
+    }
+    context.update(overrides)
+    return active_reference_exclusions(**context)
+
+
+def matching_linux_x86_large_response_exclusion(**overrides):
+    context = {
+        "category": "http3",
+        "workloads": ["large-response"],
+        "servers": SERVERS,
+        "platform_system": "Linux",
+        "machine": "x86_64",
         "hypercorn_version": "0.18.0",
     }
     context.update(overrides)
@@ -131,6 +145,28 @@ class HypercornH3ReferenceExceptionTests(unittest.TestCase):
         for overrides in cases:
             with self.subTest(overrides=overrides):
                 self.assertEqual(matching_macos_large_response_exclusion(**overrides), [])
+
+    def test_only_exact_linux_x86_64_large_response_pair_is_excluded(self):
+        self.assertEqual(
+            matching_linux_x86_large_response_exclusion(),
+            [HYPERCORN_H3_LARGE_RESPONSE_LINUX_X86_64],
+        )
+
+        cases = (
+            {"category": "http2"},
+            {"workloads": ["fixed"]},
+            {"platform_system": "Darwin"},
+            {"machine": "aarch64"},
+            {"hypercorn_version": "0.18.1"},
+            {"servers": ["hypercorn-asyncio"]},
+            {"servers": ["uvicorn-rs-asyncio"]},
+            {"enabled": False},
+        )
+        for overrides in cases:
+            with self.subTest(overrides=overrides):
+                self.assertEqual(
+                    matching_linux_x86_large_response_exclusion(**overrides), []
+                )
 
     def test_plan_skips_only_the_failed_reference_and_keeps_candidate_repetitions(self):
         planned = expected_rows(
@@ -217,6 +253,35 @@ class HypercornH3ReferenceExceptionTests(unittest.TestCase):
             {("large-response", "uvicorn-rs-asyncio", number) for number in range(1, 6)},
         )
 
+    def test_linux_x86_large_response_plan_keeps_every_candidate_repetition(self):
+        planned = expected_rows(
+            H3_RUNNER,
+            "http3",
+            SERVERS,
+            5,
+            selected_workloads=["large-response"],
+        )
+        exclusions = matching_linux_x86_large_response_exclusion()
+        admitted = expected_rows(
+            H3_RUNNER,
+            "http3",
+            SERVERS,
+            5,
+            selected_workloads=["large-response"],
+            excluded_servers_by_workload=exclusions_by_workload(exclusions),
+        )
+
+        self.assertEqual(len(planned), 20)
+        self.assertEqual(len(admitted), 15)
+        self.assertEqual(
+            planned - admitted,
+            {("large-response", "hypercorn-asyncio", number) for number in range(1, 6)},
+        )
+        self.assertEqual(
+            {row for row in admitted if row[1] == "uvicorn-rs-asyncio"},
+            {("large-response", "uvicorn-rs-asyncio", number) for number in range(1, 6)},
+        )
+
     def test_metadata_accepts_only_the_recorded_context_and_server_map(self):
         exclusions = matching_exclusion()
         metadata = {
@@ -289,6 +354,31 @@ class HypercornH3ReferenceExceptionTests(unittest.TestCase):
         metadata["reference_exclusions"] = []
         self.assertIn(
             "reference_exclusion_receipt_unrecognized_or_context_mismatched",
+            reference_exclusion_metadata_errors("http3", metadata),
+        )
+
+    def test_linux_x86_large_response_metadata_accepts_only_recorded_context(self):
+        exclusions = matching_linux_x86_large_response_exclusion()
+        metadata = {
+            "workloads": ["large-response"],
+            "servers": {name: {} for name in SERVERS},
+            "platform_system": "Linux",
+            "machine": "x86_64",
+            "hypercorn": "0.18.0",
+            "reference_exclusions": exclusions,
+            "excluded_servers_by_workload": exclusions_by_workload(exclusions),
+        }
+        self.assertEqual(reference_exclusion_metadata_errors("http3", metadata), [])
+
+        metadata["machine"] = "aarch64"
+        self.assertIn(
+            "reference_exclusion_receipt_unrecognized_or_context_mismatched",
+            reference_exclusion_metadata_errors("http3", metadata),
+        )
+        metadata["machine"] = "x86_64"
+        metadata["excluded_servers_by_workload"] = {}
+        self.assertIn(
+            "reference_exclusion_server_map_unrecognized_or_context_mismatched",
             reference_exclusion_metadata_errors("http3", metadata),
         )
 

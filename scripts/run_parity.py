@@ -10289,6 +10289,32 @@ def http3_connection_error_with_held_response(
     control_path = server.get("coverage_fault_control_path")
     if control_path is None:
         raise ParityError("HTTP/3 held-response cleanup requires the coverage-only fault control")
+    legacy_dispatch = "uvicorn-rs: coverage HTTP/3 dispatch selected legacy path"
+    native_dispatch = "uvicorn-rs: coverage HTTP/3 dispatch selected native path"
+    deadline = time.monotonic() + 5
+    while True:
+        startup_log = read_server_log(server)
+        if legacy_dispatch in startup_log:
+            break
+        if native_dispatch in startup_log:
+            raise ParityError(
+                "HTTP/3 held-response cleanup started on the native path; "
+                "the legacy dispatch selector must run before its startup fault is cleared"
+            )
+        if server["process"].poll() is not None:
+            raise ParityError(
+                "HTTP/3 server exited before selecting its instrumented dispatch path: "
+                f"{startup_log.splitlines()[-12:]}"
+            )
+        if time.monotonic() >= deadline:
+            raise ParityError(
+                "HTTP/3 server did not report its instrumented dispatch path before timeout: "
+                f"{startup_log.splitlines()[-12:]}"
+            )
+        time.sleep(0.01)
+    # Keep the startup selector armed until the background HTTP/3 task has
+    # selected the legacy path; the HTTP/1 readiness probe does not guarantee
+    # that this task has been scheduled yet.
     control_path.write_text("", encoding="utf-8")
     result_path = server["events"].with_suffix(".http3-held-response-result")
     release_path = server["events"].with_suffix(".http3-held-response-release")
@@ -10351,7 +10377,19 @@ def http3_connection_error_with_held_response(
         release_path.touch()
         stdout, stderr = process.communicate(timeout=5)
         if process.returncode != 0:
-            raise ParityError(f"HTTP/3 held-response client failed: {(stderr or stdout)[-800:]}")
+            fault_pending = control_path.read_text(encoding="utf-8").strip() == fault["point"]
+            case_log = read_server_log(server)[log_offset:]
+            case_events = read_events(server["events"])[events_offset:]
+            raise ParityError(
+                "HTTP/3 held-response client failed: "
+                f"fault_pending={fault_pending}; "
+                f"events={case_events[-8:]}; "
+                f"server_log_tail={case_log.splitlines()[-12:]}; "
+                f"client={(stderr or stdout)[-1200:]}"
+            )
+        if os.environ.get("ASGI_PARITY_HTTP3_TRACE") == "1" and stderr:
+            print("--- HTTP/3 held-response client trace ---", file=sys.stderr)
+            print(stderr, end="" if stderr.endswith("\n") else "\n", file=sys.stderr)
         wire_observation = json.loads(stdout)
         exact_keys(wire_observation, {
             "status", "content_type", "body_hex", "body_stream_error", "stream_reset",
@@ -16261,9 +16299,18 @@ def start_profile_servers(
     coverage_profile_dir: Path | None = None,
 ) -> tuple[dict[str, Any] | None, dict[str, Any], Path | None]:
     profile_id = profile["id"]
-    server_options = cases[0].get("server_options", {}) if cases else {}
+    server_options = dict(cases[0].get("server_options", {})) if cases else {}
     if any(case.get("server_options", {}) != server_options for case in cases):
         raise ParityError("profile cases with different server options must use separate processes")
+    if any(
+        case.get("fault", {}).get("contract")
+        == "http3-connection-error-cancels-held-response-followup-200"
+        for case in cases
+    ):
+        # Emit the legacy/native dispatch decision before the case clears the
+        # startup selector. This makes the held-response fault deterministic
+        # even when the HTTP/3 listener task is scheduled after HTTP/1 readiness.
+        server_options["http3_trace"] = True
     client_tls = any(case.get("client_tls") is True for case in cases)
     if any(case.get("client_tls", False) != client_tls for case in cases):
         raise ParityError("profile cases with different client TLS settings must use separate processes")

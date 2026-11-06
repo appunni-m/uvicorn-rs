@@ -64,10 +64,32 @@ HYPERCORN_H3_LARGE_RESPONSE_MACOS_ARM64 = {
     ),
 }
 
+HYPERCORN_H3_LARGE_RESPONSE_LINUX_X86_64 = {
+    "policy_id": "hypercorn-0.18.0-h3-large-response-linux-x86-64-stream-keyerror",
+    "category": "http3",
+    "workload": "large-response",
+    "reference": "hypercorn-asyncio",
+    "candidate": "uvicorn-rs-asyncio",
+    "platform_system": "Linux",
+    "machine": "x86_64",
+    "hypercorn_version": "0.18.0",
+    "reason": (
+        "On Linux x86-64, Hypercorn 0.18.0 asyncio raised KeyError(96) while "
+        "looking up an HTTP/3 stream during a 1 MiB large response. The client "
+        "received 997,497 of 1,048,576 declared bytes before the reference "
+        "failed. The retained trace confirms the missing stream-map lookup and "
+        "truncated response, but does not establish event ordering. On the same "
+        "source, uvicorn-rs asyncio passed five candidate-only repetitions with "
+        "zero failures and clean shutdown. Keep this exact reference cell "
+        "candidate-only; no matched speed comparison is available."
+    ),
+}
+
 HYPERCORN_H3_REFERENCE_EXCEPTIONS = (
     HYPERCORN_H3_SLOW_READER_LINUX_AARCH64,
     HYPERCORN_H3_SLOW_READER_LINUX_X86_64,
     HYPERCORN_H3_LARGE_RESPONSE_MACOS_ARM64,
+    HYPERCORN_H3_LARGE_RESPONSE_LINUX_X86_64,
 )
 
 
