@@ -3,8 +3,33 @@
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
 <a id="current-source-status-2026-11-02"></a>
+<a id="current-source-status-2026-11-06"></a>
 
-## Current source status (2026-11-03)
+## Current source status (2026-11-06)
+
+PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) at head
+`170c39f5553574f8ed1f76f3e5d441a4a700ef79` has hosted installed-wheel parity
+evidence in CI [#710](https://github.com/appunni-m/uvicorn-rs/actions/runs/42235051720).
+Linux x86-64 and macOS ARM64 each pass 786/786 inputs. Windows retains 757/759
+raw comparisons: two exact Uvicorn worker-reference failures remain visible
+and are accepted only by narrow policies; the candidate's six worker lifecycle
+contracts pass. The named custom protocol, TLS factory/ALPN, and response
+capacity inputs pass on the applicable hosted systems.
+
+CI #710's unified coverage job is still running its complete three-repeat
+matrix; no final 100% report has been recorded. The maintainer waived a
+separate Coverage-MCP review, while exact-source raw region/line coverage and
+its run, build, artifact, and hash identities remain mandatory.
+
+The current PR head has no complete three-system benchmark. Benchmark [#358](https://github.com/appunni-m/uvicorn-rs/actions/runs/42179655798)
+completed on earlier develop commit `5ac287dbcd375b3d4e8967c10b2f43b2e97c278b`;
+it shows workload-specific results and HTTP/1/WebSocket regressions. The later
+main attempt [#359](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
+failed on macOS stock-Uvicorn WebSocket timeouts and produced no aggregate.
+Neither qualifies PR #24. The focused ARM64 upload diagnosis and final matched
+three-system matrix follow completion of compatibility and coverage gates.
+
+### Historical source status (2026-11-03)
 
 ### PR #21 CI #637–638 — full inputs and separate reference-defect acceptance
 

@@ -12,8 +12,37 @@ release targets are the Python-free `uvicorn-rs` server crate with optional
 <a id="current-verification-status-2026-11-02"></a>
 <a id="current-verification-status-2026-11-04"></a>
 <a id="current-verification-status-2026-11-05"></a>
+<a id="current-verification-status-2026-11-06"></a>
 
-## Current verification status (2026-11-05)
+## Current verification status (2026-11-06)
+
+PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) head
+`170c39f5553574f8ed1f76f3e5d441a4a700ef79` has current hosted evidence in CI
+[#710](https://github.com/appunni-m/uvicorn-rs/actions/runs/42235051720).
+Linux x86-64 and macOS ARM64 installed-wheel parity each pass 786/786. Windows
+x86-64 retains 757/759 raw comparisons: two exact Uvicorn worker-reference
+failures are accepted separately, with the candidate's six worker contracts
+passing and no infrastructure or not-run rows. The named custom HTTP and
+WebSocket protocol classes, TLS context factories/HTTP/2 ALPN, and response
+capacity cases pass on Linux and macOS; the Windows candidate job passes under
+its narrowly scoped reference policies.
+
+Rust quality, minimum-version compilation, native FastAPI-RS composition,
+candidate consumers on all three package systems, and the CPython 3.9 floor
+consumer pass in CI #710. The complete unified coverage step is still running;
+there is not yet a final raw 100% report. The maintainer waived a separate
+Coverage-MCP review; the raw report and its source/run/build/artifact identities
+must still be recorded. After coverage, a current-source three-system
+benchmark is still required. The
+last complete matrix is run #358 on earlier develop commit `5ac287d`; the later
+main attempt #359 failed in the macOS Uvicorn WebSocket oracle and produced no
+aggregate. Neither qualifies the PR #24 source.
+
+The package scope remains a Python-free Cargo `uvicorn-rs` server crate with
+optional `http3`, `asgi-lifespan-protocol-rs`, and PyPI `uvicorn-rs` exposing
+the `uvicorn` namespace. No 0.3.0 release has been qualified or published.
+
+### Historical status (2026-11-05)
 
 PR [#23](https://github.com/appunni-m/uvicorn-rs/pull/23) has newer hosted
 evidence than the exact-main baseline below. CI
@@ -35,14 +64,14 @@ retries, but measured 15,056/15,057 regions and 11,078/11,078 lines. The one
 uncovered region was an unreachable optional request-body timer state, removed
 by the invariant change on the #689 head.
 
-Release acceptance requires exact-source 100% regions and lines, followed by
-an accepted independent Coverage-MCP review of the same complete report. The
-final-source three-system benchmark and exact candidate qualification follow
-those gates. No 0.3.0 package has been published.
+At that historical snapshot, release acceptance still listed an independent
+Coverage-MCP review. The maintainer waived that separate review on 2026-11-05;
+exact-source 100% regions/lines and a final-source three-system benchmark
+remain required. No 0.3.0 package has been published.
 
-## Exact-main release baseline (2026-11-04)
+## Last complete exact-main release baseline (2026-11-04)
 
-The latest exact-main [CI #661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
+The last complete exact-main [CI #661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
 binds to clean commit `feb955d2758166ad8c4b519903fd1318b29e7d2d`. The
 installed-wheel public parity matrix, Linux x86-64/macOS ARM64/Windows x86-64
 candidate package consumers, Python 3.9 floor consumer, and native

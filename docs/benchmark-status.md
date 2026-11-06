@@ -3,16 +3,43 @@
 <!-- BEGIN GENERATED LATEST ATTEMPT -->
 ## Latest automated benchmark attempt
 
-- Run: [41802594681 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681)
-- Commit: [`feb955d2758166ad8c4b519903fd1318b29e7d2d`](https://github.com/appunni-m/uvicorn-rs/commit/feb955d2758166ad8c4b519903fd1318b29e7d2d)
-- Recorded: 2026-11-04T10:30:31Z
-- Category matrix job: `success`
-- Aggregate job: `success`
+- Run: [42189108882 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
+- Commit: [`24f5b6a2afcab0b58adb945427e585a16d7b0e0d`](https://github.com/appunni-m/uvicorn-rs/commit/24f5b6a2afcab0b58adb945427e585a16d7b0e0d)
+- Recorded: 2026-11-06T10:16:38Z
+- Category matrix job: `failure`
+- Aggregate job: `failure`
 
-All three systems produced a complete validated matrix. The [latest complete benchmark report](benchmark-results.md) is included in this documentation update. Hashed machine-readable receipts and raw system bundles remain in this run's GitHub Actions artifacts for 90 days; generated logs and per-run files are not committed.
+This attempt did not produce a validated three-system aggregate. No performance result was generated or substituted. The last complete exact-main report in [benchmark-results.md](benchmark-results.md) remains unchanged; the later complete develop matrix #358 is linked below and does not qualify PR #24. Inspect the [workflow artifacts and logs](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882) for this attempt.
 <!-- END GENERATED LATEST ATTEMPT -->
 
-## Exact-main result and performance interpretation (2026-11-04)
+## PR #24 benchmark status (2026-11-06)
+
+The current PR #24 head `170c39f5553574f8ed1f76f3e5d441a4a700ef79` has not
+been benchmarked. CI #710 parity is complete; its exact-source coverage job is
+still running. The latest complete three-system report below uses an earlier
+develop source and cannot qualify this candidate.
+
+## Latest complete three-system matrix before PR #24 (2026-11-06)
+
+Run [#358](https://github.com/appunni-m/uvicorn-rs/actions/runs/42179655798)
+is a validated complete matrix on develop commit
+[`5ac287dbcd375b3d4e8967c10b2f43b2e97c278b`](https://github.com/appunni-m/uvicorn-rs/commit/5ac287dbcd375b3d4e8967c10b2f43b2e97c278b).
+Its aggregate artifact is [13489368566](https://github.com/appunni-m/uvicorn-rs/actions/runs/42179655798/artifacts/13489368566)
+(SHA-256 `5d61fd62869b4fd3be43d5fc200722cde23652b706750f8a6bb6331135f49b72`);
+the report within it matches its `SHA256SUMS` entry (`d8c84bef81797fbfbfc63b7154f06dad420d41ea3232431894f4aef7eb902090`).
+The generated `report.md` in this artifact records Linux x86-64, Linux ARM64,
+and macOS ARM64 with separate runner, workload, throughput, latency-percentile,
+CPU, and RSS results. The checked-in [benchmark-results.md](benchmark-results.md)
+remains the complete exact-main report for #283; neither report qualifies PR #24.
+
+This older complete matrix finds HTTP/1 FastAPI validated-route throughput
+below Uvicorn on all six system/loop pairs, while HTTP/2 and HTTP/3 gains vary
+by workload and WebSocket text echo is slower. It supports no general FastAPI
+speedup claim. The later main attempt #359 failed in the macOS reference
+WebSocket cases and has no validated aggregate. The current source needs its
+own focused ARM64 upload diagnosis and complete matched matrix.
+
+## Last complete exact-main result and performance interpretation (2026-11-04)
 
 Benchmark #283 ran against exact-main commit
 [`feb955d2758166ad8c4b519903fd1318b29e7d2d`](https://github.com/appunni-m/uvicorn-rs/commit/feb955d2758166ad8c4b519903fd1318b29e7d2d).

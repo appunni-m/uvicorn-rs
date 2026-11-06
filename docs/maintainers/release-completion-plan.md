@@ -441,8 +441,8 @@ main. The hosted exact-main handoff remains open under `7t4g`.
 Interim `[skip ci]` commits avoid broad unchanged reruns while focused tooling
 and Windows checks qualify their changes. Required PR checks remain pending;
 complete final-source CI is still required before merge and release. Coverage
-acceptance precedes benchmark timing; independent Coverage-MCP review remains
-required by the active release goal. Compatibility
+acceptance precedes benchmark timing; the maintainer waived a separate
+Coverage-MCP review, while the exact-source 100% raw gate remains active. Compatibility
 task `x3az` and all ten children are closed. The capped Linux ARM64
 [upload diagnostic #275](https://github.com/appunni-m/uvicorn-rs/actions/runs/41632864829)
 completes three candidate/reference pairs with zero failures; it does not
@@ -580,11 +580,12 @@ is artifact 13149969193, bound to clean merge revision
 `5524656c4c47090361551e83540090e6fb078f5ab534560efa85b86546ab2f56` and
 report SHA-256 is
 `8d7cbfd7abbb2fd8322bb12725a5a48386c4459ae5a1de4c2bcce5b7c565e636`.
-Independent Coverage-MCP review requires a later successful, source-bound
-report. Matched three-system ordinary-FastAPI benchmarks remain incomplete and
-follow the user's parity-first order. The Linux ARM64 upload timeout and
-incomplete HTTP/3 comparison still need resolution; current partial results do
-not establish a broad performance gain.
+At that historical checkpoint, an independent Coverage-MCP review was planned;
+the maintainer waived that separate review on 2026-11-05. Matched three-system
+ordinary-FastAPI benchmarks remain incomplete and follow the user's
+parity-first order. The Linux ARM64 upload timeout and incomplete HTTP/3
+comparison still need resolution; current partial results do not establish a
+broad performance gain.
 
 Docs CI #256 passed for PR head `87ab887`, before the current local refresh.
 At this snapshot, PR #21 still points to `87ab887`; local status commit
@@ -716,13 +717,13 @@ candidate worker cases; the oracle trace recorded no handler-entry event for one
 worker after `CTRL_BREAK_EVENT`, and the supervisor timed out waiting for it.
 
 Only Linux candidate package/consumer qualification passed. The three-repeat
-unified coverage job remains active; no independent current-source
-Coverage-MCP receipt or complete platform candidate qualification is available.
-Keep the PR head unchanged until all active parity, coverage, and package
-verification jobs reach terminal results. Then record their measured totals and
-artifact identities, run an independent Coverage-MCP review on the exact clean
-source, and carry the verified package artifacts and consumer receipts into
-candidate assembly. Start the
+unified coverage job remains active; no exact-source raw coverage report or
+complete platform candidate qualification is available. Keep the PR head
+unchanged until all active parity, coverage, and package verification jobs
+reach terminal results. Then record raw coverage totals and artifact identities
+and carry the verified package artifacts and consumer receipts into candidate
+assembly. The maintainer waived a separate Coverage-MCP review on 2026-11-05.
+Start the
 matched three-system ordinary-FastAPI benchmark only after full parity passes.
 Benchmarks use one Tokio thread and report system/workload details alongside
 throughput, latency percentiles, CPU, and memory. The maintainer will perform
@@ -1465,23 +1466,23 @@ gap against the raw LLVM profile/source identity before adding another case.
 **Close with:** One clean source/build report has 100% executable regions and
 lines, complete per-case attribution and three complete passing repeats with no
 case, infrastructure, retry or unrun failure. Record integer totals and hashes.
-Independent acceptance of that report is tracked by 7t4g; neither gate is waived.
+The source-bound report and artifact identity are recorded by 7t4g. The
+maintainer waived a separate Coverage-MCP review; the raw coverage gate remains.
 
-## 7t4g — Coverage-MCP review of the final exact-source report
+## 7t4g — Record final exact-source coverage evidence
 
-**Work:** After the final-source unified coverage job passes, use the existing
-canonical-report projection (`scripts/project_coverage_mcp.py`) and handoff
-tooling rather than repeatedly importing the large raw report. Query Coverage-
-MCP 0.16.0 for every unfiltered region and line page. Preserve the shared
-database and unchanged raw CI artifact. Retain the complete MCP transcript,
-source/build identity, passing test status, and accepted receipt; attach and
-strict-check the handoff artifact for the exact final-source run and attempt.
+**Work:** After the final-source unified coverage job passes, retain the exact
+raw artifact and record its source, CI run/attempt, artifact ID/digest, report
+and context hashes, build identity, complete file inventory, totals, and matrix
+status with `scripts/coverage_evidence.py`. Do not rerun the matrix just to
+create the evidence record. No separate Coverage-MCP query or review receipt
+is required under the maintainer's waiver.
 
-**Close with:** Complete zero-gap independent page chains with matching
-source/build identity and passing tests, successful attachment/offline
-verification, and one digest-checked handoff artifact selected and revalidated
-by candidate qualification. A timeout, pending status, raw LLVM summary, or
-synthetic receipt cannot satisfy this task.
+**Close with:** The exact final-source report passes the complete three-repeat
+matrix, attribution and 100% regions/lines checks; the retained raw artifact
+and recorded evidence pass offline verification; and candidate qualification
+revalidates the same source/run/artifact/report/build identities. A local
+summary or report from a different source cannot satisfy this task.
 
 ## nbmg — HTTP/1 upload timeout root cause
 

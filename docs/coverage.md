@@ -9,16 +9,32 @@
 <a id="current-unified-coverage-status-2026-11-01"></a>
 <a id="current-unified-coverage-status-2026-11-04"></a>
 <a id="current-unified-coverage-status-2026-11-05"></a>
+<a id="current-unified-coverage-status-2026-11-06"></a>
 
-## Current unified coverage status (2026-11-05)
+## Current unified coverage status (2026-11-06)
 
-**Current release requirement:** the exact-source unified report must have
+PR #24 head `170c39f5553574f8ed1f76f3e5d441a4a700ef79` is being checked by CI
+[#710](https://github.com/appunni-m/uvicorn-rs/actions/runs/42235051720). Its
+full three-repeat parity/coverage job is still running, so no final coverage
+report or totals are available yet. The release gate remains 100% raw executable
+regions and lines, complete attribution, three passing ASGI and native repeats,
+and recorded source, build, run, artifact, report, context and file hashes.
+The maintainer waived a separate Coverage-MCP review on 2026-11-05; no MCP
+transcript or review receipt is required for release.
+
+The previous exact-main and PR #23 reports below are historical and do not
+qualify PR #24.
+
+### Historical unified coverage status (2026-11-05)
+
+**Historical release requirement:** the exact-source unified report must have
 100% measured production regions and lines, and the complete matrix must pass
 three times. An accepted independent Coverage-MCP review must inspect every
 unfiltered region and line page for that same final-source report. The
 candidate records and revalidates the source, CI run and attempt, artifact
 digest, report, context, build, raw-file hashes, and actual MCP transcript and
-receipt. The 2026-11-04 review waiver is superseded.
+receipt. The maintainer waived this separate review on 2026-11-05; the raw
+coverage and source-identity requirements remain active.
 
 Exact-main CI [#661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
 passed on clean source `feb955d2758166ad8c4b519903fd1318b29e7d2d`, run
@@ -50,8 +66,8 @@ batch-timer invariant in the type and removes that unreachable state.
 A later follow-up handles the macOS TLS-over-Unix-socket `NotConnected`
 shutdown log mismatch found by CI #689. Because that follow-up changes
 `src/lib.rs`, CI #689 cannot be accepted as exact-source coverage even if its
-job completes; a fresh full report is required. The active release goal also
-requires an accepted independent Coverage-MCP review bound to the final report.
+job completes; a fresh full report is required. The maintainer waived a
+separate Coverage-MCP review; final raw coverage remains mandatory.
 
 The matching three-system benchmark [#283](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681)
 also passed. Its aggregate artifact is
@@ -3466,21 +3482,12 @@ uncovered region/line remains a failure.
 
 ## Record exact-source release coverage
 
-Release coverage requires an accepted independent Coverage-MCP review of the
-same complete raw report, exact source, CI attempt, artifact and instrumented
-build. `--allow-pending-mcp` lets CI validate the untouched raw report before
-review; it does not satisfy the release gate by itself.
-
-After the exact `main` CI run passes, query Coverage-MCP for every unfiltered
-regions and lines page against the deterministic projection of that raw
-artifact. Dispatch the `Coverage MCP handoff` workflow with the full page
-receipt. It rejects incomplete pagination, mismatched source/build identity,
-and altered raw evidence. The candidate workflow selects exactly one accepted
-handoff for the same source and CI attempt, downloads it by artifact ID, and
-verifies the receipt, report, projection, artifact and workflow identities.
-`coverage-evidence.json` records both the 100% totals and the accepted review
-hashes. Candidate and publication jobs revalidate this chain; a missing or
-stale receipt blocks release.
+Release coverage requires the complete exact-source report to pass 100% regions
+and lines, three full passing repeats, complete attribution, and clean source,
+build, run, artifact, report, context and raw-file identity checks. The
+maintainer waived a separate Coverage-MCP review on 2026-11-05. Candidate and
+publication jobs record that waiver and revalidate the raw coverage evidence;
+they do not require an MCP transcript or review receipt.
 
 For a local audit of a downloaded artifact, retain the artifact at
 `target/asgi-coverage/`, then create and validate the raw inventory:
@@ -3500,16 +3507,14 @@ python scripts/check_ci_evidence.py coverage \
 python scripts/coverage_evidence.py record \
   --report target/asgi-coverage/coverage-report.json \
   --raw-inventory target/asgi-coverage/raw-inventory.json \
-  --handoff-selection target/asgi-coverage/coverage-mcp-selection.json \
+  --no-independent-review \
   --source FULL_COMMIT_SHA \
   --output target/asgi-coverage/coverage-evidence.json
 ```
 
-The selection file is emitted only after the `verify` command in
-`scripts/coverage_mcp_handoff.py` validates the downloaded handoff against the
-untouched raw report. Keep
-generated reports, page receipts, profiles, and logs in Actions artifacts; do
-not commit them to the repository.
+The evidence file records the waiver explicitly; it does not synthesize a
+review receipt. Keep generated reports, profiles, and logs in Actions
+artifacts; do not commit them to the repository.
 
 ## Measure an incremental case or profile
 

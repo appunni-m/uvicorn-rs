@@ -1,12 +1,21 @@
 # Can I replace Uvicorn?
 
-Exact-main CI #661 and benchmark #283 are the last fully passed release
-baseline. PR #23 has newer hosted evidence: Linux and Windows parity pass, while
-one macOS TLS-over-Unix-socket case differs by an extra NotConnected shutdown
-log after the expected response. A focused follow-up passes locally; hosted
-confirmation, exact-source coverage and its independent review, final-source
-benchmarks, candidate qualification and publication remain open. Existing
-FastAPI measurements do not support a broad performance advantage claim.
+PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) is the active
+replacement candidate. On its head `170c39f5553574f8ed1f76f3e5d441a4a700ef79`,
+CI [#710](https://github.com/appunni-m/uvicorn-rs/actions/runs/42235051720)
+passed installed-wheel parity on Linux x86-64 and macOS ARM64 (786/786 each).
+Windows x86-64 reports 757/759 raw comparisons; two exact Uvicorn worker
+failures are retained and accepted by separate narrow policies, and all six
+candidate worker contracts pass. The Windows raw result is not a 759/759 parity
+pass.
+
+The named custom HTTP/WebSocket protocol, `ssl_context_factory`, ALPN, and
+header/trailer-capacity cases pass on Linux and macOS. Candidate package and
+consumer jobs also pass on Linux, macOS, and Windows, with the Python 3.9 floor
+consumer passing. Unified coverage is still running on this source; no final
+100% report has been recorded. The maintainer waived a separate Coverage-MCP
+review. The current PR head has not been benchmarked. Earlier results remain
+workload-specific and do not support a general FastAPI speed advantage claim.
 
 Both distributions install files under the `uvicorn` import namespace. Keep
 upstream `uvicorn` and `uvicorn-rs` in separate environments. Use the
@@ -16,26 +25,28 @@ upstream `uvicorn` and `uvicorn-rs` in separate environments. Use the
 <a id="current-status-2026-11-02"></a>
 <a id="current-status-2026-11-04"></a>
 <a id="current-status-2026-11-05"></a>
+<a id="current-status-2026-11-06"></a>
 
-## Current status (2026-11-05)
+## Current status (2026-11-06)
 
-Exact-main [CI #661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
-passed on clean commit `feb955d2758166ad8c4b519903fd1318b29e7d2d`. Its
-installed-wheel public parity and Linux x86-64, macOS ARM64, Windows x86-64,
-and Python 3.9 candidate consumers passed. The unified matrix passed 1,453
-cases (1,194 ASGI and 259 native) through three ASGI and three native repeats,
-with 14,965/14,965 regions and 10,984/10,984 lines.
+CI #710 on PR #24 is the latest hosted compatibility evidence. Linux x86-64
+and macOS ARM64 each pass all 786 public inputs. Windows x86-64 retains two raw
+Uvicorn worker-reference failures (757/759 raw) under separate, exact policies;
+the candidate's own worker lifecycle contracts pass. The raw failures and
+candidate outcomes remain visible in the CI artifacts.
 
-The exact-source three-system [benchmark #283](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681)
-completed on Linux x86-64, Linux ARM64 and macOS ARM64. It validates the
-workload matrix but shows lower HTTP/1 FastAPI validated-route throughput on
-all six system/loop pairs, workload-specific H2/H3 results, and a WebSocket
-text-echo regression. No general FastAPI performance advantage is claimed.
-The remaining compatibility work is tracked in the migration roll-up and
-its open acceptance task; the maintainer's real application trial follows
-repository completion.
+The complete three-system benchmark [#358](https://github.com/appunni-m/uvicorn-rs/actions/runs/42179655798)
+is on earlier develop commit
+[`5ac287dbcd375b3d4e8967c10b2f43b2e97c278b`](https://github.com/appunni-m/uvicorn-rs/commit/5ac287dbcd375b3d4e8967c10b2f43b2e97c278b),
+not PR #24. The later main attempt
+[#359](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
+failed in the macOS Uvicorn WebSocket oracle and produced no aggregate. Neither
+run qualifies PR #24. Exact-source 100% coverage recording, a current-source
+benchmark, final artifact verification, and publication remain open. A
+separate Coverage-MCP review is waived by the maintainer. The maintainer's real
+application trial follows repository completion.
 
-### PR #23 follow-up
+### Historical PR #23 follow-up
 
 CI [#689](https://github.com/appunni-m/uvicorn-rs/actions/runs/42061360886)
 tested head 0572a48 at merge source 3cc692ac. Linux installed-wheel parity
@@ -190,13 +201,11 @@ The validator repair independently replays LCOV line/hit sets while retaining
 raw JSON checks. Actual Coverage-MCP review of the captured producer returns
 zero gaps with matching source and passing tests across all 46 pages; attachment
 passes. These are historical receipts for that producer, not the final source.
-The 2026-11-04 owner waiver of separate Coverage-MCP review is superseded by
-the active 2026-11-05 release goal, which requires an accepted independent
-review bound to the exact final report. Exact-source raw coverage at 100%,
-matched three-system FastAPI measurements, complete
-final-source artifacts and publication remain open. Later wrapper,
-upload-diagnostic and documentation changes are not qualified by these older
-receipts.
+The maintainer reconfirmed on 2026-11-05 that a separate Coverage-MCP review is
+not required. Exact-source raw coverage at 100%, matched three-system FastAPI
+measurements, complete final-source artifacts and publication remain open.
+Later wrapper, upload-diagnostic and documentation changes are not qualified
+by these older receipts.
 
 [Documentation #263](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642063)
 built successfully for its recorded source; PR deployment was skipped. This

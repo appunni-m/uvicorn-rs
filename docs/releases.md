@@ -17,16 +17,65 @@ Use these state labels precisely:
 
 <a id="current-release-gates-2026-11-04"></a>
 <a id="current-release-gates-2026-11-05"></a>
+<a id="current-release-gates-2026-11-06"></a>
 
-## Current release gates (2026-11-05)
+## Current release gates (2026-11-06)
 
-The active release contract requires an accepted independent Coverage-MCP
-review bound to the final clean source and its exact raw unified coverage
-report. The 2026-11-04 waiver is superseded. The report must show 100% regions
-and lines across the complete three-repeat matrix, and the candidate must
-preserve and revalidate the source, run, artifact, report, context, build, and
-raw-file identities. The exact-main #661 report below is historical evidence;
-the final candidate still needs its own exact-source report and review receipt.
+PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) head
+`170c39f5553574f8ed1f76f3e5d441a4a700ef79` is the latest candidate source.
+CI [#710](https://github.com/appunni-m/uvicorn-rs/actions/runs/42235051720)
+passes Rust quality, minimum-version compilation, native composition, Linux
+and macOS installed-wheel parity (786/786 each), candidate package consumers
+on all three systems, and the CPython 3.9 floor consumer. Windows raw parity is
+757/759: two exact Uvicorn worker defects remain in the raw report and are
+accepted by separate narrow policies; six candidate worker contracts pass.
+
+The CI #710 unified coverage job is still running its three-repeat full matrix.
+There is no completed raw report showing 100% regions and lines yet. After the
+report is uploaded, it must be validated against its run, build, and source
+identities and recorded in the candidate evidence. The maintainer waived a
+separate Coverage-MCP review; that waiver does not change the exact-source
+100% regions/lines or three-repeat requirements.
+
+The current PR #24 source has not been benchmarked. The latest complete
+three-system matrix is run [#358](https://github.com/appunni-m/uvicorn-rs/actions/runs/42179655798)
+on earlier develop commit `5ac287dbcd375b3d4e8967c10b2f43b2e97c278b`;
+the later main attempt [#359](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
+failed when the macOS stock-Uvicorn WebSocket oracle timed out before scope and
+produced no aggregate. The complete prior-source report shows workload-specific
+results, including HTTP/1 validated-route and WebSocket text-echo regressions;
+it does not establish a broad FastAPI speedup. The focused Linux ARM64 upload
+trace must follow coverage and precede the final matched matrix.
+
+CI #710 built candidate packages and passed their current consumer jobs. The
+Linux artifact contains both Cargo crates, the wheel, and the sdist; the
+candidate archives, wheel metadata, and consumer receipts were inspected. A
+one-line correction to the Windows consumer scope description is local and
+uncommitted, so the revised Windows receipt and final bundle still need hosted
+verification. Registry queries on 2026-11-06 found both Cargo releases at
+0.2.1, with no 0.3.0; PyPI returns 404 for `uvicorn-rs`.
+
+| CI #710 candidate | Artifact | ZIP SHA-256 | Contents and check |
+| --- | --- | --- | --- |
+| Linux x86-64 | [13511937700](https://github.com/appunni-m/uvicorn-rs/actions/runs/42235051720/artifacts/13511937700) | `e2c78022053274b1956abd2440f62c6fdf090d398f5ff12928847d4a0f019a0a` | Both Cargo archives, wheel, and sdist; archive hashes, package metadata, wheel RECORD, and clean consumers checked |
+| macOS ARM64 | [13514516384](https://github.com/appunni-m/uvicorn-rs/actions/runs/42235051720/artifacts/13514516384) | `0682c9188cd50a02149f70d7bc4f93c516f8e6a0906c461e81c30c589ab2ea0f` | Wheel metadata and RECORD; clean consumer passes |
+| Windows x86-64 | [13514032154](https://github.com/appunni-m/uvicorn-rs/actions/runs/42235051720/artifacts/13514032154) | `ff8ea22e2aa51345dd1a34734ca47a8c326813f2eee38b129aea91c99de0544e` | Wheel metadata and RECORD; clean consumer passes, but its scope sentence is being corrected |
+
+The source has not been merged or published. The latest recorded audit found
+release controls and trusted publisher settings configured; verify them again
+immediately before publication. After every source-bound gate passes,
+publish Cargo locally first, then publish PyPI `uvicorn-rs` through
+`release.yml`, and verify registry-visible artifacts and clean consumers.
+
+### Earlier release-gate wording (2026-11-05)
+
+An earlier snapshot required an accepted independent Coverage-MCP review bound
+to the final clean source and its exact raw unified coverage report. The
+maintainer later confirmed on 2026-11-05 that no separate review is needed.
+The current contract above supersedes that review requirement. Exact source,
+complete passing matrix, 100% regions and lines, and recorded artifact
+identities remain mandatory. The exact-main #661 report below is historical;
+the final candidate needs its own exact-source report.
 
 Exact-main CI [#661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
 passed on `feb955d2758166ad8c4b519903fd1318b29e7d2d`: all 1,453 coverage
@@ -463,9 +512,9 @@ version.
    installed-package checks, and native composition inputs.
 3. Record the exact-source raw coverage report and its artifact, report,
    context, build, and full-matrix identities. Require 100% of normalized
-   regions and lines, plus an accepted independent Coverage-MCP review receipt
-   for that same report. Candidate validation must recheck the receipt and
-   source identities before the tag can be published.
+   regions and lines. The maintainer waived a separate Coverage-MCP review;
+   candidate validation must recheck the raw report, artifact and source
+   identities before the tag can be published.
 4. Complete the correctness-gated three-system performance matrix. Require
    matching valid repetitions and report throughput, p50/p95/p99 latency,
    server CPU per operation, and sampled peak RSS. Keep stock FastAPI and

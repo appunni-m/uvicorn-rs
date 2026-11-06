@@ -7,6 +7,21 @@ the Kata owner for implementation, and the parity evidence
 route. It is version scoped; it does not claim that uvicorn-rs-py is currently
 a drop-in replacement.
 
+## Current qualification status — 2026-11-06
+
+PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) CI
+[#710](https://github.com/appunni-m/uvicorn-rs/actions/runs/42235051720)
+passes installed-wheel parity on Linux x86-64 and macOS ARM64 (786/786 each).
+Windows raw parity is 757/759 with two exact stock-Uvicorn worker failures
+retained under narrow acceptance policies; the candidate's six worker
+lifecycle contracts pass. The named custom HTTP/WebSocket hooks,
+`ssl_context_factory`, ALPN, and response-capacity inputs pass on the applicable
+platforms. The complete unified coverage job remains in progress, and this PR
+head has no complete benchmark. The maintainer waived separate Coverage-MCP
+review on 2026-11-05; exact-source 100% raw coverage remains required. See the
+[current user-facing status](../uvicorn-compatibility.md#current-status-2026-11-06)
+for the up-to-date release view.
+
 ## Acceptance of known differences
 
 The maintainer requires full compatibility, a demonstrated improvement, or
@@ -30,8 +45,9 @@ deadline. There must be no unexpected worker crash or replacement, forced
 cleanup, second signal, or diagnostic wakeup connection needed for success.
 The stock-only reproducer and captured blocked-accept evidence are retained in
 [`tools/upstream/uvicorn-windows`](https://github.com/appunni-m/uvicorn-rs/tree/f0eef8911fa334c7a37a723db9fefc4ffee810f6/tools/upstream/uvicorn-windows).
-This rule does not waive coverage, independent review, benchmark or artifact
-requirements.
+This rule does not waive raw 100% coverage, benchmark or artifact requirements.
+The maintainer waived a separate independent Coverage-MCP review on
+2026-11-05.
 
 The executable exception is
 `uvicorn-0.54.0-windows-two-worker-sigint-tcp-wakeup@2`, implemented in
@@ -180,8 +196,9 @@ passing parity, and no candidate failure is required to match the reference.
 CI #627's unified matrix completed its three repeats but missed two regions
 and one line. The latest focused coverage batch exercises the missing teardown
 path and removes a redundant WebSocket timer condition; seven related selected
-checks pass. Full 100% coverage and an accepted source-bound Coverage-MCP review
-remain separate release requirements.
+checks pass. This historical run is not final-source 100% coverage evidence.
+The maintainer later waived a separate Coverage-MCP review; the raw 100% gate
+remains required.
 
 The default TLS floor follows [RFC 8996 sections 4 and 5](https://www.rfc-editor.org/rfc/rfc8996.html#section-4): TLS 1.0 and 1.1 must not negotiate. Selected live inputs verify rejection, admission of a TLS 1.2 control, and a healthy follow-up request. These checks establish the default listener floor, not every TLS configuration or custom-context behavior.
 
@@ -385,7 +402,7 @@ cases, but package-replacement checks and supported-platform evidence remain
 incomplete. `4fvf` owns expanding the input-only parity system, with
 implementation work split across the owners in the evidence map below.
 
-## Current implementation and evidence map
+## Compatibility surface inventory and prior evidence map
 
 | Surface | Current `uvicorn-rs` state | Owner | Required parity route |
 | --- | --- | --- | --- |
