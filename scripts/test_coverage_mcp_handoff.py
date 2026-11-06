@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Focused acceptance fixtures for raw release coverage and optional MCP handoff evidence."""
+"""Focused acceptance fixtures for raw release coverage and required MCP handoff evidence."""
 
 from __future__ import annotations
 
@@ -234,25 +234,6 @@ def main() -> int:
             "--raw-artifact-id", str(RAW_ARTIFACT_ID), "--raw-artifact-name", "uvicorn-rs-unified-coverage",
             "--raw-artifact-size", str(RAW_ARTIFACT_SIZE), "--raw-artifact-digest", RAW_ARTIFACT_DIGEST,
             "--output", str(coverage_snapshot_path))
-        coverage_evidence_path = coverage_snapshot_path.parent / "coverage-evidence.json"
-        run(str(COVERAGE), "record", "--report", str(report), "--raw-inventory", str(coverage_snapshot_path),
-            "--source", SOURCE, "--output", str(coverage_evidence_path))
-        recorded_coverage = json.loads(coverage_evidence_path.read_text(encoding="utf-8"))
-        if (recorded_coverage.get("schema") != "uvicorn-rs-coverage-evidence@1"
-                or recorded_coverage.get("independent_review") != "not-required-per-project-owner"
-                or recorded_coverage.get("coverage") != {
-                    "regions": {"covered": 1, "total": 1, "missing": 0},
-                    "lines": {"covered": 1, "total": 1, "missing": 0},
-                }):
-            raise AssertionError("raw 100% coverage evidence was not recorded as expected")
-        run(str(COVERAGE), "verify", "--report", str(report), "--raw-inventory", str(coverage_snapshot_path),
-            "--source", SOURCE)
-        alternate_report_root = root / "valid" / "alternate-coverage-path"
-        shutil.copytree(report.parent, alternate_report_root)
-        run(str(COVERAGE), "verify", "--report", str(alternate_report_root / report.name),
-            "--raw-inventory", str(coverage_snapshot_path), "--source", SOURCE,
-            expected=1, detail="different or unexpected coverage report path")
-
         incomplete_root = root / "incomplete" / "asgi-coverage"
         shutil.copytree(report.parent, incomplete_root)
         incomplete_report = incomplete_root / report.name
@@ -312,6 +293,29 @@ def main() -> int:
             "--selection-output", str(selection_path),
         )
         run(*verify_args)
+        coverage_evidence_path = coverage_snapshot_path.parent / "coverage-evidence.json"
+        run(str(COVERAGE), "record", "--report", str(report), "--raw-inventory", str(coverage_snapshot_path),
+            "--handoff-selection", str(selection_path), "--source", SOURCE,
+            "--output", str(coverage_evidence_path))
+        recorded_coverage = json.loads(coverage_evidence_path.read_text(encoding="utf-8"))
+        review = recorded_coverage.get("independent_review", {})
+        if (recorded_coverage.get("schema") != "uvicorn-rs-coverage-evidence@2"
+                or review.get("status") != "accepted"
+                or review.get("source_commit") != SOURCE
+                or review.get("coverage_mcp_receipt_sha256") != json.loads(selection_path.read_text())[
+                    "coverage_mcp_receipt_sha256"]
+                or recorded_coverage.get("coverage") != {
+                    "regions": {"covered": 1, "total": 1, "missing": 0},
+                    "lines": {"covered": 1, "total": 1, "missing": 0},
+                }):
+            raise AssertionError("exact-source 100% coverage and accepted MCP review were not recorded")
+        run(str(COVERAGE), "verify", "--report", str(report), "--raw-inventory", str(coverage_snapshot_path),
+            "--handoff-selection", str(selection_path), "--source", SOURCE)
+        alternate_report_root = root / "valid" / "alternate-coverage-path"
+        shutil.copytree(report.parent, alternate_report_root)
+        run(str(COVERAGE), "verify", "--report", str(alternate_report_root / report.name),
+            "--raw-inventory", str(coverage_snapshot_path), "--handoff-selection", str(selection_path),
+            "--source", SOURCE, expected=1, detail="different or unexpected coverage report path")
         recheck_path = root / "valid" / "publication-selection.json"
         recheck_args = (
             str(HANDOFF), "verify-selection", "--manifest", str(manifest_path),
@@ -357,7 +361,7 @@ def main() -> int:
         run(str(ATTACH), "--report", str(broken_projection), "--output", str(broken_reviewed),
             "--receipt", str(broken_receipt),
             expected=1, detail="receipt omits later pages")
-    print("PASS coverage evidence: exact raw artifact, 100% record, source/run binding, and optional handoff cases")
+    print("PASS coverage evidence: exact raw artifact, 100% record, accepted source-bound MCP review, and handoff cases")
     return 0
 
 

@@ -3466,18 +3466,21 @@ uncovered region/line remains a failure.
 
 ## Record exact-source release coverage
 
-Independent Coverage-MCP review is not a release requirement. The project
-owner has chosen the raw unified 100% report as the coverage acceptance
-authority. Do not create or imply an independent review receipt.
+Release coverage requires an accepted independent Coverage-MCP review of the
+same complete raw report, exact source, CI attempt, artifact and instrumented
+build. `--allow-pending-mcp` lets CI validate the untouched raw report before
+review; it does not satisfy the release gate by itself.
 
-The candidate workflow selects the latest successful `main` CI run for the
-exact annotated tag commit, downloads that run's
-`uvicorn-rs-unified-coverage` artifact by ID and verifies GitHub's artifact
-digest. It runs the strict offline evidence validator, snapshots every raw
-artifact file hash, and writes `coverage-evidence.json` with the source SHA,
-CI run and attempt, artifact identity, report/context/build hashes, region and
-line totals, and full three-repeat matrix counts. The candidate and publication
-jobs revalidate the record against the unchanged raw report and file inventory.
+After the exact `main` CI run passes, query Coverage-MCP for every unfiltered
+regions and lines page against the deterministic projection of that raw
+artifact. Dispatch the `Coverage MCP handoff` workflow with the full page
+receipt. It rejects incomplete pagination, mismatched source/build identity,
+and altered raw evidence. The candidate workflow selects exactly one accepted
+handoff for the same source and CI attempt, downloads it by artifact ID, and
+verifies the receipt, report, projection, artifact and workflow identities.
+`coverage-evidence.json` records both the 100% totals and the accepted review
+hashes. Candidate and publication jobs revalidate this chain; a missing or
+stale receipt blocks release.
 
 For a local audit of a downloaded artifact, retain the artifact at
 `target/asgi-coverage/`, then create and validate the raw inventory:
@@ -3497,14 +3500,16 @@ python scripts/check_ci_evidence.py coverage \
 python scripts/coverage_evidence.py record \
   --report target/asgi-coverage/coverage-report.json \
   --raw-inventory target/asgi-coverage/raw-inventory.json \
+  --handoff-selection target/asgi-coverage/coverage-mcp-selection.json \
   --source FULL_COMMIT_SHA \
   --output target/asgi-coverage/coverage-evidence.json
 ```
 
-The separate Coverage-MCP handoff workflow and projection tools remain
-available for optional diagnostics. They are not part of the candidate or
-publication gates. Keep generated reports, profiles, and logs in Actions
-artifacts; do not commit them to the repository.
+The selection file is emitted only after the `verify` command in
+`scripts/coverage_mcp_handoff.py` validates the downloaded handoff against the
+untouched raw report. Keep
+generated reports, page receipts, profiles, and logs in Actions artifacts; do
+not commit them to the repository.
 
 ## Measure an incremental case or profile
 
