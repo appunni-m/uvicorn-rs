@@ -1,9 +1,9 @@
 """Separate improvement acceptance for captured stock Windows worker failures.
 
 Raw parity and the reference remain unchanged. Only exact reviewed worker
-inputs, the recorded listen failure, and the candidate's expected replacement
-and shutdown behavior qualify. A separately enabled hang policy is required
-when the same run also needs the captured TCP wakeup.
+inputs and the recorded listen failure qualify; candidate behavior is checked
+independently. A separately enabled hang policy is required when the same run
+also needs the captured TCP wakeup.
 """
 
 from __future__ import annotations
@@ -23,6 +23,9 @@ POLICY = "uvicorn-0.54.0-windows-two-worker-listen-winerror10022@2"
 CASE_ID = "python-api.module-cli-two-workers-serve-request"
 WEB_CONCURRENCY_CASE_ID = "python-api.module-cli-web-concurrency-two-workers-serve-request"
 WEB_CONCURRENCY_STARTUP_POLICY = "uvicorn-0.54.0-windows-web-concurrency-listen-winerror10022@1"
+WEB_CONCURRENCY_NO_REPLACEMENT_POLICY = (
+    "uvicorn-0.54.0-windows-web-concurrency-listen-winerror10022-no-replacement-candidate-clean@1"
+)
 CRASH_RESTART_CASE_ID = "python-api.module-cli-worker-crash-restarts"
 TWO_CRASH_RESTART_CASE_ID = "python-api.module-cli-worker-restarts-after-two-crashes"
 CRASH_RESTART_POLICY = "uvicorn-0.54.0-windows-worker-restart-listen-winerror10022@1"
@@ -170,6 +173,19 @@ def _validate_reference_startup(
     with_shutdown_hang: bool,
 ) -> dict[str, Any]:
     case_id = case.get("case_id")
+    oracle = row.get("oracle_observation")
+    if (
+        case_id == WEB_CONCURRENCY_CASE_ID
+        and isinstance(oracle, dict)
+        and oracle.get("worker_start_count") == 2
+        and oracle.get("worker_replacement_observed") is False
+    ):
+        _validate_web_concurrency_no_replacement_startup(row, case, environment)
+        return {
+            "case_id": case_id, "policy": WEB_CONCURRENCY_NO_REPLACEMENT_POLICY,
+            "raw_comparison": "failed", "candidate_contract": "passed",
+            "startup_exception": True,
+        }
     if case_id == CRASH_RESTART_CASE_ID:
         _validate_crash_restart_reference(row, case, environment, crash_count=1,
                                           with_shutdown_hang=False)
@@ -376,6 +392,163 @@ def _listen_error_remainder(log: str, *, policy: str) -> tuple[re.Match[str], st
         in zip(tail, expected_tail)
     ), "failure is not create_server -> sock.listen")
     return crash, log[:crash.start()] + log[crash.end():]
+
+
+def _validate_web_concurrency_no_replacement_startup(
+    row: dict[str, Any], case: dict[str, Any], environment: dict[str, Any],
+) -> None:
+    """Accept only the captured WEB_CONCURRENCY reference failure with a clean target."""
+    policy = WEB_CONCURRENCY_NO_REPLACEMENT_POLICY
+    _policy_require(
+        policy,
+        case.get("profile") == "python-api"
+        and case.get("operation") == "python.api.run-http"
+        and case.get("api", {}).get("run_http") == _WEB_CONCURRENCY_INPUT,
+        "input is outside the exact two-worker WEB_CONCURRENCY case",
+    )
+    _policy_require(
+        policy, str(environment.get("platform", "")).lower().startswith(("windows", "win32")),
+        "not Windows",
+    )
+    _policy_require(policy, str(environment.get("machine", "")).lower() in {"amd64", "x86_64"},
+                    "not Windows x86-64")
+    _policy_require(policy, environment.get("python") == "3.12.13",
+                    "captured Python version changed")
+    dependencies = environment.get("dependencies")
+    _policy_require(policy, isinstance(dependencies, dict)
+                    and dependencies.get("uvicorn") == "0.54.0",
+                    "reference version changed")
+    _policy_require(policy, row.get("profile") == "python-api"
+                    and row.get("operation") == "python.api.run-http"
+                    and row.get("verification", "oracle-parity") == "oracle-parity"
+                    and row.get("fault") is None,
+                    "row is outside the reviewed public parity operation")
+    _policy_require(policy, row.get("status") == "failed"
+                    and row.get("difference") == "Python API observations differ: server_log_events",
+                    "raw comparison is not only the captured reference server-log difference")
+    _policy_require(policy, row.get("server_exit_codes") == {"oracle": 0, "target": 0},
+                    "probe process failed")
+
+    oracle, target = row.get("oracle_observation"), row.get("target_observation")
+    _policy_require(policy, isinstance(oracle, dict) and isinstance(target, dict)
+                    and set(oracle) == set(target),
+                    "reference observation envelope differs")
+    _policy_require(policy, oracle.get("worker_start_count") == 2
+                    and oracle.get("worker_replacement_observed") is False
+                    and oracle.get("worker_clean_shutdown_count") == 1,
+                    "reference did not show two starts, no replacement, and one clean worker")
+    _policy_require(policy, target.get("worker_start_count") == 2
+                    and target.get("worker_replacement_observed") is False
+                    and target.get("worker_clean_shutdown_count") == 2,
+                    "candidate did not shut down both original workers cleanly")
+    for field in set(oracle) - {
+        "server_log_events", "stdout_base64", "worker_clean_shutdown_count",
+    }:
+        _policy_require(policy, oracle[field] == target[field],
+                        f"unreviewed observation differs: {field}")
+
+    raw_by_side: dict[str, dict[str, Any]] = {}
+    for side, observation, clean_workers in (
+        ("oracle", oracle, 1), ("target", target, 2),
+    ):
+        _policy_require(policy, observation.get("exit_code") == 0
+                        and observation.get("process_exit_code") == 0
+                        and observation.get("process_timed_out") is False,
+                        f"{side} process outcome differs from the captured case")
+        _policy_require(policy, observation.get("response_received") is True
+                        and observation.get("response_status") == 200
+                        and observation.get("shutdown_signal_sent") is True
+                        and observation.get("shutdown_signals_sent") == ["SIGINT"],
+                        f"{side} did not serve the request and receive one SIGINT")
+        raw_by_side[side] = _raw_observation(observation, policy=policy, side=side)
+        raw = raw_by_side[side]
+        _policy_require(policy, raw.get("reference_shutdown_diagnostic") is None,
+                        f"{side} contains a shutdown wakeup diagnostic")
+        _validate_web_concurrency_worker_log(
+            _decode(raw["server_stderr_base64"]), policy=policy,
+            reference=(side == "oracle"), clean_workers=clean_workers,
+        )
+
+    raw_oracle, raw_target = raw_by_side["oracle"], raw_by_side["target"]
+    _policy_require(policy, set(raw_oracle) == set(raw_target),
+                    "raw reference and candidate envelopes differ")
+    for field in set(raw_oracle) - {"server_stderr_base64", "server_stdout_base64"}:
+        _policy_require(policy, raw_oracle[field] == raw_target[field],
+                        f"raw request or lifecycle evidence differs: {field}")
+    _policy_require(policy, oracle["server_log_events"]["stdout"]
+                    == target["server_log_events"]["stdout"],
+                    "access-log events differ")
+
+
+def _validate_web_concurrency_worker_log(
+    log: str, *, policy: str, reference: bool, clean_workers: int,
+) -> None:
+    """Validate the exact worker lifecycle around the one captured listen error."""
+    log = log.replace("\r\n", "\n")
+    crash: re.Match[str] | None = None
+    if reference:
+        crash, remainder = _listen_error_remainder(log, policy=policy)
+        _policy_require(policy, log[crash.start():].startswith("Process SpawnProcess-2:\n"),
+                        "listen traceback came from an unreviewed worker process")
+    else:
+        _policy_require(policy, not re.search(r"Traceback|WinError|ERROR:|CRITICAL:", log),
+                        "candidate log contains an error")
+        remainder = log
+
+    allowed_message = re.compile(
+        r"INFO:\s+(?:Uvicorn running on http://127\.0\.0\.1:\d+ \(Press CTRL\+C to quit\)|"
+        r"Started parent process \[\d+\]|Started server process \[\d+\]|"
+        r"Waiting for application startup\.|Application startup complete\.|"
+        r"ASGI 'lifespan' protocol appears unsupported\.|Received SIGINT, exiting\.|"
+        r"Shutting down|Waiting for application shutdown\.|"
+        r"Application shutdown complete\.|Finished server process \[\d+\]|"
+        r"Terminated child process \[\d+\]|Waiting for child process \[\d+\]|"
+        r"Stopping parent process \[\d+\])"
+    )
+    lines = [line for line in remainder.splitlines() if line]
+    _policy_require(policy, all(allowed_message.fullmatch(line) for line in lines),
+                    "unreviewed message in worker log")
+
+    starts = re.findall(r"Started server process \[(\d+)\]", remainder)
+    finishes = re.findall(r"Finished server process \[(\d+)\]", remainder)
+    deaths = re.findall(r"Child process \[(\d+)\] died", remainder)
+    parents = re.findall(r"Started parent process \[(\d+)\]", remainder)
+    joins = re.findall(r"Waiting for child process \[(\d+)\]", remainder)
+    terminated = re.findall(r"Terminated child process \[(\d+)\]", remainder)
+    _policy_require(policy, len(starts) == len(set(starts)) == 2
+                    and len(parents) == 1 and parents[0] not in starts,
+                    "expected one supervisor and exactly two original workers")
+    _policy_require(policy, not deaths, "a worker replacement or crash was observed")
+    expected_finished = {starts[0]} if reference else set(starts)
+    _policy_require(policy, len(finishes) == clean_workers
+                    and set(finishes) == expected_finished,
+                    "worker clean-shutdown identities differ")
+    _policy_require(policy, len(joins) == 2 and set(joins) == set(starts),
+                    "supervisor did not join both original workers")
+    _policy_require(policy, len(set(terminated)) == len(terminated)
+                    and set(terminated) == (set() if reference else set(starts)),
+                    "worker termination events differ")
+    _policy_require(policy, remainder.count("Waiting for application startup.") == 2
+                    and remainder.count("Application startup complete.") == 2
+                    and remainder.count("Shutting down") == clean_workers
+                    and remainder.count("Waiting for application shutdown.") == clean_workers
+                    and remainder.count("Application shutdown complete.") == clean_workers,
+                    "worker lifespan lifecycle differs")
+    _policy_require(policy, remainder.count("ASGI 'lifespan' protocol appears unsupported.") ==
+                    (1 if reference else 0),
+                    "unexpected lifespan warning")
+    _policy_require(policy, remainder.count("Received SIGINT, exiting.") == 1
+                    and re.findall(r"Stopping parent process \[(\d+)\]", remainder) == parents,
+                    "supervisor did not complete one SIGINT shutdown")
+    if reference:
+        assert crash is not None
+        startup_positions = [
+            match.start() for match in re.finditer(r"Application startup complete\.", log)
+        ]
+        _policy_require(policy, len(startup_positions) == 2
+                        and max(startup_positions) < crash.start()
+                        < log.index("Received SIGINT, exiting."),
+                        "listen failure did not occur after startup and before shutdown")
 
 
 def _worker_log_counts(log: str, *, policy: str, starts: int, deaths: int) -> tuple[list[str], list[str]]:
