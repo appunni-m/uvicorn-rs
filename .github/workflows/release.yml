@@ -1,4 +1,4 @@
-# Staged Cargo and PyPI release mode. Publishers require the exact verified candidate.
+# Staged PyPI release mode. Cargo publication is performed separately by the maintainer.
 name: Publish packages
 
 on:
@@ -9,7 +9,7 @@ on:
         required: true
         type: string
       action:
-        description: Prepare only or publish PyPI after the exact Cargo candidate archives are published locally
+        description: Prepare only or publish the exact uvicorn-rs PyPI candidate; this workflow does not publish Cargo crates
         required: true
         default: prepare-only
         type: choice
@@ -234,7 +234,7 @@ jobs:
                   or coverage != expected_coverage):
               raise SystemExit("candidate exact-source 100% coverage evidence is missing or inconsistent")
           if os.environ["RELEASE_ACTION"] == "pypi":
-              print("The PyPI registry preflight below verifies both locally published Cargo archives.")
+              print("PyPI publication is independent of Cargo registry publication; Cargo candidate archives remain part of local candidate verification.")
           PY
           rm -rf target/publication-recheck
           mkdir -p target/publication-recheck/packages target/publication-recheck/evidence
@@ -325,24 +325,14 @@ jobs:
 
           pypi_selected = action == "pypi"
           inspect_all = action == "prepare-only"
-          crate_exists = {name: check_crate_exists(name) for name in crate_names}
+          crate_exists = {name: check_crate_exists(name) for name in crate_names} if inspect_all else {}
           crate_absent = {
               name: check_crate(name) if crate_exists[name] else True
               for name in crate_names
-          }
+          } if inspect_all else {}
           pypi_absent = None
           if pypi_selected or inspect_all:
               pypi_absent = check_pypi()
-
-          missing_crates = [
-              name for name in crate_names
-              if not crate_exists[name] or crate_absent[name]
-          ]
-          if pypi_selected and missing_crates:
-              names = ", ".join(missing_crates)
-              raise SystemExit(
-                  f"publish the exact candidate Cargo archives locally before PyPI: {names}"
-              )
 
           publish_pypi = pypi_selected and pypi_absent
           registry_state = {
@@ -478,19 +468,6 @@ jobs:
                           time.sleep(10)
               raise SystemExit(f"registry did not expose {description}: {last_error}")
 
-          def verify_crate(name):
-              archive = packages / f"{name}-{version}.crate"
-              expected = hashlib.sha256(archive.read_bytes()).hexdigest()
-              payload = remote_json(f"https://crates.io/api/v1/crates/{name}/{version}")
-              version_info = payload.get("version", {}) if payload else {}
-              if version_info.get("yanked") is True:
-                  raise SystemExit(f"published {name} {version} is yanked")
-              actual = version_info.get("checksum")
-              if actual is None:
-                  raise LookupError(f"{name} {version} not visible yet")
-              if actual != expected:
-                  raise SystemExit(f"published {name} checksum differs from the candidate")
-
           def verify_pypi():
               expected = {
                   path.name: hashlib.sha256(path.read_bytes()).hexdigest()
@@ -508,9 +485,5 @@ jobs:
                   raise SystemExit("published PyPI files differ from the candidate filenames or checksums")
 
           if action == "pypi":
-              for crate in (
-                  "asgi-lifespan-protocol-rs", "uvicorn-rs",
-              ):
-                  check_registry(lambda crate=crate: verify_crate(crate), f"{crate} {version}")
               check_registry(verify_pypi, f"uvicorn-rs {version}")
           PY

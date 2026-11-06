@@ -596,13 +596,9 @@ the documentation inventory found no errors. CI must revalidate these commits
 on PR #21 after `develop` advances.
 The maintainer will run their own FastAPI apps after repository acceptance.
 
-The Linux and macOS bundles are tied to CI #618 and are not final release
-artifacts until every gate passes on the accepted source. Rebuild or recheck
-all platform candidates from the final qualified source before publication.
-Do not merge PR #21 or publish Cargo/PyPI while coverage, independent review,
-full compatibility, benchmarks, docs, or Windows candidate verification remain
-open. After qualification, publish Cargo locally first as requested, then PyPI
-`uvicorn-rs` through `release.yml`.
+This PR #21 section is historical. Its candidate bundles, coverage state,
+review requirement, and publication order were superseded by the current PR #24
+status in [release guide](../releases.md).
 
 ### Earlier release-candidate snapshot — 2026-11-01 (PR #21 / CI #594)
 
@@ -1616,19 +1612,16 @@ compatibility acceptance or the start of benchmarks.
 ## m8mx — Publish and verify the consolidated release
 
 **Work:** Once zep3, x3az and v5fe qualify, recheck the exact source, immutable
-tag, selected artifacts and current registry state. For the 0.3.0 candidate,
-the maintainer requested local Cargo publication before PyPI. The 2026-10-30
-crates.io API snapshot shows both crate names at unyanked 0.2.1, so 0.3.0 is an
-update, not a first publication. From a separate clean checkout of the exact
-accepted tag, compare both `cargo package --locked` archives with the candidate;
-publish `asgi-lifespan-protocol-rs` first, wait for its exact index checksum,
-then publish dependent `uvicorn-rs`. Use a short-lived token restricted to both
-crate names and `publish-update`, entered locally through Cargo; logout and
-revoke it after use. Verify registry checksums and clean consumers, then run
-`release.yml` on `main` with action `pypi` to publish the exact accepted
-wheel/sdist without selecting Cargo publisher jobs. Recheck the registry before
-retrying any upload; never overwrite an existing version. Do not publish while
-any required release gate is open.
+tag, selected artifacts and current registry state. The maintainer's latest
+instruction on 2026-11-06 is to publish the PyPI `uvicorn-rs` 0.3.0
+distribution first and defer Cargo registry publication until tomorrow, from
+the local clean checkout. Accordingly, `release.yml` publishes only PyPI and
+must not require the 0.3.0 Cargo crates to be registry-visible. The verified
+candidate still includes both local `.crate` archives and their checksums.
+After PyPI is verified, publish `asgi-lifespan-protocol-rs` first and dependent
+`uvicorn-rs` locally when authorized, then check exact registry checksums and
+clean consumers. Recheck registries before retrying any upload; never overwrite
+an existing version. Do not publish while any required release gate is open.
 
 **Close with:** Registry versions and bytes match the accepted candidate,
 registry-based Cargo/Python consumers pass, documentation/docs.rs reflects the

@@ -21,39 +21,44 @@ Use these state labels precisely:
 
 ## Current release gates (2026-11-06)
 
-PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) head
-`170c39f5553574f8ed1f76f3e5d441a4a700ef79` is the latest candidate source.
-CI [#710](https://github.com/appunni-m/uvicorn-rs/actions/runs/42235051720)
-passes Rust quality, minimum-version compilation, native composition, Linux
-and macOS installed-wheel parity (786/786 each), candidate package consumers
-on all three systems, and the CPython 3.9 floor consumer. Windows raw parity is
+PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) is open from
+`develop` to `main`. CI [#710](https://github.com/appunni-m/uvicorn-rs/actions/runs/42235051720)
+completed successfully on develop commit `170c39f5553574f8ed1f76f3e5d441a4a700ef79`:
+Rust quality, minimum-version compilation, native composition, Linux and macOS
+installed-wheel parity (786/786 each), candidate package consumers on all
+three systems, and the CPython 3.9 floor consumer passed. Windows raw parity is
 757/759: two exact Uvicorn worker defects remain in the raw report and are
 accepted by separate narrow policies; six candidate worker contracts pass.
 
-The CI #710 unified coverage job is still running its three-repeat full matrix.
-There is no completed raw report showing 100% regions and lines yet. After the
-report is uploaded, it must be validated against its run, build, and source
-identities and recorded in the candidate evidence. The maintainer waived a
-separate Coverage-MCP review; that waiver does not change the exact-source
-100% regions/lines or three-repeat requirements.
+The same CI #710 run completed the full coverage matrix: all 1,194 ASGI and 259
+native cases passed three repeats each, with 15,061/15,061 regions and
+11,075/11,075 lines. Raw artifact
+[13520937293](https://github.com/appunni-m/uvicorn-rs/actions/runs/42235051720/artifacts/13520937293)
+has SHA-256 `487f1f3468b1a6fc9f4f398496689e2748047fb19883f04f69d26a814d767de5`.
+The maintainer waived separate Coverage-MCP review; that waiver does not change
+the exact-source 100% regions/lines or complete-matrix requirements. A newer
+CI run is validating the release-workflow and evidence updates on the current
+PR source before it can be treated as final-source evidence.
 
-The current PR #24 source has not been benchmarked. The latest complete
-three-system matrix is run [#358](https://github.com/appunni-m/uvicorn-rs/actions/runs/42179655798)
-on earlier develop commit `5ac287dbcd375b3d4e8967c10b2f43b2e97c278b`;
-the later main attempt [#359](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
+The latest complete three-system matrix is run
+[#358](https://github.com/appunni-m/uvicorn-rs/actions/runs/42179655798) on
+earlier develop commit `5ac287dbcd375b3d4e8967c10b2f43b2e97c278b`. The later
+main attempt [#359](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
 failed when the macOS stock-Uvicorn WebSocket oracle timed out before scope and
-produced no aggregate. The complete prior-source report shows workload-specific
-results, including HTTP/1 validated-route and WebSocket text-echo regressions;
-it does not establish a broad FastAPI speedup. The focused Linux ARM64 upload
-trace must follow coverage and precede the final matched matrix.
+produced no aggregate. That run predates the narrow reference-only exception
+policy now on PR #24; a complete matched matrix on the current source is still
+required. The prior-source report shows workload-specific results, including
+HTTP/1 validated-route and WebSocket text-echo regressions, and does not
+establish a broad FastAPI speedup. After current parity and coverage complete,
+run the focused Linux ARM64 upload trace, then the final matched matrix.
 
 CI #710 built candidate packages and passed their current consumer jobs. The
 Linux artifact contains both Cargo crates, the wheel, and the sdist; the
 candidate archives, wheel metadata, and consumer receipts were inspected. A
-one-line correction to the Windows consumer scope description is local and
-uncommitted, so the revised Windows receipt and final bundle still need hosted
-verification. Registry queries on 2026-11-06 found both Cargo releases at
-0.2.1, with no 0.3.0; PyPI returns 404 for `uvicorn-rs`.
+one-line correction to the Windows consumer scope description is now on PR #24;
+the revised Windows receipt and final bundle still need hosted verification.
+Registry queries on 2026-11-06 found both Cargo releases at 0.2.1, with no
+0.3.0; PyPI returns 404 for `uvicorn-rs`.
 
 | CI #710 candidate | Artifact | ZIP SHA-256 | Contents and check |
 | --- | --- | --- | --- |
@@ -63,9 +68,12 @@ verification. Registry queries on 2026-11-06 found both Cargo releases at
 
 The source has not been merged or published. The latest recorded audit found
 release controls and trusted publisher settings configured; verify them again
-immediately before publication. After every source-bound gate passes,
-publish Cargo locally first, then publish PyPI `uvicorn-rs` through
-`release.yml`, and verify registry-visible artifacts and clean consumers.
+immediately before publication. Per the maintainer's latest instruction,
+publish PyPI `uvicorn-rs` first after its gates pass and defer local Cargo
+publication until tomorrow. `release.yml` publishes only PyPI and must not
+require Cargo 0.3.0 to be registry-visible; it still verifies the local Cargo
+candidate archives. Verify the exact PyPI files and clean consumers, then
+publish the Cargo crates locally when authorized.
 
 ### Earlier release-gate wording (2026-11-05)
 
@@ -97,7 +105,7 @@ raw-coverage evidence workflow and a candidate for the resulting exact commit.
 The release set is the Python-free **uvicorn-rs** crate with optional **http3**,
 **asgi-lifespan-protocol-rs**, and the PyPI distribution **uvicorn-rs**.
 The optional internal Cargo/PyO3 adapter remains **uvicorn-rs-py**.
-**release.yml** publishes PyPI after local Cargo publication;
+**release.yml** publishes only PyPI and does not wait for Cargo registry publication;
 **candidate.yml** verifies staged candidates. The configured publisher tuples
 are `appunni-m/uvicorn-rs / release.yml / pypi` for PyPI and
 `appunni-m/uvicorn-rs / release.yml / crates-io` for both crates.
@@ -279,11 +287,13 @@ build and test jobs.
 The implemented `release.yml` offers exactly `prepare-only` and `pypi`.
 It validates an existing annotated tag and the exact successful candidate,
 then grants OIDC permission to its PyPI publisher. It has no Cargo publisher
-job. The per-crate crates.io Trusted Publisher entries remain configured;
-they do not change this release's local-Cargo-first direction.
+job. The `prepare-only` action may inspect Cargo registry state. The `pypi`
+action checks only the exact PyPI distribution and does not require the 0.3.0
+Cargo crates to be published first. The per-crate crates.io Trusted Publisher
+entries remain configured for the later local Cargo release.
 
-After all gates pass, use a separate clean checkout of the accepted tag and
-the same Cargo 1.98.1 packaging inputs as CI. The server package uses the
+For the deferred Cargo release, use a separate clean checkout of the accepted
+tag and the same Cargo 1.98.1 packaging inputs as CI. The server package uses the
 `patch.crates-io.asgi-lifespan-protocol-rs.path` override to the accepted
 checkout's lifecycle crate. Keep this override for local preparation and
 publication so Cargo reproduces the qualified archive, including Cargo.lock.
@@ -293,13 +303,12 @@ prepared archives byte-for-byte with the candidate before uploading.
 Local `cargo publish --dry-run` checks on CI #636 source reproduced both
 Linux candidate archive hashes on macOS with Cargo 1.98.1. They did not upload
 a package and do not qualify later source. Repeat the identity comparison for
-the final accepted commit. Publish lifecycle first, verify its exact registry
-checksum, then publish the server. Keep Cargo's package verification enabled.
-Both crate names already exist, so use a short-lived, crate-restricted
-`publish-update` credential entered locally through Cargo. Never put it in
-chat, logs, shell history or repository files. Logout and revoke it after the
-uploads. Verify registry checksums and clean consumers before dispatching
-`release.yml` on `main` with action `pypi`. No workflow creates or moves a tag.
+the final accepted commit. When Cargo publication is authorized, publish
+lifecycle first, verify its exact registry checksum, then publish the server.
+Keep Cargo's package verification enabled. Both crate names already exist, so
+use a short-lived, crate-restricted `publish-update` credential entered locally
+through Cargo. Never put it in chat, logs, shell history or repository files.
+Logout and revoke it after the uploads. No workflow creates or moves a tag.
 
 Release direction (2026-10-25): the maintainer authorized a coordinated Cargo
 and PyPI release and specified local Cargo publication first. The 0.2.1 local
@@ -310,8 +319,10 @@ artifacts have been prepared, but no clean current-source candidate has passed
 its release gates. The 2026-10-30 registry API check confirms both 0.2.1
 versions remain visible and unyanked, so the requested 0.3.0 local uploads use
 `publish-update`, not a first-publish token. Earlier workflow revisions offered `cargo` and `cargo-and-pypi`.
-Those modes are retired in the current local-Cargo-first flow: the implemented
-workflow offers only `prepare-only` and `pypi`. This does not bypass
+The 2026-11-06 instruction supersedes the earlier order: publish PyPI after its
+gates pass, then defer local Cargo publication until tomorrow. The implemented
+workflow offers only `prepare-only` and `pypi`; its PyPI path does not wait for
+Cargo registry visibility. This does not bypass
 candidate gates: release still requires a clean tagged commit on `main`, a successful
 exact candidate artifact, all required release evidence, configured publisher
 trust, and the typed confirmation.

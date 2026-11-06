@@ -137,19 +137,32 @@ def project_versions(root: Path = ROOT, expected: str | None = None) -> dict[str
         len(lines),
     )
     registry_script = "\n".join(lines[registry_start:registry_end])
-    required_bootstrap_checks = (
+    required_registry_checks = (
+        'inspect_all = action == "prepare-only"',
         "def check_crate_exists(name):",
         'f"https://crates.io/api/v1/crates/{name}"',
-        "crate_exists = {name: check_crate_exists(name) for name in crate_names}",
-        "if pypi_selected and missing_crates:",
-        "publish the exact candidate Cargo archives locally before PyPI",
+        "crate_exists = {name: check_crate_exists(name) for name in crate_names} if inspect_all else {}",
+        "if pypi_selected or inspect_all:",
+        "pypi_absent = check_pypi()",
         'version_info.get("yanked") is True',
         "actual != digest",
     )
-    if any(check not in registry_script for check in required_bootstrap_checks):
+    if any(check not in registry_script for check in required_registry_checks):
         raise ValueError(
-            "release.yml must require both exact Cargo candidate archives to be visible on crates.io before PyPI"
+            "release.yml must inspect Cargo registry state in prepare-only mode and gate PyPI on exact PyPI files"
         )
+    if "if pypi_selected and missing_crates:" in registry_script:
+        raise ValueError("release.yml PyPI publication must not require Cargo crates to be published first")
+
+    verify_start = lines.index("  verify-publication:")
+    publication_verification = "\n".join(lines[verify_start:])
+    if (
+        "def verify_pypi():" not in publication_verification
+        or 'check_registry(verify_pypi, f"uvicorn-rs {version}")' not in publication_verification
+        or "crates.io/api/v1/crates" in publication_verification
+        or "verify_crate" in publication_verification
+    ):
+        raise ValueError("PyPI publication verification must verify only the exact PyPI distribution")
 
     def locked_package(lock_name: str, package_name: str, *, editable: bool = False) -> dict:
         rows = [
