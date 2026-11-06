@@ -168,7 +168,6 @@ jobs:
           path: target/release-candidate
       - name: Verify candidate checksums, source and package consumers
         env:
-          GH_TOKEN: ${{ github.token }}
           RELEASE_COMMIT: ${{ steps.candidate.outputs.commit }}
           RELEASE_VERSION: ${{ steps.candidate.outputs.version }}
           RELEASE_ACTION: ${{ inputs.action }}
@@ -185,18 +184,7 @@ jobs:
           python scripts/coverage_evidence.py verify \
             --report target/asgi-coverage/coverage-report.json \
             --raw-inventory target/release-candidate/evidence/coverage/raw-inventory.json \
-            --handoff-selection target/release-candidate/evidence/coverage/coverage-mcp-selection.json \
             --source "$RELEASE_COMMIT"
-          mkdir -p target/publication-recheck
-          python scripts/coverage_mcp_handoff.py verify-selection \
-            --manifest target/release-candidate/evidence/coverage-mcp/coverage-handoff/handoff.json \
-            --selection target/release-candidate/evidence/coverage/coverage-mcp-selection.json \
-            --source "$RELEASE_COMMIT" \
-            --ci-raw-root target/asgi-coverage \
-            --review-root target/release-candidate/evidence/coverage-mcp/asgi-coverage-review \
-            --output target/publication-recheck/coverage-mcp-selection.reverified.json
-          cmp target/release-candidate/evidence/coverage/coverage-mcp-selection.json \
-            target/publication-recheck/coverage-mcp-selection.reverified.json
           python - "$RELEASE_VERSION" "$RELEASE_COMMIT" <<'PY'
           import hashlib
           import json
@@ -206,7 +194,7 @@ jobs:
 
           version, commit = sys.argv[1:]
           candidate = json.loads(Path("target/release-candidate/candidate.json").read_text())
-          if (candidate.get("schema") != "uvicorn-rs-release-candidate@7"
+          if (candidate.get("schema") != "uvicorn-rs-release-candidate@8"
                   or candidate.get("state") != "verified candidate; publication disabled"
                   or candidate.get("version") != version
                   or candidate.get("commit") != commit
@@ -217,7 +205,6 @@ jobs:
           evidence_path = root / "coverage/coverage-evidence.json"
           coverage_evidence = json.loads(evidence_path.read_text())
           coverage = candidate.get("coverage", {})
-          coverage_review = coverage_evidence.get("coverage_review")
           expected_ci = {"id": int(candidate["ci_run_id"]),
                          "attempt": int(candidate["ci_run_attempt"]),
                          "branch": "main", "event": "push"}
@@ -230,14 +217,9 @@ jobs:
               "report": coverage_evidence.get("report"),
               "coverage": coverage_evidence.get("coverage"),
               "matrix": coverage_evidence.get("matrix"),
-              "coverage_review": coverage_review,
           }
-          if (coverage_evidence.get("schema") != "uvicorn-rs-coverage-evidence@4"
+          if (coverage_evidence.get("schema") != "uvicorn-rs-coverage-evidence@5"
                   or coverage_evidence.get("status") != "passed"
-                  or not isinstance(coverage_review, dict)
-                  or coverage_review.get("status") != "accepted"
-                  or coverage_review.get("source_commit") != commit
-                  or coverage_review.get("ci_run") != expected_ci
                   or coverage_evidence.get("source_commit") != commit
                   or coverage_evidence.get("ci_run") != expected_ci
                   or coverage != expected_coverage):

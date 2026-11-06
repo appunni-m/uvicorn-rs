@@ -14,25 +14,27 @@
 
 ## Current unified coverage status (2026-11-07)
 
-PR CI [#42277312616](https://github.com/appunni-m/uvicorn-rs/actions/runs/42277312616),
-attempt 1, tests PR head `df77c111533c8060384d7b5dad174951c9dd8518` at merge
-source `1a296b99b9525411a6cdcef74d1d7d89fedf114d`. All 1,453 cases (1,194 ASGI
-and 259 native) passed through three ASGI and three native repeats with complete
+Exact-main CI
+[#42189108870](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870),
+attempt 1, tested clean source
+`24f5b6a2afcab0b58adb945427e585a16d7b0e0d`. All 1,453 cases (1,194 ASGI and
+259 native) passed through three ASGI and three native repeats with complete
 attribution. The raw report records **15,061/15,061 regions and 11,075/11,075
 lines**. Coverage artifact
-[#13539917811](https://github.com/appunni-m/uvicorn-rs/actions/runs/42277312616/artifacts/13539917811)
-has archive SHA-256
-`be266bf7c9c12c3b45c13d091f62fac70306e11eeb57c43189b920556b313639`; report
-SHA-256 is `d727c43ac9f5603cb0e3ce2ae66702c65b8e45daae23c5655cbd9b000bb929d3`.
+[#13494831300](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870/artifacts/13494831300)
+has archive digest
+`sha256:d1f71e1c23bbc5a88e5620dc668f0809ec0caf48e4bf964a893da90f1ae09015`.
+This qualifies exact-main raw coverage. Candidate assembly still must record
+and revalidate the source, CI run/attempt, artifact, report, context, build,
+and complete file inventory. A separate Coverage-MCP review receipt is not a
+release requirement.
 
-The compact, source-bound Coverage-MCP projection received all 45 unfiltered
-region pages and the complete line page. The attached receipt validates
-`source=matches_receipt`, `tests=passed`, and `gate=passed`; its SHA-256 is
-`dc70fd196b08a515af593d146e582a598fe5e26dd9955e4d7e99eeb0241c9501`. This
-review qualifies the PR merge source only. After merge, record the final
-main-source CI report, raw artifact identity, build identity, and 100% region
-and line totals. Per the maintainer's current direction, a separate
-Coverage-MCP review receipt is not a release requirement.
+PR CI [#42277312616](https://github.com/appunni-m/uvicorn-rs/actions/runs/42277312616)
+is supplemental pre-merge evidence for earlier PR head
+`df77c111533c8060384d7b5dad174951c9dd8518` at merge source
+`1a296b99b9525411a6cdcef74d1d7d89fedf114d`. Its raw report had the same
+100% totals, and its optional Coverage-MCP review covered all unfiltered
+pages. Neither item substitutes for the exact-main run above.
 
 ### Historical unified coverage status (2026-11-05)
 
@@ -3485,19 +3487,17 @@ uv run --python 3.12 --locked --group benchmark python scripts/check_ci_evidence
 
 CI accepts the exact-source raw report with `--allow-pending-mcp` during the
 raw evidence stage. This validates the complete indexed matrix, all three
-repeats, clean source and 100% normalized regions and lines before the separate
-review handoff. Candidate and publication verification additionally require an
-accepted Coverage-MCP receipt. A failed matrix, missing counter, or uncovered
-region/line remains a failure.
+repeats, clean source and 100% normalized regions and lines. A separate
+Coverage-MCP receipt is not required by the maintainer. A failed matrix,
+missing counter, or uncovered region/line remains a failure.
 
 ## Record exact-source release coverage
 
 Release coverage requires the complete exact-source report to pass 100% regions
 and lines, three full passing repeats, complete attribution, and clean source,
-build, run, artifact, report, context and raw-file identity checks. The active
-goal also requires the accepted independent Coverage-MCP handoff. Candidate and
-publication jobs revalidate the exact handoff selection, retained MCP pages,
-reviewed report, receipt, and raw coverage evidence.
+build, run, artifact, report, context and raw-file identity checks. Candidate
+and publication jobs revalidate those raw evidence identities; a separate
+Coverage-MCP handoff is not required.
 
 For a local audit of a downloaded artifact, retain the artifact at
 `target/asgi-coverage/`, then create and validate the raw inventory:
@@ -3517,15 +3517,12 @@ python scripts/check_ci_evidence.py coverage \
 python scripts/coverage_evidence.py record \
   --report target/asgi-coverage/coverage-report.json \
   --raw-inventory target/asgi-coverage/raw-inventory.json \
-  --handoff-selection target/release-candidate/evidence/coverage/coverage-mcp-selection.json \
   --source FULL_COMMIT_SHA \
   --output target/asgi-coverage/coverage-evidence.json
 ```
 
-The selection is emitted only after the handoff validator accepts the MCP
-pages, source, build, CI attempt, and artifact identities. Keep generated
-reports, profiles, and logs in Actions artifacts; do not commit them to the
-repository.
+Keep generated reports, profiles, and logs in Actions artifacts; do not commit
+them to the repository.
 
 ## Measure an incremental case or profile
 

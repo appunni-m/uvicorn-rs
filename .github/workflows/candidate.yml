@@ -68,22 +68,6 @@ jobs:
             --repository "$GITHUB_REPOSITORY" \
             --source "$RELEASE_COMMIT" \
             --github-output "$GITHUB_OUTPUT"
-      - name: Select the accepted Coverage-MCP review for this exact CI attempt
-        id: coverage-review
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_COMMIT: ${{ steps.tag.outputs.commit }}
-          CI_RUN_ID: ${{ steps.ci-run.outputs.run-id }}
-          CI_RUN_ATTEMPT: ${{ steps.ci-run.outputs.run-attempt }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          python scripts/coverage_mcp_handoff.py select-handoff \
-            --repository "$GITHUB_REPOSITORY" \
-            --source "$RELEASE_COMMIT" \
-            --ci-run-id "$CI_RUN_ID" \
-            --ci-attempt "$CI_RUN_ATTEMPT" \
-            --github-output "$GITHUB_OUTPUT"
       - name: Select exact successful performance matrix and retained artifact
         id: performance-run
         env:
@@ -157,41 +141,6 @@ jobs:
                   output.write(f"{key}={value}\n")
           print(json.dumps(selected, sort_keys=True))
           PY
-      - name: Download the exact accepted Coverage-MCP review artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ steps.coverage-review.outputs.run-id }}
-          artifact-ids: ${{ steps.coverage-review.outputs.artifact-id }}
-          digest-mismatch: error
-          path: target/release-candidate/evidence/coverage-mcp
-      - name: Revalidate the selected Coverage-MCP workflow artifact
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_COMMIT: ${{ steps.tag.outputs.commit }}
-          CI_RUN_ID: ${{ steps.ci-run.outputs.run-id }}
-          CI_RUN_ATTEMPT: ${{ steps.ci-run.outputs.run-attempt }}
-          HANDOFF_RUN_ID: ${{ steps.coverage-review.outputs.run-id }}
-          HANDOFF_RUN_ATTEMPT: ${{ steps.coverage-review.outputs.run-attempt }}
-          HANDOFF_ARTIFACT_ID: ${{ steps.coverage-review.outputs.artifact-id }}
-          HANDOFF_ARTIFACT_NAME: ${{ steps.coverage-review.outputs.artifact-name }}
-          HANDOFF_ARTIFACT_SIZE: ${{ steps.coverage-review.outputs.artifact-size }}
-          HANDOFF_ARTIFACT_DIGEST: ${{ steps.coverage-review.outputs.artifact-digest }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          python scripts/coverage_mcp_handoff.py validate-handoff \
-            --repository "$GITHUB_REPOSITORY" \
-            --source "$RELEASE_COMMIT" \
-            --ci-run-id "$CI_RUN_ID" \
-            --ci-attempt "$CI_RUN_ATTEMPT" \
-            --handoff-run-id "$HANDOFF_RUN_ID" \
-            --handoff-attempt "$HANDOFF_RUN_ATTEMPT" \
-            --artifact-id "$HANDOFF_ARTIFACT_ID" \
-            --artifact-name "$HANDOFF_ARTIFACT_NAME" \
-            --artifact-size "$HANDOFF_ARTIFACT_SIZE" \
-            --artifact-digest "$HANDOFF_ARTIFACT_DIGEST"
       - name: Download the exact retained performance artifact by ID
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -225,49 +174,6 @@ jobs:
           artifact-ids: ${{ steps.ci-run.outputs.artifact-id }}
           digest-mismatch: error
           path: target/asgi-coverage
-      - name: Verify the reviewed pages against the exact raw coverage artifact
-        env:
-          RELEASE_COMMIT: ${{ steps.tag.outputs.commit }}
-          CI_RUN_ID: ${{ steps.ci-run.outputs.run-id }}
-          CI_RUN_ATTEMPT: ${{ steps.ci-run.outputs.run-attempt }}
-          RAW_ARTIFACT_ID: ${{ steps.ci-run.outputs.artifact-id }}
-          RAW_ARTIFACT_NAME: ${{ steps.ci-run.outputs.artifact-name }}
-          RAW_ARTIFACT_SIZE: ${{ steps.ci-run.outputs.artifact-size }}
-          RAW_ARTIFACT_DIGEST: ${{ steps.ci-run.outputs.artifact-digest }}
-          HANDOFF_RUN_ID: ${{ steps.coverage-review.outputs.run-id }}
-          HANDOFF_RUN_ATTEMPT: ${{ steps.coverage-review.outputs.run-attempt }}
-          HANDOFF_ARTIFACT_ID: ${{ steps.coverage-review.outputs.artifact-id }}
-          HANDOFF_ARTIFACT_NAME: ${{ steps.coverage-review.outputs.artifact-name }}
-          HANDOFF_ARTIFACT_SIZE: ${{ steps.coverage-review.outputs.artifact-size }}
-          HANDOFF_ARTIFACT_DIGEST: ${{ steps.coverage-review.outputs.artifact-digest }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          bundle=target/release-candidate/evidence/coverage-mcp
-          test -d "$bundle/asgi-coverage-review"
-          test -d "$bundle/coverage-handoff"
-          mkdir -p target/asgi-coverage-review target/coverage-handoff \
-            target/release-candidate/evidence/coverage
-          cp -a "$bundle/asgi-coverage-review/." target/asgi-coverage-review/
-          cp -a "$bundle/coverage-handoff/." target/coverage-handoff/
-          python scripts/coverage_mcp_handoff.py verify \
-            --manifest target/coverage-handoff/handoff.json \
-            --source "$RELEASE_COMMIT" \
-            --ci-run-id "$CI_RUN_ID" \
-            --ci-attempt "$CI_RUN_ATTEMPT" \
-            --raw-artifact-id "$RAW_ARTIFACT_ID" \
-            --raw-artifact-name "$RAW_ARTIFACT_NAME" \
-            --raw-artifact-size "$RAW_ARTIFACT_SIZE" \
-            --raw-artifact-digest "$RAW_ARTIFACT_DIGEST" \
-            --ci-raw-root target/asgi-coverage \
-            --review-root target/asgi-coverage-review \
-            --handoff-run-id "$HANDOFF_RUN_ID" \
-            --handoff-attempt "$HANDOFF_RUN_ATTEMPT" \
-            --handoff-artifact-id "$HANDOFF_ARTIFACT_ID" \
-            --handoff-artifact-name "$HANDOFF_ARTIFACT_NAME" \
-            --handoff-artifact-size "$HANDOFF_ARTIFACT_SIZE" \
-            --handoff-artifact-digest "$HANDOFF_ARTIFACT_DIGEST" \
-            --selection-output target/release-candidate/evidence/coverage/coverage-mcp-selection.json
       - name: Download Python minimum consumer evidence
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -314,13 +220,11 @@ jobs:
           python scripts/coverage_evidence.py record \
             --report target/asgi-coverage/coverage-report.json \
             --raw-inventory target/release-candidate/evidence/coverage/raw-inventory.json \
-            --handoff-selection target/release-candidate/evidence/coverage/coverage-mcp-selection.json \
             --source "$RELEASE_COMMIT" \
             --output target/release-candidate/evidence/coverage/coverage-evidence.json
           python scripts/coverage_evidence.py verify \
             --report target/asgi-coverage/coverage-report.json \
             --raw-inventory target/release-candidate/evidence/coverage/raw-inventory.json \
-            --handoff-selection target/release-candidate/evidence/coverage/coverage-mcp-selection.json \
             --source "$RELEASE_COMMIT"
           cp -a target/asgi-coverage \
             target/release-candidate/evidence/coverage/raw
@@ -464,23 +368,18 @@ jobs:
                   or performance.get("workflow_run_attempt") != int(os.environ["PERFORMANCE_RUN_ATTEMPT"])
                   or performance.get("artifact_id") != int(os.environ["PERFORMANCE_ARTIFACT_ID"])):
               raise SystemExit("performance receipt differs from the selected exact-run artifact")
-          coverage_review = coverage_evidence.get("coverage_review")
           expected_ci = {"id": int(os.environ["RELEASE_CI_RUN"]),
                          "attempt": int(os.environ["RELEASE_CI_ATTEMPT"]),
                          "branch": "main", "event": "push"}
-          if (coverage_evidence.get("schema") != "uvicorn-rs-coverage-evidence@4"
+          if (coverage_evidence.get("schema") != "uvicorn-rs-coverage-evidence@5"
                   or coverage_evidence.get("status") != "passed"
-                  or not isinstance(coverage_review, dict)
-                  or coverage_review.get("status") != "accepted"
                   or coverage_evidence.get("source_commit") != os.environ["RELEASE_COMMIT"]
-                  or coverage_review.get("source_commit") != os.environ["RELEASE_COMMIT"]
                   or coverage_evidence.get("ci_run") != expected_ci
-                  or coverage_review.get("ci_run") != expected_ci
                   or any(coverage_evidence.get("coverage", {}).get(metric, {}).get("covered")
                          != coverage_evidence.get("coverage", {}).get(metric, {}).get("total")
                          for metric in ("regions", "lines"))):
               raise SystemExit("raw 100% coverage evidence differs from the exact source or CI artifact")
-          record = {"schema": "uvicorn-rs-release-candidate@7", "state": "verified candidate; publication disabled",
+          record = {"schema": "uvicorn-rs-release-candidate@8", "state": "verified candidate; publication disabled",
                     "commit": os.environ["RELEASE_COMMIT"], "version": os.environ["RELEASE_VERSION"],
                     "ci_run_id": os.environ["RELEASE_CI_RUN"], "ci_run_attempt": os.environ["RELEASE_CI_ATTEMPT"],
                     "tag": os.environ["GITHUB_REF_NAME"],
@@ -492,8 +391,7 @@ jobs:
                                  "artifact": coverage_evidence["artifact"],
                                  "report": coverage_evidence["report"],
                                  "coverage": coverage_evidence["coverage"],
-                                 "matrix": coverage_evidence["matrix"],
-                                 "coverage_review": coverage_evidence["coverage_review"]},
+                                 "matrix": coverage_evidence["matrix"]},
                     "performance": {"decision": performance["decision"],
                                     "receipt_sha256": hashlib.sha256(performance_path.read_bytes()).hexdigest(),
                                     "review_sha256": performance["review_sha256"],
