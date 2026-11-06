@@ -61,6 +61,7 @@ from h2.settings import SettingCodes
 from websockets.exceptions import ConnectionClosed, InvalidHandshake, InvalidStatus
 from websockets.sync.client import connect as websocket_connect
 from parity_identity import runtime_source_digest, runtime_source_hashes
+from macos_reference_exceptions import validate_reference_failure
 from windows_reference_hang import diagnostic_input as windows_reference_hang_input
 from windows_reference_startup import diagnostic_input as windows_reference_startup_input
 
@@ -16462,6 +16463,8 @@ def execute_profile(
     h3_client: Path | None,
     operations: dict[str, dict[str, Any]],
     coverage_profile_dir: Path | None = None,
+    environment: dict[str, Any] | None = None,
+    continue_after_macos_reference_wss_handshake_timeout: bool = False,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     if profile["id"] == "cli":
         return execute_cli_profile(
@@ -16492,6 +16495,8 @@ def execute_profile(
                 h3_client,
                 operations,
                 coverage_profile_dir,
+                environment,
+                continue_after_macos_reference_wss_handshake_timeout,
             )
             grouped_outcomes.update(
                 (outcome["case_id"], outcome) for outcome in group_outcomes
@@ -16541,6 +16546,8 @@ def execute_profile(
                 h3_client,
                 operations,
                 coverage_profile_dir,
+                environment,
+                continue_after_macos_reference_wss_handshake_timeout,
             )
             grouped_outcomes.update(
                 (outcome["case_id"], outcome) for outcome in group_outcomes
@@ -16605,6 +16612,7 @@ def execute_profile(
                 # but their TLS transports can still be draining when the
                 # next case starts on the shared profile listener.
                 or case["case_id"] == "websocket-tls.scope-headers-path-query-and-subprotocols"
+                or case["case_id"] == "websocket-tls.text-round-trip-with-query-and-subprotocol"
                 or case["case_id"] in {
                     "http3.client-cancels-large-response-after-headers",
                     "http3.post-first-upload-response-with-queued-chunks",
@@ -16955,6 +16963,7 @@ def execute_profile(
                                 "server_log": read_server_log(oracle)[-2000:],
                                 "oracle_process": server_process_diagnostic(oracle),
                                 "target_process": server_process_diagnostic(target),
+                                "target_observation": target_result,
                                 "target_server_log": read_server_log(target)[-2000:],
                             }
                             raise ParityError(
@@ -17017,15 +17026,32 @@ def execute_profile(
                             None if is_fault_contract else target_comparison,
                         )
                 except Exception as error:  # Preserve adapter failures in the generated result.
+                    error_message = str(error)
                     outcomes.append({
                         "case_id": case["case_id"],
                         "profile": profile["id"],
                         "operation": case["operation"],
                         "requirements": case["covers"],
                         "status": "infrastructure_failed",
-                        "error": {"class": type(error).__name__, "message": str(error)[:5000]},
+                        "error": {"class": type(error).__name__, "message": error_message[:5000]},
                     })
                     print(f"ERROR {profile['id']}: {case['case_id']}: {error}", flush=True)
+                    if (
+                        continue_after_macos_reference_wss_handshake_timeout
+                        and type(error) is ParityError
+                        and environment is not None
+                    ):
+                        try:
+                            receipt = validate_reference_failure(error_message, case, environment)
+                        except ValueError:
+                            pass
+                        else:
+                            print(
+                                "REFERENCE-ONLY FAILURE PRESERVED (not a parity pass): "
+                                f"{receipt['policy_id']}; continuing to collect sibling cases",
+                                flush=True,
+                            )
+                            continue
                     for unrun_case in execution_cases[case_index + 1:]:
                         outcomes.append({
                             "case_id": unrun_case["case_id"],
@@ -17398,6 +17424,14 @@ def main() -> int:
             "requires exactly --case-id http3.early-response-with-open-upload"
         ),
     )
+    parser.add_argument(
+        "--continue-after-macos-reference-wss-handshake-timeout",
+        action="store_true",
+        help=(
+            "continue the raw public parity matrix only after the exact captured "
+            "macOS ARM64 Uvicorn TLS-WebSocket oracle timeout; preserve its failed row"
+        ),
+    )
     args = parser.parse_args()
     global INSTALLED_CANDIDATE_MODE, ORACLE_PYTHON, TRACE_HYPERCORN_H3_EVENTS
     # Keep the venv's python symlink intact; resolving it points at the base
@@ -17491,6 +17525,8 @@ def main() -> int:
                 h3_client,
                 operations,
                 coverage_profile_dir,
+                environment,
+                args.continue_after_macos_reference_wss_handshake_timeout,
             )
             case_results.extend(profile_results)
             infrastructure_errors.extend(profile_errors)

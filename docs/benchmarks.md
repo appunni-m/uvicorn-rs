@@ -983,17 +983,30 @@ PY
 This standalone command plans 144 H1 rows for the 12 listed workloads at three
 repetitions. H3 ordinarily has 78 rows rather than 84 because its known-failing
 Hypercorn upload comparison is omitted. On the exact Linux ARM64 exception
-context, H3 has three fewer rows: the Hypercorn asyncio slow-reader cell is
-absent while all three Rust asyncio repetitions remain required. On the exact
-macOS ARM64 exception context, H3 also has three fewer rows for the Hypercorn
-asyncio large-response reference; all three Rust asyncio repetitions remain
-required. The full five-repetition matrix omits five reference rows for each
-matching exception. Check the report's `reference_exclusions` and
+context, H3 omits the Hypercorn asyncio slow-reader reference; all five Rust
+asyncio repetitions remain required. This exact slow-reader exception also
+applies to Linux x86-64 after the same Hypercorn 0.18.0 `KeyError(52)` and five
+passing candidate-only repetitions were retained. On the exact macOS ARM64
+exception context, H3 omits the Hypercorn asyncio large-response reference;
+all five Rust asyncio repetitions remain required. The full five-repetition
+matrix omits five reference rows for each matching exception. Check the report's `reference_exclusions` and
 `excluded_servers_by_workload` against the policy and verify that the Rust rows
 are present and correctness- and lifecycle-valid. Unlisted missing rows remain
-failures; retain them in logs instead of dropping them. Candidate-only H3
-output is useful as separate correctness evidence, but it cannot replace a
-matched comparison or produce a Hypercorn speedup.
+failures; retain them in logs instead of dropping them. Candidate-only H3 cells
+establish correctness and lifecycle behavior but provide no matched speed
+comparison.
+
+The public parity gate also has one narrowly scoped candidate-only policy for
+the intermittent macOS ARM64 stock Uvicorn 0.54.0 TLS-WebSocket handshake
+timeout. It applies only to
+`websocket-tls.text-round-trip-with-query-and-subprotocol` with websockets
+17.1, when the retained trace shows that stock Uvicorn stopped before the
+WebSocket scope and `uvicorn-rs` completed the exact expected subprotocol and
+message exchange. The raw parity report remains failed with an
+`infrastructure_failed` row; every sibling case and both server cleanups must
+pass. The failure's cause remains unknown, and it supplies no performance
+ratio. Any other case, error signature, candidate result, or cleanup failure
+blocks the matrix.
 
 Row counts and response equality are correctness checks only. For every category,
 also inspect `metadata.identity_stable`, `timing_excluded_rows`,

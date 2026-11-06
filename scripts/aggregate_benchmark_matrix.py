@@ -13,6 +13,8 @@ import re
 import sys
 import tarfile
 
+from macos_reference_exceptions import parity_gate_errors
+
 
 EXPECTED_SYSTEMS = {
     "linux-x86_64": {"runner": "ubuntu-24.04", "architecture": "x86_64", "os": "Linux"},
@@ -95,9 +97,17 @@ def load_system(artifact: Path, system_id: str, expected_commit: str) -> dict:
     if identity.get("optional_workloads", {}).get("fastapi", {}).get("selected") is not True:
         raise ValueError(f"{artifact.name}: upstream FastAPI benchmark dependencies were not selected")
     parity = run.get("public_parity_gate")
-    if (not isinstance(parity, dict) or parity.get("status") != "passed"
-            or not isinstance(parity.get("public_cases"), int) or parity["public_cases"] <= 0):
-        raise ValueError(f"{artifact.name}: public parity gate did not pass")
+    frozen_policy_hash = identity.get("harness", {}).get(
+        "scripts/macos_reference_exceptions.py"
+    )
+    parity_errors = parity_gate_errors(
+        parity, expected_policy_sha256=frozen_policy_hash
+    )
+    if parity_errors:
+        raise ValueError(f"{artifact.name}: public parity gate was rejected: {parity_errors}")
+    if (parity.get("status") == "accepted_with_reference_exception"
+            and system_id != "macos-arm64"):
+        raise ValueError(f"{artifact.name}: macOS-only reference exception appeared on {system_id}")
     if analysis.get("schema") != "uvicorn-rs-paired-category-analysis@2":
         raise ValueError(f"{artifact.name}: unsupported analysis schema")
     if analysis.get("status") not in ACCEPTED_ANALYSIS_STATUSES:

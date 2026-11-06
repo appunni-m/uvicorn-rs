@@ -8,13 +8,13 @@ a prerequisite for completing the repository work.
 
 ## Active release goal — 2026-11-05
 
-The current user-provided release goal requires an accepted independent
-Coverage-MCP review bound to the final clean source and its exact raw unified
-coverage report. This supersedes the 2026-11-04 waiver below. Require every
-unfiltered region and line page, matching source/build receipts, passing test
-status, no remaining observations, and the actual MCP transcript and receipt.
-Candidate qualification must revalidate that receipt against the same source,
-run, artifact, and report. Do not synthesize or manually assemble review pages.
+The current user-provided release goal requires exact-source raw unified
+coverage at 100% regions and lines, with the source, run and attempt, raw
+artifact ID and digest, report and context hashes, and build identity recorded.
+The maintainer explicitly waived a separate Coverage-MCP review on 2026-11-05;
+this supersedes the later reinstatement recorded below. Candidate qualification
+must revalidate the coverage identity against the same source, run, artifact,
+and report.
 
 The raw coverage gate remains 100% for regions and lines, with three passing
 ASGI and native repeats, complete attribution, and zero failures or
@@ -22,12 +22,50 @@ infrastructure retries. Retain the source, run/attempt, artifact ID/digest,
 report/context hashes, build identity, and revalidate them during candidate
 qualification.
 
-## Historical owner decision — 2026-11-04 (superseded)
+## Historical review decisions — 2026-11-04 to 2026-11-05
 
-At the time, the project owner waived independent Coverage-MCP review while
-retaining the exact-source 100% raw coverage gate. The active release goal now
-reinstates the independent review requirement; the remaining raw coverage and
-identity requirements continue to apply.
+The owner first waived independent review on 2026-11-04, later reinstated it,
+then reconfirmed on 2026-11-05 that no independent Coverage-MCP review is
+required. The current contract is the recorded 100% exact-source raw coverage
+gate above.
+
+## Benchmark update — 2026-11-06
+
+CI #693 on develop commit `1859f1946b4df2fc361521ef412f882c5698ed49` passed
+the unified coverage gate: 15,053/15,053 regions and 11,072/11,072 lines, with
+three passing ASGI and native repeats. This is candidate evidence; main still
+needs final-source qualification after PR #23 merges.
+
+Benchmark #354 failed on Linux x86-64 because Hypercorn 0.18.0 asyncio raised
+`KeyError(52)` in the HTTP/3 slow-reader case after 28 requests; two client
+requests timed out waiting for response headers. The same source's focused
+candidate-only run #355 passed `uvicorn-rs-asyncio` for five repetitions, 40
+requests each, with zero failures and clean shutdown. The exception is limited
+to that exact Hypercorn reference cell; it provides no matched speed ratio.
+Linux ARM64 passed #354. macOS parity remains incomplete because stock Uvicorn
+timed out during the TLS WebSocket handshake before the application received a
+WebSocket scope, while the candidate reached the scope. The only allowed
+candidate-only decision is the exact TLS WebSocket input and trace described
+below: keep its raw `infrastructure_failed` row, require the candidate's
+expected subprotocol/message and clean process lifecycle, require every sibling
+case to pass, and record no performance ratio. The cause remains unknown. The
+full matrix has not been rerun with this acceptance path, so #354 is still
+incomplete.
+
+Focused reproduction on the local macOS ARM64 host used the same Python 3.12.13,
+Uvicorn 0.54.0, and websockets 17.1 versions. Across six runs of only
+`websocket-tls.text-round-trip-with-query-and-subprotocol`, stock Uvicorn timed
+out before the handshake once; its process stayed alive with only
+`lifespan.startup` recorded and no WebSocket scope. The candidate completed the
+TLS handshake, selected `parity`, and echoed `tls-websocket` in all six runs.
+Five runs passed against both servers. The failure also appears in hosted run
+#354 on macOS 15.8.2. This confirms an intermittent oracle-only failure for
+this exact case; the underlying Uvicorn/TLS scheduling cause remains unknown.
+The parity diagnostic now retains the candidate observation when the oracle
+fails, so the two sides remain independently reviewable. These local runs used
+revision `1859f19` with a dirty worktree containing harness, benchmark-policy,
+and documentation edits; treat them as diagnostic evidence, not release
+qualification.
 
 ## Exact-main evidence update — 2026-11-04
 
