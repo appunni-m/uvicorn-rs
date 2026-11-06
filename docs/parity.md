@@ -4,30 +4,31 @@
 
 <a id="current-source-status-2026-11-02"></a>
 <a id="current-source-status-2026-11-06"></a>
+<a id="current-source-status-2026-11-07"></a>
 
-## Current source status (2026-11-06)
+## Current source status (2026-11-07)
 
-PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) at head
-`a9974d21b8ec06f444c629f175ecd363a1c760c9` has hosted installed-wheel parity
-evidence in CI [#712](https://github.com/appunni-m/uvicorn-rs/actions/runs/42255484334).
-The public parity job passed 786/786. The macOS ARM64 and Windows x86-64
-candidate package jobs also completed their platform parity and consumer checks
-successfully. The named custom protocol, TLS factory/ALPN, and response
-capacity inputs are included in this evidence.
+Main CI [#42189108870](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870)
+on `24f5b6a2afcab0b58adb945427e585a16d7b0e0d` passed installed-wheel public
+parity and candidate package/consumer checks. PR CI
+[#714](https://github.com/appunni-m/uvicorn-rs/actions/runs/42265761156)
+also passed its installed-wheel parity and platform candidate checks. The named
+custom protocol, TLS factory/ALPN, and response-capacity inputs are included in
+that parity evidence.
 
-CI #712's unified coverage job is still running its complete three-repeat
-matrix; there is no final 100% report yet. The active release goal requires
-both exact-source raw region/line coverage and an accepted independent
-Coverage-MCP review bound to that report, along with the run, build, artifact,
-and hash identities.
+The main baseline's unified report is 100% (15,061/15,061 regions and
+11,075/11,075 lines, three repeats). PR CI #714's coverage runner shut down
+after its first pass, so it produced no report for that source. An accepted
+independent Coverage-MCP review is also required for the final exact-source
+report.
 
-The current PR head has no complete three-system benchmark. Benchmark [#358](https://github.com/appunni-m/uvicorn-rs/actions/runs/42179655798)
-completed on earlier develop commit `5ac287dbcd375b3d4e8967c10b2f43b2e97c278b`;
-it shows workload-specific results and HTTP/1/WebSocket regressions. The later
-main attempt [#359](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
-failed on macOS stock-Uvicorn WebSocket timeouts and produced no aggregate.
-Neither qualifies PR #24. The focused ARM64 upload diagnosis and final matched
-three-system matrix remain open.
+The latest main benchmark [#42189108882](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
+passed Linux x86-64 and Linux ARM64, but macOS ARM64 failed before benchmark
+categories when its stock Uvicorn WebSocket oracle timed out. The aggregate
+failed, and the focused Linux ARM64 upload trace was skipped. The final matched
+three-system matrix and performance decision remain open. A prior-source
+complete matrix shows workload-specific results and HTTP/1/WebSocket
+regressions; it does not establish a broad FastAPI speedup.
 
 ### Historical source status (2026-11-03)
 

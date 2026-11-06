@@ -10,21 +10,28 @@
 <a id="current-unified-coverage-status-2026-11-04"></a>
 <a id="current-unified-coverage-status-2026-11-05"></a>
 <a id="current-unified-coverage-status-2026-11-06"></a>
+<a id="current-unified-coverage-status-2026-11-07"></a>
 
-## Current unified coverage status (2026-11-06)
+## Current unified coverage status (2026-11-07)
 
-PR #24 head `a9974d21b8ec06f444c629f175ecd363a1c760c9` is being checked by CI
-[#712](https://github.com/appunni-m/uvicorn-rs/actions/runs/42255484334). Its
-full three-repeat parity/coverage job is still running, so no final coverage
-report or totals are available yet. The release gate requires 100% raw
-executable regions and lines, complete attribution, three passing ASGI and
-native repeats, and recorded source, build, run, artifact, report, context and
-file hashes. The current release goal also requires an accepted independent
-Coverage-MCP review bound to this exact report; the previous waiver wording is
-superseded.
+Exact-main CI [#42189108870](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870)
+on `24f5b6a2afcab0b58adb945427e585a16d7b0e0d` passed all 1,453 cases (1,194
+ASGI and 259 native), with three ASGI and three native repeats, zero failures,
+and complete attribution. The raw report records **15,061/15,061 regions and
+11,075/11,075 lines**. Its artifact is
+[#13494831300](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870/artifacts/13494831300),
+SHA-256 `d1f71e1c23bbc5a88e5620dc668f0809ec0caf48e4bf964a893da90f1ae09015`.
 
-The previous exact-main and PR #23 reports below are historical and do not
-qualify PR #24.
+This clears the coverage amount gate on the main baseline, but not the final
+candidate. PR CI [#714](https://github.com/appunni-m/uvicorn-rs/actions/runs/42265761156)
+was shut down by the runner after pass 1/3 and produced no report. The required
+independent Coverage-MCP review is still missing. The review attempt against
+the main report failed because the local daemon did not become healthy; its log
+reports a busy daemon on port 59471 and closed connections. Re-run the review
+after restoring the daemon, then repeat it on the final exact-source report.
+
+The main report qualifies only commit `24f5b6a2afcab0b58adb945427e585a16d7b0e0d`;
+it does not qualify the later PR #24 source.
 
 ### Historical unified coverage status (2026-11-05)
 

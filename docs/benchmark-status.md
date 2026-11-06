@@ -12,12 +12,17 @@
 This attempt did not produce a validated three-system aggregate. No performance result was generated or substituted. The last complete exact-main report in [benchmark-results.md](benchmark-results.md) remains unchanged; the later complete develop matrix #358 is linked below and does not qualify PR #24. Inspect the [workflow artifacts and logs](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882) for this attempt.
 <!-- END GENERATED LATEST ATTEMPT -->
 
-## PR #24 benchmark status (2026-11-06)
+## PR #24 benchmark status (2026-11-07)
 
-The current PR #24 head `a9974d21b8ec06f444c629f175ecd363a1c760c9` has not
-been benchmarked. CI #712 parity and candidate platform consumers passed; its
-exact-source coverage job is still running. The latest complete three-system
-report below uses an earlier develop source and cannot qualify this candidate.
+The current final PR source has not completed a benchmark. The latest main run
+[#42189108882](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
+passed Linux x86-64 and Linux ARM64. macOS ARM64 stopped at the stock Uvicorn
+WebSocket oracle timeout before category measurements, and the aggregate
+failed. The focused Linux ARM64 upload trace was skipped. The retained log
+shows the timeout on an encoded `/ws-scope-echo` request with duplicate headers
+and subprotocols. The run does not establish a candidate failure or a valid
+three-system result. Isolate that reference case and record candidate-side
+behavior before accepting a narrow reference-only exception.
 
 ## Latest complete three-system matrix before PR #24 (2026-11-06)
 

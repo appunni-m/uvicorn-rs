@@ -18,41 +18,38 @@ Use these state labels precisely:
 <a id="current-release-gates-2026-11-04"></a>
 <a id="current-release-gates-2026-11-05"></a>
 <a id="current-release-gates-2026-11-06"></a>
+<a id="current-release-gates-2026-11-07"></a>
 
-## Current release gates (2026-11-06)
+## Current release gates (2026-11-07)
 
 PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) is open from
-`develop` to `main`. CI [#712](https://github.com/appunni-m/uvicorn-rs/actions/runs/42255484334)
-is running on develop commit `a9974d21b8ec06f444c629f175ecd363a1c760c9`.
-Installed-wheel parity passed 786/786; Rust quality, minimum-version
-compilation, native composition, all three candidate platform package/consumer
-jobs, and the CPython 3.9 floor consumer passed. Its complete three-repeat
-coverage job is still in progress; no current-source totals or raw artifact are
-available yet. The active release goal requires an accepted independent
-Coverage-MCP review bound to that final-source report, as well as 100% regions
-and lines and complete passing repeats.
+`develop` to `main`. Exact-main CI [#42189108870](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870)
+on `24f5b6a2afcab0b58adb945427e585a16d7b0e0d` passed installed-wheel parity,
+native composition, package consumers, and three-repeat coverage at 100%
+(15,061/15,061 regions and 11,075/11,075 lines). This is a baseline, not final
+candidate evidence. PR CI [#714](https://github.com/appunni-m/uvicorn-rs/actions/runs/42265761156)
+passed parity and candidate consumers, but the runner shut down its coverage
+job after pass 1/3, before producing a report. The PyPI metadata summary
+correction must be included in the final source and its candidate artifacts
+rebuilt. That final source still needs complete CI and an accepted independent
+Coverage-MCP review.
 
-The latest complete three-system matrix is run
-[#358](https://github.com/appunni-m/uvicorn-rs/actions/runs/42179655798) on
-earlier develop commit `5ac287dbcd375b3d4e8967c10b2f43b2e97c278b`. The later
-main attempt [#359](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
-failed when the macOS stock-Uvicorn WebSocket oracle timed out before scope and
-produced no aggregate. That run predates the narrow reference-only exception
-policy now on PR #24; a complete matched matrix on the current source is still
-required. The prior-source report shows workload-specific results, including
-HTTP/1 validated-route and WebSocket text-echo regressions, and does not
-establish a broad FastAPI speedup. After current parity and coverage complete,
-run the focused Linux ARM64 upload trace, then the final matched matrix.
+The latest main benchmark [#42189108882](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
+passed Linux x86-64 and Linux ARM64. macOS ARM64 failed at the stock-Uvicorn
+WebSocket oracle timeout before categories ran, so the aggregate is incomplete.
+The focused Linux ARM64 upload trace was skipped. A final matched three-system
+matrix and honest performance decision remain required. Prior complete results
+show workload-specific gains and regressions, with no broad FastAPI speedup.
 
-CI #710 built candidate packages and passed their current consumer jobs. The
-Linux artifact contains both Cargo crates, the wheel, and the sdist; the
-candidate archives, wheel metadata, and consumer receipts were inspected. A
-one-line correction to the Windows consumer scope description is now on PR #24;
-the revised Windows receipt and final bundle still need hosted verification.
+Main CI #421891 built the Linux Cargo archives, wheel, and sdist, and passed
+its Linux, macOS, Windows, and Python-floor consumer checks. The artifacts are
+from the main baseline and predate the PyPI metadata summary correction, so
+they are not the final candidate. Earlier PR CI #712 artifacts below are also
+superseded and must not be published.
 Registry queries on 2026-11-06 found both Cargo releases at 0.2.1, with no
 0.3.0; PyPI returns 404 for `uvicorn-rs`.
 
-| CI #712 candidate | Artifact | ZIP SHA-256 | Contents and check |
+| Superseded CI #712 artifact | Artifact | ZIP SHA-256 | Contents and check |
 | --- | --- | --- | --- |
 | Linux x86-64 | [13523013492](https://github.com/appunni-m/uvicorn-rs/actions/runs/42255484334/artifacts/13523013492) | `f4e0f01dc354e64bdfa333e3cf21123bda2a0682caab38a8f3442ee3da600694` | Cargo archives, wheel, and sdist; package and clean-consumer checks passed |
 | macOS ARM64 | [13524965653](https://github.com/appunni-m/uvicorn-rs/actions/runs/42255484334/artifacts/13524965653) | `44b2c6efc5775e363c720f810e0bf9313c224fa381c6b36b5b23f8f4f12922bf` | Wheel and package checks passed; clean consumer passed |

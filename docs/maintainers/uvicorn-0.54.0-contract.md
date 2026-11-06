@@ -7,20 +7,19 @@ the Kata owner for implementation, and the parity evidence
 route. It is version scoped; it does not claim that uvicorn-rs-py is currently
 a drop-in replacement.
 
-## Current qualification status — 2026-11-06
+## Current qualification status — 2026-11-07
 
-PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) CI
-[#710](https://github.com/appunni-m/uvicorn-rs/actions/runs/42235051720)
-passes installed-wheel parity on Linux x86-64 and macOS ARM64 (786/786 each).
-Windows raw parity is 757/759 with two exact stock-Uvicorn worker failures
-retained under narrow acceptance policies; the candidate's six worker
-lifecycle contracts pass. The named custom HTTP/WebSocket hooks,
-`ssl_context_factory`, ALPN, and response-capacity inputs pass on the applicable
-platforms. The complete unified coverage job remains in progress, and this PR
-head has no complete benchmark. The maintainer waived separate Coverage-MCP
-review on 2026-11-05; exact-source 100% raw coverage remains required. See the
-[current user-facing status](../uvicorn-compatibility.md#current-status-2026-11-06)
-for the up-to-date release view.
+Main CI [#42189108870](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870)
+on `24f5b6a2afcab0b58adb945427e585a16d7b0e0d` passed installed-wheel parity,
+the named custom HTTP/WebSocket hooks, `ssl_context_factory`, ALPN,
+response-capacity inputs, candidate consumers, and three-repeat unified
+coverage at 100% regions and lines. PR CI
+[#714](https://github.com/appunni-m/uvicorn-rs/actions/runs/42265761156)
+passed parity and candidate consumers, but its coverage runner shut down after
+pass 1/3. The PR source has no accepted independent Coverage-MCP review and no
+complete benchmark. The current release goal requires both for the final
+source. See the [current user-facing status](../uvicorn-compatibility.md#current-status-2026-11-07)
+for the release gate view.
 
 ## Acceptance of known differences
 

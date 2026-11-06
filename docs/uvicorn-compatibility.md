@@ -1,13 +1,16 @@
 # Can I replace Uvicorn?
 
 PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) is the active
-replacement candidate. On its current hosted head `a9974d21b8ec06f444c629f175ecd363a1c760c9`,
-CI [#712](https://github.com/appunni-m/uvicorn-rs/actions/runs/42255484334)
-has passed installed-wheel public parity (786/786), native composition, Rust
-checks, all three candidate package/consumer jobs, and the Python 3.9 floor
-consumer. The three-repeat unified coverage job is still running; no final
-100% report exists for this source yet. The current release goal also requires
-an accepted independent Coverage-MCP review bound to that exact raw report.
+replacement candidate. Main CI [#42189108870](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870)
+passed installed-wheel parity, all three-repeat unified coverage (1,453/1,453
+cases, 15,061/15,061 regions, 11,075/11,075 lines), and candidate package
+consumers on `24f5b6a2afcab0b58adb945427e585a16d7b0e0d`. That report is bound to
+the main baseline, not the final PR source. Earlier PR CI
+[#714](https://github.com/appunni-m/uvicorn-rs/actions/runs/42265761156)
+passed public parity and package consumers, but its coverage runner shut down
+after the first of three passes and produced no report. A PyPI metadata summary
+correction is prepared on `develop`; wheels built before that correction must
+be rebuilt and checked on the final PR source.
 
 The custom HTTP/WebSocket protocol, `ssl_context_factory`, ALPN, and
 header/trailer-capacity inputs are included in the passing public parity
@@ -25,25 +28,27 @@ upstream `uvicorn` and `uvicorn-rs` in separate environments. Use the
 <a id="current-status-2026-11-04"></a>
 <a id="current-status-2026-11-05"></a>
 <a id="current-status-2026-11-06"></a>
+<a id="current-status-2026-11-07"></a>
 
-## Current status (2026-11-06)
+## Current status (2026-11-07)
 
-CI #712 on PR #24 is the latest hosted compatibility evidence. The installed-
-wheel public parity job passed 786/786; the macOS ARM64 and Windows x86-64
-candidate jobs also completed their platform parity and consumer checks
-successfully. The three-repeat coverage job remains in progress. The active
-release goal requires final-source 100% raw coverage plus an accepted
-independent Coverage-MCP review; the earlier waiver wording is superseded.
+Main CI [#42189108870](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870)
+on `24f5b6a2afcab0b58adb945427e585a16d7b0e0d` passed installed-wheel public
+parity, native composition, package consumers, and the full three-repeat
+coverage gate at 100% regions and lines. This is a baseline result. PR #24's
+later CI [#714](https://github.com/appunni-m/uvicorn-rs/actions/runs/42265761156)
+passed public parity and candidate consumers, but the coverage runner was shut
+down after pass 1/3, before it produced a report. The required independent
+Coverage-MCP receipt is still missing; the local daemon did not become healthy
+when queried against the main report.
 
-The complete three-system benchmark [#358](https://github.com/appunni-m/uvicorn-rs/actions/runs/42179655798)
-uses earlier develop commit
-[`5ac287dbcd375b3d4e8967c10b2f43b2e97c278b`](https://github.com/appunni-m/uvicorn-rs/commit/5ac287dbcd375b3d4e8967c10b2f43b2e97c278b),
-not PR #24. The later main attempt
-[#359](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
-failed in the macOS Uvicorn WebSocket oracle and produced no aggregate. A
-focused ARM64 upload trace and a complete current-source benchmark remain
-open. Final artifact qualification and publication remain open. The
-maintainer's real application trial follows repository completion.
+The latest main benchmark [#42189108882](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
+passed Linux x86-64 and Linux ARM64, but macOS ARM64 stopped at the stock
+Uvicorn WebSocket oracle timeout and the aggregate failed. The focused Linux
+ARM64 upload trace was skipped. A complete current-source matrix and its
+performance decision remain open. Final candidate rebuild, qualification, and
+publication remain open. The maintainer's real application trial follows
+repository completion.
 
 ### Historical PR #23 follow-up
 

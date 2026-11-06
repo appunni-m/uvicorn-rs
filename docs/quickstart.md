@@ -52,15 +52,14 @@ measurements, and restore upstream Uvicorn.
 
 ## Compatibility evidence
 
-The CI #637 installed-wheel matrix passed 786/786 cases on Linux x86-64 and
-macOS ARM64. Windows passed 758/759 raw comparisons, with one captured
-stock-Uvicorn startup defect. Focused CI #638 qualifies narrow startup and
-shutdown reference-defect policies while requiring all three candidate worker
-lifecycles to pass independently. Linux/macOS package consumers and the
-separate Python 3.9 floor consumer pass. Full Windows packaging, strict
-coverage acceptance, final-source review/qualification and benchmarks remain
-open, so the 0.3.0 distribution is still unpublished. See the
-[compatibility status](uvicorn-compatibility.md) and
-[support matrix](support-matrix.md) for scope and remaining gates. The
-maintainer will perform the real-application trial after the repository
-release gates are complete.
+Main CI [#42189108870](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870)
+passed installed-wheel parity, candidate consumers, and three-repeat unified
+coverage at 100% on its recorded source. The final PR source still needs its
+own complete coverage and accepted Coverage-MCP review. The latest benchmark
+[#42189108882](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
+is incomplete after a stock Uvicorn WebSocket timeout on macOS, and the focused
+Linux ARM64 upload trace remains open. The PyPI distribution is not yet
+published; candidate artifacts must be rebuilt after the metadata summary
+correction. See the [compatibility status](uvicorn-compatibility.md) and
+[support matrix](support-matrix.md) for remaining gates. The maintainer will
+perform the real-application trial after repository release gates are complete.

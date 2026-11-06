@@ -1,17 +1,17 @@
 # Deployment guidance
 
 The `uvicorn-rs` 0.3.0 PyPI release is still being qualified and is not
-published. CI [#710](https://github.com/appunni-m/uvicorn-rs/actions/runs/42235051720)
-passed Linux x86-64 and macOS ARM64 installed-wheel parity at 786/786. Windows
-has 757/759 raw comparisons; two exact Uvicorn worker-reference failures are
-retained under narrow policies, while the candidate worker contracts pass.
-Candidate package consumers pass on Linux, macOS and Windows. The exact-source
-coverage matrix is still running, and a complete three-system benchmark for
-this candidate is not available. No separate Coverage-MCP review is required;
-the final raw report must still record 100% regions and lines with its source,
-run, build and artifact identities. See the [source-bound receipts](uvicorn-compatibility.md)
-and [support matrix](support-matrix.md), then evaluate the released candidate
-with your application before deploying it.
+published. Main CI [#42189108870](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870)
+passed installed-wheel parity, package consumers, and three-repeat unified
+coverage at 15,061/15,061 regions and 11,075/11,075 lines. The independent
+Coverage-MCP receipt is still missing, and that main report does not qualify
+the final PR source. The latest benchmark [#42189108882](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
+is incomplete because the stock Uvicorn WebSocket oracle timed out on macOS;
+the focused Linux ARM64 upload trace also remains open. Final-source CI and
+candidate artifact verification are required after the PyPI metadata summary
+correction. See the [source-bound receipts](uvicorn-compatibility.md) and
+[support matrix](support-matrix.md), then evaluate the released candidate with
+your application before deploying it.
 
 ## Bind and run
 
