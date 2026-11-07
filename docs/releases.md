@@ -23,36 +23,33 @@ Use these state labels precisely:
 ## Current release gates (2026-11-07)
 
 PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) remains open from
-`develop` to `main`, currently at `c1011d50f6eb6841b69488fe7b4925f153e66cd1`.
-Its last full CI, [#42277312616](https://github.com/appunni-m/uvicorn-rs/actions/runs/42277312616),
-passed on the earlier PR head `df77c111`; the current head has only the focused
-HTTP/3 diagnostic result so far. Exact-main CI
+`develop` at `e8b5d6bdb33ae7c8edebcfc233ac28363234977a` to `main`.
+PR CI [#716 / run 42310334382](https://github.com/appunni-m/uvicorn-rs/actions/runs/42310334382)
+passed installed-wheel public parity, native composition, the Python 3.9
+consumer, and Linux, macOS, and Windows package/consumer jobs. Its three-repeat
+unified coverage is 15,061/15,061 regions and 11,075/11,075 lines for synthetic
+merge source `f8d25698b98e630e9d77e7da1bbc670c9ebb0fd4`; the independent
+Coverage-MCP review of that source and report is accepted. Exact-main CI
 [#42189108870](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870)
-passed on `24f5b6a2afcab0b58adb945427e585a16d7b0e0d`: 1,453 cases, three ASGI
-and three native repeats, 15,061/15,061 regions, and 11,075/11,075 lines. Its
-raw coverage artifact [13494831300](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870/artifacts/13494831300)
-has digest `sha256:d1f71e1c23bbc5a88e5620dc668f0809ec0caf48e4bf964a893da90f1ae09015`.
-Main CI also passed installed-wheel parity, native composition, the Python
-3.9 consumer, and Linux, macOS, and Windows package/consumer jobs. The current
-release-evidence workflow edits are local and still need review and hosted CI.
+is still for the older `24f5b6a2afcab0b58adb945427e585a16d7b0e0d` source and
+does not qualify the PR changes. Final-main CI and a new final-source review
+are required after merge.
 
-The exact-main three-system benchmark
-[#42189108882](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
-failed during the macOS ARM64 FastAPI preflight: stock Uvicorn's WebSocket
-oracle timed out before returning the response to `ws-scope-echo`. Since the
-preflight did not match the documented candidate-only TLS WebSocket exception,
-the benchmark stopped before producing an accepted aggregate. The later PR
-benchmark [#42288036588](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588)
-also remained incomplete: Linux ARM64 Hypercorn 0.18.0 asyncio timed out in
-HTTP/3 `fastapi-validated-route` repetition 4 after 4,954 successful responses.
-Focused diagnostic [#42307094156](https://github.com/appunni-m/uvicorn-rs/actions/runs/42307094156)
-passed five ARM64 repetitions on the traced Hypercorn HTTP/3 workload, but
-tracing invalidates timing and the prior timeout did not recur. The bounded
-512-event traces show normal stream mapping and response sends in the captured
-window, with no missing-map or response-after-close anomaly. The cap means the
-trace does not establish the earlier timeout's event ordering or cause and does
-not qualify the benchmark. No broad FastAPI speedup is established; available
-HTTP/1.1 validated-route measurements show regressions.
+The full matched benchmark
+[#361 / run 42288036588](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588)
+is incomplete: Linux ARM64 Hypercorn 0.18.0 asyncio timed out in the HTTP/3
+`fastapi-validated-route` workload. Current-source upload diagnostic
+[#363 / run 42323833577](https://github.com/appunni-m/uvicorn-rs/actions/runs/42323833577)
+completed three paired ARM64 attempts on kernel 6.8.0-1070-azure without an
+HTTP/1 upload timeout. Its artifact
+[13554486318](https://github.com/appunni-m/uvicorn-rs/actions/runs/42323833577/artifacts/13554486318)
+contains request and server traces; all six ASGI captures report zero receive
+waits over 100 ms. This profiling-only diagnostic does not reproduce or explain
+the historical upload timeout and cannot qualify performance. The current
+source still needs the full matched ordinary-FastAPI matrix on Linux x86-64,
+Linux ARM64, and macOS ARM64, with one Tokio thread and throughput, latency,
+CPU, and memory reported. Partial results show HTTP/1 route regressions; no
+general FastAPI speedup is established.
 
 Exact-main CI's platform package and consumer jobs passed, but a checksum-bound
 release-candidate bundle for the final merged source still needs assembly and
@@ -73,19 +70,25 @@ immediately before publication. The current release order is to publish Cargo
 locally first, verify the exact versions and checksums, and then publish PyPI
 `uvicorn-rs` through `release.yml`. The workflow checks that the Cargo versions
 are registry-visible and match the candidate archives before PyPI publication.
-The release-evidence workflow edits and complete benchmark acceptance remain
-open. Exact-source raw coverage is already 100% on current `main`; an
-independent Coverage-MCP receipt is not a release gate. Candidate assembly must
-revalidate the same coverage source, run, artifact, report, and build identities.
+The complete benchmark remains open. Exact-source raw coverage is already 100%
+on the older current `main`, but it does not qualify the PR source. The active
+release goal requires an accepted independent Coverage-MCP receipt bound to the
+final source and raw report. Candidate assembly must revalidate that coverage
+source, run, artifact, report, build, and receipt identity.
+The current local `develop` draft now selects and validates the exact CI
+attempt's Coverage-MCP handoff in `candidate.yml`, stores the review selection
+with the checksummed candidate, and replays that verification in `release.yml`.
+These workflow edits still need hosted validation before the gate is considered
+operational.
 
 ### Earlier release-gate wording (2026-11-05)
 
-At this snapshot, the active goal required an independent Coverage-MCP review
-for the final clean source. On 2026-11-07, the maintainer confirmed that a
-separate review receipt is not a release gate. Exact source, a complete passing
-matrix, 100% regions and lines, and recorded artifact identities remain
-mandatory. The exact-main #661 report below is historical; the final candidate
-still needs its own exact-source raw report and evidence identity.
+At this 2026-11-05 snapshot, independent Coverage-MCP review was required for
+the final clean source. A later waiver was recorded on 2026-11-07, but the
+active release goal has since reinstated the accepted final-source review.
+Exact-source 100% regions and lines, a complete passing matrix, and recorded
+artifact identities remain mandatory. The exact-main #661 report below is
+historical; the final source needs its own raw report and review receipt.
 
 Exact-main CI [#661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
 passed on `feb955d2758166ad8c4b519903fd1318b29e7d2d`: all 1,453 coverage
@@ -217,8 +220,8 @@ is selected-case evidence, not full-suite coverage. The later Rust error-mapping
 fix, WebSocket close-path simplification, and parity input additions make the
 earlier full draft report stale for the current source and inventory. This
 historical snapshot recorded a temporary waiver of separate Coverage-MCP
-review; the active 2026-11-05 release goal supersedes it and requires an
-accepted independent review bound to the final exact-source report.
+review; the active release goal requires an accepted independent review bound
+to the final exact-source report.
 
 Benchmark run
 [`39689988939`](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939)

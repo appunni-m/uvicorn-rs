@@ -52,14 +52,16 @@ measurements, and restore upstream Uvicorn.
 
 ## Compatibility evidence
 
-PR CI [#42277312616](https://github.com/appunni-m/uvicorn-rs/actions/runs/42277312616)
-passed the installed-wheel parity matrix, candidate consumers, and three-repeat
-unified coverage at 100% regions and lines. Coverage-MCP reviewed all unfiltered
-pages for the PR merge source. The current matched benchmark
-[#42288036588](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588)
-completed with an incomplete Linux ARM64 HTTP/3 reference category; x86-64 and
-macOS ARM64 completed. Final main-source CI and candidate artifact verification
-remain required. The PyPI distribution is not yet published.
+PR #24 CI [#716](https://github.com/appunni-m/uvicorn-rs/actions/runs/42310334382)
+passed installed-wheel Uvicorn 0.54.0 parity, candidate consumers and unified
+coverage at 100% regions and lines for synthetic merge source
+`f8d25698b98e630e9d77e7da1bbc670c9ebb0fd4`. An accepted Coverage-MCP review is
+bound to that PR source; final-main CI and a new final-source review remain
+required. The full matched benchmark is incomplete after a Linux ARM64 HTTP/3
+Hypercorn reference timeout. Current-source diagnostic
+[#363](https://github.com/appunni-m/uvicorn-rs/actions/runs/42323833577) did not
+reproduce the historical HTTP/1 upload timeout and is not performance evidence.
+Final main-source candidate verification and PyPI publication remain pending.
 See the [compatibility status](uvicorn-compatibility.md) and
 [support matrix](support-matrix.md) for the current gates. The maintainer will
 perform the real-application trial after repository release gates are complete.

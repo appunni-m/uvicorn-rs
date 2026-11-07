@@ -1,16 +1,18 @@
 # Deployment guidance
 
 The `uvicorn-rs` 0.3.0 PyPI release is still being qualified and is not
-published. PR #24 CI [#42277312616](https://github.com/appunni-m/uvicorn-rs/actions/runs/42277312616)
+published. PR #24 CI [#716](https://github.com/appunni-m/uvicorn-rs/actions/runs/42310334382)
 passed installed-wheel parity, package consumers, and three-repeat unified
-coverage at 15,061/15,061 regions and 11,075/11,075 lines for its merge source.
-The current benchmark [#42288036588](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588)
-is partial because the Linux ARM64 Hypercorn HTTP/3 reference timed out waiting
-for response headers; x86-64 and macOS ARM64 completed. After merge, run final
-main-source CI and qualify the exact Cargo/PyPI candidate artifacts and clean
-consumers. See the [compatibility status](uvicorn-compatibility.md) and
-[support matrix](support-matrix.md), then evaluate the released candidate with
-your application before deploying it.
+coverage at 15,061/15,061 regions and 11,075/11,075 lines for synthetic merge
+source `f8d25698b98e630e9d77e7da1bbc670c9ebb0fd4`. Its independent
+Coverage-MCP review is accepted and source-bound; final main-source CI and a new
+review remain required. The full benchmark is incomplete because Linux ARM64
+Hypercorn HTTP/3 timed out waiting for response headers. Focused current-source
+upload diagnostic #363 did not reproduce the historical HTTP/1 timeout and is
+not valid performance evidence. Final-main candidate artifacts and clean
+consumers are still required. See the [compatibility status](uvicorn-compatibility.md)
+and [support matrix](support-matrix.md), then evaluate the released candidate
+with your application before deploying it.
 
 ## Bind and run
 

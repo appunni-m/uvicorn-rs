@@ -3,12 +3,13 @@
 This page describes the current `uvicorn-rs` source interfaces against the
 Uvicorn 0.54.0 contract. The `uvicorn` namespace exposes its `run`, `Config`,
 and `Server` call signatures, with protocol and transport work in the Rust
-engine and Python at the ASGI integration boundary. PR CI
-[#42277312616](https://github.com/appunni-m/uvicorn-rs/actions/runs/42277312616)
-passed the indexed public parity matrix and the named custom protocol,
-`ssl_context_factory`, ALPN, and response-capacity cases. Release qualification
-is still open; see the [current status](uvicorn-compatibility.md) for final-main
-coverage, benchmark, and artifact gates.
+engine and Python at the ASGI integration boundary. PR #24 CI
+[#716](https://github.com/appunni-m/uvicorn-rs/actions/runs/42310334382) passed
+the installed-wheel public parity matrix and the named custom protocol,
+`ssl_context_factory`, ALPN, and response-capacity cases on synthetic merge
+source `f8d25698b98e630e9d77e7da1bbc670c9ebb0fd4`. Release qualification is
+still open; see the [current status](uvicorn-compatibility.md) for final-main
+coverage and review, benchmark, and artifact gates.
 
 ## CLI
 
@@ -19,7 +20,7 @@ uv run uvicorn examples.hello_asgi:app --host 127.0.0.1 --port 8000
 The CLI uses the 51 declared option definitions from Uvicorn 0.54.0. Its
 118-case process input matrix covers help/version output, imports, settings
 validation, environment precedence, and live requests; the complete current
-public parity matrix passed in PR CI #42277312616. The table describes the
+public parity matrix passed in PR CI #716. The table describes the
 observable behavior and selected evidence for each setting. It does not claim
 that every combination of values, protocols, and operating systems has been
 exercised.

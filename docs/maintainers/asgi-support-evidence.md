@@ -9,7 +9,7 @@ The [user-facing ASGI support matrix](../support-matrix.md) summarizes what the 
 
 The Python-free uvicorn-rs Cargo library is the Rust server. uvicorn-rs-py is the optional Python adapter for Python ASGI applications. Python application code remains on its owning asyncio or uvloop event loop; the Rust runtime handles network and protocol work, while application calls and ASGI messages cross the Python boundary.
 
-The confirmed PyPI distribution name is `uvicorn-rs`, following the project's `pillow-rs` naming convention. The root Cargo integration package and optional extra console script remain named `uvicorn-rs-py`; the installed compatibility command and import namespace are `uvicorn`. Exact-main CI has passed the indexed Uvicorn 0.54.0 installed-wheel matrix and package consumers, but the migration roll-up and final release-candidate assembly remain open. See [Uvicorn replacement status](../uvicorn-compatibility.md).
+The confirmed PyPI distribution name is `uvicorn-rs`, following the project's `pillow-rs` naming convention. The root Cargo integration package and optional extra console script remain named `uvicorn-rs-py`; the installed compatibility command and import namespace are `uvicorn`. PR #24 CI #716 passed the indexed Uvicorn 0.54.0 installed-wheel matrix, three-repeat 100% unified coverage, and package consumers. Its Coverage-MCP review is bound to the PR merge source; final-main CI, review, benchmark completion, and release-candidate assembly remain open. See [Uvicorn replacement status](../uvicorn-compatibility.md).
 
 This matrix records live-tested ASGI and protocol behavior. A passing ASGI case does not by itself establish Uvicorn CLI, Python API, worker, or reload compatibility. The Rust server remains independent of Starlette-RS and FastAPI-RS; they do not need it as a runtime dependency.
 
@@ -24,10 +24,10 @@ source lines**. The retained raw artifact is
 [13313323556](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662/artifacts/13313323556),
 SHA-256 `d7ce785d590e7195be7eaa57e7761b8acb182ac4475599e2ab43cbd45567745d`.
 The owner temporarily waived a separate Coverage-MCP review for this exact-main
-baseline; no review receipt is claimed. The maintainer's 2026-11-07 direction
-confirms that a separate MCP receipt is not required. The candidate workflow
-records and revalidates the exact report, context, build, artifact, and raw-file
-identities for the final source.
+baseline; no review receipt is claimed. That waiver is historical. The active
+release goal requires an accepted review bound to the final source and raw
+report. The candidate workflow records and revalidates the exact report,
+context, build, artifact, raw-file identities, and review receipt.
 
 The same CI run passed Linux x86-64, macOS ARM64 and Windows x86-64 package
 consumers, the Python 3.9 floor consumer, and the native FastAPI-RS →

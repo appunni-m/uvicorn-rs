@@ -9,12 +9,22 @@ a prerequisite for completing the repository work.
 ## Active release goal — 2026-11-07
 
 The current user-provided release goal requires exact-source raw unified
-coverage at 100% regions and lines. Per the maintainer's current direction, a
-separate independent Coverage-MCP review or receipt is not required. Record the
-source, run and attempt, raw artifact ID and digest, report and context hashes,
-build identity, and complete matrix evidence. Candidate qualification must
-revalidate the coverage identity against the same source, run, artifact, and
-report.
+coverage at 100% regions and lines plus an accepted independent Coverage-MCP
+review bound to the final source and raw report. Record the source, run and
+attempt, raw artifact ID and digest, report and context hashes, build identity,
+complete matrix evidence, and accepted review receipt. Candidate qualification
+must revalidate the coverage identity against the same source, run, artifact,
+report, and review.
+
+The current `develop` workflow draft makes the independent review a release
+gate. `candidate.yml` selects the successful Coverage-MCP handoff for the exact
+main CI run and attempt, revalidates its GitHub artifact identity, then verifies
+the retained raw report, projection, full page receipt, source, and build before
+recording a selection in the candidate bundle. `release.yml` replays that
+selection check against the bundled files before accepting the candidate. The
+handoff files are restored to their canonical `target/asgi-coverage-review`
+paths because those paths are part of the review receipt binding. These local
+workflow edits still need hosted CI on the resulting source.
 
 The raw coverage gate remains 100% for regions and lines, with three passing
 ASGI and native repeats, complete attribution, and zero failures or
@@ -22,12 +32,32 @@ infrastructure retries. Retain the source, run/attempt, artifact ID/digest,
 report/context hashes, build identity, and revalidate them during candidate
 qualification.
 
-## Historical review decisions — 2026-11-04 to 2026-11-05
+## Historical review decisions — 2026-11-04 to 2026-11-07
 
-The owner waived independent review on 2026-11-04, reinstated it, and waived it
-again on 2026-11-05. A later Kata update reinstated it on 2026-11-06; the
-maintainer's 2026-11-07 direction confirms that a separate MCP receipt is not
-required. Exact-source raw 100% coverage remains required.
+The owner waived independent review on 2026-11-04 and 2026-11-05, then
+reinstated it. A later 2026-11-07 update made the accepted final-source review
+part of the active release goal. Earlier waivers remain historical decisions;
+they do not waive the current gate.
+
+## Focused upload diagnostic — 2026-11-07
+
+Run [#363](https://github.com/appunni-m/uvicorn-rs/actions/runs/42323833577),
+artifact [13554486318](https://github.com/appunni-m/uvicorn-rs/actions/runs/42323833577/artifacts/13554486318),
+tested current source `e8b5d6bdb33ae7c8edebcfc233ac28363234977a` on Linux ARM64,
+kernel `6.8.0-1070-azure`, CPython 3.12.13, uvloop, 1 MiB uploads in 1 KiB
+writes, concurrency 8, with the recreated 5 ms timer and proactive 16 KiB peer
+reads. Three paired attempts completed with zero timeouts or failed requests.
+All six ASGI captures recorded zero receives over 100 ms. The traced candidate
+requests drained the full body and completed the HTTP response; the historical
+upload timeout remains unreproduced and its first-stalled boundary is unknown.
+
+This job is profiling-only: it used request and server tracing and must not be
+used as a performance result. The candidate's recorded throughput was about
+537–553 requests/s versus 744–755 for stock Uvicorn, but instrumentation makes
+that comparison invalid for release performance claims. The earlier full
+three-system benchmark remains incomplete; run the matched current-source
+matrix after the parity gate, with one Tokio thread, and report its uninstrumented
+measurements separately.
 
 ## Benchmark update — 2026-11-06
 
@@ -1473,8 +1503,9 @@ are recorded by 7t4g.
 **Work:** After the final-source unified coverage job passes, retain the exact
 raw artifact and record its source, CI run/attempt, artifact ID/digest, report
 and context hashes, build identity, complete file inventory, totals, and matrix
-status. A separate Coverage-MCP review is not required per the maintainer's
-direction. Do not rerun the matrix just to create the evidence record.
+status. An accepted independent Coverage-MCP review bound to the exact final
+source and raw report is also required. Do not rerun the matrix just to create
+the evidence record.
 
 **Close with:** The exact final-source report passes the complete three-repeat
 matrix, attribution and 100% regions/lines checks; the retained raw artifact

@@ -205,6 +205,37 @@ def check_repository_path_projection() -> None:
             raise AssertionError("unbound or inconsistent LLVM source paths must be rejected")
 
 
+def check_release_workflows_require_accepted_review() -> None:
+    candidate = (ROOT / ".github/workflows/candidate.yml").read_text(encoding="utf-8")
+    release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    candidate_steps = (
+        "coverage_mcp_handoff.py select-handoff",
+        "name: Download the selected exact-source Coverage-MCP handoff",
+        "coverage_mcp_handoff.py validate-handoff",
+        "coverage_mcp_handoff.py verify \\",
+        "coverage-mcp-selection.json",
+        '"schema": "uvicorn-rs-release-candidate@9"',
+    )
+    missing = [value for value in candidate_steps if value not in candidate]
+    if missing:
+        raise AssertionError(f"candidate workflow does not require and retain MCP review: {missing}")
+    if candidate.index(candidate_steps[0]) > candidate.index(candidate_steps[1]) \
+            or candidate.index(candidate_steps[1]) > candidate.index(candidate_steps[3]):
+        raise AssertionError("candidate workflow must select and download MCP evidence before verifying it")
+
+    release_steps = (
+        "coverage_mcp_handoff.py verify-selection",
+        'candidate.get("coverage_mcp") != expected_coverage_mcp',
+        '"uvicorn-rs-release-candidate@9"',
+        'coverage_mcp.get("schema") != "uvicorn-rs-coverage-mcp-selection@1"',
+    )
+    missing = [value for value in release_steps if value not in release]
+    if missing:
+        raise AssertionError(f"publication workflow does not revalidate retained MCP review: {missing}")
+    if release.index(release_steps[0]) > release.index(release_steps[1]):
+        raise AssertionError("publication workflow must verify the MCP selection before accepting candidate metadata")
+
+
 def main() -> int:
     # The installed-wheel exclusion audit must inspect this registry without
     # importing or executing the parity runner. A starred set expansion once
@@ -216,6 +247,7 @@ def main() -> int:
         raise AssertionError("native fault registry must remain literal and include TLS initialization selectors")
     check_uncovered_function_projection()
     check_repository_path_projection()
+    check_release_workflows_require_accepted_review()
     (ROOT / "target").mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="uvicorn-rs-coverage-handoff-", dir=ROOT / "target") as temp:
         root = Path(temp)
@@ -357,7 +389,7 @@ def main() -> int:
         run(str(ATTACH), "--report", str(broken_projection), "--output", str(broken_reviewed),
             "--receipt", str(broken_receipt),
             expected=1, detail="receipt omits later pages")
-    print("PASS exact raw release coverage without MCP; optional source-bound MCP handoff cases")
+    print("PASS exact raw release coverage with required source-bound MCP handoff cases")
     return 0
 
 

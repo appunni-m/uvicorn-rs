@@ -17,45 +17,37 @@ candidate workflow.
 
 ## Current status (2026-11-07)
 
-PR CI [#42277312616](https://github.com/appunni-m/uvicorn-rs/actions/runs/42277312616),
-attempt 1, tests PR head `df77c111533c8060384d7b5dad174951c9dd8518` at synthetic
-merge source `1a296b99b9525411a6cdcef74d1d7d89fedf114d`. The installed-wheel
-public parity matrix, native FastAPI-RS → Starlette-RS → Uvicorn-RS composition,
-Rust checks, Python 3.9 consumer, and Linux, macOS, and Windows candidate package
-and consumer jobs passed. The three-repeat unified matrix passed all 1,453
-cases, recording **15,061/15,061 regions and 11,075/11,075 lines**.
+PR #24 CI [#716](https://github.com/appunni-m/uvicorn-rs/actions/runs/42310334382),
+attempt 1, tested head `e8b5d6bdb33ae7c8edebcfc233ac28363234977a` at synthetic
+merge source `f8d25698b98e630e9d77e7da1bbc670c9ebb0fd4`. Installed-wheel public
+parity, native FastAPI-RS → Starlette-RS → Uvicorn-RS composition, Rust checks,
+the Python 3.9 consumer, and Linux, macOS, and Windows candidate package and
+consumer jobs passed. All 1,453 unified cases passed with three ASGI and three
+native repeats: **15,061/15,061 regions and 11,075/11,075 lines**.
 
-Coverage artifact [13539917811](https://github.com/appunni-m/uvicorn-rs/actions/runs/42277312616/artifacts/13539917811)
-has archive SHA-256
-`be266bf7c9c12c3b45c13d091f62fac70306e11eeb57c43189b920556b313639`; its raw
-report SHA-256 is `d727c43ac9f5603cb0e3ce2ae66702c65b8e45daae23c5655cbd9b000bb929d3`.
-An independent Coverage-MCP review of the compact projection covered all 45
-unfiltered region pages and the line page and validated against that merge
-source. This is supplemental PR evidence. Per the maintainer's current
-direction, no separate main-source MCP receipt is required; after merge, record
-the final main-source CI report and its 100% raw coverage totals.
+Coverage artifact [13552742902](https://github.com/appunni-m/uvicorn-rs/actions/runs/42310334382/artifacts/13552742902)
+has digest `sha256:6076a92a1771c314cb6882b65830f749791f65eb53da61f75a2657d7694e41fa`;
+its raw report SHA-256 is
+`45063184917fb9a55de1627962f2101d892f71f7155bcfb1e8ca35245ef43972`. The
+accepted independent Coverage-MCP receipt is bound to this PR merge source and
+report. This is pre-merge evidence only; final-main CI must produce a new
+100%-coverage report and accepted review.
 
-The current three-system benchmark
-[#42288036588](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588)
-completed with a partial aggregate: Linux x86-64 and macOS ARM64 completed all
-categories, while Linux ARM64 stopped in HTTP/3 after Hypercorn 0.18.0 asyncio
-`fastapi-validated-route` repetition 4 had one client timeout waiting for
-response headers. All three exact-binary public-parity gates passed. The
-aggregate does not qualify a complete three-system matrix, and available
-HTTP/1.1 FastAPI validated-route results are slower for the candidate. Focused upload diagnostic
-[#42285812866](https://github.com/appunni-m/uvicorn-rs/actions/runs/42285812866)
-completed three paired Linux ARM64 runs on kernel 7.0 with no request failures
-or timeouts; it did not reproduce the historical HTTP/1 15-second upload
-timeout or establish its cause. That diagnostic does not explain the distinct
-HTTP/3 Hypercorn timeout in #42288036588.
+The full matched benchmark
+[#361](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588) is
+incomplete: Linux ARM64 stopped in the Hypercorn asyncio HTTP/3 reference after
+a response-header timeout. Current-source focused upload diagnostic
+[#363](https://github.com/appunni-m/uvicorn-rs/actions/runs/42323833577) ran
+three paired attempts on kernel 6.8.0-1070-azure with no HTTP/1 upload timeout
+or failed requests. The diagnostic is profiling-only and cannot qualify
+performance. It does not explain the historical upload timeout or complete the
+three-system benchmark; the HTTP/1 validated-route results in the partial
+aggregate show regressions, so no general FastAPI speedup is claimed.
 
-Documentation build
-[#42277312707](https://github.com/appunni-m/uvicorn-rs/actions/runs/42277312707)
-passed for the PR source; deployment was skipped because this is not a `main`
-push. PR #24 remains open and no 0.3.0 package or tag has been published. Final
-main-source review, benchmark completion, and final candidate rebuild remain
-release gates. The maintainer's real FastAPI application trial follows release
-qualification.
+PR #24 remains open and no 0.3.0 package or tag has been published. Final-main
+CI, a new final-source Coverage-MCP review, a complete matched benchmark, and
+final candidate artifacts remain release gates. The maintainer's real FastAPI
+application trial follows repository release qualification.
 
 ### Historical PR #23 follow-up
 

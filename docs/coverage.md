@@ -14,35 +14,28 @@
 
 ## Current unified coverage status (2026-11-07)
 
-Exact-main CI
-[#42189108870](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870),
-attempt 1, tested clean source
-`24f5b6a2afcab0b58adb945427e585a16d7b0e0d`. All 1,453 cases (1,194 ASGI and
-259 native) passed through three ASGI and three native repeats with complete
-attribution. The raw report records **15,061/15,061 regions and 11,075/11,075
-lines**. Coverage artifact
-[#13494831300](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870/artifacts/13494831300)
+PR #24 CI [#716](https://github.com/appunni-m/uvicorn-rs/actions/runs/42310334382),
+attempt 1, tested head `e8b5d6bdb33ae7c8edebcfc233ac28363234977a` at synthetic
+merge source `f8d25698b98e630e9d77e7da1bbc670c9ebb0fd4`. All 1,453 cases (1,194
+ASGI and 259 native) passed through three ASGI and three native repeats with
+complete attribution. The raw report records **15,061/15,061 regions and
+11,075/11,075 lines**. Coverage artifact
+[#13552742902](https://github.com/appunni-m/uvicorn-rs/actions/runs/42310334382/artifacts/13552742902)
 has archive digest
-`sha256:d1f71e1c23bbc5a88e5620dc668f0809ec0caf48e4bf964a893da90f1ae09015`.
-This qualifies exact-main raw coverage. Candidate assembly still must record
-and revalidate the source, CI run/attempt, artifact, report, context, build,
-and complete file inventory. A separate Coverage-MCP review receipt is not a
-release requirement.
-
-PR CI [#42277312616](https://github.com/appunni-m/uvicorn-rs/actions/runs/42277312616)
-is supplemental pre-merge evidence for earlier PR head
-`df77c111533c8060384d7b5dad174951c9dd8518` at merge source
-`1a296b99b9525411a6cdcef74d1d7d89fedf114d`. Its raw report had the same
-100% totals, and its optional Coverage-MCP review covered all unfiltered
-pages. Neither item substitutes for the exact-main run above.
+`sha256:6076a92a1771c314cb6882b65830f749791f65eb53da61f75a2657d7694e41fa` and
+raw report SHA-256
+`45063184917fb9a55de1627962f2101d892f71f7155bcfb1e8ca35245ef43972`.
+Coverage-MCP accepted a source-bound review of the complete projection: 45/45
+unfiltered region pages (899/899 groups) and the complete line result, with no
+gaps. Final-main CI must produce a new exact-source raw report and accepted
+review; this PR evidence is supplemental.
 
 ### Historical unified coverage status (2026-11-05)
 
-The exact-source unified report must have 100% measured production regions and
-lines, and the complete matrix must pass three times. The candidate records and
-revalidates the source, CI run and attempt, artifact digest, report, context,
-build, and raw-file hashes. Per the maintainer's current direction, an
-independent Coverage-MCP transcript and receipt are not required.
+At that historical checkpoint, the exact-source unified report needed 100%
+regions and lines and the complete matrix needed three passing repeats. The
+active release goal now also requires an accepted independent Coverage-MCP
+review bound to the same final source and raw report.
 
 Exact-main CI [#661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
 passed on clean source `feb955d2758166ad8c4b519903fd1318b29e7d2d`, run
@@ -74,9 +67,10 @@ batch-timer invariant in the type and removes that unreachable state.
 A later follow-up handles the macOS TLS-over-Unix-socket `NotConnected`
 shutdown log mismatch found by CI #689. Because that follow-up changes
 `src/lib.rs`, CI #689 cannot be accepted as exact-source coverage even if its
-job completes; a fresh full report is required. The maintainer later confirmed
-that a separate source-bound Coverage-MCP receipt is not required; the final
-source still needs its own exact 100% raw coverage report.
+job completes; a fresh full report is required. A later waiver of the
+source-bound Coverage-MCP review was historical and has been reversed by the
+active release goal, which requires the accepted final-source review as well as
+the exact 100% raw coverage report.
 
 The matching three-system benchmark [#283](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681)
 also passed. Its aggregate artifact is
@@ -129,8 +123,9 @@ measurement does not qualify current source or complete release acceptance.
 
 The final-source report must retain both measured objects, pass strict replay,
 and record the exact source, run, artifact, report, context, and build
-identities. Coverage thresholds and source exclusions are unchanged. A
-separate Coverage-MCP receipt is not required by the maintainer.
+identities. Coverage thresholds and source exclusions are unchanged. The active
+release goal also requires an accepted Coverage-MCP review bound to that exact
+source and report.
 See the [release sequence](releases.md).
 
 ### Historical full report: CI #596 (2026-11-01)
@@ -3487,17 +3482,18 @@ uv run --python 3.12 --locked --group benchmark python scripts/check_ci_evidence
 
 CI accepts the exact-source raw report with `--allow-pending-mcp` during the
 raw evidence stage. This validates the complete indexed matrix, all three
-repeats, clean source and 100% normalized regions and lines. A separate
-Coverage-MCP receipt is not required by the maintainer. A failed matrix,
-missing counter, or uncovered region/line remains a failure.
+repeats, clean source and 100% normalized regions and lines. The later release
+qualification stage still requires an accepted independent Coverage-MCP review
+bound to the same source and raw report. A failed matrix, missing counter, or
+uncovered region/line remains a failure.
 
 ## Record exact-source release coverage
 
 Release coverage requires the complete exact-source report to pass 100% regions
 and lines, three full passing repeats, complete attribution, and clean source,
 build, run, artifact, report, context and raw-file identity checks. Candidate
-and publication jobs revalidate those raw evidence identities; a separate
-Coverage-MCP handoff is not required.
+and publication jobs revalidate those raw evidence identities and the accepted
+Coverage-MCP receipt bound to that report.
 
 For a local audit of a downloaded artifact, retain the artifact at
 `target/asgi-coverage/`, then create and validate the raw inventory:

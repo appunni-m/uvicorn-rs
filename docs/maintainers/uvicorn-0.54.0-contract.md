@@ -9,17 +9,19 @@ a drop-in replacement.
 
 ## Current qualification status — 2026-11-07
 
-PR CI [#42277312616](https://github.com/appunni-m/uvicorn-rs/actions/runs/42277312616)
+PR #24 CI [#716](https://github.com/appunni-m/uvicorn-rs/actions/runs/42310334382)
 passed installed-wheel parity, the named custom HTTP/WebSocket hooks,
 `ssl_context_factory`, ALPN, response-capacity inputs, candidate consumers,
 native composition, and three-repeat unified coverage at 100% regions and
-lines. A source-bound Coverage-MCP review of its merge source is complete. The
-current matched benchmark [#42288036588](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588)
-completed partially: x86-64 and macOS ARM64 completed all categories, while
-Linux ARM64 stopped in the HTTP/3 Hypercorn asyncio reference at
-`fastapi-validated-route` repetition 4 after a response-header timeout. The
-candidate parity gates passed on all systems, but a complete three-system
-benchmark and final main-source CI/artifact evidence remain required. See the
+lines for synthetic merge source `f8d25698b98e630e9d77e7da1bbc670c9ebb0fd4`.
+The independent Coverage-MCP review is accepted for that source. The full
+matched benchmark [#361](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588)
+is incomplete after Linux ARM64 stopped in the HTTP/3 Hypercorn asyncio
+reference at `fastapi-validated-route` with a response-header timeout. Current
+source diagnostic [#363](https://github.com/appunni-m/uvicorn-rs/actions/runs/42323833577)
+did not reproduce the HTTP/1 upload timeout on kernel 6.8.0-1070-azure; it is
+profiling-only and does not qualify performance. A complete three-system
+benchmark and final-main CI, review, and candidate artifacts remain required. See the
 [current user-facing status](../uvicorn-compatibility.md#current-status-2026-11-07).
 
 ## Acceptance of known differences
@@ -46,10 +48,10 @@ cleanup, second signal, or diagnostic wakeup connection needed for success.
 The stock-only reproducer and captured blocked-accept evidence are retained in
 [`tools/upstream/uvicorn-windows`](https://github.com/appunni-m/uvicorn-rs/tree/f0eef8911fa334c7a37a723db9fefc4ffee810f6/tools/upstream/uvicorn-windows).
 This rule does not waive raw 100% coverage, benchmark or artifact requirements.
-Per the maintainer's current direction, a separate independent Coverage-MCP
-review or receipt is not required. Final-main CI must still record the exact
-source raw report at 100% regions and lines with the complete passing matrix
-and retained run/artifact/build identities.
+The active release goal requires an accepted independent Coverage-MCP review
+bound to the final source and raw coverage report. Final-main CI must record the
+exact-source report at 100% regions and lines with the complete passing matrix
+and retained run, artifact, and build identities.
 
 The executable exception is
 `uvicorn-0.54.0-windows-two-worker-sigint-tcp-wakeup@2`, implemented in
@@ -199,8 +201,10 @@ CI #627's unified matrix completed its three repeats but missed two regions
 and one line. The latest focused coverage batch exercises the missing teardown
 path and removes a redundant WebSocket timer condition; seven related selected
 checks pass. This historical run is not final-source 100% coverage evidence.
-The maintainer later waived a separate Coverage-MCP review; the raw 100% gate
-remains required.
+The maintainer later waived a separate Coverage-MCP review for that historical
+snapshot; the raw 100% gate remained required. The active release goal now
+requires both the raw 100% gate and an accepted independent review for the final
+source.
 
 The default TLS floor follows [RFC 8996 sections 4 and 5](https://www.rfc-editor.org/rfc/rfc8996.html#section-4): TLS 1.0 and 1.1 must not negotiate. Selected live inputs verify rejection, admission of a TLS 1.2 control, and a healthy follow-up request. These checks establish the default listener floor, not every TLS configuration or custom-context behavior.
 
