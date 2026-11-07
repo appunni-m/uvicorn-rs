@@ -1,8 +1,9 @@
 # Release guide
 
 This guide defines how to prepare and publish uvicorn-rs releases.
-Candidate assembly, Cargo/PyPI publication, GitHub Releases, and documentation
-deployment are separate steps. A successful build is not a published release.
+Candidate qualification and registry/GitHub publication run as an automated
+tag-triggered workflow chain. Documentation deployment remains a separate
+workflow. A successful build alone is not a published release.
 
 Use these state labels precisely:
 
@@ -26,7 +27,7 @@ PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) merged to `main` as `2
 
 The complete earlier benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265) is bound to source `e8b5d6b`. It reports slower ordinary-FastAPI HTTP/1 route and WebSocket text-echo results, with workload-specific H2/H3 results; no broad FastAPI speedup is claimed. Focused upload diagnostic [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289) did not reproduce or explain the historical upload timeout. Exact-main benchmark #366 is now the qualifying run for commit `242f050`.
 
-Main docs build #314 passed on merge commit `242f050` before this documentation refresh. The updated pages still need the docs check. The active release goal requires a complete exact-source raw 100% report and an accepted independent Coverage-MCP review bound to that same source and report. PR #25 is being aligned with that requirement on `develop`; its merged main commit must receive its own CI, benchmark, artifact, review, and consumer evidence before tagging. The staged publication order remains local Cargo publication and registry-byte verification, followed by PyPI distribution `uvicorn-rs` through `release.yml`. No 0.3.0 package has been published.
+Main docs build #314 passed on merge commit `242f050` before this documentation refresh. The local strict MkDocs build passes for this update; the PR docs check will validate the hosted workflow. The active release goal requires a complete exact-source raw 100% report and an accepted independent Coverage-MCP review bound to that same source and report. PR #25 is being aligned with that requirement on `develop`; its merged main commit must receive its own CI, benchmark, artifact, review, and consumer evidence before tagging. No 0.3.0 package or tag has been published. Since both Cargo package names already exist and their Trusted Publisher entries are configured, a successful exact-source candidate will publish the missing Cargo versions automatically, then PyPI `uvicorn-rs`, verify registry bytes, and create the GitHub Release.
 
 | Superseded CI #712 artifact | Artifact | ZIP SHA-256 | Contents and check |
 | --- | --- | --- | --- |
@@ -34,18 +35,40 @@ Main docs build #314 passed on merge commit `242f050` before this documentation 
 | macOS ARM64 | [13524965653](https://github.com/appunni-m/uvicorn-rs/actions/runs/42255484334/artifacts/13524965653) | `44b2c6efc5775e363c720f810e0bf9313c224fa381c6b36b5b23f8f4f12922bf` | Wheel and package checks passed; clean consumer passed |
 | Windows x86-64 | [13523938563](https://github.com/appunni-m/uvicorn-rs/actions/runs/42255484334/artifacts/13523938563) | `7ea545070d73360a0f15beb8f6b68f4edf00ccfe877e3501387ff8e4db6d6988` | Wheel and package checks passed; clean consumer passed |
 
-The source has not been merged or published. The latest recorded audit found
-release controls and trusted publisher settings configured; verify them again
-immediately before publication. The current release order is to publish Cargo
-locally first, verify the exact versions and checksums, and then publish PyPI
-`uvicorn-rs` through `release.yml`. The workflow checks that the Cargo versions
-are registry-visible and match the candidate archives before PyPI publication.
+PR #25's release-readiness changes are on `develop` and have not yet merged.
+The latest recorded audit found release controls and Trusted Publisher
+settings configured; verify them again immediately before publication. A
+never-before-published Cargo package name requires a local bootstrap; both
+current names already exist on crates.io. An annotated version tag starts
+`candidate.yml`; a successful candidate automatically starts `release.yml`.
+It publishes missing Cargo versions through crates.io Trusted Publishing,
+publishes PyPI `uvicorn-rs`, verifies registry bytes, and creates the GitHub
+Release with artifact attestations. Identical already-published Cargo or PyPI
+bytes are verified and skipped. Build and test jobs have no registry
+credentials.
+
 The exact-source raw coverage gate requires 100% regions and lines, a complete
 passing matrix, and recorded source, run, artifact, report, context, and build
 identities, plus an accepted independent Coverage-MCP review bound to the same
 source and report. Candidate assembly revalidates the raw evidence against the
 final source commit. The tag-triggered candidate and publication workflows
 still need to run against the final main commit.
+
+## Workflow ownership
+
+| Readiness pillar | Workflow | Purpose |
+| --- | --- | --- |
+| Reliability and correctness | `ci.yml` | Rust/MSRV/platform builds, public Uvicorn parity, native framework composition, fault contracts, and clean package consumers. |
+| Coverage | `ci.yml`, `coverage-mcp-handoff.yml` | Exact-source 100% unified region/line coverage; attach and verify the independent source-bound review receipt. |
+| Reliability evidence | `benchmark-categories.yml` | Matched three-system workloads and focused diagnostics; release qualification consumes only a complete exact-source matrix. |
+| Automated release | `candidate.yml`, `release.yml` | Tag-triggered candidate assembly, followed automatically by Cargo/PyPI publishing, byte verification, GitHub Release, and provenance. |
+| Documentation | `docs.yml` | Strict documentation build and main deployment; imports the selected main benchmark artifact after each matrix run so reports and status are current in the published site. |
+| Upstream-only diagnostic | `upstream-uvicorn-windows-diagnostic.yml` | Reproduce the stock Uvicorn Windows worker issue; this is not a `uvicorn-rs` release gate. |
+
+The reference-only Windows reproduction was moved out of `ci.yml` so it no
+longer appears as a `uvicorn-rs` correctness gate. The focused parity and
+coverage replay modes remain available in CI as diagnostics for those same
+readiness areas.
 
 ### Earlier release-gate wording (2026-11-05)
 
@@ -256,17 +279,22 @@ validate an immutable source identity, build and verify artifacts once, carry
 checksummed artifacts between jobs, and isolate publishing permissions from
 build and test jobs.
 
-The implemented `release.yml` offers exactly `prepare-only` and `pypi`.
-It validates an existing annotated tag and the exact successful candidate,
-then grants OIDC permission to its PyPI publisher. It has no Cargo publisher
-job. The `prepare-only` action may inspect Cargo registry state. Before the
-`pypi` action can publish `uvicorn-rs`, it requires the exact candidate versions
-of `asgi-lifespan-protocol-rs` and `uvicorn-rs` to be registry-visible with
-checksums matching the verified candidate archives. Publish those Cargo
-archives locally first; their per-crate Trusted Publisher entries remain
-configured for a future workflow-based Cargo release.
+`candidate.yml` starts on an annotated `vX.Y.Z` tag and requires successful
+exact-commit CI, coverage review, three-system benchmark, and consumer evidence.
+Only a successful candidate run triggers `release.yml`. That workflow selects
+the exact candidate run and attempt, rechecks the tag, source, artifact digest
+and candidate manifest, then publishes missing Cargo versions in dependency
+order through crates.io OIDC. It verifies each crate checksum before publishing
+PyPI through the `pypi` trusted publisher. Its final job verifies registry
+bytes, attests the candidate files, and creates or verifies the GitHub Release.
 
-For the deferred Cargo release, use a separate clean checkout of the accepted
+The first publication of a Cargo crate name remains a local bootstrap because
+crates.io Trusted Publishing is configured on an existing crate. Once the
+crate exists, later versions publish automatically; exact prepublished bytes
+are verified and skipped. This keeps the local-first bootstrap while making
+subsequent tag releases automatic.
+
+For a first Cargo publication, use a separate clean checkout of the accepted
 tag and the same Cargo 1.98.1 packaging inputs as CI. The server package uses the
 `patch.crates-io.asgi-lifespan-protocol-rs.path` override to the accepted
 checkout's lifecycle crate. Keep this override for local preparation and
@@ -276,13 +304,11 @@ prepared archives byte-for-byte with the candidate before uploading.
 
 Local `cargo publish --dry-run` checks on CI #636 source reproduced both
 Linux candidate archive hashes on macOS with Cargo 1.98.1. They did not upload
-a package and do not qualify later source. Repeat the identity comparison for
-the final accepted commit. When Cargo publication is authorized, publish
-lifecycle first, verify its exact registry checksum, then publish the server.
-Keep Cargo's package verification enabled. Both crate names already exist, so
-use a short-lived, crate-restricted `publish-update` credential entered locally
-through Cargo. Never put it in chat, logs, shell history or repository files.
-Logout and revoke it after the uploads. No workflow creates or moves a tag.
+a package and do not qualify later source. The current `release.yml` repeats
+the archive identity check from the candidate and uses isolated short-lived
+Trusted Publishing tokens after candidate success. It publishes the lifecycle
+crate first, verifies its registry checksum, then publishes the server. No
+workflow creates or moves a tag.
 
 Release direction (2026-10-25): the maintainer authorized a coordinated Cargo
 and PyPI release and specified local Cargo publication first. The 0.2.1 local
@@ -291,15 +317,16 @@ published before its dependent `uvicorn-rs`, and both registry artifacts were
 verified. PyPI `uvicorn-rs` remains pending. Dirty-source 0.2.2 inspection
 artifacts have been prepared, but no clean current-source candidate has passed
 its release gates. The 2026-10-30 registry API check confirms both 0.2.1
-versions remain visible and unyanked, so the requested 0.3.0 local uploads use
-`publish-update`, not a first-publish token. Earlier workflow revisions offered `cargo` and `cargo-and-pypi`.
-That 2026-11-06 snapshot temporarily put PyPI before Cargo. The active order
-now publishes the two Cargo crates locally first and requires their exact
-registry checksums to match the verified candidate before `release.yml`
-publishes PyPI. The workflow offers only `prepare-only` and `pypi`, and has no
-Cargo publisher job. Release still requires a clean tagged commit on `main`, a
-successful exact candidate artifact, all required release evidence, configured
-publisher trust, and the typed confirmation.
+versions remain visible and unyanked. Earlier workflow revisions offered
+manual Cargo/PyPI actions, and the 2026-11-06 snapshot temporarily put PyPI
+before Cargo. The current workflow model replaces those manual steps: an
+annotated tag starts candidate qualification, then successful candidate
+completion automatically starts Cargo/PyPI publication and GitHub Release
+creation. The first publication of each Cargo package name remains a local
+bootstrap; both current names already exist, so later versions use the
+configured OIDC publisher. Release still requires a clean tagged commit on
+`main`, a successful exact candidate artifact, all required release evidence,
+and configured publisher trust.
 
 Local Cargo candidate status (2026-10-25): the clean 0.2.1 archives were built
 with Cargo 1.85.0 from commit `7754895262c7b1d7baa2e9595277a81607634d38`.
@@ -522,7 +549,7 @@ successful documentation build alone cannot satisfy the full candidate gate.
 The tag-triggered
 [Release candidate workflow](https://github.com/appunni-m/uvicorn-rs/blob/main/.github/workflows/candidate.yml) assembles a
 candidate from the exact successful main CI and performance artifacts. After
-all gates pass and the maintainer authorizes a tag:
+all gates pass, pushing the annotated version tag is the release authorization:
 
 1. Create an annotated vMAJOR.MINOR.PATCH tag on the reviewed commit. Do not
    move or reuse a tag after a public artifact refers to it.
@@ -535,6 +562,8 @@ all gates pass and the maintainer authorizes a tag:
 5. It writes a candidate manifest and checksums and uploads the immutable
    bundle. Candidate assembly has no registry credentials or publication
    permissions.
+6. A successful candidate automatically triggers `release.yml`; no separate
+   publication dispatch or typed confirmation is needed.
 
 The candidate includes three Python wheels, a source distribution, two Cargo
 archives, and the exact parity, coverage, benchmark, Python-floor, and standalone
@@ -557,27 +586,21 @@ response. A local or dirty-source receipt is diagnostic only.
 
 ## Publication
 
-The maintainer authorized Cargo and PyPI publication, with Cargo published
-locally first. The [Release workflow](https://github.com/appunni-m/uvicorn-rs/blob/2d3633d8b79e6f0b8ab0bf72466418d1d8b1662f/.github/workflows/release.yml)
-is dispatched from `main` with an existing annotated tag. It offers
-`prepare-only` and `pypi`; publication requires the exact confirmation
-`PUBLISH vX.Y.Z`.
-
-Prepare-only verifies the tag, exact candidate artifact/checksum manifest,
-package contents, version and registry state. The PyPI path requires both
-Cargo candidate versions to exist with the exact expected archive checksums.
-A mismatch or missing Cargo upload blocks PyPI. Do not publish from a dirty
-checkout or bypass a failed candidate gate.
+After candidate success, `release.yml` validates the exact artifact bundle and
+checks registry state without credentials. It stops if either crate name has
+not been bootstrapped locally. For the existing crate names, it publishes
+missing versions in dependency order with short-lived OIDC tokens, then
+publishes PyPI and verifies all registry checksums. It creates the GitHub
+Release only after registry verification. A mismatch or failed candidate gate
+stops publication.
 
 ### Cargo publisher configuration
 
-The clean 0.2.1 crates have already been published locally. The recorded
-Trusted Publisher entry on each crate is `appunni-m / uvicorn-rs /
-release.yml / crates-io`. The current workflow has no Cargo publication job,
-so these entries are not the next release step and do not replace local Cargo
-publication. Future OIDC Cargo automation needs an explicitly implemented and
-reviewed publisher job. Never supply a Cargo token through workflow inputs or
-commit one to the repository.
+The recorded Trusted Publisher entry on each crate is `appunni-m / uvicorn-rs /
+release.yml / crates-io`. It is used only after the crate name has been
+bootstrapped locally. Future versions receive short-lived OIDC tokens inside
+the isolated Cargo publish job. Never supply a Cargo token through workflow
+inputs or commit one to the repository.
 
 ### First PyPI publication
 
@@ -590,18 +613,20 @@ and checksums. Do not add a long-lived PyPI token to GitHub secrets.
 
 ### GitHub Release
 
-A GitHub Release is a separate distribution action. If authorized, create it
-only after the intended Cargo/PyPI publication and registry verification.
-Attach the exact candidate artifacts and SHA-256 manifest. Keep repository
-write permission isolated to the release job.
+The automated release job creates the GitHub Release only after Cargo and PyPI
+checksums match the candidate. It attaches the verified crate archives, Python
+distributions and a SHA-256 manifest, then records artifact attestations. Repo
+write permission is limited to that final job.
 
 ## Documentation publication
 
 The
 [Documentation workflow](https://github.com/appunni-m/uvicorn-rs/blob/main/.github/workflows/docs.yml) builds every maintained
 page with strict link validation, uploads the validated Pages artifact, and
-deploys only from main after the build passes. It uses a separate
-github-pages environment and does not publish packages.
+deploys only from main after the build passes. It selects the triggering or
+latest completed main benchmark aggregate and renders that report and attempt
+status into the site build. It uses a separate github-pages environment and
+does not publish packages.
 
 Set repository Pages source to GitHub Actions and create the github-pages
 environment before deployment. The expected site URL is

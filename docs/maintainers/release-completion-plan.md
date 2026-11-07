@@ -379,8 +379,11 @@ at the first failing body boundary before changing server behavior.
   `uvicorn-rs-py` and is not a crates.io release target.
 - Cargo releases: `asgi-lifespan-protocol-rs`, then the Python-free `uvicorn-rs`.
   HTTP/3 is optional under `http3`. No separate H3 or Quinn package is published.
-- Publisher: `.github/workflows/release.yml`. `candidate.yml` builds and verifies
-  candidates. Documentation deployment is separate.
+- Publisher: `.github/workflows/release.yml`. `candidate.yml` verifies the exact
+  tagged source and builds a checksum-bound candidate; its successful completion
+  automatically starts Cargo/PyPI publication and GitHub Release verification.
+  `docs.yml` remains a separate strict build/deploy pipeline and imports the
+  selected main benchmark artifact after each matrix run.
 - Compatibility authority: the pinned Uvicorn 0.54.0 source in
   [the public contract](uvicorn-0.54.0-contract.md). Use the existing
   `tests/parity/manifest.json`, its indexed inputs, `tests/native-core/manifest.json`,
@@ -1628,14 +1631,15 @@ compatibility acceptance or the start of benchmarks.
 ## m8mx — Publish and verify the consolidated release
 
 **Work:** Once zep3, x3az and v5fe qualify, recheck the exact source, immutable
-tag, selected artifacts and current registry state. The current release order
-is to publish `asgi-lifespan-protocol-rs` and then dependent `uvicorn-rs`
-locally, verify exact registry checksums and clean consumers, and publish the
-PyPI `uvicorn-rs` 0.3.0 distribution through `release.yml`. The workflow
-preflight requires the exact Cargo versions to be registry-visible with bytes
-matching the verified candidate. Recheck registries before retrying any upload;
-never overwrite an existing version. Do not publish while any required release
-gate is open.
+tag, selected artifacts and current registry state. Pushing the annotated tag
+starts `candidate.yml`; its successful completion automatically starts
+`release.yml`. The publisher verifies the candidate bundle, publishes missing
+`asgi-lifespan-protocol-rs` and dependent `uvicorn-rs` versions through their
+Trusted Publishers, verifies exact registry checksums, publishes PyPI
+`uvicorn-rs` 0.3.0, and creates the GitHub Release. A first-ever Cargo package
+name still requires a local bootstrap before tagging; both current names exist.
+Recheck registries before retrying any upload; never overwrite an existing
+version. Do not publish while any required release gate is open.
 
 **Close with:** Registry versions and bytes match the accepted candidate,
 registry-based Cargo/Python consumers pass, documentation/docs.rs reflects the

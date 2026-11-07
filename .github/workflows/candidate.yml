@@ -1,5 +1,5 @@
-# Assemble artifacts from successful main CI on the exact annotated tag commit.
-# Registry publication, public GitHub Releases and tag mutation remain disabled.
+# Assemble the exact-source release candidate after all main CI, coverage,
+# benchmark and consumer gates have passed. A successful run triggers release.yml.
 name: Release candidate
 
 on:
@@ -532,7 +532,7 @@ jobs:
           test "$tag_commit" = "$RELEASE_COMMIT"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: uvicorn-rs-candidate-${{ github.ref_name }}
+          name: uvicorn-rs-candidate-${{ github.ref_name }}-${{ github.run_attempt }}
           path: target/release-candidate/
           if-no-files-found: error
           retention-days: 90
