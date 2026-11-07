@@ -22,11 +22,11 @@ Use these state labels precisely:
 
 ## Current release gates (2026-11-07)
 
-PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) remains open from develop head be12ff08002fb55ef250eb777198061b4e7c3b4a to main. CI [#718](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980) passed parity, native composition, candidate package and consumer checks, and unified coverage on synthetic merge source 292433bdb710774a1156e4c1983a6b4e8a761aca. Coverage-MCP reviewed that exact PR report with zero gaps. These receipts are not yet bound to the final main release commit.
+PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) merged to `main` as `242f05096181ee1b84aac116bea613c1a6dad76f`. Exact-main CI [#720](https://github.com/appunni-m/uvicorn-rs/actions/runs/42356999307), documentation [#314](https://github.com/appunni-m/uvicorn-rs/actions/runs/42356999093), and three-system benchmark [#366](https://github.com/appunni-m/uvicorn-rs/actions/runs/42356999128) started from that push. The docs build passed; the CI and benchmark run pages carry the latest results. PR-head CI [#719](https://github.com/appunni-m/uvicorn-rs/actions/runs/42348498407) had passed 1,453/1,453 indexed cases, three ASGI plus three native repeats, 15,061/15,061 regions, 11,075/11,075 lines, installed-wheel parity, and candidate consumers on Linux, macOS, and Windows.
 
-The complete three-system benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265) is bound to earlier source e8b5d6b. It reports slower ordinary-FastAPI HTTP/1 route and WebSocket text-echo results, with workload-specific H2/H3 results; no broad FastAPI speedup is claimed. Focused upload diagnostic [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289) did not reproduce or explain the historical upload timeout. The release workflow still requires an exact-main benchmark receipt.
+The complete earlier benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265) is bound to source `e8b5d6b`. It reports slower ordinary-FastAPI HTTP/1 route and WebSocket text-echo results, with workload-specific H2/H3 results; no broad FastAPI speedup is claimed. Focused upload diagnostic [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289) did not reproduce or explain the historical upload timeout. Exact-main benchmark #366 is now the qualifying run for commit `242f050`.
 
-The checked-in docs status needs a new documentation build because run #312 passed before this refresh. After the updated PR is merged, exact-main CI and Coverage-MCP handoff, the complete exact-main benchmark, and a rebuilt candidate with clean consumers must pass. Only then can the annotated release tag be created and candidate workflow verified. The staged publication order remains local Cargo publication and registry-byte verification, followed by PyPI distribution uvicorn-rs through release.yml. No 0.3.0 candidate or package has been published.
+Main docs build #314 passed on merge commit `242f050` before this documentation refresh. The updated pages still need the docs check. The maintainer has waived independent Coverage-MCP review: candidate and publication workflows now validate and record exact-source raw 100% coverage instead. That workflow-policy change is in progress on `develop`; its merged main commit must receive its own CI, benchmark, artifact, and consumer evidence before tagging. The staged publication order remains local Cargo publication and registry-byte verification, followed by PyPI distribution `uvicorn-rs` through `release.yml`. No 0.3.0 candidate or package has been published.
 
 | Superseded CI #712 artifact | Artifact | ZIP SHA-256 | Contents and check |
 | --- | --- | --- | --- |
@@ -40,15 +40,12 @@ immediately before publication. The current release order is to publish Cargo
 locally first, verify the exact versions and checksums, and then publish PyPI
 `uvicorn-rs` through `release.yml`. The workflow checks that the Cargo versions
 are registry-visible and match the candidate archives before PyPI publication.
-The complete benchmark remains open. Exact-source raw coverage is already 100%
-on the older current `main`, but it does not qualify the PR source. The active
-release goal requires an accepted independent Coverage-MCP receipt bound to the
-final source and raw report. Candidate assembly must revalidate that coverage
-source, run, artifact, report, build, and receipt identity.
-PR #24 contains the exact-attempt Coverage-MCP handoff checks in
-`candidate.yml` and `release.yml`. CI #718 passed the PR-source release-evidence
-checks; the tag-triggered candidate and publication workflows still need to run
-against the final main commit.
+The exact-source raw coverage gate requires 100% regions and lines, a complete
+passing matrix, and recorded source, run, artifact, report, context, and build
+identities. Independent Coverage-MCP review is optional and does not gate the
+release. Candidate assembly revalidates the raw evidence against the final
+source commit. The tag-triggered candidate and publication workflows still need
+to run against the final main commit.
 
 ### Earlier release-gate wording (2026-11-05)
 
@@ -189,8 +186,8 @@ is selected-case evidence, not full-suite coverage. The later Rust error-mapping
 fix, WebSocket close-path simplification, and parity input additions make the
 earlier full draft report stale for the current source and inventory. This
 historical snapshot recorded a temporary waiver of separate Coverage-MCP
-review; the active release goal requires an accepted independent review bound
-to the final exact-source report.
+review. The maintainer reaffirmed that waiver on 2026-11-07; final exact-source
+raw 100% coverage remains mandatory, while independent review is optional.
 
 Benchmark run
 [`39689988939`](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939)

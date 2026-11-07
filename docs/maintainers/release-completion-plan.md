@@ -8,22 +8,20 @@ a prerequisite for completing the repository work.
 
 ## Active release goal — 2026-11-07
 
-The current user-provided release goal requires exact-source raw unified
-coverage at 100% regions and lines plus an accepted independent Coverage-MCP
-review bound to the final source and raw report. Record the source, run and
-attempt, raw artifact ID and digest, report and context hashes, build identity,
-complete matrix evidence, and accepted review receipt. Candidate qualification
-must revalidate the coverage identity against the same source, run, artifact,
-report, and review.
+The current release goal requires exact-source raw unified coverage at 100%
+regions and lines. Record the source, run and attempt, raw artifact ID and
+digest, report and context hashes, build identity, and complete matrix evidence.
+Candidate qualification must revalidate those identities against the final
+source. The maintainer explicitly waived a separate Coverage-MCP review; it is
+optional diagnostic evidence, not a release gate.
 
-The current `develop` workflow draft makes the independent review a release
-gate. `candidate.yml` selects the successful Coverage-MCP handoff for the exact
-main CI run and attempt, revalidates its GitHub artifact identity, then verifies
-the retained raw report, projection, full page receipt, source, and build before
-recording a selection in the candidate bundle. `release.yml` replays that
-selection check against the bundled files before accepting the candidate. The
-handoff files are restored to their canonical `target/asgi-coverage-review`
-paths because those paths are part of the review receipt binding. CI #718 passed the PR-source release-evidence checks; final-main CI, its matching handoff, and the tag-triggered candidate workflow still need to validate the release commit.
+The `develop` workflow update removes the old handoff requirement from
+`candidate.yml` and `release.yml`. The candidate still selects the successful
+main CI run, validates the exact raw report and complete matrix, and records
+100% regions and lines with source, run, artifact, report, context, and build
+identity. PR-head CI #719 passed raw coverage and package checks. Main CI #720
+and the exact-main benchmark #366 started on `242f050`; this workflow-policy
+update will require new final-main evidence after merge.
 
 The raw coverage gate remains 100% for regions and lines, with three passing
 ASGI and native repeats, complete attribution, and zero failures or
