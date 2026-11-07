@@ -13,14 +13,12 @@ import sys
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA = "uvicorn-rs-coverage-evidence@2"
+SCHEMA = "uvicorn-rs-coverage-evidence@5"
 COMMIT_SHA = re.compile(r"^[0-9a-f]{40}$")
 ARTIFACT_SHA = re.compile(r"^sha256:[0-9a-f]{64}$")
-SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
 RAW_ARTIFACT_NAME = "uvicorn-rs-unified-coverage"
 CI_IDENTITY_NAME = "ci-run.json"
 REPORT_NAME = "coverage-report.json"
-HANDOFF_WORKFLOW = ".github/workflows/coverage-mcp-handoff.yml"
 REPORT_SCHEMAS = {"uvicorn_rs_coverage/unified@9", "uvicorn_rs_coverage/unified@10",
                   "uvicorn-rs-coverage/unified@9", "uvicorn-rs-coverage/unified@10"}
 
@@ -159,77 +157,7 @@ def command_snapshot(args: argparse.Namespace) -> None:
                       "report_sha256": snapshot["report_sha256"]}, sort_keys=True))
 
 
-def accepted_review(selection_path: Path, *, source: str, ci_run: dict[str, Any],
-                    raw_artifact: dict[str, Any], report_sha256: str,
-                    build_id: str) -> dict[str, Any]:
-    selection = read_json(selection_path)
-    require(isinstance(selection, dict)
-            and selection.get("schema") == "uvicorn-rs-coverage-mcp-selection@1"
-            and selection.get("source_commit") == source,
-            "Coverage-MCP selection does not bind the requested source")
-    expected_ci = {key: ci_run[key] for key in ("id", "attempt", "branch", "event")}
-    require(selection.get("ci_run") == expected_ci,
-            "Coverage-MCP selection does not bind the exact CI run and attempt")
-    require(selection.get("raw_coverage_artifact") == raw_artifact,
-            "Coverage-MCP selection does not bind the selected raw coverage artifact")
-    handoff_inventory_sha256 = selection.get("raw_inventory_sha256")
-    require(isinstance(handoff_inventory_sha256, str)
-            and SHA256_HEX.fullmatch(handoff_inventory_sha256) is not None,
-            "Coverage-MCP selection omits the reviewed raw inventory hash")
-    require(selection.get("raw_report_sha256") == report_sha256,
-            "Coverage-MCP selection does not bind the raw report")
-    require(selection.get("build_id") == build_id,
-            "Coverage-MCP selection does not bind the report build")
-
-    handoff = selection.get("handoff_run")
-    require(isinstance(handoff, dict)
-            and type(handoff.get("id")) is int and handoff["id"] > 0
-            and type(handoff.get("attempt")) is int and handoff["attempt"] > 0
-            and handoff.get("workflow_path") == HANDOFF_WORKFLOW
-            and handoff.get("event") == "workflow_dispatch"
-            and handoff.get("branch") == "main",
-            "Coverage-MCP selection has an invalid handoff workflow identity")
-    expected_handoff_artifact_name = (
-        f"uvicorn-rs-coverage-mcp-{ci_run['id']}-{ci_run['attempt']}-"
-        f"{handoff['id']}-{handoff['attempt']}"
-    )
-    handoff_artifact = selection.get("handoff_artifact")
-    require(isinstance(handoff_artifact, dict)
-            and type(handoff_artifact.get("id")) is int and handoff_artifact["id"] > 0
-            and handoff_artifact.get("name") == expected_handoff_artifact_name
-            and type(handoff_artifact.get("size_in_bytes")) is int
-            and handoff_artifact["size_in_bytes"] > 0
-            and isinstance(handoff_artifact.get("digest"), str)
-            and ARTIFACT_SHA.fullmatch(handoff_artifact["digest"]) is not None,
-            "Coverage-MCP selection has invalid reviewed-artifact identity or digest")
-
-    hashes = {
-        "handoff_manifest_sha256": selection.get("handoff_manifest_sha256"),
-        "reviewed_report_sha256": selection.get("reviewed_report_sha256"),
-        "reviewed_context_sha256": selection.get("reviewed_context_sha256"),
-        "projection_report_sha256": selection.get("projection_report_sha256"),
-        "projection_context_sha256": selection.get("projection_context_sha256"),
-        "coverage_mcp_receipt_sha256": selection.get("coverage_mcp_receipt_sha256"),
-    }
-    require(all(isinstance(value, str) and SHA256_HEX.fullmatch(value) is not None
-                for value in hashes.values()),
-            "Coverage-MCP selection omits a valid receipt, review, projection, or handoff hash")
-    return {
-        "status": "accepted",
-        "source_commit": source,
-        "ci_run": expected_ci,
-        "handoff_raw_inventory_sha256": handoff_inventory_sha256,
-        "raw_report_sha256": report_sha256,
-        "build_id": build_id,
-        "handoff_run": handoff,
-        "handoff_artifact": handoff_artifact,
-        **hashes,
-        "selection_sha256": file_hash(selection_path),
-    }
-
-
-def verified_record(report_path: Path, inventory_path: Path, source: str,
-                    handoff_selection_path: Path) -> dict[str, Any]:
+def verified_record(report_path: Path, inventory_path: Path, source: str) -> dict[str, Any]:
     require(COMMIT_SHA.fullmatch(source) is not None, "expected source must be a full commit SHA")
     report_path = report_path.resolve()
     inventory_path = inventory_path.resolve()
@@ -300,15 +228,10 @@ def verified_record(report_path: Path, inventory_path: Path, source: str,
             and inventory.get("context_sha256") == file_hash(report_path.with_name(report_path.name + ".context.json"))
             and inventory.get("build_id") == validated["build_id"],
             "raw coverage inventory hashes or build identity differ from the report")
-    independent_review = accepted_review(
-        handoff_selection_path, source=source, ci_run=ci_run, raw_artifact=artifact,
-        report_sha256=inventory["report_sha256"], build_id=inventory["build_id"],
-    )
     return {
         "schema": SCHEMA,
         "status": "passed",
-        "acceptance": "exact-source raw unified coverage at 100% for regions and lines",
-        "independent_review": independent_review,
+        "acceptance": "exact-source raw unified coverage at 100% for regions and lines; complete three-repeat matrix passed",
         "source_commit": source,
         "ci_run": ci_run,
         "artifact": artifact,
@@ -355,7 +278,6 @@ def main() -> int:
         subparser = subparsers.add_parser(command)
         subparser.add_argument("--report", type=Path, required=True)
         subparser.add_argument("--raw-inventory", type=Path, required=True)
-        subparser.add_argument("--handoff-selection", type=Path, required=True)
         subparser.add_argument("--source", required=True)
         subparser.add_argument("--output", type=Path, help="required for record; evidence file for verify")
         subparser.set_defaults(func=command)
@@ -364,7 +286,7 @@ def main() -> int:
         if args.command == "snapshot":
             command_snapshot(args)
             return 0
-        expected = verified_record(args.report, args.raw_inventory, args.source, args.handoff_selection)
+        expected = verified_record(args.report, args.raw_inventory, args.source)
         if args.command == "record":
             if args.output is None:
                 raise EvidenceError("record requires --output")

@@ -17,16 +17,47 @@ Use these state labels precisely:
 
 <a id="current-release-gates-2026-11-04"></a>
 <a id="current-release-gates-2026-11-05"></a>
+<a id="current-release-gates-2026-11-06"></a>
+<a id="current-release-gates-2026-11-07"></a>
 
-## Current release gates (2026-11-05)
+## Current release gates (2026-11-07)
 
-The active release contract requires an accepted independent Coverage-MCP
-review bound to the final clean source and its exact raw unified coverage
-report. The 2026-11-04 waiver is superseded. The report must show 100% regions
-and lines across the complete three-repeat matrix, and the candidate must
-preserve and revalidate the source, run, artifact, report, context, build, and
-raw-file identities. The exact-main #661 report below is historical evidence;
-the final candidate still needs its own exact-source report and review receipt.
+PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) remains open from develop head be12ff08002fb55ef250eb777198061b4e7c3b4a to main. CI [#718](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980) passed parity, native composition, candidate package and consumer checks, and unified coverage on synthetic merge source 292433bdb710774a1156e4c1983a6b4e8a761aca. Coverage-MCP reviewed that exact PR report with zero gaps. These receipts are not yet bound to the final main release commit.
+
+The complete three-system benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265) is bound to earlier source e8b5d6b. It reports slower ordinary-FastAPI HTTP/1 route and WebSocket text-echo results, with workload-specific H2/H3 results; no broad FastAPI speedup is claimed. Focused upload diagnostic [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289) did not reproduce or explain the historical upload timeout. The release workflow still requires an exact-main benchmark receipt.
+
+The checked-in docs status needs a new documentation build because run #312 passed before this refresh. After the updated PR is merged, exact-main CI and Coverage-MCP handoff, the complete exact-main benchmark, and a rebuilt candidate with clean consumers must pass. Only then can the annotated release tag be created and candidate workflow verified. The staged publication order remains local Cargo publication and registry-byte verification, followed by PyPI distribution uvicorn-rs through release.yml. No 0.3.0 candidate or package has been published.
+
+| Superseded CI #712 artifact | Artifact | ZIP SHA-256 | Contents and check |
+| --- | --- | --- | --- |
+| Linux x86-64 | [13523013492](https://github.com/appunni-m/uvicorn-rs/actions/runs/42255484334/artifacts/13523013492) | `f4e0f01dc354e64bdfa333e3cf21123bda2a0682caab38a8f3442ee3da600694` | Cargo archives, wheel, and sdist; package and clean-consumer checks passed |
+| macOS ARM64 | [13524965653](https://github.com/appunni-m/uvicorn-rs/actions/runs/42255484334/artifacts/13524965653) | `44b2c6efc5775e363c720f810e0bf9313c224fa381c6b36b5b23f8f4f12922bf` | Wheel and package checks passed; clean consumer passed |
+| Windows x86-64 | [13523938563](https://github.com/appunni-m/uvicorn-rs/actions/runs/42255484334/artifacts/13523938563) | `7ea545070d73360a0f15beb8f6b68f4edf00ccfe877e3501387ff8e4db6d6988` | Wheel and package checks passed; clean consumer passed |
+
+The source has not been merged or published. The latest recorded audit found
+release controls and trusted publisher settings configured; verify them again
+immediately before publication. The current release order is to publish Cargo
+locally first, verify the exact versions and checksums, and then publish PyPI
+`uvicorn-rs` through `release.yml`. The workflow checks that the Cargo versions
+are registry-visible and match the candidate archives before PyPI publication.
+The complete benchmark remains open. Exact-source raw coverage is already 100%
+on the older current `main`, but it does not qualify the PR source. The active
+release goal requires an accepted independent Coverage-MCP receipt bound to the
+final source and raw report. Candidate assembly must revalidate that coverage
+source, run, artifact, report, build, and receipt identity.
+PR #24 contains the exact-attempt Coverage-MCP handoff checks in
+`candidate.yml` and `release.yml`. CI #718 passed the PR-source release-evidence
+checks; the tag-triggered candidate and publication workflows still need to run
+against the final main commit.
+
+### Earlier release-gate wording (2026-11-05)
+
+At this 2026-11-05 snapshot, independent Coverage-MCP review was required for
+the final clean source. A later waiver was recorded on 2026-11-07, but the
+active release goal has since reinstated the accepted final-source review.
+Exact-source 100% regions and lines, a complete passing matrix, and recorded
+artifact identities remain mandatory. The exact-main #661 report below is
+historical; the final source needs its own raw report and review receipt.
 
 Exact-main CI [#661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
 passed on `feb955d2758166ad8c4b519903fd1318b29e7d2d`: all 1,453 coverage
@@ -48,8 +79,8 @@ raw-coverage evidence workflow and a candidate for the resulting exact commit.
 The release set is the Python-free **uvicorn-rs** crate with optional **http3**,
 **asgi-lifespan-protocol-rs**, and the PyPI distribution **uvicorn-rs**.
 The optional internal Cargo/PyO3 adapter remains **uvicorn-rs-py**.
-**release.yml** publishes PyPI after local Cargo publication;
-**candidate.yml** verifies staged candidates. The configured publisher tuples
+**release.yml** publishes PyPI after the locally published Cargo candidates are
+registry-verified; **candidate.yml** verifies staged candidates. The configured publisher tuples
 are `appunni-m/uvicorn-rs / release.yml / pypi` for PyPI and
 `appunni-m/uvicorn-rs / release.yml / crates-io` for both crates.
 
@@ -158,8 +189,8 @@ is selected-case evidence, not full-suite coverage. The later Rust error-mapping
 fix, WebSocket close-path simplification, and parity input additions make the
 earlier full draft report stale for the current source and inventory. This
 historical snapshot recorded a temporary waiver of separate Coverage-MCP
-review; the active 2026-11-05 release goal supersedes it and requires an
-accepted independent review bound to the final exact-source report.
+review; the active release goal requires an accepted independent review bound
+to the final exact-source report.
 
 Benchmark run
 [`39689988939`](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939)
@@ -230,11 +261,15 @@ build and test jobs.
 The implemented `release.yml` offers exactly `prepare-only` and `pypi`.
 It validates an existing annotated tag and the exact successful candidate,
 then grants OIDC permission to its PyPI publisher. It has no Cargo publisher
-job. The per-crate crates.io Trusted Publisher entries remain configured;
-they do not change this release's local-Cargo-first direction.
+job. The `prepare-only` action may inspect Cargo registry state. Before the
+`pypi` action can publish `uvicorn-rs`, it requires the exact candidate versions
+of `asgi-lifespan-protocol-rs` and `uvicorn-rs` to be registry-visible with
+checksums matching the verified candidate archives. Publish those Cargo
+archives locally first; their per-crate Trusted Publisher entries remain
+configured for a future workflow-based Cargo release.
 
-After all gates pass, use a separate clean checkout of the accepted tag and
-the same Cargo 1.98.1 packaging inputs as CI. The server package uses the
+For the deferred Cargo release, use a separate clean checkout of the accepted
+tag and the same Cargo 1.98.1 packaging inputs as CI. The server package uses the
 `patch.crates-io.asgi-lifespan-protocol-rs.path` override to the accepted
 checkout's lifecycle crate. Keep this override for local preparation and
 publication so Cargo reproduces the qualified archive, including Cargo.lock.
@@ -244,13 +279,12 @@ prepared archives byte-for-byte with the candidate before uploading.
 Local `cargo publish --dry-run` checks on CI #636 source reproduced both
 Linux candidate archive hashes on macOS with Cargo 1.98.1. They did not upload
 a package and do not qualify later source. Repeat the identity comparison for
-the final accepted commit. Publish lifecycle first, verify its exact registry
-checksum, then publish the server. Keep Cargo's package verification enabled.
-Both crate names already exist, so use a short-lived, crate-restricted
-`publish-update` credential entered locally through Cargo. Never put it in
-chat, logs, shell history or repository files. Logout and revoke it after the
-uploads. Verify registry checksums and clean consumers before dispatching
-`release.yml` on `main` with action `pypi`. No workflow creates or moves a tag.
+the final accepted commit. When Cargo publication is authorized, publish
+lifecycle first, verify its exact registry checksum, then publish the server.
+Keep Cargo's package verification enabled. Both crate names already exist, so
+use a short-lived, crate-restricted `publish-update` credential entered locally
+through Cargo. Never put it in chat, logs, shell history or repository files.
+Logout and revoke it after the uploads. No workflow creates or moves a tag.
 
 Release direction (2026-10-25): the maintainer authorized a coordinated Cargo
 and PyPI release and specified local Cargo publication first. The 0.2.1 local
@@ -261,11 +295,13 @@ artifacts have been prepared, but no clean current-source candidate has passed
 its release gates. The 2026-10-30 registry API check confirms both 0.2.1
 versions remain visible and unyanked, so the requested 0.3.0 local uploads use
 `publish-update`, not a first-publish token. Earlier workflow revisions offered `cargo` and `cargo-and-pypi`.
-Those modes are retired in the current local-Cargo-first flow: the implemented
-workflow offers only `prepare-only` and `pypi`. This does not bypass
-candidate gates: release still requires a clean tagged commit on `main`, a successful
-exact candidate artifact, all required release evidence, configured publisher
-trust, and the typed confirmation.
+That 2026-11-06 snapshot temporarily put PyPI before Cargo. The active order
+now publishes the two Cargo crates locally first and requires their exact
+registry checksums to match the verified candidate before `release.yml`
+publishes PyPI. The workflow offers only `prepare-only` and `pypi`, and has no
+Cargo publisher job. Release still requires a clean tagged commit on `main`, a
+successful exact candidate artifact, all required release evidence, configured
+publisher trust, and the typed confirmation.
 
 Local Cargo candidate status (2026-10-25): the clean 0.2.1 archives were built
 with Cargo 1.85.0 from commit `7754895262c7b1d7baa2e9595277a81607634d38`.
@@ -463,9 +499,10 @@ version.
    installed-package checks, and native composition inputs.
 3. Record the exact-source raw coverage report and its artifact, report,
    context, build, and full-matrix identities. Require 100% of normalized
-   regions and lines, plus an accepted independent Coverage-MCP review receipt
-   for that same report. Candidate validation must recheck the receipt and
-   source identities before the tag can be published.
+   regions and lines. A separate independent Coverage-MCP review is also
+   required for the exact source and raw report; candidate validation must
+   recheck the raw report, artifact, review receipt and source identities
+   before the tag can be published.
 4. Complete the correctness-gated three-system performance matrix. Require
    matching valid repetitions and report throughput, p50/p95/p99 latency,
    server CPU per operation, and sampled peak RSS. Keep stock FastAPI and

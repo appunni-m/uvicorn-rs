@@ -219,7 +219,7 @@ on:
           - request-upload
           - slow-reader-backpressure
       h3_trace_hypercorn_events:
-        description: Trace H3 stream event/removal ordering; timing is invalid and this requires Linux ARM64, Hypercorn asyncio, slow-reader-backpressure, and one repetition
+        description: Trace Hypercorn H3 request/response stream events; timing is invalid and this requires Linux ARM64, Hypercorn asyncio, and either slow-reader-backpressure (1 repetition) or fastapi-validated-route (5 repetitions)
         default: false
         required: true
         type: boolean
@@ -1206,11 +1206,17 @@ jobs:
             --concurrency "$BENCHMARK_H3_CONCURRENCY"
           )
           if [[ "$BENCHMARK_H3_TRACE" == "true" ]]; then
+            trace_workload_repetitions=false
+            if [[ "$BENCHMARK_H3_WORKLOAD" == "slow-reader-backpressure" \
+              && "$BENCHMARK_REPETITIONS" == "1" ]] \
+              || [[ "$BENCHMARK_H3_WORKLOAD" == "fastapi-validated-route" \
+              && "$BENCHMARK_REPETITIONS" == "5" ]]; then
+              trace_workload_repetitions=true
+            fi
             if [[ "$RUNNER_OS" != "Linux" || "$RUNNER_ARCH" != "ARM64" \
               || "${#h3_servers[@]}" != "1" || "${h3_servers[0]}" != "hypercorn-asyncio" \
-              || "$BENCHMARK_H3_WORKLOAD" != "slow-reader-backpressure" \
-              || "$BENCHMARK_REPETITIONS" != "1" ]]; then
-              echo "H3 event tracing requires Linux ARM64, Hypercorn asyncio, slow-reader-backpressure, and one repetition" >&2
+              || "$trace_workload_repetitions" != "true" ]]; then
+              echo "H3 tracing requires Linux ARM64 and Hypercorn asyncio, with slow-reader-backpressure at one repetition or fastapi-validated-route at five repetitions" >&2
               exit 2
             fi
             benchmark_args+=(--trace-hypercorn-h3-events)

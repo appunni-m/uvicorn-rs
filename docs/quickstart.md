@@ -52,15 +52,22 @@ measurements, and restore upstream Uvicorn.
 
 ## Compatibility evidence
 
-The CI #637 installed-wheel matrix passed 786/786 cases on Linux x86-64 and
-macOS ARM64. Windows passed 758/759 raw comparisons, with one captured
-stock-Uvicorn startup defect. Focused CI #638 qualifies narrow startup and
-shutdown reference-defect policies while requiring all three candidate worker
-lifecycles to pass independently. Linux/macOS package consumers and the
-separate Python 3.9 floor consumer pass. Full Windows packaging, strict
-coverage acceptance, final-source review/qualification and benchmarks remain
-open, so the 0.3.0 distribution is still unpublished. See the
-[compatibility status](uvicorn-compatibility.md) and
-[support matrix](support-matrix.md) for scope and remaining gates. The
-maintainer will perform the real-application trial after the repository
-release gates are complete.
+PR #24 CI [#718](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980)
+passed installed-wheel Uvicorn 0.54.0 parity on Linux x86-64 (786/786), macOS
+ARM64 (786/786), and Windows x86-64 (759/759 applicable cases). Candidate
+packages and clean consumers passed on all three systems and on the CPython 3.9
+floor. Unified coverage passed all 1,453 cases through three ASGI and three
+native repeats at 15,061/15,061 regions and 11,075/11,075 lines, with a complete
+Coverage-MCP review reporting zero gaps. This is PR-source evidence; exact-main
+coverage and review must still bind to the final release commit.
+
+The complete three-system benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265)
+passed matrix validation on earlier source `e8b5d6b`. Ordinary-FastAPI HTTP/1.1
+validated-route throughput is below Uvicorn on all six system/loop pairs, and
+WebSocket text echo is slower; H2/H3 results vary by workload. It supports no
+broad FastAPI speedup claim and cannot satisfy the exact-main benchmark gate.
+Focused upload diagnostic [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289)
+did not reproduce the historical HTTP/1 timeout or establish its cause. The
+maintainer will perform the real-application trial after repository release
+qualification. See the [compatibility status](uvicorn-compatibility.md) and
+[support matrix](support-matrix.md) for current evidence.

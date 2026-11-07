@@ -2,12 +2,26 @@ use std::error::Error;
 use std::io::{BufReader, Write};
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Instant;
 
 use bytes::{Buf, Bytes};
 use h3_quinn::quinn::{self, rustls};
 use http::{HeaderMap, HeaderValue, Request, header::HeaderName};
 use serde_json::{Value, json};
 use uvicorn_rs::{h3, h3_quinn};
+
+fn trace_client_event(started: &Instant, event: impl std::fmt::Display) {
+    if matches!(
+        std::env::var("UVICORN_RS_PARITY_H3_TRACE"),
+        Ok(value) if value == "1"
+    ) {
+        let _ = writeln!(
+            std::io::stderr().lock(),
+            "HTTP/3 client trace elapsed_us={} {event}",
+            started.elapsed().as_micros()
+        );
+    }
+}
 
 async fn send_truncated_data_frame(
     connection: &quinn::Connection,
@@ -253,6 +267,7 @@ async fn concurrent_request_sequence(
     address: SocketAddr,
     specification: &Value,
 ) -> Result<(), Box<dyn Error>> {
+    let trace_started = Instant::now();
     let requests = specification["request_sequence"]
         .as_array()
         .ok_or("request_sequence must be an array")?;
@@ -265,6 +280,10 @@ async fn concurrent_request_sequence(
             .as_str()
             .ok_or("missing sequence method")?;
         let path = request["path"].as_str().ok_or("missing sequence path")?;
+        trace_client_event(
+            &trace_started,
+            format_args!("sequence stream={} open-start path={path}", index + 1),
+        );
         let body = decode_hex(
             request["body_hex"]
                 .as_str()
@@ -305,18 +324,50 @@ async fn concurrent_request_sequence(
             sender.send_request(builder.body(())?),
         )
         .await
-        .map_err(|error| sequence_stage_error(index + 1, "open-stream deadline", error))?
-        .map_err(|error| sequence_stage_error(index + 1, "open-stream", error))?;
+        .map_err(|error| {
+            trace_client_event(
+                &trace_started,
+                format_args!("sequence stream={} open-deadline error={error}", index + 1),
+            );
+            sequence_stage_error(index + 1, "open-stream deadline", error)
+        })?
+        .map_err(|error| {
+            trace_client_event(
+                &trace_started,
+                format_args!("sequence stream={} open-error error={error}", index + 1),
+            );
+            sequence_stage_error(index + 1, "open-stream", error)
+        })?;
+        trace_client_event(
+            &trace_started,
+            format_args!("sequence stream={} open-complete", index + 1),
+        );
         if !body.is_empty() {
-            stream
-                .send_data(Bytes::from(body))
-                .await
-                .map_err(|error| sequence_stage_error(index + 1, "send-body", error))?;
+            stream.send_data(Bytes::from(body)).await.map_err(|error| {
+                trace_client_event(
+                    &trace_started,
+                    format_args!(
+                        "sequence stream={} send-body-error error={error}",
+                        index + 1
+                    ),
+                );
+                sequence_stage_error(index + 1, "send-body", error)
+            })?;
         }
-        stream
-            .finish()
-            .await
-            .map_err(|error| sequence_stage_error(index + 1, "finish-upload", error))?;
+        stream.finish().await.map_err(|error| {
+            trace_client_event(
+                &trace_started,
+                format_args!(
+                    "sequence stream={} finish-upload-error error={error}",
+                    index + 1
+                ),
+            );
+            sequence_stage_error(index + 1, "finish-upload", error)
+        })?;
+        trace_client_event(
+            &trace_started,
+            format_args!("sequence stream={} upload-finished", index + 1),
+        );
         streams.push((stream, index + 1));
     }
     let pause_before_read_ms = specification["pause_before_read_ms"]
@@ -326,30 +377,79 @@ async fn concurrent_request_sequence(
 
     let mut responses = Vec::with_capacity(streams.len());
     for (mut stream, request_index) in streams {
+        trace_client_event(
+            &trace_started,
+            format_args!("sequence stream={request_index} receive-headers-start"),
+        );
         let response =
             tokio::time::timeout(std::time::Duration::from_secs(10), stream.recv_response())
                 .await
                 .map_err(|error| {
+                    trace_client_event(
+                        &trace_started,
+                        format_args!(
+                            "sequence stream={request_index} receive-headers-deadline error={error}"
+                        ),
+                    );
                     sequence_stage_error(request_index, "receive-headers deadline", error)
                 })?
-                .map_err(|error| sequence_stage_error(request_index, "receive-headers", error))?;
+                .map_err(|error| {
+                    trace_client_event(
+                        &trace_started,
+                        format_args!(
+                            "sequence stream={request_index} receive-headers-error error={error}"
+                        ),
+                    );
+                    sequence_stage_error(request_index, "receive-headers", error)
+                })?;
+        trace_client_event(
+            &trace_started,
+            format_args!(
+                "sequence stream={request_index} receive-headers-complete status={}",
+                response.status()
+            ),
+        );
         let content_type = response
             .headers()
             .get(http::header::CONTENT_TYPE)
             .and_then(|value| value.to_str().ok());
         let mut response_body = Vec::new();
+        let mut response_chunks = 0;
         while let Some(mut data) =
             tokio::time::timeout(std::time::Duration::from_secs(10), stream.recv_data())
                 .await
                 .map_err(|error| {
+                    trace_client_event(
+                        &trace_started,
+                        format_args!(
+                            "sequence stream={request_index} receive-body-deadline error={error}"
+                        ),
+                    );
                     sequence_stage_error(request_index, "receive-body deadline", error)
                 })?
-                .map_err(|error| sequence_stage_error(request_index, "receive-body", error))?
+                .map_err(|error| {
+                    trace_client_event(
+                        &trace_started,
+                        format_args!(
+                            "sequence stream={request_index} receive-body-error error={error}"
+                        ),
+                    );
+                    sequence_stage_error(request_index, "receive-body", error)
+                })?
         {
             let length = data.remaining();
+            response_chunks += 1;
             response_body.extend_from_slice(data.chunk());
             data.advance(length);
         }
+        trace_client_event(
+            &trace_started,
+            format_args!(
+                "sequence stream={request_index} receive-body-complete status={} bytes={} chunks={response_chunks}",
+                response.status(),
+                response_body.len()
+            ),
+        );
         responses.push(json!({
             "status": response.status().as_u16(),
             "content_type": content_type,
@@ -358,7 +458,9 @@ async fn concurrent_request_sequence(
             "stream_reset": false
         }));
     }
+    trace_client_event(&trace_started, "sequence result-barrier-start");
     hold_sequence_connection(connection, specification, &responses).await?;
+    trace_client_event(&trace_started, "sequence result-barrier-released");
     writeln!(
         std::io::stdout().lock(),
         "{}",
@@ -782,13 +884,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
         request_builder = request_builder.header(http::header::CONTENT_LENGTH, request_body.len());
     }
     let request = request_builder.body(())?;
+    let trace_started = Instant::now();
+    trace_client_event(
+        &trace_started,
+        format_args!("request open-start method={method} path={path}"),
+    );
     let send_request = tokio::time::timeout(
         std::time::Duration::from_secs(2),
         sender.send_request(request),
     )
     .await;
     let mut stream = match send_request {
-        Ok(Ok(stream)) => stream,
+        Ok(Ok(stream)) => {
+            trace_client_event(&trace_started, "request open-complete");
+            stream
+        }
         Ok(Err(_error)) if expect_response_error => {
             report_stream_error()?;
             return Ok(());
@@ -801,8 +911,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
             )?;
             return Ok(());
         }
-        Ok(Err(error)) => return Err(error.into()),
-        Err(error) => return Err(error.into()),
+        Ok(Err(error)) => {
+            trace_client_event(
+                &trace_started,
+                format_args!("request open-error error={error}"),
+            );
+            return Err(error.into());
+        }
+        Err(error) => {
+            trace_client_event(
+                &trace_started,
+                format_args!("request open-deadline error={error}"),
+            );
+            return Err(error.into());
+        }
     };
     let _ = writeln!(
         std::io::stderr().lock(),
@@ -873,6 +995,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
             return Err(error.into());
         }
+        trace_client_event(&trace_started, "request upload-finished");
     }
     if peer_stop_before_response_headers
         || peer_stop_after_body_complete
@@ -959,6 +1082,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         std::io::stderr().lock(),
         "HTTP/3 probe: awaiting response headers"
     );
+    trace_client_event(&trace_started, "request receive-headers-start");
     let response_result =
         tokio::time::timeout(std::time::Duration::from_secs(2), stream.recv_response()).await;
     let response = match response_result {
@@ -975,10 +1099,26 @@ async fn main() -> Result<(), Box<dyn Error>> {
             )?;
             return Ok(());
         }
-        Ok(Err(error)) => return Err(error.into()),
-        Err(error) => return Err(error.into()),
+        Ok(Err(error)) => {
+            trace_client_event(
+                &trace_started,
+                format_args!("request receive-headers-error error={error}"),
+            );
+            return Err(error.into());
+        }
+        Err(error) => {
+            trace_client_event(
+                &trace_started,
+                format_args!("request receive-headers-deadline error={error}"),
+            );
+            return Err(error.into());
+        }
     };
     let status = response.status().as_u16();
+    trace_client_event(
+        &trace_started,
+        format_args!("request receive-headers-complete status={status}"),
+    );
     let _ = writeln!(
         std::io::stderr().lock(),
         "HTTP/3 probe: response headers received status={status}"
@@ -1253,6 +1393,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         std::io::stderr().lock(),
         "HTTP/3 probe: response body finished bytes={}",
         body.len()
+    );
+    trace_client_event(
+        &trace_started,
+        format_args!(
+            "request receive-body-complete status={status} bytes={} stream_error={body_stream_error}",
+            body.len()
+        ),
     );
     let body_hex = body
         .iter()

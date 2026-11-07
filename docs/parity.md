@@ -3,8 +3,16 @@
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
 <a id="current-source-status-2026-11-02"></a>
+<a id="current-source-status-2026-11-06"></a>
+<a id="current-source-status-2026-11-07"></a>
 
-## Current source status (2026-11-03)
+## Current source status (2026-11-07)
+
+PR #24 CI [#718](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980) passed the installed-wheel Uvicorn 0.54.0 matrix on synthetic merge source 292433bdb710774a1156e4c1983a6b4e8a761aca: Linux x86-64 786/786, macOS ARM64 786/786, and Windows x86-64 759/759 applicable cases. All indexed custom protocol, TLS factory/ALPN, and response-capacity inputs passed. Native composition and package consumers on Linux, macOS, Windows, and Python 3.9 also passed. Unified coverage and Coverage-MCP review are complete on that PR source; see the [coverage record](coverage.md#current-unified-coverage-status-2026-11-07). Exact-main requalification remains required.
+
+The complete matched benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265) validated 68/69/68 category pairs across Linux x86-64, Linux ARM64, and macOS ARM64, but ran on earlier source e8b5d6b. HTTP/1 FastAPI route throughput and WebSocket text echo are slower than Uvicorn in the reported comparisons; H2/H3 results vary by workload. No broad FastAPI speedup is claimed. The Linux ARM64 Hypercorn HTTP/3 reference exception has candidate-only passing evidence and no comparative ratio. Focused upload diagnostic [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289) did not reproduce the historical HTTP/1 timeout or establish its cause. The release workflow requires a complete benchmark bound to the final main commit; the maintainer will run their real FastAPI application after release qualification.
+
+### Historical source status (2026-11-03)
 
 ### PR #21 CI #637–638 — full inputs and separate reference-defect acceptance
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Focused acceptance fixtures for raw release coverage and required MCP handoff evidence."""
+"""Focused acceptance fixtures for exact-source raw and MCP release evidence."""
 
 from __future__ import annotations
 
@@ -205,6 +205,37 @@ def check_repository_path_projection() -> None:
             raise AssertionError("unbound or inconsistent LLVM source paths must be rejected")
 
 
+def check_release_workflows_require_accepted_review() -> None:
+    candidate = (ROOT / ".github/workflows/candidate.yml").read_text(encoding="utf-8")
+    release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    candidate_steps = (
+        "coverage_mcp_handoff.py select-handoff",
+        "name: Download the selected exact-source Coverage-MCP handoff",
+        "coverage_mcp_handoff.py validate-handoff",
+        "coverage_mcp_handoff.py verify \\",
+        "coverage-mcp-selection.json",
+        '"schema": "uvicorn-rs-release-candidate@9"',
+    )
+    missing = [value for value in candidate_steps if value not in candidate]
+    if missing:
+        raise AssertionError(f"candidate workflow does not require and retain MCP review: {missing}")
+    if candidate.index(candidate_steps[0]) > candidate.index(candidate_steps[1]) \
+            or candidate.index(candidate_steps[1]) > candidate.index(candidate_steps[3]):
+        raise AssertionError("candidate workflow must select and download MCP evidence before verifying it")
+
+    release_steps = (
+        "coverage_mcp_handoff.py verify-selection",
+        'candidate.get("coverage_mcp") != expected_coverage_mcp',
+        '"uvicorn-rs-release-candidate@9"',
+        'coverage_mcp.get("schema") != "uvicorn-rs-coverage-mcp-selection@1"',
+    )
+    missing = [value for value in release_steps if value not in release]
+    if missing:
+        raise AssertionError(f"publication workflow does not revalidate retained MCP review: {missing}")
+    if release.index(release_steps[0]) > release.index(release_steps[1]):
+        raise AssertionError("publication workflow must verify the MCP selection before accepting candidate metadata")
+
+
 def main() -> int:
     # The installed-wheel exclusion audit must inspect this registry without
     # importing or executing the parity runner. A starred set expansion once
@@ -216,6 +247,7 @@ def main() -> int:
         raise AssertionError("native fault registry must remain literal and include TLS initialization selectors")
     check_uncovered_function_projection()
     check_repository_path_projection()
+    check_release_workflows_require_accepted_review()
     (ROOT / "target").mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="uvicorn-rs-coverage-handoff-", dir=ROOT / "target") as temp:
         root = Path(temp)
@@ -295,26 +327,22 @@ def main() -> int:
         run(*verify_args)
         coverage_evidence_path = coverage_snapshot_path.parent / "coverage-evidence.json"
         run(str(COVERAGE), "record", "--report", str(report), "--raw-inventory", str(coverage_snapshot_path),
-            "--handoff-selection", str(selection_path), "--source", SOURCE,
+            "--source", SOURCE,
             "--output", str(coverage_evidence_path))
         recorded_coverage = json.loads(coverage_evidence_path.read_text(encoding="utf-8"))
-        review = recorded_coverage.get("independent_review", {})
-        if (recorded_coverage.get("schema") != "uvicorn-rs-coverage-evidence@2"
-                or review.get("status") != "accepted"
-                or review.get("source_commit") != SOURCE
-                or review.get("coverage_mcp_receipt_sha256") != json.loads(selection_path.read_text())[
-                    "coverage_mcp_receipt_sha256"]
+        if (recorded_coverage.get("schema") != "uvicorn-rs-coverage-evidence@5"
+                or "coverage_review" in recorded_coverage
                 or recorded_coverage.get("coverage") != {
                     "regions": {"covered": 1, "total": 1, "missing": 0},
                     "lines": {"covered": 1, "total": 1, "missing": 0},
                 }):
-            raise AssertionError("exact-source 100% coverage and accepted MCP review were not recorded")
+            raise AssertionError("exact-source 100% raw coverage was not recorded independently of MCP")
         run(str(COVERAGE), "verify", "--report", str(report), "--raw-inventory", str(coverage_snapshot_path),
-            "--handoff-selection", str(selection_path), "--source", SOURCE)
+            "--source", SOURCE)
         alternate_report_root = root / "valid" / "alternate-coverage-path"
         shutil.copytree(report.parent, alternate_report_root)
         run(str(COVERAGE), "verify", "--report", str(alternate_report_root / report.name),
-            "--raw-inventory", str(coverage_snapshot_path), "--handoff-selection", str(selection_path),
+            "--raw-inventory", str(coverage_snapshot_path),
             "--source", SOURCE, expected=1, detail="different or unexpected coverage report path")
         recheck_path = root / "valid" / "publication-selection.json"
         recheck_args = (
@@ -361,7 +389,7 @@ def main() -> int:
         run(str(ATTACH), "--report", str(broken_projection), "--output", str(broken_reviewed),
             "--receipt", str(broken_receipt),
             expected=1, detail="receipt omits later pages")
-    print("PASS coverage evidence: exact raw artifact, 100% record, accepted source-bound MCP review, and handoff cases")
+    print("PASS exact raw release coverage with required source-bound MCP handoff cases")
     return 0
 
 

@@ -543,7 +543,7 @@ def main():
         "uvicorn_module_help": "passed",
         "cli_tls_and_shutdown": probe_installed_cli_tls_and_shutdown(),
         "live_asgi": asyncio.run(consume_wheel()),
-        "scope": "actual package-consumer HTTP/lifespan/context/cancellation and POSIX CLI/TLS/shutdown smoke; not full oracle parity",
+        "scope": "actual package-consumer HTTP/lifespan/context/cancellation and installed CLI/TLS/shutdown smoke where supported by the platform; not full oracle parity",
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(evidence, indent=2) + "\n")

@@ -6,15 +6,24 @@ FastAPI evaluation. Kata remains the system of record. The maintainer will run
 their application trial; collecting their application or running its load is not
 a prerequisite for completing the repository work.
 
-## Active release goal — 2026-11-05
+## Active release goal — 2026-11-07
 
 The current user-provided release goal requires exact-source raw unified
-coverage at 100% regions and lines, with the source, run and attempt, raw
-artifact ID and digest, report and context hashes, and build identity recorded.
-The maintainer explicitly waived a separate Coverage-MCP review on 2026-11-05;
-this supersedes the later reinstatement recorded below. Candidate qualification
+coverage at 100% regions and lines plus an accepted independent Coverage-MCP
+review bound to the final source and raw report. Record the source, run and
+attempt, raw artifact ID and digest, report and context hashes, build identity,
+complete matrix evidence, and accepted review receipt. Candidate qualification
 must revalidate the coverage identity against the same source, run, artifact,
-and report.
+report, and review.
+
+The current `develop` workflow draft makes the independent review a release
+gate. `candidate.yml` selects the successful Coverage-MCP handoff for the exact
+main CI run and attempt, revalidates its GitHub artifact identity, then verifies
+the retained raw report, projection, full page receipt, source, and build before
+recording a selection in the candidate bundle. `release.yml` replays that
+selection check against the bundled files before accepting the candidate. The
+handoff files are restored to their canonical `target/asgi-coverage-review`
+paths because those paths are part of the review receipt binding. CI #718 passed the PR-source release-evidence checks; final-main CI, its matching handoff, and the tag-triggered candidate workflow still need to validate the release commit.
 
 The raw coverage gate remains 100% for regions and lines, with three passing
 ASGI and native repeats, complete attribution, and zero failures or
@@ -22,12 +31,18 @@ infrastructure retries. Retain the source, run/attempt, artifact ID/digest,
 report/context hashes, build identity, and revalidate them during candidate
 qualification.
 
-## Historical review decisions — 2026-11-04 to 2026-11-05
+## Historical review decisions — 2026-11-04 to 2026-11-07
 
-The owner first waived independent review on 2026-11-04, later reinstated it,
-then reconfirmed on 2026-11-05 that no independent Coverage-MCP review is
-required. The current contract is the recorded 100% exact-source raw coverage
-gate above.
+The owner waived independent review on 2026-11-04 and 2026-11-05, then
+reinstated it. A later 2026-11-07 update made the accepted final-source review
+part of the active release goal. Earlier waivers remain historical decisions;
+they do not waive the current gate.
+
+## Focused upload diagnostic — 2026-11-07
+
+Run [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289), artifact [13561333175](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289/artifacts/13561333175), tested PR source be12ff08002fb55ef250eb777198061b4e7c3b4a on Linux ARM64, kernel 7.0.0-1017-azure, CPython 3.12.13, uvloop, 1 MiB uploads in 1 KiB writes, concurrency 8, with the recreated 5 ms timer and proactive 16 KiB peer reads. Three repetitions per server completed with zero timeouts or failed requests. All requests completed and no receive exceeded 100 ms. The historical upload timeout remains unreproduced; its cause and first-stalled boundary remain unknown.
+
+This focused trace is diagnostic only and does not replace the matched three-system matrix. Benchmark #364 is complete but predates the current source and reports HTTP/1 FastAPI and WebSocket regressions; exact-main matrix evidence remains required.
 
 ## Benchmark update — 2026-11-06
 
@@ -441,8 +456,9 @@ main. The hosted exact-main handoff remains open under `7t4g`.
 Interim `[skip ci]` commits avoid broad unchanged reruns while focused tooling
 and Windows checks qualify their changes. Required PR checks remain pending;
 complete final-source CI is still required before merge and release. Coverage
-acceptance precedes benchmark timing; independent Coverage-MCP review remains
-required by the active release goal. Compatibility
+acceptance precedes benchmark timing; the active release goal requires the
+exact-source 100% raw gate and retained source/run/artifact/build identities.
+The maintainer does not require a separate Coverage-MCP receipt. Compatibility
 task `x3az` and all ten children are closed. The capped Linux ARM64
 [upload diagnostic #275](https://github.com/appunni-m/uvicorn-rs/actions/runs/41632864829)
 completes three candidate/reference pairs with zero failures; it does not
@@ -580,11 +596,12 @@ is artifact 13149969193, bound to clean merge revision
 `5524656c4c47090361551e83540090e6fb078f5ab534560efa85b86546ab2f56` and
 report SHA-256 is
 `8d7cbfd7abbb2fd8322bb12725a5a48386c4459ae5a1de4c2bcce5b7c565e636`.
-Independent Coverage-MCP review requires a later successful, source-bound
-report. Matched three-system ordinary-FastAPI benchmarks remain incomplete and
-follow the user's parity-first order. The Linux ARM64 upload timeout and
-incomplete HTTP/3 comparison still need resolution; current partial results do
-not establish a broad performance gain.
+At that historical checkpoint, an independent Coverage-MCP review was planned;
+the maintainer waived that separate review on 2026-11-05. Matched three-system
+ordinary-FastAPI benchmarks remain incomplete and follow the user's
+parity-first order. The Linux ARM64 upload timeout and incomplete HTTP/3
+comparison still need resolution; current partial results do not establish a
+broad performance gain.
 
 Docs CI #256 passed for PR head `87ab887`, before the current local refresh.
 At this snapshot, PR #21 still points to `87ab887`; local status commit
@@ -595,13 +612,9 @@ the documentation inventory found no errors. CI must revalidate these commits
 on PR #21 after `develop` advances.
 The maintainer will run their own FastAPI apps after repository acceptance.
 
-The Linux and macOS bundles are tied to CI #618 and are not final release
-artifacts until every gate passes on the accepted source. Rebuild or recheck
-all platform candidates from the final qualified source before publication.
-Do not merge PR #21 or publish Cargo/PyPI while coverage, independent review,
-full compatibility, benchmarks, docs, or Windows candidate verification remain
-open. After qualification, publish Cargo locally first as requested, then PyPI
-`uvicorn-rs` through `release.yml`.
+This PR #21 section is historical. Its candidate bundles, coverage state,
+review requirement, and publication order were superseded by the current PR #24
+status in [release guide](../releases.md).
 
 ### Earlier release-candidate snapshot — 2026-11-01 (PR #21 / CI #594)
 
@@ -716,13 +729,15 @@ candidate worker cases; the oracle trace recorded no handler-entry event for one
 worker after `CTRL_BREAK_EVENT`, and the supervisor timed out waiting for it.
 
 Only Linux candidate package/consumer qualification passed. The three-repeat
-unified coverage job remains active; no independent current-source
-Coverage-MCP receipt or complete platform candidate qualification is available.
-Keep the PR head unchanged until all active parity, coverage, and package
-verification jobs reach terminal results. Then record their measured totals and
-artifact identities, run an independent Coverage-MCP review on the exact clean
-source, and carry the verified package artifacts and consumer receipts into
-candidate assembly. Start the
+unified coverage job remains active; no exact-source raw coverage report or
+complete platform candidate qualification is available. Keep the PR head
+unchanged until all active parity, coverage, and package verification jobs
+reach terminal results. Then record raw coverage totals and artifact identities
+and carry the verified package artifacts and consumer receipts into candidate
+assembly. That earlier checkpoint recorded a waiver. The maintainer's
+2026-11-07 direction confirms no separate Coverage-MCP receipt is required;
+exact-source raw 100% regions and lines remain mandatory.
+Start the
 matched three-system ordinary-FastAPI benchmark only after full parity passes.
 Benchmarks use one Tokio thread and report system/workload details alongside
 throughput, latency percentiles, CPU, and memory. The maintainer will perform
@@ -1465,23 +1480,23 @@ gap against the raw LLVM profile/source identity before adding another case.
 **Close with:** One clean source/build report has 100% executable regions and
 lines, complete per-case attribution and three complete passing repeats with no
 case, infrastructure, retry or unrun failure. Record integer totals and hashes.
-Independent acceptance of that report is tracked by 7t4g; neither gate is waived.
+The source-bound report, accepted Coverage-MCP receipt, and artifact identity
+are recorded by 7t4g.
 
-## 7t4g — Coverage-MCP review of the final exact-source report
+## 7t4g — Record final exact-source coverage evidence
 
-**Work:** After the final-source unified coverage job passes, use the existing
-canonical-report projection (`scripts/project_coverage_mcp.py`) and handoff
-tooling rather than repeatedly importing the large raw report. Query Coverage-
-MCP 0.16.0 for every unfiltered region and line page. Preserve the shared
-database and unchanged raw CI artifact. Retain the complete MCP transcript,
-source/build identity, passing test status, and accepted receipt; attach and
-strict-check the handoff artifact for the exact final-source run and attempt.
+**Work:** After the final-source unified coverage job passes, retain the exact
+raw artifact and record its source, CI run/attempt, artifact ID/digest, report
+and context hashes, build identity, complete file inventory, totals, and matrix
+status. An accepted independent Coverage-MCP review bound to the exact final
+source and raw report is also required. Do not rerun the matrix just to create
+the evidence record.
 
-**Close with:** Complete zero-gap independent page chains with matching
-source/build identity and passing tests, successful attachment/offline
-verification, and one digest-checked handoff artifact selected and revalidated
-by candidate qualification. A timeout, pending status, raw LLVM summary, or
-synthetic receipt cannot satisfy this task.
+**Close with:** The exact final-source report passes the complete three-repeat
+matrix, attribution and 100% regions/lines checks; the retained raw artifact
+and recorded evidence pass offline verification; and candidate qualification
+revalidates the same source/run/artifact/report/build identities. A local
+summary or report from a different source cannot satisfy this task.
 
 ## nbmg — HTTP/1 upload timeout root cause
 
@@ -1615,19 +1630,14 @@ compatibility acceptance or the start of benchmarks.
 ## m8mx — Publish and verify the consolidated release
 
 **Work:** Once zep3, x3az and v5fe qualify, recheck the exact source, immutable
-tag, selected artifacts and current registry state. For the 0.3.0 candidate,
-the maintainer requested local Cargo publication before PyPI. The 2026-10-30
-crates.io API snapshot shows both crate names at unyanked 0.2.1, so 0.3.0 is an
-update, not a first publication. From a separate clean checkout of the exact
-accepted tag, compare both `cargo package --locked` archives with the candidate;
-publish `asgi-lifespan-protocol-rs` first, wait for its exact index checksum,
-then publish dependent `uvicorn-rs`. Use a short-lived token restricted to both
-crate names and `publish-update`, entered locally through Cargo; logout and
-revoke it after use. Verify registry checksums and clean consumers, then run
-`release.yml` on `main` with action `pypi` to publish the exact accepted
-wheel/sdist without selecting Cargo publisher jobs. Recheck the registry before
-retrying any upload; never overwrite an existing version. Do not publish while
-any required release gate is open.
+tag, selected artifacts and current registry state. The current release order
+is to publish `asgi-lifespan-protocol-rs` and then dependent `uvicorn-rs`
+locally, verify exact registry checksums and clean consumers, and publish the
+PyPI `uvicorn-rs` 0.3.0 distribution through `release.yml`. The workflow
+preflight requires the exact Cargo versions to be registry-visible with bytes
+matching the verified candidate. Recheck registries before retrying any upload;
+never overwrite an existing version. Do not publish while any required release
+gate is open.
 
 **Close with:** Registry versions and bytes match the accepted candidate,
 registry-based Cargo/Python consumers pass, documentation/docs.rs reflects the

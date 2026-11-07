@@ -813,6 +813,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          "$WHEEL_PYTHON" - "$WHEEL_PYTHON_VERSION" <<'PY'
+          import sys
+
+          expected = sys.argv[1]
+          actual = ".".join(str(part) for part in sys.version_info[:3])
+          if actual != expected:
+              raise SystemExit(f"wheel Python is {actual}; expected {expected}")
+          PY
           log="$RUNNER_TEMP/uvicorn-rs-wheel-consumer.log"
           set +e
           (
@@ -998,7 +1006,7 @@ jobs:
           set -euo pipefail
           log="$RUNNER_TEMP/uvicorn-rs-release-evidence.log"
           set +e
-          python scripts/release_evidence.py record --directory dist \
+          "$WHEEL_PYTHON" scripts/release_evidence.py record --directory dist \
             --platform ${{ matrix.platform }} --commit "${{ github.sha }}" \
             --output dist/build-manifest-${{ matrix.platform }}.json >"$log" 2>&1
           status=$?
@@ -1197,6 +1205,7 @@ jobs:
         shell: bash
         env:
           PARITY_CASE_IDS: ${{ inputs.parity_case_ids }}
+          ASGI_PARITY_TRACE_HTTP3_CASE: http3.concurrent-stream-load-slow-reader-resource-bound
           UVICORN_RS_SHUTDOWN_TRACE: "1"
           UVICORN_RS_SHUTDOWN_TRACE_OUTPUT: target/focused-linux/shutdown-trace.log
         run: |

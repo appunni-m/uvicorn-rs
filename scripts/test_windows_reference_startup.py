@@ -25,6 +25,7 @@ from windows_reference_startup import (
     TWO_CRASH_RESTART_CASE_ID,
     TWO_CRASH_RESTART_POLICY,
     WEB_CONCURRENCY_CASE_ID,
+    WEB_CONCURRENCY_NO_REPLACEMENT_POLICY,
     WEB_CONCURRENCY_STARTUP_POLICY,
     _windows_log_events,
     diagnostic_input,
@@ -219,6 +220,27 @@ class ReferenceStartupPolicyTests(unittest.TestCase):
         return evidence.validate_parity(self.result, expected_cases=[self.case],
                                        allow_windows_reference_startup=True, **kwargs)
 
+    def load_web_concurrency_no_replacement_capture(self):
+        capture = json.loads(
+            (ROOT / "tools/upstream/uvicorn-windows/evidence/"
+             "ci707-web-concurrency-no-replacement.json").read_text()
+        )
+        _, cases, _ = evidence.load_contract()
+        self.case = deepcopy(next(item for item in cases
+                                  if item["case_id"] == WEB_CONCURRENCY_CASE_ID))
+        self.result = deepcopy(self.template)
+        self.row = deepcopy(capture["row"])
+        self.result["cases"] = [self.row]
+        self.result["status"] = "failed"
+        self.result["summary"] = {
+            "selected": 1, "executed": 1, "passed": 0, "failed": 1,
+            "not_run": 0, "infrastructure_failed": 0,
+        }
+        self.result["run"]["environment"] = deepcopy(capture["environment"])
+        self.result["run"]["command"] = [
+            "python", "scripts/run_parity.py", "--case-id", WEB_CONCURRENCY_CASE_ID,
+        ]
+
     def edit_raw(self, side, edit):
         observation = self.row[side + "_observation"]
         raw = json.loads(base64.b64decode(observation["stdout_base64"]))
@@ -261,6 +283,45 @@ class ReferenceStartupPolicyTests(unittest.TestCase):
             evidence.validate_parity(
                 self.result, expected_cases=[changed], allow_windows_reference_startup=True,
             )
+
+    def test_web_concurrency_no_replacement_failure_is_accepted_without_rewriting_parity(self):
+        self.load_web_concurrency_no_replacement_capture()
+        before = deepcopy(self.result)
+        decision = self.check()
+        self.assertEqual(decision["status"], "accepted_with_reference_exception")
+        self.assertEqual(decision["raw_parity_status"], "failed")
+        self.assertEqual(decision["raw_parity_summary"]["failed"], 1)
+        self.assertEqual(decision["accepted_reference_defects"][0]["policy"],
+                         WEB_CONCURRENCY_NO_REPLACEMENT_POLICY)
+        self.assertEqual(decision["accepted_reference_defects"][0]["startup_exception"], True)
+        self.assertEqual(decision["candidate_contract_cases"], [WEB_CONCURRENCY_CASE_ID])
+        self.assertEqual(self.result, before)
+
+    def test_web_concurrency_no_replacement_policy_rejects_changed_evidence(self):
+        mutations = (
+            ("reference worker count", lambda: self.row["oracle_observation"].update(
+                worker_clean_shutdown_count=2)),
+            ("candidate worker count", lambda: self.row["target_observation"].update(
+                worker_clean_shutdown_count=1)),
+            ("reference error", lambda: self.edit_raw(
+                "oracle", lambda raw: raw.update(server_stderr_base64=encode(
+                    base64.b64decode(raw["server_stderr_base64"]).decode().replace(
+                        "WinError 10022", "WinError 10038"))))),
+            ("extra candidate error", lambda: self.edit_raw(
+                "target", lambda raw: raw.update(server_stderr_base64=encode(
+                    base64.b64decode(raw["server_stderr_base64"]).decode()
+                    + "ERROR: unrelated failure\n")))),
+            ("changed input", lambda: self.case["api"]["run_http"]["environment"].__setitem__(
+                "WEB_CONCURRENCY", "3")),
+            ("changed Python", lambda: self.result["run"]["environment"].update(
+                python="3.13.0")),
+        )
+        for label, mutate in mutations:
+            with self.subTest(label=label):
+                self.load_web_concurrency_no_replacement_capture()
+                mutate()
+                with self.assertRaises(evidence.EvidenceError):
+                    self.check()
 
     def test_default_and_shutdown_policy_still_reject_startup_failure(self):
         for kwargs in ({}, {"allow_windows_reference_hang": True}):

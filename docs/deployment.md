@@ -1,21 +1,19 @@
 # Deployment guidance
 
-The `uvicorn-rs` 0.3.0 PyPI release is still being qualified and is not
-published. The CI
-[#637](https://github.com/appunni-m/uvicorn-rs/actions/runs/41614642084)
-installed-wheel matrix passed 786/786 on Linux x86-64 and macOS ARM64. Windows
-passed 758/759 raw comparisons, with one captured stock-Uvicorn startup
-defect. Focused CI #638 qualifies narrow startup and shutdown reference-defect
-policies while independently requiring clean candidate lifecycles.
-Linux/macOS artifact consumers and the separate Python 3.9 floor consumer
-pass. Full Windows packaging remains pending. Coverage measures 100%, but
-strict validation fails on raw function-line versus unique source-line totals;
-the validator repair still needs Linux acceptance. Actual independent review
-of that captured source finds zero gaps; final-main review handoff, matched
-FastAPI benchmarks and final-source qualification remain release gates. See the
-[source-bound receipts](uvicorn-compatibility.md), then use the
-[support matrix](support-matrix.md) to check the tested surface, then evaluate
-the released candidate with your application before deploying it.
+The `uvicorn-rs` 0.3.0 PyPI release is not published. PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24)
+has passing parity, candidate consumer, and unified coverage evidence on its
+synthetic merge source; CI [#718](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980)
+records 15,061/15,061 regions and 11,075/11,075 lines. Coverage-MCP reviewed
+that report with zero gaps. The PR remains on `develop`, so the release still
+needs exact-main CI and review evidence, the exact-main benchmark, a final
+checksummed candidate, and clean consumers. The complete earlier benchmark
+shows FastAPI HTTP/1 route and WebSocket regressions; it supports no broad
+speedup claim. Focused upload diagnostic [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289)
+did not reproduce the historical timeout or explain its cause. Updated docs
+need a new docs build because run #312 predates this refresh. See the
+[compatibility status](uvicorn-compatibility.md) and
+[support matrix](support-matrix.md), then evaluate the published candidate
+with your application before deploying it.
 
 ## Bind and run
 

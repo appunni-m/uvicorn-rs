@@ -3,16 +3,48 @@
 <!-- BEGIN GENERATED LATEST ATTEMPT -->
 ## Latest automated benchmark attempt
 
-- Run: [41802594681 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681)
-- Commit: [`feb955d2758166ad8c4b519903fd1318b29e7d2d`](https://github.com/appunni-m/uvicorn-rs/commit/feb955d2758166ad8c4b519903fd1318b29e7d2d)
-- Recorded: 2026-11-04T10:30:31Z
-- Category matrix job: `success`
-- Aggregate job: `success`
+- Run: [42325915265 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265)
+- Commit: [`e8b5d6bdb33ae7c8edebcfc233ac28363234977a`](https://github.com/appunni-m/uvicorn-rs/commit/e8b5d6bdb33ae7c8edebcfc233ac28363234977a)
+- Recorded: 2026-11-07T03:25:16Z
+- Linux x86-64 category matrix: `success` (`validated_complete_system`, 68 qualified category pairs)
+- Linux ARM64 category matrix: `success` (`validated_complete_system`, 69 qualified category pairs)
+- macOS ARM64 category matrix: `success` (`validated_complete_system`, 68 qualified category pairs)
+- Aggregate: `success` (`validated_complete_matrix`)
 
-All three systems produced a complete validated matrix. The [latest complete benchmark report](benchmark-results.md) is included in this documentation update. Hashed machine-readable receipts and raw system bundles remain in this run's GitHub Actions artifacts for 90 days; generated logs and per-run files are not committed.
+All three systems completed the planned category matrix and the ordinary-FastAPI comparisons. Aggregate artifact [13558995489](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265/artifacts/13558995489) has SHA-256 `94bc9e40d96fc6a1201cab33e8f033aafe97dd88394a036cbd07a9afb9bbc412`; platform artifacts are [Linux x86-64 13558820521](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265/artifacts/13558820521), [Linux ARM64 13558531443](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265/artifacts/13558531443), and [macOS ARM64 13558995413](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265/artifacts/13558995413). The HTTP/1.1 FastAPI validated route is slower than Uvicorn on all six system/loop pairs; the matrix supports no broad FastAPI speedup claim. On Linux ARM64, Hypercorn asyncio's HTTP/3 slow-reader reference raised `KeyError(52)` and two client requests timed out waiting for response headers. The candidate-only asyncio repetitions passed, but that cell has no comparative ratio. This run predates PR #24 head `2b3ea9d` and cannot qualify exact-source release performance evidence.
 <!-- END GENERATED LATEST ATTEMPT -->
 
-## Exact-main result and performance interpretation (2026-11-04)
+## PR #24 benchmark status (2026-11-07)
+
+Benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265) completed a validated matrix for Linux x86-64, Linux ARM64, and macOS ARM64. The category artifacts contain 68, 69, and 68 qualified pairs. The generated [benchmark report](benchmark-results.md) and checksummed run artifacts record per-workload throughput, latency percentiles, server/client CPU, and RSS.
+
+Ordinary-FastAPI HTTP/1.1 validated-route throughput was below Uvicorn on all six system/loop pairs; WebSocket text echo was slower on all three systems. H2/H3 improvements are workload-specific. The report does not support a broad FastAPI speedup claim. The Linux ARM64 Hypercorn HTTP/3 slow-reader reference raised KeyError(52); the candidate-only asyncio repetitions passed, so that cell has no comparative ratio.
+
+Run #364 is bound to earlier develop commit e8b5d6b and cannot satisfy the exact-main release benchmark gate. Focused upload diagnostic [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289) used the current PR source and completed without timeouts; it did not identify the historical failure cause and is not performance evidence. Do not rerun unchanged categories. A complete matrix on the final main source remains required.
+
+## Earlier complete three-system matrix before PR #24 (2026-11-06)
+
+Run [#358](https://github.com/appunni-m/uvicorn-rs/actions/runs/42179655798)
+is a validated complete matrix on develop commit
+[`5ac287dbcd375b3d4e8967c10b2f43b2e97c278b`](https://github.com/appunni-m/uvicorn-rs/commit/5ac287dbcd375b3d4e8967c10b2f43b2e97c278b).
+Its aggregate artifact is [13489368566](https://github.com/appunni-m/uvicorn-rs/actions/runs/42179655798/artifacts/13489368566)
+(SHA-256 `5d61fd62869b4fd3be43d5fc200722cde23652b706750f8a6bb6331135f49b72`);
+the report within it matches its `SHA256SUMS` entry (`d8c84bef81797fbfbfc63b7154f06dad420d41ea3232431894f4aef7eb902090`).
+The generated `report.md` in this artifact records Linux x86-64, Linux ARM64,
+and macOS ARM64 with separate runner, workload, throughput, latency-percentile,
+CPU, and RSS results. The checked-in [benchmark-results.md](benchmark-results.md)
+remains the complete exact-main report for #283; neither report qualifies PR #24.
+
+This older complete matrix finds HTTP/1 FastAPI validated-route throughput
+below Uvicorn on all six system/loop pairs, while HTTP/2 and HTTP/3 gains vary
+by workload and WebSocket text echo is slower. It supports no general FastAPI
+speedup claim. The later main attempt #359 failed in the macOS reference
+WebSocket cases and has no validated aggregate. The current source's upload
+diagnostic did not reproduce the historical HTTP/1 timeout; run #42288036588
+now has a separate Linux ARM64 HTTP/3 Hypercorn reference timeout and remains
+partial.
+
+## Last complete exact-main result and performance interpretation (2026-11-04)
 
 Benchmark #283 ran against exact-main commit
 [`feb955d2758166ad8c4b519903fd1318b29e7d2d`](https://github.com/appunni-m/uvicorn-rs/commit/feb955d2758166ad8c4b519903fd1318b29e7d2d).

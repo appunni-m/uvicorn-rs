@@ -9,16 +9,21 @@
 <a id="current-unified-coverage-status-2026-11-01"></a>
 <a id="current-unified-coverage-status-2026-11-04"></a>
 <a id="current-unified-coverage-status-2026-11-05"></a>
+<a id="current-unified-coverage-status-2026-11-06"></a>
+<a id="current-unified-coverage-status-2026-11-07"></a>
 
-## Current unified coverage status (2026-11-05)
+## Current unified coverage status (2026-11-07)
 
-**Current release requirement:** the exact-source unified report must have
-100% measured production regions and lines, and the complete matrix must pass
-three times. An accepted independent Coverage-MCP review must inspect every
-unfiltered region and line page for that same final-source report. The
-candidate records and revalidates the source, CI run and attempt, artifact
-digest, report, context, build, raw-file hashes, and actual MCP transcript and
-receipt. The 2026-11-04 review waiver is superseded.
+PR #24 CI [#718](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980), attempt 1, tested develop head be12ff08002fb55ef250eb777198061b4e7c3b4a at synthetic merge source 292433bdb710774a1156e4c1983a6b4e8a761aca. All 1,453 cases (1,194 ASGI and 259 native) passed with three repeats per suite and complete attribution. The raw report records **15,061/15,061 regions and 11,075/11,075 lines**. Coverage artifact [13563705697](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980/artifacts/13563705697) has archive SHA-256 4a344042e9f56d113fa4a2029d4267a11e863010bcaf0de5eac6f8001b38356d and raw report SHA-256 1b24dc37836737849f98cddbf7002d65fa64d7b22a287e47c5210b20a460881c.
+
+Coverage-MCP independently reviewed the report: all 45 region pages and 899 groups, plus the complete line result, with zero gaps, matching source receipt, and passed test status. The local page receipt is target/asgi-coverage-review/coverage-mcp-pages.json, SHA-256 c1bc9b344d0be4517df17a4f20273e2228399537f38e432d364ab0d09f554a84. This evidence is bound to the PR merge source. The release workflow still requires a new exact-main report and accepted handoff for the final release commit.
+
+### Historical unified coverage status (2026-11-05)
+
+At that historical checkpoint, the exact-source unified report needed 100%
+regions and lines and the complete matrix needed three passing repeats. The
+active release goal now also requires an accepted independent Coverage-MCP
+review bound to the same final source and raw report.
 
 Exact-main CI [#661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
 passed on clean source `feb955d2758166ad8c4b519903fd1318b29e7d2d`, run
@@ -50,8 +55,10 @@ batch-timer invariant in the type and removes that unreachable state.
 A later follow-up handles the macOS TLS-over-Unix-socket `NotConnected`
 shutdown log mismatch found by CI #689. Because that follow-up changes
 `src/lib.rs`, CI #689 cannot be accepted as exact-source coverage even if its
-job completes; a fresh full report is required. The active release goal also
-requires an accepted independent Coverage-MCP review bound to the final report.
+job completes; a fresh full report is required. A later waiver of the
+source-bound Coverage-MCP review was historical and has been reversed by the
+active release goal, which requires the accepted final-source review as well as
+the exact 100% raw coverage report.
 
 The matching three-system benchmark [#283](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681)
 also passed. Its aggregate artifact is
@@ -103,8 +110,10 @@ Those issues motivated the latest evidence-tooling batch. The historical
 measurement does not qualify current source or complete release acceptance.
 
 The final-source report must retain both measured objects, pass strict replay,
-and obtain actual unfiltered Coverage-MCP region/line pages through the
-source-bound handoff. Coverage thresholds and source exclusions are unchanged.
+and record the exact source, run, artifact, report, context, and build
+identities. Coverage thresholds and source exclusions are unchanged. The active
+release goal also requires an accepted Coverage-MCP review bound to that exact
+source and report.
 See the [release sequence](releases.md).
 
 ### Historical full report: CI #596 (2026-11-01)
@@ -137,9 +146,10 @@ six selected multi-worker CLI parity cases (6/6, zero infrastructure
 failures). Its artifact is
 [13086090330](https://github.com/appunni-m/uvicorn-rs/actions/runs/41311364502/artifacts/13086090330).
 This selected run is not a full parity matrix or a coverage report. There is
-still no exact-current-source 100% unified coverage result and no accepted
-independent Coverage-MCP receipt; `7t4g` remains open. The normal build
-excludes fault controls.
+still no exact-current-source 100% unified coverage result at that historical
+checkpoint. PR #24 later passed the 100% gate on its merge source; `7t4g`
+remains open for final-main raw coverage evidence. The normal build excludes
+fault controls.
 
 ### Earlier focused coverage batches
 
@@ -3458,29 +3468,20 @@ uv run --python 3.12 --locked --group benchmark python scripts/check_ci_evidence
   build/asgi-coverage/unified/coverage-report.json
 ```
 
-CI accepts the exact-source raw report with `--allow-pending-mcp`; this enables
-the raw evidence gate while no independent review is attached. It still
-validates the complete indexed matrix, all three repeats, clean source and
-100% normalized regions and lines. A failed matrix, missing counter, or
+CI accepts the exact-source raw report with `--allow-pending-mcp` during the
+raw evidence stage. This validates the complete indexed matrix, all three
+repeats, clean source and 100% normalized regions and lines. The later release
+qualification stage still requires an accepted independent Coverage-MCP review
+bound to the same source and raw report. A failed matrix, missing counter, or
 uncovered region/line remains a failure.
 
 ## Record exact-source release coverage
 
-Release coverage requires an accepted independent Coverage-MCP review of the
-same complete raw report, exact source, CI attempt, artifact and instrumented
-build. `--allow-pending-mcp` lets CI validate the untouched raw report before
-review; it does not satisfy the release gate by itself.
-
-After the exact `main` CI run passes, query Coverage-MCP for every unfiltered
-regions and lines page against the deterministic projection of that raw
-artifact. Dispatch the `Coverage MCP handoff` workflow with the full page
-receipt. It rejects incomplete pagination, mismatched source/build identity,
-and altered raw evidence. The candidate workflow selects exactly one accepted
-handoff for the same source and CI attempt, downloads it by artifact ID, and
-verifies the receipt, report, projection, artifact and workflow identities.
-`coverage-evidence.json` records both the 100% totals and the accepted review
-hashes. Candidate and publication jobs revalidate this chain; a missing or
-stale receipt blocks release.
+Release coverage requires the complete exact-source report to pass 100% regions
+and lines, three full passing repeats, complete attribution, and clean source,
+build, run, artifact, report, context and raw-file identity checks. Candidate
+and publication jobs revalidate those raw evidence identities and the accepted
+Coverage-MCP receipt bound to that report.
 
 For a local audit of a downloaded artifact, retain the artifact at
 `target/asgi-coverage/`, then create and validate the raw inventory:
@@ -3500,16 +3501,12 @@ python scripts/check_ci_evidence.py coverage \
 python scripts/coverage_evidence.py record \
   --report target/asgi-coverage/coverage-report.json \
   --raw-inventory target/asgi-coverage/raw-inventory.json \
-  --handoff-selection target/asgi-coverage/coverage-mcp-selection.json \
   --source FULL_COMMIT_SHA \
   --output target/asgi-coverage/coverage-evidence.json
 ```
 
-The selection file is emitted only after the `verify` command in
-`scripts/coverage_mcp_handoff.py` validates the downloaded handoff against the
-untouched raw report. Keep
-generated reports, page receipts, profiles, and logs in Actions artifacts; do
-not commit them to the repository.
+Keep generated reports, profiles, and logs in Actions artifacts; do not commit
+them to the repository.
 
 ## Measure an incremental case or profile
 

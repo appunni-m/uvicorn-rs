@@ -137,19 +137,41 @@ def project_versions(root: Path = ROOT, expected: str | None = None) -> dict[str
         len(lines),
     )
     registry_script = "\n".join(lines[registry_start:registry_end])
-    required_bootstrap_checks = (
+    required_registry_checks = (
+        'inspect_all = action == "prepare-only"',
         "def check_crate_exists(name):",
         'f"https://crates.io/api/v1/crates/{name}"',
-        "crate_exists = {name: check_crate_exists(name) for name in crate_names}",
-        "if pypi_selected and missing_crates:",
-        "publish the exact candidate Cargo archives locally before PyPI",
+        "if pypi_selected or inspect_all:",
+        "missing_names = [name for name, exists in crate_exists.items() if not exists]",
+        'raise SystemExit("create these crates before the PyPI release: "',
+        "unpublished = [name for name, absent in crate_absent.items() if absent]",
+        'raise SystemExit("publish these exact candidate Cargo versions before PyPI: "',
+        "pypi_absent = check_pypi()",
+        "expected[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()",
+        "if len(expected) != 4:",
+        'f"https://pypi.org/pypi/uvicorn-rs/{version}/json"',
+        'actual = {item.get("filename"): item.get("digests", {}).get("sha256") for item in files}',
+        "if actual != expected:",
+        "publish_pypi = pypi_selected and pypi_absent",
         'version_info.get("yanked") is True',
         "actual != digest",
     )
-    if any(check not in registry_script for check in required_bootstrap_checks):
+    if any(check not in registry_script for check in required_registry_checks):
         raise ValueError(
-            "release.yml must require both exact Cargo candidate archives to be visible on crates.io before PyPI"
+            "release.yml must inspect exact Cargo and PyPI registry state in prepare-only mode "
+            "and permit PyPI only after exact candidate Cargo versions and PyPI filenames/checksums "
+            "are verified"
         )
+
+    verify_start = lines.index("  verify-publication:")
+    publication_verification = "\n".join(lines[verify_start:])
+    if (
+        "def verify_pypi():" not in publication_verification
+        or 'check_registry(verify_pypi, f"uvicorn-rs {version}")' not in publication_verification
+        or "crates.io/api/v1/crates" in publication_verification
+        or "verify_crate" in publication_verification
+    ):
+        raise ValueError("PyPI publication verification must verify only the exact PyPI distribution")
 
     def locked_package(lock_name: str, package_name: str, *, editable: bool = False) -> dict:
         rows = [

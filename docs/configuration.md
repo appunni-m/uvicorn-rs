@@ -1,10 +1,15 @@
 # Configure the Rust server and Python compatibility API
 
-This page describes the current source-checkout interfaces. The `uvicorn`
-namespace now exposes the Uvicorn 0.54.0 `run`, `Config`, and `Server` call
-signatures, with serving routed through the Rust engine. Runtime compatibility
-is still partial; see [Uvicorn replacement status](uvicorn-compatibility.md)
-before relying on an option or API behavior.
+This page describes the `uvicorn-rs` source interfaces against the Uvicorn
+0.54.0 contract. The `uvicorn` namespace exposes its `run`, `Config`, and `Server`
+call signatures, with protocol and transport work in Rust and Python at the
+ASGI integration boundary. PR #24 CI
+[#718](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980) passed
+the installed-wheel parity matrix and the custom protocol, `ssl_context_factory`,
+ALPN, and response-capacity cases on synthetic merge source
+292433bdb710774a1156e4c1983a6b4e8a761aca. Final-main release qualification is
+still open; see the [current status](uvicorn-compatibility.md) for remaining
+source-bound coverage, benchmark, and artifact gates.
 
 ## CLI
 
@@ -12,11 +17,13 @@ before relying on an option or API behavior.
 uv run uvicorn examples.hello_asgi:app --host 127.0.0.1 --port 8000
 ~~~
 
-The CLI recognizes the pinned Uvicorn option names. The options below are the
-current accepted subset; other explicitly selected settings are rejected as
-not yet implemented. A few exposed defaults still have behavior gaps, which
-are called out in the table. Where a parity receipt checks only startup
-diagnostics, that limit is stated in the option description.
+The CLI uses the 51 declared option definitions from Uvicorn 0.54.0. Its
+118-case process input matrix covers help/version output, imports, settings
+validation, environment precedence, and live requests; the complete current
+public parity matrix passed in PR CI #718. The table describes the
+observable behavior and selected evidence for each setting. It does not claim
+that every combination of values, protocols, and operating systems has been
+exercised.
 
 | Option | Default | Description |
 | --- | --- | --- |
@@ -29,7 +36,7 @@ diagnostics, that limit is stated in the option description.
 | --http2 | Disabled | Enables HTTP/2 over TLS ALPN and cleartext prior knowledge when `--http zttp` is selected, matching Uvicorn's opt-in setting while using the Rust protocol implementation. A local aggregate run passed all 27 maintained HTTP/2 parity cases against Uvicorn 0.54.0 with zttp 0.0.34 on macOS ARM64 and CPython 3.12.13; the HTTP/2 category benchmark and hosted release evidence remain pending. |
 | --ws auto | auto | `auto`, `websockets-sansio`, `wsproto`, and legacy `websockets` are accepted and route to the native WebSocket implementation. Focused selector cases cover diagnostics and text/binary exchange; they do not establish complete backend parity. |
 | --ws-per-message-deflate BOOL | true | When enabled, negotiates `permessage-deflate` if offered by the client; `false` disables negotiation. Focused Python API parity cases verify compressed text echo with normal close and verify the disabled setting. A selected raw-frame comparison also verifies one fragmented compressed text message is reassembled and delivered as one ASGI event. Other extension parameter combinations and full backend parity remain unverified. |
-| --ws-max-queue INTEGER | 32 | `auto`, `websockets-sansio`, and `wsproto` do not consume this backend-specific setting. The legacy `websockets` selector passes it to a bounded native ASGI receive-message channel. One live `--ws-max-queue 1` case delays the ASGI reader and verifies three messages arrive before a normal close. The Rust bound counts complete messages; upstream `websockets` applies its high-water mark to frames, so other thresholds, fragmented-message behavior, and flow-control timing remain unverified. |
+| --ws-max-queue INTEGER | 32 | `auto`, `websockets-sansio`, and `wsproto` do not consume this legacy-backend setting. With `--ws websockets`, it bounds complete incoming messages before the ASGI receive call; this matches Uvicorn 0.54.0's pinned `websockets.legacy` implementation, which queues reassembled messages. A live `--ws-max-queue 1` delayed-reader case passes. Other values and timing combinations are not all represented in the parity matrix. |
 | --ws-ping-interval SECONDS | 20.0 | Send server-initiated WebSocket Ping frames at this interval. A non-positive value disables pings. An infinite positive interval, NaN, or a value beyond Rust's `Duration` range is treated as never firing; use `None` or zero to disable pings explicitly. The Rust driver sends a four-byte payload and schedules the next ping after a matching Pong. |
 | --ws-ping-timeout SECONDS | 20.0 | Close the WebSocket with code 1011 and reason `keepalive ping timeout` when the peer does not return the matching Pong before the deadline. `None` through `uvicorn.run()` or `uvicorn_rs.Server` disables the timeout; a negative value is an immediate timeout after the first Ping; NaN is treated as unbounded. Positive infinity or a finite timeout beyond Rust's `Duration` range is unbounded. Focused Python API parity cases verify the negative, NaN, and unbounded timeout behavior against Uvicorn 0.54.0. |
 | --workers INTEGER | `WEB_CONCURRENCY` or 1 | Explicit `0` and `1` use one process; `WEB_CONCURRENCY=0` also selects one process. Focused module-CLI comparisons verify two workers serve a live HTTP/1.1 request and stop on SIGINT with either `--workers 2` or `WEB_CONCURRENCY=2`. Separate cases verify replacement after one worker exits and after a POSIX worker stops answering health checks. Repeated failure policy, dynamic worker-count signals, and other socket/platform combinations remain unverified. |
@@ -71,9 +78,9 @@ import uvicorn
 uvicorn.run("examples.hello_asgi:app", log_config="logging.json")
 ~~~
 
-Without certificate and key files, the prototype accepts cleartext HTTP/1.1 and HTTP/2 prior knowledge. With both files, TLS uses ALPN for HTTP/1.1 and HTTP/2; experimental HTTP/3 uses QUIC. Protocol and lifecycle cases are listed in the [support matrix](support-matrix.md).
+Without certificate and key files, the server accepts cleartext HTTP/1.1 and HTTP/2 prior knowledge. With both files, TLS uses ALPN for HTTP/1.1 and HTTP/2; experimental HTTP/3 uses QUIC. Protocol and lifecycle cases are listed in the [support matrix](support-matrix.md).
 
-Ctrl-C and SIGTERM request shutdown. By default the prototype runs ASGI lifespan startup before serving and lifespan shutdown after draining or cancelling active work. With `--lifespan off`, it skips calling the application with a lifespan scope while HTTP scopes still receive an empty `state` mapping. The Python API accepts the same setting as `uvicorn.run(app, lifespan="off")` or `Config(app, lifespan="off")`.
+Ctrl-C and SIGTERM request shutdown. By default the server runs ASGI lifespan startup before serving and lifespan shutdown after draining or cancelling active work. With `--lifespan off`, it skips calling the application with a lifespan scope while HTTP scopes still receive an empty `state` mapping. The Python API accepts the same setting as `uvicorn.run(app, lifespan="off")` or `Config(app, lifespan="off")`.
 
 The same root-path setting is available through `uvicorn.run(app,
 root_path="/mounted")` and `--root-path /mounted`. Focused HTTP/1.1 contract
@@ -177,10 +184,13 @@ single-process ASGI 3 TCP path and selected TLS, factory, loop, and graceful
 shutdown settings, including the focused `lifespan="off"` case. Matching
 signatures do not imply that every Uvicorn setting is implemented.
 
-## Not available in the current prototype
+## Platform and verification boundaries
 
-The compatibility API does not yet implement the complete Uvicorn settings,
-logging, socket, interface-selection, reload, worker, or process-supervision contracts.
-Unsupported runtime options must be checked against the
-[compatibility matrix](uvicorn-compatibility.md); use upstream Uvicorn when
-your application depends on an unqualified feature.
+Windows does not provide Uvicorn's Unix-domain-socket or inherited-file-
+descriptor listener paths. TLS 1.0 and 1.1 are rejected in accordance with
+[RFC 8996](https://www.rfc-editor.org/rfc/rfc8996.html). The support matrix
+records platform-specific parity exclusions and the exact inputs exercised.
+Passing those inputs is evidence for the recorded contract, not a claim that
+every possible option combination has been tested. The `uvicorn-rs` 0.3.0
+release remains under qualification; see the
+[release status](uvicorn-compatibility.md).
