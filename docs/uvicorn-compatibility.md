@@ -38,7 +38,8 @@ These receipts qualify the PR merge source, not the final main release commit.
 Unified coverage passed all 1,453 cases through three ASGI and three native
 repeats: 15,061/15,061 regions and 11,075/11,075 lines. Exact-main CI #720,
 docs #314, and the three-system benchmark #366 were dispatched on commit
-`242f050`; the docs build passed. Coverage-MCP review is optional. The full
+`242f050`; the docs build passed. The active release goal requires a final-source
+Coverage-MCP review in addition to 100% raw coverage. The full
 three-system
 benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265)
 is complete on earlier source `e8b5d6b`, but it reports HTTP/1 FastAPI route

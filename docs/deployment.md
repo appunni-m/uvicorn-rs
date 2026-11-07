@@ -5,8 +5,9 @@ merged to `main` as `242f05096181ee1b84aac116bea613c1a6dad76f`. PR-head CI
 [#719](https://github.com/appunni-m/uvicorn-rs/actions/runs/42348498407) passed
 parity, candidate consumers, and unified coverage at 15,061/15,061 regions and
 11,075/11,075 lines. Exact-main CI #720 and benchmark #366 were dispatched; docs
-build #314 passed. The maintainer waived independent Coverage-MCP review while
-retaining raw 100% coverage as a release requirement. The earlier benchmark
+build #314 passed. The active release goal requires an accepted independent
+Coverage-MCP review bound to the final source and raw report, alongside 100%
+raw coverage. The earlier benchmark
 shows FastAPI HTTP/1 route and WebSocket regressions; it supports no broad
 speedup claim. Focused upload diagnostic [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289)
 did not reproduce the historical timeout or explain its cause. See the

@@ -26,7 +26,7 @@ PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) merged to `main` as `2
 
 The complete earlier benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265) is bound to source `e8b5d6b`. It reports slower ordinary-FastAPI HTTP/1 route and WebSocket text-echo results, with workload-specific H2/H3 results; no broad FastAPI speedup is claimed. Focused upload diagnostic [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289) did not reproduce or explain the historical upload timeout. Exact-main benchmark #366 is now the qualifying run for commit `242f050`.
 
-Main docs build #314 passed on merge commit `242f050` before this documentation refresh. The updated pages still need the docs check. The maintainer has waived independent Coverage-MCP review: candidate and publication workflows now validate and record exact-source raw 100% coverage instead. That workflow-policy change is in progress on `develop`; its merged main commit must receive its own CI, benchmark, artifact, and consumer evidence before tagging. The staged publication order remains local Cargo publication and registry-byte verification, followed by PyPI distribution `uvicorn-rs` through `release.yml`. No 0.3.0 candidate or package has been published.
+Main docs build #314 passed on merge commit `242f050` before this documentation refresh. The updated pages still need the docs check. The active release goal requires a complete exact-source raw 100% report and an accepted independent Coverage-MCP review bound to that same source and report. PR #25 is being aligned with that requirement on `develop`; its merged main commit must receive its own CI, benchmark, artifact, review, and consumer evidence before tagging. The staged publication order remains local Cargo publication and registry-byte verification, followed by PyPI distribution `uvicorn-rs` through `release.yml`. No 0.3.0 package has been published.
 
 | Superseded CI #712 artifact | Artifact | ZIP SHA-256 | Contents and check |
 | --- | --- | --- | --- |
@@ -42,16 +42,16 @@ locally first, verify the exact versions and checksums, and then publish PyPI
 are registry-visible and match the candidate archives before PyPI publication.
 The exact-source raw coverage gate requires 100% regions and lines, a complete
 passing matrix, and recorded source, run, artifact, report, context, and build
-identities. Independent Coverage-MCP review is optional and does not gate the
-release. Candidate assembly revalidates the raw evidence against the final
-source commit. The tag-triggered candidate and publication workflows still need
-to run against the final main commit.
+identities, plus an accepted independent Coverage-MCP review bound to the same
+source and report. Candidate assembly revalidates the raw evidence against the
+final source commit. The tag-triggered candidate and publication workflows
+still need to run against the final main commit.
 
 ### Earlier release-gate wording (2026-11-05)
 
 At this 2026-11-05 snapshot, independent Coverage-MCP review was required for
-the final clean source. A later waiver was recorded on 2026-11-07, but the
-active release goal has since reinstated the accepted final-source review.
+the final clean source. A temporary waiver recorded on 2026-11-07 was later
+superseded; the active release goal requires the accepted final-source review.
 Exact-source 100% regions and lines, a complete passing matrix, and recorded
 artifact identities remain mandatory. The exact-main #661 report below is
 historical; the final source needs its own raw report and review receipt.
@@ -186,8 +186,9 @@ is selected-case evidence, not full-suite coverage. The later Rust error-mapping
 fix, WebSocket close-path simplification, and parity input additions make the
 earlier full draft report stale for the current source and inventory. This
 historical snapshot recorded a temporary waiver of separate Coverage-MCP
-review. The maintainer reaffirmed that waiver on 2026-11-07; final exact-source
-raw 100% coverage remains mandatory, while independent review is optional.
+review. The active release goal supersedes that waiver and requires an accepted
+independent review bound to the final exact-source report, alongside raw 100%
+coverage.
 
 Benchmark run
 [`39689988939`](https://github.com/appunni-m/uvicorn-rs/actions/runs/39689988939)

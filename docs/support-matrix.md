@@ -34,9 +34,10 @@ retries. Raw coverage is 15,061/15,061 regions and 11,075/11,075 lines; artifact
 has SHA-256 `4a670ab7794c50c3104ca9415fc6664f0ec7b7080dc47086864c09949aa8c856`.
 Coverage-MCP reviewed the full report with 45/45 region pages (899 groups),
 the full line result, zero gaps, matching source receipt, and passed test
-status. The maintainer waived independent Coverage-MCP review as a release
-gate; exact-source 100% raw coverage remains mandatory. Main CI #720 and the
-three-system benchmark #366 were dispatched on `242f050`; docs build #314 passed.
+status. That review is bound to the earlier PR merge source. The active release
+goal requires a new accepted review bound to the final main source. Exact-source
+100% raw coverage remains mandatory. Main CI #720 and the three-system benchmark
+#366 were dispatched on `242f050`; docs build #314 passed.
 
 The complete matched benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265)
 has 68/69/68 qualified category pairs on Linux x86-64, Linux ARM64, and macOS
@@ -77,9 +78,10 @@ retries, but measured 15,056/15,057 regions and 11,078/11,078 lines. The one
 uncovered region was an unreachable optional request-body timer state, removed
 by the invariant change on the #689 head.
 
-That historical snapshot records an earlier review-gate discussion. The
-maintainer's current decision waives a separate Coverage-MCP review; exact-source
-100% raw coverage and the final-source three-system benchmark remain required.
+That historical snapshot records an earlier review-gate discussion. A temporary
+waiver of independent Coverage-MCP review was later recorded, then superseded by
+the active release goal. Exact-source 100% raw coverage, an accepted independent
+review of that report, and the final-source three-system benchmark are required.
 No 0.3.0 package has been published.
 
 ## Last complete exact-main release baseline (2026-11-04)

@@ -9,7 +9,7 @@ a drop-in replacement.
 
 ## Current qualification status — 2026-11-07
 
-PR #24 merged to `main` as `242f05096181ee1b84aac116bea613c1a6dad76f`. PR-head CI #719 passed the installed-wheel parity matrix, including custom HTTP/WebSocket hooks, `ssl_context_factory`, ALPN, response-capacity inputs, native composition, and candidate consumers. The Windows-applicable matrix is 759/759. Three-repeat unified coverage passed at 15,061/15,061 regions and 11,075/11,075 lines. Exact-main CI #720, docs #314, and benchmark #366 started on this commit; the docs build passed. Coverage-MCP review is optional under the maintainer's decision. The workflow-policy change on `develop` will need fresh main evidence after merge.
+PR #24 merged to `main` as `242f05096181ee1b84aac116bea613c1a6dad76f`. PR-head CI #719 passed the installed-wheel parity matrix, including custom HTTP/WebSocket hooks, `ssl_context_factory`, ALPN, response-capacity inputs, native composition, and candidate consumers. The Windows-applicable matrix is 759/759. Three-repeat unified coverage passed at 15,061/15,061 regions and 11,075/11,075 lines. Exact-main CI #720, docs #314, and benchmark #366 started on this commit; the docs build passed. The active release goal requires a final-source Coverage-MCP review. PR #25 is being updated to preserve that handoff gate and will need fresh main evidence after merge.
 
 The complete three-system benchmark #364 is on earlier source e8b5d6b. It reports ordinary-FastAPI HTTP/1 route and WebSocket regressions and is not a broad speedup result. Focused upload trace [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289) did not reproduce the historical HTTP/1 timeout or establish a cause. A full matrix on the exact final main source and current documentation build remain required. See the [current user-facing status](../uvicorn-compatibility.md#current-status-2026-11-07).
 
@@ -40,7 +40,8 @@ This rule does not waive raw 100% coverage, benchmark or artifact requirements.
 The active release goal requires final-main CI to record exact-source raw
 coverage at 100% regions and lines with the complete passing matrix and retained
 run, artifact, report, context, and build identities. An independent
-Coverage-MCP review is optional.
+An accepted independent Coverage-MCP review bound to the final raw report is a
+release requirement.
 
 The executable exception is
 `uvicorn-0.54.0-windows-two-worker-sigint-tcp-wakeup@2`, implemented in

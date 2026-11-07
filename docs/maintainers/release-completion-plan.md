@@ -9,19 +9,19 @@ a prerequisite for completing the repository work.
 ## Active release goal — 2026-11-07
 
 The current release goal requires exact-source raw unified coverage at 100%
-regions and lines. Record the source, run and attempt, raw artifact ID and
-digest, report and context hashes, build identity, and complete matrix evidence.
-Candidate qualification must revalidate those identities against the final
-source. The maintainer explicitly waived a separate Coverage-MCP review; it is
-optional diagnostic evidence, not a release gate.
+regions and lines plus an accepted independent Coverage-MCP review bound to the
+same final source and report. Record the source, run and attempt, raw artifact
+ID and digest, report and context hashes, build identity, complete matrix
+evidence, and review receipt. Candidate qualification must revalidate those
+identities against the final source.
 
-The `develop` workflow update removes the old handoff requirement from
-`candidate.yml` and `release.yml`. The candidate still selects the successful
-main CI run, validates the exact raw report and complete matrix, and records
-100% regions and lines with source, run, artifact, report, context, and build
-identity. PR-head CI #719 passed raw coverage and package checks. Main CI #720
-and the exact-main benchmark #366 started on `242f050`; this workflow-policy
-update will require new final-main evidence after merge.
+PR #25 currently removes the independent Coverage-MCP handoff requirement from
+`candidate.yml` and `release.yml`; the local `develop` draft restores it to match
+the active goal. Candidate selection must bind the accepted review artifact to
+the successful main CI run and exact report, then revalidate the raw report,
+complete matrix, and source/build identities. PR-head CI #719 passed raw
+coverage and package checks. Main CI #720 and the exact-main benchmark #366
+started on `242f050`; the final PR merge commit still needs fresh main evidence.
 
 The raw coverage gate remains 100% for regions and lines, with three passing
 ASGI and native repeats, complete attribution, and zero failures or
@@ -732,9 +732,9 @@ complete platform candidate qualification is available. Keep the PR head
 unchanged until all active parity, coverage, and package verification jobs
 reach terminal results. Then record raw coverage totals and artifact identities
 and carry the verified package artifacts and consumer receipts into candidate
-assembly. That earlier checkpoint recorded a waiver. The maintainer's
-2026-11-07 direction confirms no separate Coverage-MCP receipt is required;
-exact-source raw 100% regions and lines remain mandatory.
+assembly. That earlier checkpoint recorded a temporary review waiver. The active
+release goal supersedes it and requires an accepted independent Coverage-MCP
+receipt bound to the exact-source raw report, alongside 100% regions and lines.
 Start the
 matched three-system ordinary-FastAPI benchmark only after full parity passes.
 Benchmarks use one Tokio thread and report system/workload details alongside
