@@ -1,7 +1,7 @@
 # Can I replace Uvicorn?
 
-PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) is the active
-replacement candidate from `develop` to `main`. The PyPI distribution is
+The replacement candidate PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24)
+merged to `main` as `242f050`. The PyPI distribution is
 `uvicorn-rs`; it provides the `uvicorn` command and import namespace. The
 optional internal Python adapter remains `uvicorn-rs-py`. Keep upstream
 `uvicorn` and `uvicorn-rs` in separate environments because they install
@@ -17,10 +17,10 @@ candidate workflow.
 
 ## Current status (2026-11-07)
 
-PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) is open from
-`develop` head `be12ff08002fb55ef250eb777198061b4e7c3b4a`; CI
-[#718](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980)
-tested synthetic merge source `292433bdb710774a1156e4c1983a6b4e8a761aca`.
+PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) merged to `main` as
+`242f05096181ee1b84aac116bea613c1a6dad76f`. PR-head CI
+[#719](https://github.com/appunni-m/uvicorn-rs/actions/runs/42348498407)
+tested commit `69903ba90f11d22716064dde92c30f98ab631ced`.
 Installed-wheel parity passed 786/786 on Linux x86-64 and macOS ARM64, and
 759/759 applicable cases on Windows x86-64. The 27 Windows exclusions require
 POSIX-only facilities. All 16 custom protocol, `ssl_context_factory`, ALPN,
@@ -30,25 +30,25 @@ cases passed.
 
 The same run passed candidate package/consumer checks on Linux, macOS ARM64,
 Windows x86-64, and the CPython 3.9 floor. See the retained [Linux parity
-artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980/artifacts/13559903360),
-[macOS artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980/artifacts/13560349807),
-and [Windows artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980/artifacts/13560553951).
+artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/42348498407/artifacts/13564214885),
+[macOS artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/42348498407/artifacts/13565221881),
+and [Windows artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/42348498407/artifacts/13565697309).
 These receipts qualify the PR merge source, not the final main release commit.
 
 Unified coverage passed all 1,453 cases through three ASGI and three native
-repeats: 15,061/15,061 regions and 11,075/11,075 lines. Coverage-MCP reviewed
-all 45 region pages (899 groups) and the full line result with zero gaps,
-matching source receipt, and passed tests. Final-main CI and its matching
-review handoff remain required by the release workflow. The full three-system
+repeats: 15,061/15,061 regions and 11,075/11,075 lines. Exact-main CI #720,
+docs #314, and the three-system benchmark #366 were dispatched on commit
+`242f050`; the docs build passed. The active release goal requires a final-source
+Coverage-MCP review in addition to 100% raw coverage. The full
+three-system
 benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265)
 is complete on earlier source `e8b5d6b`, but it reports HTTP/1 FastAPI route
 and WebSocket regressions and cannot satisfy the exact-main benchmark gate.
 Focused upload diagnostic [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289)
 did not reproduce the historical HTTP/1 timeout or establish its cause.
 
-The updated pages still need a new docs build: #312 passed before this status
-refresh. PR #24 must be merged and the final-main benchmark, package candidate,
-and clean consumer checks must pass before tagging or publishing 0.3.0. The
+Main docs build #314 passed. Before tagging or publishing 0.3.0, exact-main CI,
+the benchmark, package candidate, and clean consumer checks must pass. The
 maintainer's real FastAPI application trial follows repository release
 qualification.
 

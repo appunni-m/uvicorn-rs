@@ -14,7 +14,7 @@ from typing import Any
 from urllib.parse import unquote, urlsplit
 
 
-POLICY_ID = "uvicorn-0.54.0-macos-arm64-wss-handshake-timeout-candidate-clean@2"
+POLICY_ID = "uvicorn-0.54.0-macos-arm64-wss-handshake-timeout-candidate-clean@3"
 CASE_ID = "websocket-tls.text-round-trip-with-query-and-subprotocol"
 SCOPE_CASE_ID = "websocket-tls.scope-headers-path-query-and-subprotocols"
 MACOS_REFERENCE_CASE_IDS = frozenset({CASE_ID, SCOPE_CASE_ID})
@@ -129,8 +129,25 @@ def _eligible_context(case: dict[str, Any], environment: dict[str, Any]) -> str:
 
 def _parse_failure_diagnostic(error_message: str, case_id: str) -> dict[str, Any]:
     if case_id == CASE_ID:
-        _require(error_message.startswith(ERROR_PREFIX), "failure is not the recorded handshake timeout")
-        diagnostic_and_traceback = error_message[len(ERROR_PREFIX):]
+        if error_message.startswith(ERROR_PREFIX):
+            diagnostic_and_traceback = error_message[len(ERROR_PREFIX):]
+        else:
+            _require(
+                error_message.startswith(SCOPE_ERROR_PREFIX),
+                "failure is not the recorded handshake timeout",
+            )
+            client_trace_and_diagnostic = error_message[len(SCOPE_ERROR_PREFIX):]
+            client_trace, separator, diagnostic_and_traceback = client_trace_and_diagnostic.partition(
+                SCOPE_DIAGNOSTIC_MARKER
+            )
+            _require(bool(separator), "raw WebSocket client trace or diagnostic marker is missing")
+            _require(
+                "DEBUG > GET /ws?parity=tls HTTP/1.1" in client_trace
+                and "DEBUG > Upgrade: websocket" in client_trace
+                and "DEBUG > EOF" in client_trace
+                and "OSError: [Errno 9] Bad file descriptor" in client_trace,
+                "client trace does not identify the captured TLS WebSocket EOF",
+            )
     else:
         _require(
             error_message.startswith(SCOPE_ERROR_PREFIX),

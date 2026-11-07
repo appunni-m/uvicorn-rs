@@ -8,22 +8,20 @@ a prerequisite for completing the repository work.
 
 ## Active release goal — 2026-11-07
 
-The current user-provided release goal requires exact-source raw unified
-coverage at 100% regions and lines plus an accepted independent Coverage-MCP
-review bound to the final source and raw report. Record the source, run and
-attempt, raw artifact ID and digest, report and context hashes, build identity,
-complete matrix evidence, and accepted review receipt. Candidate qualification
-must revalidate the coverage identity against the same source, run, artifact,
-report, and review.
+The current release goal requires exact-source raw unified coverage at 100%
+regions and lines plus an accepted independent Coverage-MCP review bound to the
+same final source and report. Record the source, run and attempt, raw artifact
+ID and digest, report and context hashes, build identity, complete matrix
+evidence, and review receipt. Candidate qualification must revalidate those
+identities against the final source.
 
-The current `develop` workflow draft makes the independent review a release
-gate. `candidate.yml` selects the successful Coverage-MCP handoff for the exact
-main CI run and attempt, revalidates its GitHub artifact identity, then verifies
-the retained raw report, projection, full page receipt, source, and build before
-recording a selection in the candidate bundle. `release.yml` replays that
-selection check against the bundled files before accepting the candidate. The
-handoff files are restored to their canonical `target/asgi-coverage-review`
-paths because those paths are part of the review receipt binding. CI #718 passed the PR-source release-evidence checks; final-main CI, its matching handoff, and the tag-triggered candidate workflow still need to validate the release commit.
+PR #25 currently removes the independent Coverage-MCP handoff requirement from
+`candidate.yml` and `release.yml`; the local `develop` draft restores it to match
+the active goal. Candidate selection must bind the accepted review artifact to
+the successful main CI run and exact report, then revalidate the raw report,
+complete matrix, and source/build identities. PR-head CI #719 passed raw
+coverage and package checks. Main CI #720 and the exact-main benchmark #366
+started on `242f050`; the final PR merge commit still needs fresh main evidence.
 
 The raw coverage gate remains 100% for regions and lines, with three passing
 ASGI and native repeats, complete attribution, and zero failures or
@@ -381,8 +379,11 @@ at the first failing body boundary before changing server behavior.
   `uvicorn-rs-py` and is not a crates.io release target.
 - Cargo releases: `asgi-lifespan-protocol-rs`, then the Python-free `uvicorn-rs`.
   HTTP/3 is optional under `http3`. No separate H3 or Quinn package is published.
-- Publisher: `.github/workflows/release.yml`. `candidate.yml` builds and verifies
-  candidates. Documentation deployment is separate.
+- Publisher: `.github/workflows/release.yml`. `candidate.yml` verifies the exact
+  tagged source and builds a checksum-bound candidate; its successful completion
+  automatically starts Cargo/PyPI publication and GitHub Release verification.
+  `docs.yml` remains a separate strict build/deploy pipeline and imports the
+  selected main benchmark artifact after each matrix run.
 - Compatibility authority: the pinned Uvicorn 0.54.0 source in
   [the public contract](uvicorn-0.54.0-contract.md). Use the existing
   `tests/parity/manifest.json`, its indexed inputs, `tests/native-core/manifest.json`,
@@ -734,9 +735,9 @@ complete platform candidate qualification is available. Keep the PR head
 unchanged until all active parity, coverage, and package verification jobs
 reach terminal results. Then record raw coverage totals and artifact identities
 and carry the verified package artifacts and consumer receipts into candidate
-assembly. That earlier checkpoint recorded a waiver. The maintainer's
-2026-11-07 direction confirms no separate Coverage-MCP receipt is required;
-exact-source raw 100% regions and lines remain mandatory.
+assembly. That earlier checkpoint recorded a temporary review waiver. The active
+release goal supersedes it and requires an accepted independent Coverage-MCP
+receipt bound to the exact-source raw report, alongside 100% regions and lines.
 Start the
 matched three-system ordinary-FastAPI benchmark only after full parity passes.
 Benchmarks use one Tokio thread and report system/workload details alongside
@@ -1630,14 +1631,15 @@ compatibility acceptance or the start of benchmarks.
 ## m8mx — Publish and verify the consolidated release
 
 **Work:** Once zep3, x3az and v5fe qualify, recheck the exact source, immutable
-tag, selected artifacts and current registry state. The current release order
-is to publish `asgi-lifespan-protocol-rs` and then dependent `uvicorn-rs`
-locally, verify exact registry checksums and clean consumers, and publish the
-PyPI `uvicorn-rs` 0.3.0 distribution through `release.yml`. The workflow
-preflight requires the exact Cargo versions to be registry-visible with bytes
-matching the verified candidate. Recheck registries before retrying any upload;
-never overwrite an existing version. Do not publish while any required release
-gate is open.
+tag, selected artifacts and current registry state. Pushing the annotated tag
+starts `candidate.yml`; its successful completion automatically starts
+`release.yml`. The publisher verifies the candidate bundle, publishes missing
+`asgi-lifespan-protocol-rs` and dependent `uvicorn-rs` versions through their
+Trusted Publishers, verifies exact registry checksums, publishes PyPI
+`uvicorn-rs` 0.3.0, and creates the GitHub Release. A first-ever Cargo package
+name still requires a local bootstrap before tagging; both current names exist.
+Recheck registries before retrying any upload; never overwrite an existing
+version. Do not publish while any required release gate is open.
 
 **Close with:** Registry versions and bytes match the accepted candidate,
 registry-based Cargo/Python consumers pass, documentation/docs.rs reflects the

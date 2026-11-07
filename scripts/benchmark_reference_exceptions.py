@@ -85,11 +85,34 @@ HYPERCORN_H3_LARGE_RESPONSE_LINUX_X86_64 = {
     ),
 }
 
+HYPERCORN_H3_FIXED_LINUX_X86_64 = {
+    "policy_id": "hypercorn-0.18.0-h3-fixed-linux-x86-64-stream-keyerror",
+    "category": "http3",
+    "workload": "fixed",
+    "reference": "hypercorn-asyncio",
+    "candidate": "uvicorn-rs-asyncio",
+    "platform_system": "Linux",
+    "machine": "x86_64",
+    "hypercorn_version": "0.18.0",
+    "reason": (
+        "Hypercorn 0.18.0 asyncio raised KeyError(19072) while indexing its "
+        "HTTP/3 stream map during the fixed FastAPI workload. The client "
+        "completed 4,769 requests before one request timed out waiting for "
+        "response headers. The retained server trace confirms the missing "
+        "stream-map lookup but does not establish event ordering or root cause. "
+        "On the same source, uvicorn-rs asyncio passed all five repetitions "
+        "with zero failures, valid timing, and clean shutdown. Keep this exact "
+        "reference cell candidate-only; no matched speed comparison is "
+        "available."
+    ),
+}
+
 HYPERCORN_H3_REFERENCE_EXCEPTIONS = (
     HYPERCORN_H3_SLOW_READER_LINUX_AARCH64,
     HYPERCORN_H3_SLOW_READER_LINUX_X86_64,
     HYPERCORN_H3_LARGE_RESPONSE_MACOS_ARM64,
     HYPERCORN_H3_LARGE_RESPONSE_LINUX_X86_64,
+    HYPERCORN_H3_FIXED_LINUX_X86_64,
 )
 
 
