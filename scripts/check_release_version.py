@@ -76,102 +76,87 @@ def project_versions(root: Path = ROOT, expected: str | None = None) -> dict[str
     release_workflow = release_workflow_path.read_text(encoding="utf-8")
     candidate_workflow = candidate_workflow_path.read_text(encoding="utf-8")
     lines = release_workflow.splitlines()
-    try:
-        action_start = lines.index("      action:")
-        action_end = lines.index("      confirmation:", action_start + 1)
-    except ValueError as error:
-        raise ValueError("release.yml must expose the staged publication action selector") from error
-    action_block = "\n".join(lines[action_start:action_end])
-    action_options = re.findall(r"(?m)^          - ([^\s#]+)\s*$", action_block)
-    if action_options != ["prepare-only", "pypi"]:
-        raise ValueError("release.yml must expose only prepare-only and PyPI publication actions")
-    if any(
-        marker in release_workflow
-        for marker in (
-            "  publish-lifecycle:",
-            "  publish-uvicorn-rs:",
-            "cargo publish",
-            "crates-io-auth-action",
-        )
-    ):
-        raise ValueError("release.yml must leave Cargo publication to the authorized local release step")
-
-    try:
-        job_start = lines.index("  publish-pypi:")
-    except ValueError as error:
-        raise ValueError("release.yml is missing its publish-pypi job") from error
-    job_end = next(
-        (
-            index
-            for index in range(job_start + 1, len(lines))
-            if lines[index].startswith("  ") and not lines[index].startswith("    ")
-        ),
-        len(lines),
-    )
-    pypi_job = "\n".join(lines[job_start:job_end])
     if (
-        "needs: prepare" not in pypi_job
-        or "needs.prepare.outputs.publish-pypi == 'true'" not in pypi_job
+        "  workflow_run:" not in release_workflow
+        or "    workflows: [Release candidate]" not in release_workflow
+        or "    types: [completed]" not in release_workflow
     ):
-        raise ValueError("release.yml PyPI publication must be gated by its exact-candidate preflight")
-    if not re.search(r"(?m)^    environment:\s*['\"]?pypi['\"]?\s*$", pypi_job):
-        raise ValueError("release.yml must bind its PyPI publisher to the pypi environment")
-    if not re.search(r"(?m)^      id-token:\s*write\s*$", pypi_job):
-        raise ValueError("release.yml PyPI publisher must request OIDC only in its publish job")
+        raise ValueError("release.yml must start automatically after Release candidate completes")
+    if any(marker in release_workflow for marker in ("prepare-only", "PUBLISH v", "confirmation:")):
+        raise ValueError("release.yml must not retain the retired manual publication selector")
+    if (
+        'tags: ["v*"]' not in candidate_workflow
+        or "uvicorn-rs-candidate-${{ github.ref_name }}-${{ github.run_attempt }}" not in candidate_workflow
+        or 'artifact_name = f"uvicorn-rs-candidate-{tag}-{attempt}"' not in release_workflow
+    ):
+        raise ValueError("tag candidate artifact selection must bind the exact run attempt")
+
+    def workflow_job(name: str) -> str:
+        try:
+            start = lines.index(f"  {name}:")
+        except ValueError as error:
+            raise ValueError(f"release.yml is missing its {name} job") from error
+        end = next(
+            (
+                index
+                for index in range(start + 1, len(lines))
+                if lines[index].startswith("  ") and not lines[index].startswith("    ")
+            ),
+            len(lines),
+        )
+        return "\n".join(lines[start:end])
+
+    prepare_job = workflow_job("prepare")
+    crates_job = workflow_job("publish-crates")
+    pypi_job = workflow_job("publish-pypi")
+    verify_job = workflow_job("verify-publication")
+    github_release_job = workflow_job("github-release")
+
+    if (
+        "first publication must create these crates locally before tagging" not in prepare_job
+        or "publish_crates = any(crate_absent.values())" not in prepare_job
+        or "publish_pypi = pypi_absent" not in prepare_job
+    ):
+        raise ValueError("release preflight must preserve local first-name bootstrap and inspect exact versions")
+    required_crate_publish = (
+        "environment: crates-io",
+        "id-token: write",
+        "rust-lang/crates-io-auth-action",
+        "cargo publish --locked --no-verify -p asgi-lifespan-protocol-rs",
+        "cargo publish --locked --no-verify -p uvicorn-rs",
+        "Verify lifecycle crate registry bytes before publishing the server",
+        "Publish the lifecycle crate",
+        "Publish uvicorn-rs",
+    )
+    if any(check not in crates_job for check in required_crate_publish):
+        raise ValueError("Cargo publication must use OIDC, preserve dependency order, and match candidate archives")
+    if not (
+        crates_job.index("Publish the lifecycle crate")
+        < crates_job.index("Verify lifecycle crate registry bytes before publishing the server")
+        < crates_job.index("Publish uvicorn-rs")
+    ):
+        raise ValueError("the lifecycle crate must be published and checksum-verified before uvicorn-rs")
+    if (
+        "needs: [prepare, publish-crates]" not in pypi_job
+        or "needs.prepare.outputs.publish-pypi == 'true'" not in pypi_job
+        or not re.search(r"(?m)^    environment:\s*['\"]?pypi['\"]?\s*$", pypi_job)
+        or not re.search(r"(?m)^      id-token:\s*write\s*$", pypi_job)
+        or "pypa/gh-action-pypi-publish" not in pypi_job
+    ):
+        raise ValueError("PyPI publication must follow Cargo verification and use its isolated OIDC environment")
     if "pypa/gh-action-pypi-publish" in candidate_workflow:
         raise ValueError("candidate.yml must remain candidate-only and must not publish to PyPI")
-
-    registry_step = "      - name: Check immutable registry versions without credentials"
-    registry_start = next(
-        (index for index, line in enumerate(lines) if line == registry_step),
-        None,
-    )
-    if registry_start is None:
-        raise ValueError("release.yml is missing its registry preflight")
-    registry_end = next(
-        (
-            index
-            for index in range(registry_start + 1, len(lines))
-            if lines[index] == "  publish-pypi:"
-        ),
-        len(lines),
-    )
-    registry_script = "\n".join(lines[registry_start:registry_end])
-    required_registry_checks = (
-        'inspect_all = action == "prepare-only"',
-        "def check_crate_exists(name):",
-        'f"https://crates.io/api/v1/crates/{name}"',
-        "if pypi_selected or inspect_all:",
-        "missing_names = [name for name, exists in crate_exists.items() if not exists]",
-        'raise SystemExit("create these crates before the PyPI release: "',
-        "unpublished = [name for name, absent in crate_absent.items() if absent]",
-        'raise SystemExit("publish these exact candidate Cargo versions before PyPI: "',
-        "pypi_absent = check_pypi()",
-        "expected[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()",
-        "if len(expected) != 4:",
-        'f"https://pypi.org/pypi/uvicorn-rs/{version}/json"',
-        'actual = {item.get("filename"): item.get("digests", {}).get("sha256") for item in files}',
-        "if actual != expected:",
-        "publish_pypi = pypi_selected and pypi_absent",
-        'version_info.get("yanked") is True',
-        "actual != digest",
-    )
-    if any(check not in registry_script for check in required_registry_checks):
-        raise ValueError(
-            "release.yml must inspect exact Cargo and PyPI registry state in prepare-only mode "
-            "and permit PyPI only after exact candidate Cargo versions and PyPI filenames/checksums "
-            "are verified"
-        )
-
-    verify_start = lines.index("  verify-publication:")
-    publication_verification = "\n".join(lines[verify_start:])
     if (
-        "def verify_pypi():" not in publication_verification
-        or 'check_registry(verify_pypi, f"uvicorn-rs {version}")' not in publication_verification
-        or "crates.io/api/v1/crates" in publication_verification
-        or "verify_crate" in publication_verification
+        "needs.verify-publication.result == 'success'" not in github_release_job
+        or "contents: write" not in github_release_job
+        or "actions/attest" not in github_release_job
+        or '"gh", "release", "create"' not in github_release_job
     ):
-        raise ValueError("PyPI publication verification must verify only the exact PyPI distribution")
+        raise ValueError("GitHub Release creation and provenance must follow publication verification")
+    if ("verify_crate(name)" not in verify_job
+            or "for crate in (\"asgi-lifespan-protocol-rs\", \"uvicorn-rs\")" not in verify_job
+            or "check_registry(verify_pypi" not in verify_job):
+        raise ValueError("publication verification must compare both crate and PyPI bytes with the candidate")
 
     def locked_package(lock_name: str, package_name: str, *, editable: bool = False) -> dict:
         rows = [
