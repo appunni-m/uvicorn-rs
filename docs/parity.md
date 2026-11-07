@@ -8,28 +8,9 @@
 
 ## Current source status (2026-11-07)
 
-Exact-main CI [#42189108870](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870)
-on clean source `24f5b6a2afcab0b58adb945427e585a16d7b0e0d` passed the installed
-normal-wheel matrix against Uvicorn 0.54.0, including the custom protocol, TLS
-factory/ALPN, and response-capacity inputs. Native composition and Linux,
-macOS, Windows, and Python 3.9 package consumers passed. Unified coverage
-passed 1,453/1,453 cases through three ASGI and three native repeats at 100%
-regions and lines. PR #24 is now at `c1011d50`; that current PR head has only a
-focused HTTP/3 diagnostic, not a fresh full CI run.
+PR #24 CI [#718](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980) passed the installed-wheel Uvicorn 0.54.0 matrix on synthetic merge source 292433bdb710774a1156e4c1983a6b4e8a761aca: Linux x86-64 786/786, macOS ARM64 786/786, and Windows x86-64 759/759 applicable cases. All indexed custom protocol, TLS factory/ALPN, and response-capacity inputs passed. Native composition and package consumers on Linux, macOS, Windows, and Python 3.9 also passed. Unified coverage and Coverage-MCP review are complete on that PR source; see the [coverage record](coverage.md#current-unified-coverage-status-2026-11-07). Exact-main requalification remains required.
 
-Exact-main benchmark [#42189108882](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108882)
-failed in its macOS ARM64 FastAPI preflight when stock Uvicorn timed out on the
-`ws-scope-echo` WebSocket case. The failure did not match the documented
-candidate-only TLS WebSocket exception, so the benchmark stopped before an
-accepted aggregate. The later PR benchmark
-[#42288036588](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588)
-also remained incomplete after a Linux ARM64 Hypercorn asyncio HTTP/3 timeout
-in `fastapi-validated-route` repetition 4. Focused diagnostic
-[#42307094156](https://github.com/appunni-m/uvicorn-rs/actions/runs/42307094156)
-passed five traced repetitions without reproducing the timeout; its timing is
-invalid and it does not identify the cause. The complete three-system
-benchmark remains open. Available HTTP/1.1 FastAPI validated-route results
-show regressions, not a broad speedup.
+The complete matched benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265) validated 68/69/68 category pairs across Linux x86-64, Linux ARM64, and macOS ARM64, but ran on earlier source e8b5d6b. HTTP/1 FastAPI route throughput and WebSocket text echo are slower than Uvicorn in the reported comparisons; H2/H3 results vary by workload. No broad FastAPI speedup is claimed. The Linux ARM64 Hypercorn HTTP/3 reference exception has candidate-only passing evidence and no comparative ratio. Focused upload diagnostic [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289) did not reproduce the historical HTTP/1 timeout or establish its cause. The release workflow requires a complete benchmark bound to the final main commit; the maintainer will run their real FastAPI application after release qualification.
 
 ### Historical source status (2026-11-03)
 

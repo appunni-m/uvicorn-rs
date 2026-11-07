@@ -52,32 +52,22 @@ measurements, and restore upstream Uvicorn.
 
 ## Compatibility evidence
 
-PR #24 CI [#717](https://github.com/appunni-m/uvicorn-rs/actions/runs/42327905944)
-has passing installed-wheel Uvicorn 0.54.0 parity on Linux x86-64 and macOS
-ARM64 (786/786 each). Windows x86-64 is 758/759 raw; its only failed comparison
-is the accepted stock-Uvicorn two-worker SIGBREAK timeout, and the candidate
-serves and shuts down cleanly. Candidate package consumers passed on all three
-systems and on the CPython 3.9 floor. The exact-source unified coverage job is
-still running and has not uploaded its report. The previous #716 coverage
-report belongs to an earlier PR head and cannot qualify this source.
+PR #24 CI [#718](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980)
+passed installed-wheel Uvicorn 0.54.0 parity on Linux x86-64 (786/786), macOS
+ARM64 (786/786), and Windows x86-64 (759/759 applicable cases). Candidate
+packages and clean consumers passed on all three systems and on the CPython 3.9
+floor. Unified coverage passed all 1,453 cases through three ASGI and three
+native repeats at 15,061/15,061 regions and 11,075/11,075 lines, with a complete
+Coverage-MCP review reporting zero gaps. This is PR-source evidence; exact-main
+coverage and review must still bind to the final release commit.
 
-The complete three-system benchmark
-[#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265)
-passed its matrix validation on Linux x86-64, Linux ARM64, and macOS ARM64.
-Its ordinary-FastAPI HTTP/1.1 validated-route throughput is below Uvicorn on
-all six system/loop pairs, and WebSocket text echo is slower; H2/H3 results
-vary by workload. It supports no broad FastAPI speedup claim. The Linux ARM64
-Hypercorn HTTP/3 slow-reader reference raised `KeyError(52)` and timed out two
-client requests; the candidate-only asyncio repetitions passed, but that cell
-has no comparative ratio. The five matched ARM64 upload repetitions on both
-loops did not reproduce the historical HTTP/1 timeout, whose cause remains
-unknown.
-
-Benchmark #364 ran on earlier commit `e8b5d6b`, so its validated report is
-diagnostic evidence, not exact-source release qualification. The release
-verifier requires a benchmark bound to the final release commit. Final-main
-coverage, a source-bound Coverage-MCP review, exact-source benchmark evidence,
-and final candidate verification remain release gates. The maintainer will
-perform the real-application trial after those gates are complete. See the
-[compatibility status](uvicorn-compatibility.md) and
+The complete three-system benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265)
+passed matrix validation on earlier source `e8b5d6b`. Ordinary-FastAPI HTTP/1.1
+validated-route throughput is below Uvicorn on all six system/loop pairs, and
+WebSocket text echo is slower; H2/H3 results vary by workload. It supports no
+broad FastAPI speedup claim and cannot satisfy the exact-main benchmark gate.
+Focused upload diagnostic [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289)
+did not reproduce the historical HTTP/1 timeout or establish its cause. The
+maintainer will perform the real-application trial after repository release
+qualification. See the [compatibility status](uvicorn-compatibility.md) and
 [support matrix](support-matrix.md) for current evidence.

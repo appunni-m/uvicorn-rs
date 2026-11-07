@@ -9,20 +9,9 @@ a drop-in replacement.
 
 ## Current qualification status — 2026-11-07
 
-PR #24 CI [#716](https://github.com/appunni-m/uvicorn-rs/actions/runs/42310334382)
-passed installed-wheel parity, the named custom HTTP/WebSocket hooks,
-`ssl_context_factory`, ALPN, response-capacity inputs, candidate consumers,
-native composition, and three-repeat unified coverage at 100% regions and
-lines for synthetic merge source `f8d25698b98e630e9d77e7da1bbc670c9ebb0fd4`.
-The independent Coverage-MCP review is accepted for that source. The full
-matched benchmark [#361](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588)
-is incomplete after Linux ARM64 stopped in the HTTP/3 Hypercorn asyncio
-reference at `fastapi-validated-route` with a response-header timeout. Current
-source diagnostic [#363](https://github.com/appunni-m/uvicorn-rs/actions/runs/42323833577)
-did not reproduce the HTTP/1 upload timeout on kernel 6.8.0-1070-azure; it is
-profiling-only and does not qualify performance. A complete three-system
-benchmark and final-main CI, review, and candidate artifacts remain required. See the
-[current user-facing status](../uvicorn-compatibility.md#current-status-2026-11-07).
+PR #24 CI [#718](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980) passed the indexed installed-wheel parity matrix, including custom HTTP/WebSocket hooks, ssl_context_factory, ALPN, response-capacity inputs, native composition, and candidate consumers. The Windows-applicable matrix is 759/759. Three-repeat unified coverage passed at 15,061/15,061 regions and 11,075/11,075 lines; the complete Coverage-MCP review found zero gaps for the same synthetic merge source. These results do not qualify final main until the main-push evidence and matching handoff exist.
+
+The complete three-system benchmark #364 is on earlier source e8b5d6b. It reports ordinary-FastAPI HTTP/1 route and WebSocket regressions and is not a broad speedup result. Focused upload trace [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289) did not reproduce the historical HTTP/1 timeout or establish a cause. A full matrix on the exact final main source and current documentation build remain required. See the [current user-facing status](../uvicorn-compatibility.md#current-status-2026-11-07).
 
 ## Acceptance of known differences
 

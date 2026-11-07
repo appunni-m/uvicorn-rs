@@ -1,17 +1,18 @@
 # Deployment guidance
 
-The `uvicorn-rs` 0.3.0 PyPI release is still being qualified and is not
-published. PR #24 CI [#716](https://github.com/appunni-m/uvicorn-rs/actions/runs/42310334382)
-passed installed-wheel parity, package consumers, and three-repeat unified
-coverage at 15,061/15,061 regions and 11,075/11,075 lines for synthetic merge
-source `f8d25698b98e630e9d77e7da1bbc670c9ebb0fd4`. Its independent
-Coverage-MCP review is accepted and source-bound; final main-source CI and a new
-review remain required. The full benchmark is incomplete because Linux ARM64
-Hypercorn HTTP/3 timed out waiting for response headers. Focused current-source
-upload diagnostic #363 did not reproduce the historical HTTP/1 timeout and is
-not valid performance evidence. Final-main candidate artifacts and clean
-consumers are still required. See the [compatibility status](uvicorn-compatibility.md)
-and [support matrix](support-matrix.md), then evaluate the released candidate
+The `uvicorn-rs` 0.3.0 PyPI release is not published. PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24)
+has passing parity, candidate consumer, and unified coverage evidence on its
+synthetic merge source; CI [#718](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980)
+records 15,061/15,061 regions and 11,075/11,075 lines. Coverage-MCP reviewed
+that report with zero gaps. The PR remains on `develop`, so the release still
+needs exact-main CI and review evidence, the exact-main benchmark, a final
+checksummed candidate, and clean consumers. The complete earlier benchmark
+shows FastAPI HTTP/1 route and WebSocket regressions; it supports no broad
+speedup claim. Focused upload diagnostic [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289)
+did not reproduce the historical timeout or explain its cause. Updated docs
+need a new docs build because run #312 predates this refresh. See the
+[compatibility status](uvicorn-compatibility.md) and
+[support matrix](support-matrix.md), then evaluate the published candidate
 with your application before deploying it.
 
 ## Bind and run

@@ -22,8 +22,10 @@ Historical hosted CI on clean commit
 [`94c89b79c1f2a8e5f90b2171ee28ca929444a7f5`](https://github.com/appunni-m/uvicorn-rs/commit/94c89b79c1f2a8e5f90b2171ee28ca929444a7f5)
 passed the unified 761-case coverage matrix; that run is not current release
 Exact-source CI #586 tested pushed PR head d5f983c43615df5990abfc73fcfc73a3460a86c7 against main at 86e72e181d00feca1b4db7f30377d5d9d4345b83. Rust quality/docs, MSRV, the artifact/Coverage-MCP handoff contract, and pinned native FastAPI-RS composition passed. Linux x86-64 installed-wheel parity passed 755/755; its candidate artifact and consumer passed (artifact 13073349195, SHA-256 32c5f281febbe84bd7dda7b1017b2a6afa87667fee1e93a16e287a9eb6bd573b). macOS ARM64 parity passed 754/755; the sole failure was python-api.module-cli-worker-restarts-after-two-crashes, whose HTTP response and process results matched but whose target log included an extra 'client disconnected before response start' event. A focused native macOS run with the pending 15-second client-probe timeout passed this case 1/1; the updated input still needs hosted full-matrix validation. Windows x86-64 executed 682 cases: 678 passed, zero behavioral mismatches, 46 were not run, and four infrastructure failures occurred. They were candidate shutdown timeouts in the two-worker environment and SIGTERM cases, a Uvicorn oracle shutdown timeout in the explicit-worker case, and a Uvicorn oracle HTTP/1 upload abort (WinError 10053). Focused Windows run #587 on the same source passed both candidate worker cases; its oracle timeout trace showed no handler-entry event for one worker after CTRL_BREAK_EVENT while the parent waited for it. Only Linux artifact/consumer qualification passed. macOS and Windows candidate artifact/consumer checks remain open. Three-repeat unified coverage is still running.
-Complete Uvicorn compatibility and the three-system benchmark remain open. See
-the [current coverage record](coverage.md#current-unified-coverage-status-2026-11-01),
+This CI #586 snapshot is historical and does not qualify the current release
+candidate. PR #24 CI #718 passed current parity, package consumers, and unified
+coverage on its synthetic merge source; exact-main CI, benchmark, and candidate
+evidence remain required. See the [current coverage record](coverage.md#current-unified-coverage-status-2026-11-07),
 [parity evidence](parity.md), and [benchmark status](benchmark-status.md).
 The PyPI distribution provides the `uvicorn` namespace and primary
 `uvicorn`/`python -m uvicorn` commands. The root Cargo/PyO3 integration package

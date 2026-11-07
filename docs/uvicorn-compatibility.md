@@ -17,55 +17,40 @@ candidate workflow.
 
 ## Current status (2026-11-07)
 
-PR #24 CI [#717](https://github.com/appunni-m/uvicorn-rs/actions/runs/42327905944)
-tests head `2b3ea9d1132ec2595f7a3c6d30930cdc828aa481` at synthetic merge source
-`4b885b6041516147223a6fbd0662092d7f867f15`. The installed-wheel public parity
-artifacts passed on Linux x86-64 (786/786), macOS ARM64 (786/786), and Windows
-x86-64 (758/759 raw). The sole Windows raw failure is stock Uvicorn 0.54.0's
-two-worker SIGBREAK shutdown timeout. Policy
-`uvicorn-0.54.0-windows-two-worker-sigbreak-tcp-wakeup@1` records that raw
-reference failure separately; the candidate serves and exits cleanly, and its
-lifecycle contract passes. The 16 indexed custom HTTP/WebSocket protocol,
-`ssl_context_factory`, ALPN, and header/trailer-capacity cases pass on all
-three systems. See the retained parity artifacts for
-[Linux](https://github.com/appunni-m/uvicorn-rs/actions/runs/42327905944/artifacts/13556905501),
-[macOS](https://github.com/appunni-m/uvicorn-rs/actions/runs/42327905944/artifacts/13556593165),
-and [Windows](https://github.com/appunni-m/uvicorn-rs/actions/runs/42327905944/artifacts/13556804636).
+PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) is open from
+`develop` head `be12ff08002fb55ef250eb777198061b4e7c3b4a`; CI
+[#718](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980)
+tested synthetic merge source `292433bdb710774a1156e4c1983a6b4e8a761aca`.
+Installed-wheel parity passed 786/786 on Linux x86-64 and macOS ARM64, and
+759/759 applicable cases on Windows x86-64. The 27 Windows exclusions require
+POSIX-only facilities. All 16 custom protocol, `ssl_context_factory`, ALPN,
+and header/trailer-capacity cases passed on all three systems. No accepted
+stock-Uvicorn defect was needed in this run; the candidate worker lifecycle
+cases passed.
 
-The same CI run has passed Linux, macOS, and Windows candidate package/consumer
-jobs and the CPython 3.9 floor consumer. Candidate artifact IDs are
-[Linux 13556925865](https://github.com/appunni-m/uvicorn-rs/actions/runs/42327905944/artifacts/13556925865),
-[macOS 13556423490](https://github.com/appunni-m/uvicorn-rs/actions/runs/42327905944/artifacts/13556423490),
-[Windows 13556749674](https://github.com/appunni-m/uvicorn-rs/actions/runs/42327905944/artifacts/13556749674),
-and [Python floor 13557133930](https://github.com/appunni-m/uvicorn-rs/actions/runs/42327905944/artifacts/13557133930).
-The unified coverage job is still running; its raw report has not been
-uploaded. The previous #716 report is from an earlier PR head and cannot qualify
-this source. Documentation build [#311](https://github.com/appunni-m/uvicorn-rs/actions/runs/42327905933)
-passed for its recorded source; this status refresh needs a new docs build.
+The same run passed candidate package/consumer checks on Linux, macOS ARM64,
+Windows x86-64, and the CPython 3.9 floor. See the retained [Linux parity
+artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980/artifacts/13559903360),
+[macOS artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980/artifacts/13560349807),
+and [Windows artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980/artifacts/13560553951).
+These receipts qualify the PR merge source, not the final main release commit.
 
-The complete three-system matched benchmark
-[#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265)
-validated 68/69/68 qualified category pairs on Linux x86-64, Linux ARM64, and
-macOS ARM64. Stock-FastAPI HTTP/1.1 validated-route throughput is below
-Uvicorn on all six system/loop pairs, and WebSocket text echo is slower; H2/H3
-results vary by workload. No broad FastAPI speedup is claimed. The Linux
-ARM64 Hypercorn asyncio HTTP/3 slow-reader reference raised `KeyError(52)` and
-two clients timed out waiting for response headers. The candidate-only asyncio
-cell passed five repetitions, but no comparative ratio is available. The five
-matched ARM64 upload repetitions on each loop did not reproduce the historical
-HTTP/1 timeout, whose cause remains unknown.
+Unified coverage passed all 1,453 cases through three ASGI and three native
+repeats: 15,061/15,061 regions and 11,075/11,075 lines. Coverage-MCP reviewed
+all 45 region pages (899 groups) and the full line result with zero gaps,
+matching source receipt, and passed tests. Final-main CI and its matching
+review handoff remain required by the release workflow. The full three-system
+benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265)
+is complete on earlier source `e8b5d6b`, but it reports HTTP/1 FastAPI route
+and WebSocket regressions and cannot satisfy the exact-main benchmark gate.
+Focused upload diagnostic [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289)
+did not reproduce the historical HTTP/1 timeout or establish its cause.
 
-Run #364 uses earlier commit `e8b5d6b`, not PR head `2b3ea9d`. The release
-acceptance verifier requires a benchmark receipt for the exact release commit,
-so #364 is diagnostic evidence and a final-source matrix remains required.
-Focused upload diagnostic [#363](https://github.com/appunni-m/uvicorn-rs/actions/runs/42323833577)
-also did not reproduce or explain the historical timeout.
-
-PR #24 remains open and no 0.3.0 package or tag has been published. Final-main
-coverage plus an accepted source-bound Coverage-MCP review, the complete matched
-benchmark, refreshed documentation, and final candidate verification remain
-release gates. The maintainer's real FastAPI application trial follows
-repository release qualification.
+The updated pages still need a new docs build: #312 passed before this status
+refresh. PR #24 must be merged and the final-main benchmark, package candidate,
+and clean consumer checks must pass before tagging or publishing 0.3.0. The
+maintainer's real FastAPI application trial follows repository release
+qualification.
 
 ### Historical PR #23 follow-up
 

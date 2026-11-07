@@ -16,41 +16,11 @@ All three systems completed the planned category matrix and the ordinary-FastAPI
 
 ## PR #24 benchmark status (2026-11-07)
 
-Benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265)
-completed and produced a `validated_complete_matrix` for Linux x86-64, Linux
-ARM64, and macOS ARM64. The category artifacts contain 68, 69, and 68
-qualified local category pairs. Each platform also completed the maintained
-ordinary-FastAPI workloads; the full per-system throughput, p50/p95/p99,
-server/client CPU, and RSS results are in the generated
-[benchmark report](benchmark-results.md) and checksummed run artifacts.
+Benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265) completed a validated matrix for Linux x86-64, Linux ARM64, and macOS ARM64. The category artifacts contain 68, 69, and 68 qualified pairs. The generated [benchmark report](benchmark-results.md) and checksummed run artifacts record per-workload throughput, latency percentiles, server/client CPU, and RSS.
 
-The HTTP/1.1 FastAPI validated-route throughput ratios (Rust/Uvicorn) were
-0.537/0.538 on Linux x86-64, 0.760/0.818 on Linux ARM64, and 0.667/0.710 on
-macOS ARM64 for asyncio/uvloop. Candidate p95 latency was also higher in each
-pair. WebSocket text echo was slower on all three systems. H2/H3 improvements
-are workload-specific; these results do not justify a general FastAPI speedup
-claim. `docs/performance-acceptance.json` keeps Python ASGI as a compatibility
-and regression target, with performance claims scoped to separately measured
-Python-free Rust-native composition.
+Ordinary-FastAPI HTTP/1.1 validated-route throughput was below Uvicorn on all six system/loop pairs; WebSocket text echo was slower on all three systems. H2/H3 improvements are workload-specific. The report does not support a broad FastAPI speedup claim. The Linux ARM64 Hypercorn HTTP/3 slow-reader reference raised KeyError(52); the candidate-only asyncio repetitions passed, so that cell has no comparative ratio.
 
-The Linux ARM64 Hypercorn 0.18.0 asyncio HTTP/3 `slow-reader-backpressure`
-reference raised `KeyError(52)` for a stream absent from its map; two requests
-timed out waiting for response headers. The observed trace does not establish
-event ordering or root cause. The candidate-only asyncio case passed five
-repetitions, and the affected cell has no matched performance ratio. The five
-matched ARM64 `fastapi-upload-1m-write-1k` repetitions on both asyncio and
-uvloop completed without a timeout. This does not explain or fix the historical
-HTTP/1 timeout; no failing request was available to trace.
-
-Run #364 is bound to earlier develop commit
-[`e8b5d6bdb33ae7c8edebcfc233ac28363234977a`](https://github.com/appunni-m/uvicorn-rs/commit/e8b5d6bdb33ae7c8edebcfc233ac28363234977a),
-not current PR head `2b3ea9d`. It is complete diagnostic evidence, but the
-release verifier requires the exact release commit. A final-source matrix is
-still required after source and docs are frozen. Do not rerun unchanged
-categories; the two retained reference exceptions have candidate evidence, and
-the historical upload failure did not reproduce. Focused upload diagnostic
-[#363](https://github.com/appunni-m/uvicorn-rs/actions/runs/42323833577) also
-completed without an upload timeout and did not identify its cause.
+Run #364 is bound to earlier develop commit e8b5d6b and cannot satisfy the exact-main release benchmark gate. Focused upload diagnostic [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289) used the current PR source and completed without timeouts; it did not identify the historical failure cause and is not performance evidence. Do not rerun unchanged categories. A complete matrix on the final main source remains required.
 
 ## Earlier complete three-system matrix before PR #24 (2026-11-06)
 

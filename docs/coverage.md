@@ -14,21 +14,9 @@
 
 ## Current unified coverage status (2026-11-07)
 
-PR #24 CI [#716](https://github.com/appunni-m/uvicorn-rs/actions/runs/42310334382),
-attempt 1, tested head `e8b5d6bdb33ae7c8edebcfc233ac28363234977a` at synthetic
-merge source `f8d25698b98e630e9d77e7da1bbc670c9ebb0fd4`. All 1,453 cases (1,194
-ASGI and 259 native) passed through three ASGI and three native repeats with
-complete attribution. The raw report records **15,061/15,061 regions and
-11,075/11,075 lines**. Coverage artifact
-[#13552742902](https://github.com/appunni-m/uvicorn-rs/actions/runs/42310334382/artifacts/13552742902)
-has archive digest
-`sha256:6076a92a1771c314cb6882b65830f749791f65eb53da61f75a2657d7694e41fa` and
-raw report SHA-256
-`45063184917fb9a55de1627962f2101d892f71f7155bcfb1e8ca35245ef43972`.
-Coverage-MCP accepted a source-bound review of the complete projection: 45/45
-unfiltered region pages (899/899 groups) and the complete line result, with no
-gaps. Final-main CI must produce a new exact-source raw report and accepted
-review; this PR evidence is supplemental.
+PR #24 CI [#718](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980), attempt 1, tested develop head be12ff08002fb55ef250eb777198061b4e7c3b4a at synthetic merge source 292433bdb710774a1156e4c1983a6b4e8a761aca. All 1,453 cases (1,194 ASGI and 259 native) passed with three repeats per suite and complete attribution. The raw report records **15,061/15,061 regions and 11,075/11,075 lines**. Coverage artifact [13563705697](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980/artifacts/13563705697) has archive SHA-256 4a344042e9f56d113fa4a2029d4267a11e863010bcaf0de5eac6f8001b38356d and raw report SHA-256 1b24dc37836737849f98cddbf7002d65fa64d7b22a287e47c5210b20a460881c.
+
+Coverage-MCP independently reviewed the report: all 45 region pages and 899 groups, plus the complete line result, with zero gaps, matching source receipt, and passed test status. The local page receipt is target/asgi-coverage-review/coverage-mcp-pages.json, SHA-256 c1bc9b344d0be4517df17a4f20273e2228399537f38e432d364ab0d09f554a84. This evidence is bound to the PR merge source. The release workflow still requires a new exact-main report and accepted handoff for the final release commit.
 
 ### Historical unified coverage status (2026-11-05)
 

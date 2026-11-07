@@ -23,8 +23,7 @@ the retained raw report, projection, full page receipt, source, and build before
 recording a selection in the candidate bundle. `release.yml` replays that
 selection check against the bundled files before accepting the candidate. The
 handoff files are restored to their canonical `target/asgi-coverage-review`
-paths because those paths are part of the review receipt binding. These local
-workflow edits still need hosted CI on the resulting source.
+paths because those paths are part of the review receipt binding. CI #718 passed the PR-source release-evidence checks; final-main CI, its matching handoff, and the tag-triggered candidate workflow still need to validate the release commit.
 
 The raw coverage gate remains 100% for regions and lines, with three passing
 ASGI and native repeats, complete attribution, and zero failures or
@@ -41,23 +40,9 @@ they do not waive the current gate.
 
 ## Focused upload diagnostic — 2026-11-07
 
-Run [#363](https://github.com/appunni-m/uvicorn-rs/actions/runs/42323833577),
-artifact [13554486318](https://github.com/appunni-m/uvicorn-rs/actions/runs/42323833577/artifacts/13554486318),
-tested current source `e8b5d6bdb33ae7c8edebcfc233ac28363234977a` on Linux ARM64,
-kernel `6.8.0-1070-azure`, CPython 3.12.13, uvloop, 1 MiB uploads in 1 KiB
-writes, concurrency 8, with the recreated 5 ms timer and proactive 16 KiB peer
-reads. Three paired attempts completed with zero timeouts or failed requests.
-All six ASGI captures recorded zero receives over 100 ms. The traced candidate
-requests drained the full body and completed the HTTP response; the historical
-upload timeout remains unreproduced and its first-stalled boundary is unknown.
+Run [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289), artifact [13561333175](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289/artifacts/13561333175), tested PR source be12ff08002fb55ef250eb777198061b4e7c3b4a on Linux ARM64, kernel 7.0.0-1017-azure, CPython 3.12.13, uvloop, 1 MiB uploads in 1 KiB writes, concurrency 8, with the recreated 5 ms timer and proactive 16 KiB peer reads. Three repetitions per server completed with zero timeouts or failed requests. All requests completed and no receive exceeded 100 ms. The historical upload timeout remains unreproduced; its cause and first-stalled boundary remain unknown.
 
-This job is profiling-only: it used request and server tracing and must not be
-used as a performance result. The candidate's recorded throughput was about
-537–553 requests/s versus 744–755 for stock Uvicorn, but instrumentation makes
-that comparison invalid for release performance claims. The earlier full
-three-system benchmark remains incomplete; run the matched current-source
-matrix after the parity gate, with one Tokio thread, and report its uninstrumented
-measurements separately.
+This focused trace is diagnostic only and does not replace the matched three-system matrix. Benchmark #364 is complete but predates the current source and reports HTTP/1 FastAPI and WebSocket regressions; exact-main matrix evidence remains required.
 
 ## Benchmark update — 2026-11-06
 
