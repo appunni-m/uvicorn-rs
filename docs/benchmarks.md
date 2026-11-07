@@ -996,6 +996,16 @@ failures; retain them in logs instead of dropping them. Candidate-only H3 cells
 establish correctness and lifecycle behavior but provide no matched speed
 comparison.
 
+Linux x86-64 also has an exact candidate-only exception for the HTTP/3
+`fixed` FastAPI workload with Hypercorn 0.18.0 asyncio. In benchmark run
+42356999128, Hypercorn raised `KeyError(19072)` while indexing its H3 stream
+map; the client completed 4,769 requests before one timed out waiting for
+response headers. The retained trace establishes the missing stream-map
+lookup, not event ordering or root cause. The same-source Rust asyncio server
+passed all five repetitions with valid timings and clean shutdown. This cell
+has no matched performance ratio; the exception does not apply to other
+Hypercorn versions, platforms, servers, or workloads.
+
 The public parity gate also has one narrowly scoped candidate-only policy for
 the intermittent macOS ARM64 stock Uvicorn 0.54.0 TLS-WebSocket handshake
 timeout. It applies only to
