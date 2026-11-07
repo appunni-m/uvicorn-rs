@@ -938,10 +938,21 @@ jobs:
           fi
           run_platform_parity() {
             parity_exit=0
-            "$candidate_python" scripts/run_parity.py \
-              --oracle-python "$oracle_python" \
-              --installed-candidate "$@" \
-              --output "target/parity-${{ matrix.platform }}.json" || parity_exit=$?
+            if [ "$RUNNER_OS" = 'macOS' ]; then
+              # Continue only after the exact known stock-Uvicorn TLS-WebSocket
+              # timeout; the checker retains it as an infrastructure failure
+              # and independently requires the candidate exchange to succeed.
+              "$candidate_python" scripts/run_parity.py \
+                --oracle-python "$oracle_python" \
+                --installed-candidate "$@" \
+                --continue-after-macos-reference-wss-handshake-timeout \
+                --output "target/parity-${{ matrix.platform }}.json" || parity_exit=$?
+            else
+              "$candidate_python" scripts/run_parity.py \
+                --oracle-python "$oracle_python" \
+                --installed-candidate "$@" \
+                --output "target/parity-${{ matrix.platform }}.json" || parity_exit=$?
+            fi
             # macOS ships Bash 3.2, where expanding an empty array under
             # nounset fails. Keep the command array nonempty on every platform.
             evidence_args=(scripts/check_ci_evidence.py parity
@@ -952,8 +963,11 @@ jobs:
               # Each has a separate policy; independently verify the candidate.
               evidence_args+=(--accept-windows-reference-hang --accept-windows-reference-startup
                 --acceptance-output "target/parity-diagnostics-${{ matrix.platform }}/compatibility-acceptance.json")
+            elif [ "$RUNNER_OS" = 'macOS' ]; then
+              evidence_args+=(--accept-macos-reference-wss-handshake-timeout
+                --acceptance-output "target/parity-diagnostics-${{ matrix.platform }}/compatibility-acceptance.json")
             fi
-            if ((parity_exit > 1)) || { ((parity_exit != 0)) && [ "$RUNNER_OS" != 'Windows' ]; }; then
+            if ((parity_exit > 1)) || { ((parity_exit != 0)) && [ "$RUNNER_OS" != 'Windows' ] && [ "$RUNNER_OS" != 'macOS' ]; }; then
               return "$parity_exit"
             fi
             "$candidate_python" "${evidence_args[@]}" "$@"
@@ -961,6 +975,8 @@ jobs:
           if [ "$RUNNER_OS" = 'Windows' ]; then
             export UVICORN_RS_SHUTDOWN_TRACE_OUTPUT="target/parity-diagnostics-${{ matrix.platform }}/shutdown-trace.log"
             run_platform_parity "${parity_args[@]}"
+          elif [ "$RUNNER_OS" = 'macOS' ]; then
+            run_platform_parity
           else
             run_platform_parity
           fi

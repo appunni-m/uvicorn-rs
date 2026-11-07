@@ -26,6 +26,10 @@ from typing import Any
 
 from coverage_contract import pending_coverage_mcp_request
 from coverage_toolchain import ToolchainError, validate_coverage_tools
+from macos_reference_exceptions import (
+    POLICY_ID as MACOS_WSS_POLICY_ID,
+    validate_reference_row as validate_macos_reference_row,
+)
 from parity_identity import runtime_source_digest, runtime_source_hashes
 from windows_reference_hang import (
     SIGBREAK_STALL_POLICY,
@@ -672,6 +676,7 @@ def validate_parity(
     _current_revision: str | None = None, expected_coverage_profile_dir: Path | None = None,
     allow_windows_reference_hang: bool = False,
     allow_windows_reference_startup: bool = False,
+    allow_macos_reference_wss_handshake_timeout: bool = False,
 ) -> dict[str, Any]:
     """Check exact indexed cases; callers may bind evidence to a shipping native hash."""
     manifest, all_cases, input_paths = load_contract()
@@ -699,10 +704,34 @@ def validate_parity(
     exact_keys(result, {"schema", "status", "run", "summary", "cases", "infrastructure_errors"}, "parity report")
     require(result.get("schema") == manifest["result_schema"], "parity report uses a predecessor or unsupported schema")
     require(result.get("infrastructure_errors") == [], "parity contains infrastructure failures")
-    allow_reference_exception = allow_windows_reference_hang or allow_windows_reference_startup
+    allow_reference_exception = (
+        allow_windows_reference_hang or allow_windows_reference_startup
+        or allow_macos_reference_wss_handshake_timeout
+    )
     if not allow_reference_exception:
         require(result.get("status") == "completed", "parity did not complete cleanly")
         require_summary(result.get("summary"), len(expected))
+    elif allow_macos_reference_wss_handshake_timeout:
+        counts = Counter(row.get("status") for row in result.get("cases", []))
+        require(set(counts) <= {"passed", "infrastructure_failed"},
+                "macOS reference acceptance cannot waive behavioral failures or not-run cases")
+        require(isinstance(result.get("summary"), dict)
+                and all(type(value) is int for value in result["summary"].values()),
+                "macOS reference acceptance summary counts must be integers")
+        if counts["infrastructure_failed"] == 0:
+            require(result.get("status") == "completed", "clean macOS parity was relabeled")
+            require_summary(result.get("summary"), len(expected))
+        else:
+            require(counts["infrastructure_failed"] == 1
+                    and counts["passed"] == len(expected) - 1,
+                    "macOS reference acceptance requires exactly one infrastructure failure")
+            require(result.get("summary") == {
+                "selected": len(expected), "executed": len(expected),
+                "passed": len(expected) - 1, "failed": 0,
+                "infrastructure_failed": 1, "not_run": 0,
+            }, "macOS reference acceptance summary differs from raw case evidence")
+            require(result.get("status") == "failed",
+                    "macOS reference acceptance cannot relabel the raw parity status")
     else:
         counts = Counter(row.get("status") for row in result.get("cases", []))
         require(set(counts) <= {"passed", "failed"}, "reference exception cannot waive missing or infrastructure-failed cases")
@@ -788,6 +817,9 @@ def validate_parity(
         parity_platform = "linux"
     else:
         raise EvidenceError(f"unsupported parity environment platform: {run['environment']['platform']}")
+    if allow_macos_reference_wss_handshake_timeout:
+        require(parity_platform == "macos" and run["environment"].get("machine") == "arm64",
+                "the TLS WebSocket reference policy is limited to macOS ARM64")
     for oracle in manifest["oracles"]:
         components = [
             item for item in oracle["components"]
@@ -813,7 +845,21 @@ def validate_parity(
     candidate_contract_cases = []
     for row in rows:
         case = expected[row["case_id"]]
-        accepted = allow_reference_exception and row.get("status") == "failed"
+        macos_reference_failure = (
+            allow_macos_reference_wss_handshake_timeout
+            and row.get("status") == "infrastructure_failed"
+        )
+        if macos_reference_failure:
+            try:
+                decision = validate_macos_reference_row(row, case, run["environment"])
+            except (ValueError, KeyError, TypeError) as error:
+                raise EvidenceError(f"macOS reference exception rejected: {error}") from error
+            accepted_reference_defects.append(decision)
+            validate_case_metadata(row, case, expected_status="infrastructure_failed")
+            continue
+
+        accepted = (allow_windows_reference_hang or allow_windows_reference_startup) \
+            and row.get("status") == "failed"
         if allow_reference_exception and parity_platform == "windows":
             if eligible_input(case):
                 try:
@@ -2143,6 +2189,8 @@ def main() -> int:
                         help="accept only recorded stock two-worker console-signal/TCP-wakeup defects; preserve failed parity")
     parser.add_argument("--accept-windows-reference-startup", action="store_true",
                         help="accept only the captured stock two-worker listen WinError 10022; preserve failed parity")
+    parser.add_argument("--accept-macos-reference-wss-handshake-timeout", action="store_true",
+                        help="accept only the exact stock Uvicorn macOS ARM64 TLS-WebSocket timeout with a successful candidate; preserve raw infrastructure failure")
     parser.add_argument("--acceptance-output", type=Path,
                         help="write the separate, source-bound compatibility decision")
     parser.add_argument("--case-id", action="append", default=[],
@@ -2166,11 +2214,18 @@ def main() -> int:
         parser.error("--exclude-case-id is valid only for parity reports")
     if args.case_id and (args.kind != "parity" or args.exclude_case_id):
         parser.error("--case-id requires parity and cannot be combined with exclusions")
-    accept_reference_exception = args.accept_windows_reference_hang or args.accept_windows_reference_startup
+    accept_reference_exception = (
+        args.accept_windows_reference_hang or args.accept_windows_reference_startup
+        or args.accept_macos_reference_wss_handshake_timeout
+    )
+    if args.accept_macos_reference_wss_handshake_timeout and (
+        args.accept_windows_reference_hang or args.accept_windows_reference_startup
+    ):
+        parser.error("macOS and Windows reference policies cannot be combined")
     if accept_reference_exception and (args.kind != "parity" or args.acceptance_output is None):
-        parser.error("Windows reference acceptance requires parity and --acceptance-output")
+        parser.error("reference acceptance requires parity and --acceptance-output")
     if args.acceptance_output and not accept_reference_exception:
-        parser.error("--acceptance-output requires an explicit Windows reference policy")
+        parser.error("--acceptance-output requires an explicit reference policy")
     path = args.report.resolve()
     result = read_json(path)
     selected_cases = None
@@ -2188,6 +2243,7 @@ def main() -> int:
             expected_excluded_case_ids=set(args.exclude_case_id) if args.exclude_case_id else None,
             allow_windows_reference_hang=args.accept_windows_reference_hang,
             allow_windows_reference_startup=args.accept_windows_reference_startup,
+            allow_macos_reference_wss_handshake_timeout=args.accept_macos_reference_wss_handshake_timeout,
         )
         if args.kind == "parity"
         else validate_coverage(result, path, allow_pending_mcp=args.allow_pending_mcp, offline=args.offline)
@@ -2200,11 +2256,16 @@ def main() -> int:
         require(checked["recorded_dirty"] is False, "release evidence was produced from a dirty source checkout")
     if args.acceptance_output:
         require(args.acceptance_output.resolve() != path, "acceptance must not overwrite raw parity")
+        policy_path = (ROOT / "scripts/macos_reference_exceptions.py"
+                       if args.accept_macos_reference_wss_handshake_timeout
+                       else ROOT / "scripts/windows_reference_hang.py")
         receipt = {
             "schema": "uvicorn-rs-compatibility-acceptance@1",
             "parity_report": {"path": str(path), "sha256": sha256(path), "run_id": result["run"]["run_id"]},
             "validator_sha256": sha256(Path(__file__)),
-            "policy_sha256": sha256(ROOT / "scripts/windows_reference_hang.py"),
+            "policy_id": (MACOS_WSS_POLICY_ID
+                          if args.accept_macos_reference_wss_handshake_timeout else None),
+            "policy_sha256": sha256(policy_path),
             "startup_policy_sha256": (sha256(ROOT / "scripts/windows_reference_startup.py")
                                       if args.accept_windows_reference_startup else None),
             "decision": checked,

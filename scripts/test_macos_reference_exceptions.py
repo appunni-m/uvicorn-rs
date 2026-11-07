@@ -6,8 +6,12 @@ from __future__ import annotations
 import base64
 import copy
 import json
+from pathlib import Path
+import sys
 import unittest
 
+import check_ci_evidence as evidence
+from parity_identity import runtime_source_digest, runtime_source_hashes
 from macos_reference_exceptions import (
     CASE_ID,
     ERROR_PREFIX,
@@ -34,6 +38,7 @@ ENVIRONMENT = {
     "machine": "arm64",
     "dependencies": {"uvicorn": "0.54.0", "websockets": "17.1"},
 }
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def raw_message(**overrides):
@@ -73,6 +78,110 @@ def raw_message(**overrides):
         + "\nTraceback (most recent call last):\n"
         + "TimeoutError: timed out while waiting for handshake response"
     )
+
+
+def text_trace_raw_message(**overrides):
+    diagnostic = json.loads(raw_message()[len(ERROR_PREFIX):].partition("\nTraceback ")[0])
+    diagnostic.update(overrides)
+    client_trace = (
+        "DEBUG = connection is CONNECTING\n"
+        "DEBUG > GET /ws?parity=tls HTTP/1.1\n"
+        "DEBUG > Upgrade: websocket\n"
+        "DEBUG > EOF\n"
+        "DEBUG ! error while receiving data\n"
+        "OSError: [Errno 9] Bad file descriptor"
+    )
+    return (
+        SCOPE_ERROR_PREFIX
+        + client_trace
+        + SCOPE_DIAGNOSTIC_MARKER
+        + json.dumps(diagnostic, sort_keys=True)
+        + "\nTraceback (most recent call last):\n"
+        + "TimeoutError: timed out while waiting for handshake response"
+    )
+
+
+def macos_parity_result():
+    manifest, cases, input_paths = evidence.load_contract()
+    case = next(item for item in cases if item["case_id"] == CASE_ID)
+    dependencies = {}
+    for oracle in manifest["oracles"]:
+        dependencies[oracle["id"]] = oracle["version"]
+        dependencies.update(
+            (component["id"], component["version"])
+            for component in oracle["components"]
+            if "platforms" not in component or "macos" in component["platforms"]
+        )
+    source_files = runtime_source_hashes(ROOT)
+    result = {
+        "schema": manifest["result_schema"],
+        "status": "failed",
+        "summary": {
+            "selected": 1, "executed": 1, "passed": 0, "failed": 0,
+            "infrastructure_failed": 1, "not_run": 0,
+        },
+        "cases": [{
+            "case_id": CASE_ID,
+            "profile": case["profile"],
+            "operation": case["operation"],
+            "requirements": case["covers"],
+            "verification": case.get("verification", "oracle-parity"),
+            "fault": case.get("fault"),
+            "status": "infrastructure_failed",
+            "error": {"class": "ParityError", "message": text_trace_raw_message()},
+        }],
+        "infrastructure_errors": [],
+        "run": {
+            "run_id": "unit-macos-reference-fixture",
+            "started_at": "fixture",
+            "finished_at": "fixture",
+            "manifest": {
+                "path": "tests/parity/manifest.json",
+                "schema": manifest["schema"],
+                "sha256": evidence.sha256(evidence.MANIFEST_PATH),
+            },
+            "inputs": [{
+                "path": path.relative_to(ROOT).as_posix(),
+                "schema": evidence.source_constant(ROOT / "scripts/run_parity.py", "INPUT_SCHEMA"),
+                "sha256": evidence.sha256(path),
+            } for path in input_paths],
+            "environment": {
+                **ENVIRONMENT,
+                "python": "3.12.13",
+                "rustc": "fixture",
+                "dependencies": dependencies,
+            },
+            "target": {
+                "revision": evidence.git_commit(),
+                "dirty": False,
+                "native_extension": {"path": "target/fixture.dylib", "sha256": "a" * 64},
+                "cargo_lock_sha256": evidence.sha256(ROOT / "Cargo.lock"),
+                "source_files": source_files,
+                "source_sha256": runtime_source_digest(source_files),
+            },
+            "harness": {
+                "runner": "scripts/run_parity.py",
+                "runner_sha256": evidence.sha256(ROOT / "scripts/run_parity.py"),
+                "identity_helper": {
+                    "path": "scripts/parity_identity.py",
+                    "sha256": evidence.sha256(ROOT / "scripts/parity_identity.py"),
+                },
+                "fixture_app": "tests/parity/app.py",
+                "fixture_app_sha256": evidence.sha256(ROOT / "tests/parity/app.py"),
+                "python_api_probe": {
+                    "path": "tests/parity/python_api_probe.py",
+                    "sha256": evidence.sha256(ROOT / "tests/parity/python_api_probe.py"),
+                },
+                "http3_client": None,
+            },
+            "command": [
+                sys.executable,
+                "scripts/run_parity.py",
+                "--continue-after-macos-reference-wss-handshake-timeout",
+            ],
+        },
+    }
+    return result, case
 
 
 def _b64(value: bytes) -> str:
@@ -171,6 +280,33 @@ class MacOSReferenceExceptionTests(unittest.TestCase):
         self.assertEqual(decision["candidate_observation"], EXPECTED_CANDIDATE_OBSERVATION)
         self.assertEqual(decision["root_cause"], "unknown")
         self.assertIsNone(decision["performance_pair"])
+
+    def test_captured_text_timeout_trace_preserves_candidate_only_evidence(self):
+        decision = validate_reference_failure(
+            text_trace_raw_message(), EXPECTED_CASE, ENVIRONMENT
+        )
+        self.assertEqual(decision["policy_id"], POLICY_ID)
+        self.assertEqual(decision["case_id"], CASE_ID)
+        self.assertEqual(decision["candidate_observation"], EXPECTED_CANDIDATE_OBSERVATION)
+        self.assertEqual(decision["root_cause"], "unknown")
+        self.assertIsNone(decision["performance_pair"])
+
+    def test_ci_checker_accepts_only_the_retained_candidate_success_and_raw_failure(self):
+        result, case = macos_parity_result()
+        checked = evidence.validate_parity(
+            result,
+            expected_cases=[case],
+            allow_macos_reference_wss_handshake_timeout=True,
+        )
+        self.assertEqual(checked["status"], "accepted_with_reference_exception")
+        self.assertEqual(checked["raw_parity_status"], "failed")
+        self.assertEqual(checked["raw_parity_summary"]["infrastructure_failed"], 1)
+        self.assertEqual(len(checked["accepted_reference_defects"]), 1)
+        self.assertEqual(
+            checked["accepted_reference_defects"][0]["policy_id"], POLICY_ID
+        )
+        with self.assertRaises(evidence.EvidenceError):
+            evidence.validate_parity(result, expected_cases=[case])
 
     def test_exact_scope_timeout_preserves_candidate_scope_and_header_evidence(self):
         decision = validate_reference_failure(
