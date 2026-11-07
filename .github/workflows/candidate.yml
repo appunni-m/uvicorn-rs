@@ -157,7 +157,7 @@ jobs:
           print(json.dumps(selected, sort_keys=True))
           PY
       - name: Download the exact retained performance artifact by ID
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
@@ -166,7 +166,7 @@ jobs:
           path: target/release-candidate/evidence/performance
           digest-mismatch: error
       - name: Download package artifacts from exact successful main CI
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           github-token: ${{ github.token }}
           run-id: ${{ steps.ci-run.outputs.run-id }}
@@ -174,14 +174,14 @@ jobs:
           merge-multiple: true
           path: target/release-candidate/packages
       - name: Download normal public parity and seam-exclusion evidence
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           github-token: ${{ github.token }}
           run-id: ${{ steps.ci-run.outputs.run-id }}
           name: uvicorn-rs-public-parity
           path: target/release-candidate/evidence/public
       - name: Download the exact raw unified coverage artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
@@ -190,7 +190,7 @@ jobs:
           digest-mismatch: error
           path: target/asgi-coverage
       - name: Download the selected exact-source Coverage-MCP handoff
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
@@ -230,7 +230,7 @@ jobs:
             --artifact-size "$HANDOFF_ARTIFACT_SIZE" \
             --artifact-digest "$HANDOFF_ARTIFACT_DIGEST"
       - name: Download Python minimum consumer evidence
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           github-token: ${{ github.token }}
           run-id: ${{ steps.ci-run.outputs.run-id }}
