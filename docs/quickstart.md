@@ -52,16 +52,32 @@ measurements, and restore upstream Uvicorn.
 
 ## Compatibility evidence
 
-PR #24 CI [#716](https://github.com/appunni-m/uvicorn-rs/actions/runs/42310334382)
-passed installed-wheel Uvicorn 0.54.0 parity, candidate consumers and unified
-coverage at 100% regions and lines for synthetic merge source
-`f8d25698b98e630e9d77e7da1bbc670c9ebb0fd4`. An accepted Coverage-MCP review is
-bound to that PR source; final-main CI and a new final-source review remain
-required. The full matched benchmark is incomplete after a Linux ARM64 HTTP/3
-Hypercorn reference timeout. Current-source diagnostic
-[#363](https://github.com/appunni-m/uvicorn-rs/actions/runs/42323833577) did not
-reproduce the historical HTTP/1 upload timeout and is not performance evidence.
-Final main-source candidate verification and PyPI publication remain pending.
-See the [compatibility status](uvicorn-compatibility.md) and
-[support matrix](support-matrix.md) for the current gates. The maintainer will
-perform the real-application trial after repository release gates are complete.
+PR #24 CI [#717](https://github.com/appunni-m/uvicorn-rs/actions/runs/42327905944)
+has passing installed-wheel Uvicorn 0.54.0 parity on Linux x86-64 and macOS
+ARM64 (786/786 each). Windows x86-64 is 758/759 raw; its only failed comparison
+is the accepted stock-Uvicorn two-worker SIGBREAK timeout, and the candidate
+serves and shuts down cleanly. Candidate package consumers passed on all three
+systems and on the CPython 3.9 floor. The exact-source unified coverage job is
+still running and has not uploaded its report. The previous #716 coverage
+report belongs to an earlier PR head and cannot qualify this source.
+
+The complete three-system benchmark
+[#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265)
+passed its matrix validation on Linux x86-64, Linux ARM64, and macOS ARM64.
+Its ordinary-FastAPI HTTP/1.1 validated-route throughput is below Uvicorn on
+all six system/loop pairs, and WebSocket text echo is slower; H2/H3 results
+vary by workload. It supports no broad FastAPI speedup claim. The Linux ARM64
+Hypercorn HTTP/3 slow-reader reference raised `KeyError(52)` and timed out two
+client requests; the candidate-only asyncio repetitions passed, but that cell
+has no comparative ratio. The five matched ARM64 upload repetitions on both
+loops did not reproduce the historical HTTP/1 timeout, whose cause remains
+unknown.
+
+Benchmark #364 ran on earlier commit `e8b5d6b`, so its validated report is
+diagnostic evidence, not exact-source release qualification. The release
+verifier requires a benchmark bound to the final release commit. Final-main
+coverage, a source-bound Coverage-MCP review, exact-source benchmark evidence,
+and final candidate verification remain release gates. The maintainer will
+perform the real-application trial after those gates are complete. See the
+[compatibility status](uvicorn-compatibility.md) and
+[support matrix](support-matrix.md) for current evidence.

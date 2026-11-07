@@ -17,32 +17,45 @@ release targets are the Python-free `uvicorn-rs` server crate with optional
 
 ## Current verification status (2026-11-07)
 
-PR #24 CI [#716](https://github.com/appunni-m/uvicorn-rs/actions/runs/42310334382),
-attempt 1, passed the installed-wheel public parity matrix, native composition,
-and Linux x86-64, macOS ARM64, Windows x86-64 and Python 3.9 candidate consumers
-for synthetic merge source `f8d25698b98e630e9d77e7da1bbc670c9ebb0fd4`.
-All 16 indexed custom HTTP/WebSocket protocol, `ssl_context_factory`, ALPN,
-HTTP/1 and HTTP/2 header/trailer, and WebSocket response-capacity cases passed.
-Unified coverage passed all 1,453 cases through three ASGI and three native
-repeats at 15,061/15,061 regions and 11,075/11,075 lines. The accepted
-Coverage-MCP review covered all 45 unfiltered region pages (899/899 groups) and
-the complete line result, with no missing coverage. This review is bound to the
-PR merge source; the active release goal still requires a fresh accepted review
-for the final main source.
+PR #24 CI [#717](https://github.com/appunni-m/uvicorn-rs/actions/runs/42327905944)
+tests head `2b3ea9d1132ec2595f7a3c6d30930cdc828aa481` at synthetic merge source
+`4b885b6041516147223a6fbd0662092d7f867f15`. Installed-wheel parity passed on
+Linux x86-64 (786/786), macOS ARM64 (786/786), and Windows x86-64 (758/759 raw).
+The only failed raw comparison is the pinned stock-Uvicorn Windows two-worker
+SIGBREAK timeout. Its accepted narrow reference policy retains the raw failure;
+the candidate lifecycle contract passes and the candidate does not reproduce
+the hang. All 16 indexed custom HTTP/WebSocket protocol, TLS context factory,
+ALPN, and header/trailer-capacity cases pass on the three systems.
 
-The full matched benchmark [#361](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588)
-is incomplete: Linux ARM64 stopped in HTTP/3 when Hypercorn asyncio timed out
-waiting for response headers. The current-source focused upload diagnostic
-[#363](https://github.com/appunni-m/uvicorn-rs/actions/runs/42323833577) ran
-three paired attempts on Linux ARM64, kernel 6.8.0-1070-azure, without an upload
-timeout or failed request. Its profiling instrumentation invalidates timing;
-the historical timeout remains unexplained and the full three-system benchmark
-is still required. No broad FastAPI speedup is established.
+The Linux, macOS ARM64, Windows x86-64 and CPython 3.9 candidate package and
+consumer jobs passed for that CI run. The unified three-repeat coverage job is
+still running and has not uploaded its raw report. The previous #716 coverage
+receipt belongs to an earlier PR head, so it does not qualify the current
+source. Documentation build [#311](https://github.com/appunni-m/uvicorn-rs/actions/runs/42327905933)
+passed for its recorded source; this status refresh requires a new docs build.
 
-The package scope is one Python-free Cargo `uvicorn-rs` server crate with
-optional `http3`, the `asgi-lifespan-protocol-rs` crate, and the PyPI
+The complete matched benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265)
+validated all three platform matrices: 68 qualified category pairs on Linux
+x86-64, 69 on Linux ARM64, and 68 on macOS ARM64. The HTTP/1.1 FastAPI
+validated route is slower than Uvicorn on all six system/loop pairs, and
+WebSocket text echo is slower. H2/H3 results vary by workload, so there is no
+broad FastAPI performance claim. On Linux ARM64, Hypercorn asyncio's HTTP/3
+slow-reader reference raised `KeyError(52)` and two client requests timed out;
+the candidate-only asyncio case passed five repetitions, with no ratio claimed
+for that cell. Five matched ARM64 upload repetitions per event loop passed
+without reproducing the historical HTTP/1 timeout; its cause is unknown.
+
+Run #364 is complete but uses earlier commit `e8b5d6b`, not PR head
+`2b3ea9d`. It cannot satisfy the release verifier's exact-commit requirement;
+a final-source matrix remains required. Focused diagnostic
+[#363](https://github.com/appunni-m/uvicorn-rs/actions/runs/42323833577)
+likewise completed without an upload timeout and does not identify the cause.
+
+The release package scope remains one Python-free Cargo `uvicorn-rs` server
+crate with optional `http3`, the `asgi-lifespan-protocol-rs` crate, and the PyPI
 distribution `uvicorn-rs` exposing the `uvicorn` namespace and command. PR #24
-remains open; final main-source artifacts and publication are pending.
+remains open; final-main coverage and Coverage-MCP review, completed benchmark,
+refreshed docs, final candidate artifacts and publication are pending.
 
 ### Historical status (2026-11-05)
 

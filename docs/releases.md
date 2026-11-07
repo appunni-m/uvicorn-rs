@@ -23,38 +23,45 @@ Use these state labels precisely:
 ## Current release gates (2026-11-07)
 
 PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) remains open from
-`develop` at `e8b5d6bdb33ae7c8edebcfc233ac28363234977a` to `main`.
-PR CI [#716 / run 42310334382](https://github.com/appunni-m/uvicorn-rs/actions/runs/42310334382)
-passed installed-wheel public parity, native composition, the Python 3.9
-consumer, and Linux, macOS, and Windows package/consumer jobs. Its three-repeat
-unified coverage is 15,061/15,061 regions and 11,075/11,075 lines for synthetic
-merge source `f8d25698b98e630e9d77e7da1bbc670c9ebb0fd4`; the independent
-Coverage-MCP review of that source and report is accepted. Exact-main CI
-[#42189108870](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870)
-is still for the older `24f5b6a2afcab0b58adb945427e585a16d7b0e0d` source and
-does not qualify the PR changes. Final-main CI and a new final-source review
-are required after merge.
+`develop` at `2b3ea9d1132ec2595f7a3c6d30930cdc828aa481` to `main`.
+PR CI [#717 / run 42327905944](https://github.com/appunni-m/uvicorn-rs/actions/runs/42327905944)
+passed installed-wheel public parity on Linux x86-64 (786/786) and macOS ARM64
+(786/786); Windows x86-64 is 758/759 raw with one accepted stock-Uvicorn
+two-worker SIGBREAK timeout. The candidate lifecycle contract passes that case.
+Native composition, Rust checks, the Python 3.9 consumer, and Linux, macOS and
+Windows candidate package/consumer jobs passed. The unified coverage job is
+still running and has not uploaded its raw report. The previous #716 report and
+Coverage-MCP receipt belong to an earlier PR head and do not qualify this
+source. Exact-main CI [#42189108870](https://github.com/appunni-m/uvicorn-rs/actions/runs/42189108870)
+is also for an older source; final-main CI and a new final-source review are
+required after merge.
 
-The full matched benchmark
-[#361 / run 42288036588](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588)
-is incomplete: Linux ARM64 Hypercorn 0.18.0 asyncio timed out in the HTTP/3
-`fastapi-validated-route` workload. Current-source upload diagnostic
-[#363 / run 42323833577](https://github.com/appunni-m/uvicorn-rs/actions/runs/42323833577)
-completed three paired ARM64 attempts on kernel 6.8.0-1070-azure without an
-HTTP/1 upload timeout. Its artifact
-[13554486318](https://github.com/appunni-m/uvicorn-rs/actions/runs/42323833577/artifacts/13554486318)
-contains request and server traces; all six ASGI captures report zero receive
-waits over 100 ms. This profiling-only diagnostic does not reproduce or explain
-the historical upload timeout and cannot qualify performance. The current
-source still needs the full matched ordinary-FastAPI matrix on Linux x86-64,
-Linux ARM64, and macOS ARM64, with one Tokio thread and throughput, latency,
-CPU, and memory reported. Partial results show HTTP/1 route regressions; no
-general FastAPI speedup is established.
+The complete matched benchmark
+[#364 / run 42325915265](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265)
+validated on Linux x86-64, Linux ARM64, and macOS ARM64, with 68, 69, and 68
+qualified category pairs. The ordinary-FastAPI HTTP/1.1 validated route was
+slower on all six system/loop pairs (throughput ratios 0.537/0.538 on Linux
+x86-64, 0.760/0.818 on Linux ARM64, and 0.667/0.710 on macOS ARM64). WebSocket
+text echo was also slower; H2/H3 gains vary by workload. There is no broad
+FastAPI speedup claim. On Linux ARM64, Hypercorn asyncio's H3 slow-reader
+reference raised `KeyError(52)` and two requests timed out waiting for response
+headers; the candidate-only asyncio cell passed five repetitions and has no
+comparative ratio. Five matched `fastapi-upload-1m-write-1k` repetitions on
+both ARM64 loops did not reproduce the historical HTTP/1 timeout, so its cause
+remains unknown.
+
+Run #364 is bound to earlier commit `e8b5d6b`, not the current PR source. Its
+complete matrix is useful diagnostic evidence but cannot satisfy the release
+verifier's exact-commit requirement. A final-source matrix is still required.
+Focused upload diagnostic [#363 / run 42323833577](https://github.com/appunni-m/uvicorn-rs/actions/runs/42323833577)
+also completed without a timeout and does not explain the historical failure.
 
 Exact-main CI's platform package and consumer jobs passed, but a checksum-bound
 release-candidate bundle for the final merged source still needs assembly and
 verification. Earlier artifact tables below are historical and must not be
-published. No 0.3.0 package or tag has been published.
+published. The current docs status refresh requires its own successful docs
+build, and candidate artifacts must be rebuilt from final merged source. No
+0.3.0 package or tag has been published.
 Registry queries on 2026-11-06 found both Cargo releases at 0.2.1, with no
 0.3.0; PyPI returns 404 for `uvicorn-rs`.
 

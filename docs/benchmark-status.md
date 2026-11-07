@@ -3,52 +3,56 @@
 <!-- BEGIN GENERATED LATEST ATTEMPT -->
 ## Latest automated benchmark attempt
 
-- Run: [42288036588 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588)
-- Commit: [`df77c111533c8060384d7b5dad174951c9dd8518`](https://github.com/appunni-m/uvicorn-rs/commit/df77c111533c8060384d7b5dad174951c9dd8518)
-- Recorded: 2026-11-06T22:03:25Z
-- Linux x86-64 category matrix job: `success` (`validated_complete_system`)
-- Linux ARM64 category matrix job: `failure` (`validated_partial_system`)
-- macOS ARM64 category matrix job: `success` (`validated_complete_system`)
-- Aggregate job: `success` (`validated_partial_matrix`)
+- Run: [42325915265 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265)
+- Commit: [`e8b5d6bdb33ae7c8edebcfc233ac28363234977a`](https://github.com/appunni-m/uvicorn-rs/commit/e8b5d6bdb33ae7c8edebcfc233ac28363234977a)
+- Recorded: 2026-11-07T03:25:16Z
+- Linux x86-64 category matrix: `success` (`validated_complete_system`, 68 qualified category pairs)
+- Linux ARM64 category matrix: `success` (`validated_complete_system`, 69 qualified category pairs)
+- macOS ARM64 category matrix: `success` (`validated_complete_system`, 68 qualified category pairs)
+- Aggregate: `success` (`validated_complete_matrix`)
 
-All three systems passed their exact-binary public-parity gates. Linux x86-64 and macOS ARM64 completed all categories. Linux ARM64 stopped in HTTP/3 when Hypercorn 0.18.0 asyncio, `fastapi-validated-route`, repetition 4, hit one client timeout waiting for response headers. Its category retained 15/135 rows and is incomplete; this reference timeout is not a candidate parity failure. The aggregate remains partial and does not qualify a complete three-system matrix. The candidate was slower on the HTTP/1.1 FastAPI validated route on each system; do not claim a broad FastAPI speedup. See the retained [aggregate artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588/artifacts/13544691498) and system artifacts. Do not rerun unchanged categories; isolate or explicitly resolve the reference timeout before requesting replacement evidence.
+All three systems completed the planned category matrix and the ordinary-FastAPI comparisons. Aggregate artifact [13558995489](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265/artifacts/13558995489) has SHA-256 `94bc9e40d96fc6a1201cab33e8f033aafe97dd88394a036cbd07a9afb9bbc412`; platform artifacts are [Linux x86-64 13558820521](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265/artifacts/13558820521), [Linux ARM64 13558531443](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265/artifacts/13558531443), and [macOS ARM64 13558995413](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265/artifacts/13558995413). The HTTP/1.1 FastAPI validated route is slower than Uvicorn on all six system/loop pairs; the matrix supports no broad FastAPI speedup claim. On Linux ARM64, Hypercorn asyncio's HTTP/3 slow-reader reference raised `KeyError(52)` and two client requests timed out waiting for response headers. The candidate-only asyncio repetitions passed, but that cell has no comparative ratio. This run predates PR #24 head `2b3ea9d` and cannot qualify exact-source release performance evidence.
 <!-- END GENERATED LATEST ATTEMPT -->
 
 ## PR #24 benchmark status (2026-11-07)
 
-Benchmark run [#42288036588](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588)
-completed on develop head `df77c111533c8060384d7b5dad174951c9dd8518`. The
-exact-binary public-parity gate passed on all three systems. Linux x86-64 and
-macOS ARM64 completed their category matrices; Linux ARM64 failed the HTTP/3
-category on Hypercorn 0.18.0 asyncio, `fastapi-validated-route`, repetition 4:
-the client recorded one failure, `timed out waiting for H3 response headers`,
-after 4,954 successful responses. The Hypercorn server output was empty. The
-Linux ARM64 artifact retains only 15 of 135 planned H3 rows, so this is not a
-complete three-system matrix. The aggregate status is `validated_partial_matrix`.
+Benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265)
+completed and produced a `validated_complete_matrix` for Linux x86-64, Linux
+ARM64, and macOS ARM64. The category artifacts contain 68, 69, and 68
+qualified local category pairs. Each platform also completed the maintained
+ordinary-FastAPI workloads; the full per-system throughput, p50/p95/p99,
+server/client CPU, and RSS results are in the generated
+[benchmark report](benchmark-results.md) and checksummed run artifacts.
 
-Available HTTP/1.1 FastAPI validated-route throughput ratios (Rust/reference)
-are 0.603/0.717 on Linux x86-64 and 0.661/0.655 on macOS ARM64 for asyncio and
-uvloop respectively. The partial Linux ARM64 report also shows lower HTTP/1.1
-throughput. H2/H3 results vary by workload. These results do not support a broad
-FastAPI speedup claim. Aggregate artifact [13544691498](https://github.com/appunni-m/uvicorn-rs/actions/runs/42288036588/artifacts/13544691498)
-contains the per-system report and raw evidence.
+The HTTP/1.1 FastAPI validated-route throughput ratios (Rust/Uvicorn) were
+0.537/0.538 on Linux x86-64, 0.760/0.818 on Linux ARM64, and 0.667/0.710 on
+macOS ARM64 for asyncio/uvloop. Candidate p95 latency was also higher in each
+pair. WebSocket text echo was slower on all three systems. H2/H3 improvements
+are workload-specific; these results do not justify a general FastAPI speedup
+claim. `docs/performance-acceptance.json` keeps Python ASGI as a compatibility
+and regression target, with performance claims scoped to separately measured
+Python-free Rust-native composition.
 
-Focused Linux ARM64 upload diagnostic [#42285812866](https://github.com/appunni-m/uvicorn-rs/actions/runs/42285812866)
-completed three paired runs on kernel 7.0 with zero request failures or
-timeouts. It did not reproduce the historical HTTP/1 15-second upload timeout,
-so that cause remains unverified. This diagnostic is separate from the new
-HTTP/3 Hypercorn reference timeout above; it does not explain that failure.
+The Linux ARM64 Hypercorn 0.18.0 asyncio HTTP/3 `slow-reader-backpressure`
+reference raised `KeyError(52)` for a stream absent from its map; two requests
+timed out waiting for response headers. The observed trace does not establish
+event ordering or root cause. The candidate-only asyncio case passed five
+repetitions, and the affected cell has no matched performance ratio. The five
+matched ARM64 `fastapi-upload-1m-write-1k` repetitions on both asyncio and
+uvloop completed without a timeout. This does not explain or fix the historical
+HTTP/1 timeout; no failing request was available to trace.
 
-The focused H3 diagnostic now supports this exact FastAPI route on Linux ARM64
-with Hypercorn asyncio for five repetitions. It keeps a bounded 512-event
-server trace per sample, including received QUIC/H3 events, stream creation and
-closure, and response event type/status/body length. It records no header values
-or body contents. Traced rows are explicitly invalid for timing and cannot be
-used as benchmark results. This path is meant to establish whether the last
-timed-out client request reached Hypercorn and whether Hypercorn emitted its
-response before the timeout; it has not yet been run.
+Run #364 is bound to earlier develop commit
+[`e8b5d6bdb33ae7c8edebcfc233ac28363234977a`](https://github.com/appunni-m/uvicorn-rs/commit/e8b5d6bdb33ae7c8edebcfc233ac28363234977a),
+not current PR head `2b3ea9d`. It is complete diagnostic evidence, but the
+release verifier requires the exact release commit. A final-source matrix is
+still required after source and docs are frozen. Do not rerun unchanged
+categories; the two retained reference exceptions have candidate evidence, and
+the historical upload failure did not reproduce. Focused upload diagnostic
+[#363](https://github.com/appunni-m/uvicorn-rs/actions/runs/42323833577) also
+completed without an upload timeout and did not identify its cause.
 
-## Latest complete three-system matrix before PR #24 (2026-11-06)
+## Earlier complete three-system matrix before PR #24 (2026-11-06)
 
 Run [#358](https://github.com/appunni-m/uvicorn-rs/actions/runs/42179655798)
 is a validated complete matrix on develop commit
