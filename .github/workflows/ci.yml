@@ -40,7 +40,7 @@ on:
           - windows-2022
           - windows-2025
       parity_repeats:
-        description: Consecutive repetitions of selected Windows cases (every run must pass)
+        description: Repetitions of selected focused Windows or Linux cases (every run must pass)
         required: true
         type: choice
         default: "1"
@@ -48,6 +48,7 @@ on:
           - "1"
           - "3"
           - "10"
+          - "100"
       coverage_ci_run_id:
         description: Original completed CI run for retained coverage replay
         required: false
@@ -1236,6 +1237,7 @@ jobs:
         shell: bash
         env:
           PARITY_CASE_IDS: ${{ inputs.parity_case_ids }}
+          PARITY_REPEATS: ${{ inputs.parity_repeats }}
         run: |
           set -euo pipefail
           IFS=',' read -r -a case_ids <<< "$PARITY_CASE_IDS"
@@ -1260,8 +1262,12 @@ jobs:
           mkdir -p target/focused-linux/native-trace
           oracle_environment="$RUNNER_TEMP/uvicorn-rs-focused-linux-oracle"
           oracle_python="$oracle_environment/bin/python"
+          case "$PARITY_REPEATS" in
+            1|3|10|100) ;;
+            *) echo "Select 1, 3, 10 or 100 traced attempts" >&2; exit 2 ;;
+          esac
           reproduced=0
-          for attempt in 1 2 3; do
+          for ((attempt = 1; attempt <= PARITY_REPEATS; attempt++)); do
             attempt_dir="target/focused-linux/native-trace/attempt-$attempt"
             mkdir -p "$attempt_dir"
             rm -f "$core_directory"/core.*
@@ -1308,7 +1314,7 @@ jobs:
             echo "Target SIGSEGV reproduced with the installed release wheel; see retained parity, process logs, and native backtrace artifacts." >&2
             exit 1
           fi
-          echo "The selected installed-wheel parity case passed all three attempts; a native crash was not reproduced. This diagnostic does not qualify full parity or coverage."
+          echo "The selected installed-wheel parity case passed all $PARITY_REPEATS traced attempts; a native crash was not reproduced. This diagnostic does not qualify full parity or coverage."
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
