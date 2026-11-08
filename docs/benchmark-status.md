@@ -3,15 +3,18 @@
 <!-- BEGIN GENERATED LATEST ATTEMPT -->
 ## Latest automated benchmark attempt
 
-- Run: [42325915265 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265)
-- Commit: [`e8b5d6bdb33ae7c8edebcfc233ac28363234977a`](https://github.com/appunni-m/uvicorn-rs/commit/e8b5d6bdb33ae7c8edebcfc233ac28363234977a)
-- Recorded: 2026-11-07T03:25:16Z
-- Linux x86-64 category matrix: `success` (`validated_complete_system`, 68 qualified category pairs)
-- Linux ARM64 category matrix: `success` (`validated_complete_system`, 69 qualified category pairs)
-- macOS ARM64 category matrix: `success` (`validated_complete_system`, 68 qualified category pairs)
-- Aggregate: `success` (`validated_complete_matrix`)
+- Run: [42503892704 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/42503892704)
+- Commit: [`d0648cc0a4479b246dc7423b22a2b80f333d6193`](https://github.com/appunni-m/uvicorn-rs/commit/d0648cc0a4479b246dc7423b22a2b80f333d6193)
+- Recorded: 2026-11-08T20:10:52Z
+- Workflow conclusion: `success`
+- Linux x86-64 category matrix: `validated_complete_system` (`completed_correctness_gated`, 67 qualified pairs)
+- Linux ARM64 category matrix: `validated_complete_system` (`completed_correctness_gated`, 69 qualified pairs)
+- macOS ARM64 category matrix: `validated_complete_system` (`completed_correctness_gated`, 69 qualified pairs)
 
-All three systems completed the planned category matrix and the ordinary-FastAPI comparisons. Aggregate artifact [13558995489](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265/artifacts/13558995489) has SHA-256 `94bc9e40d96fc6a1201cab33e8f033aafe97dd88394a036cbd07a9afb9bbc412`; platform artifacts are [Linux x86-64 13558820521](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265/artifacts/13558820521), [Linux ARM64 13558531443](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265/artifacts/13558531443), and [macOS ARM64 13558995413](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265/artifacts/13558995413). The HTTP/1.1 FastAPI validated route is slower than Uvicorn on all six system/loop pairs; the matrix supports no broad FastAPI speedup claim. On Linux ARM64, Hypercorn asyncio's HTTP/3 slow-reader reference raised `KeyError(52)` and two client requests timed out waiting for response headers. The candidate-only asyncio repetitions passed, but that cell has no comparative ratio. This run predates PR #24 head `2b3ea9d` and cannot qualify exact-source release performance evidence.
+Aggregate: `validated_complete_matrix`
+Aggregate artifact: [13629568790](https://github.com/appunni-m/uvicorn-rs/actions/runs/42503892704/artifacts/13629568790) with SHA-256 `fc4f0d331603850cdec3b8d84d1f40182f5deec0800e4f51b3d0a613966493f1`.
+
+All three systems produced a complete validated matrix. This report is rendered from the checksummed aggregate artifact; raw platform bundles remain attached to the benchmark workflow run.
 <!-- END GENERATED LATEST ATTEMPT -->
 
 ## PR #24 benchmark status (2026-11-07)

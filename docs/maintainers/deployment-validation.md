@@ -3,26 +3,29 @@
 The [deployment guide](../deployment.md) is the operator-facing entry point. This page preserves validation procedures, framework comparison setup, and run-specific evidence for maintainers.
 
 
-The Python compatibility distribution is named `uvicorn-rs` on PyPI; it has
-not had its first upload. The root Cargo/PyO3 integration package is named
-`uvicorn-rs-py` internally, and is not the distribution name. The package
-provides the `uvicorn` import namespace and command, plus the project-specific
-`uvicorn-rs-py` console command. The implementation has an initial two-worker
-module-CLI path. Its
-module CLI supports no-argument application factories through `--factory`, and
-`uvicorn.run()` supports them through `factory=True`; both have focused parity
-cases. The installed-wheel procedure below loads a direct module:attribute app
-and does not exercise factories, worker supervision, or reload. Separate
-source parity cases cover two-worker HTTP request and SIGINT shutdown using
-explicit worker count and `WEB_CONCURRENCY`, one forced worker exit and
-replacement, and one POSIX health-check expiry and replacement with a
-non-default timeout. One current-source module-CLI case verifies reload restart and another verifies one WatchFiles include/exclude pair. Repeated restart/failure behavior, dynamic worker controls, other filter combinations, fallback-watcher behavior, and platform coverage remain incomplete. Proxy-header behavior has only the focused
-CLI and `uvicorn.run()` coverage listed in the [support matrix](../support-matrix.md).
-The old Cargo `0.1.0` releases are historical. `asgi-lifespan-protocol-rs`
-and the consolidated `uvicorn-rs` crate are published at 0.2.1 from clean
-source commit `d5caa7d7fbfa70a38abb78d2bfa729f2e7c9494e`; the `uvicorn-rs`
-PyPI distribution remains unpublished. Build and install a wheel
-into the same environment as the application and its Python dependencies.
+As of 2026-11-09, exact-main CI [#746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884)
+passed installed-wheel Uvicorn 0.54.0 parity on Linux x86-64 and macOS ARM64
+(786/786 each) and Windows x86-64 (759/759 applicable cases; 27 POSIX-only
+cases are inapplicable). Candidate packages and clean consumers passed on all
+three systems, and the CPython 3.9 abi3-wheel consumer passed. See the
+[support matrix](../support-matrix.md) for verified profiles and remaining
+platform-specific exclusions.
+
+The PyPI distribution is `uvicorn-rs`, exposing `uvicorn` imports and command;
+the optional internal Cargo/PyO3 adapter remains `uvicorn-rs-py`. The optional Cargo/PyO3 integration package declares the project-specific
+`uvicorn-rs-py` console alias. Keep the PyPI distribution name and internal Cargo package name distinct in
+release instructions. The installed-wheel
+procedure below uses a direct `module:attribute` app; it does not by itself
+exercise the complete CLI/API matrix. Factory, worker, reload, socket, signal,
+and proxy-header claims should use the indexed current-source parity results
+linked from the support matrix rather than these deployment probes.
+
+The old Cargo 0.1.0 releases are historical. Both `asgi-lifespan-protocol-rs`
+and the consolidated `uvicorn-rs` crate have published 0.2.1 releases; their
+0.3.0 candidate versions and the PyPI `uvicorn-rs` distribution are not yet
+published. The release workflow requires the Cargo 0.3.0 local-first uploads
+before it publishes PyPI. Build and install a wheel into the same environment
+as the application and its Python dependencies only after publication.
 
 ## Start an application
 

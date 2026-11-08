@@ -4,7 +4,19 @@
 
 ## Decision
 
-The available matched measurements for the Python ASGI compatibility path do not show a general speed advantage over Uvicorn. The project should be described as an independent Rust-first ASGI server with a documented support subset, not as a faster Uvicorn replacement. Keep performance claims workload-specific. Partial matched measurements exist for later source snapshots, but a complete current-source, multi-category, multi-system comparison has not been qualified. Further optimization should target measured bottlenecks and be validated with fresh matched runs. The [Rust-native FastAPI-RS/Starlette-RS architecture](rust-native-integration-architecture.html) is a separate path: the package split and a limited [Python-free H1/H2 composition prototype](native-fastapi-composition.md) exist, while transport consolidation and complete integration remain unfinished. Native framework composition is validated through integration inputs; the comparative server performance gate uses stock Python FastAPI. A release candidate still needs complete multi-system performance evidence or an explicitly reviewed performance-scope revision.
+The exact-main ordinary-FastAPI comparison [#371](https://github.com/appunni-m/uvicorn-rs/actions/runs/42503892704)
+completed on Linux x86-64, Linux ARM64, and macOS ARM64 at commit
+`d0648cc0a4479b246dc7423b22a2b80f333d6193`. HTTP/1.1 validated-route results
+regressed; H2/H3 results vary by workload. This supports no general Python-ASGI
+speed claim over Uvicorn. The project remains an independent Rust-first ASGI
+server with a version-scoped compatibility contract. Further performance work
+should target measured bottlenecks and preserve behavior. The separate
+[Rust-native FastAPI-RS/Starlette-RS path](rust-native-integration-architecture.html)
+has some native-service inputs in CI #746, but the full downstream
+FastAPI-RS → Starlette-RS → Uvicorn-RS composition remains a separate open
+acceptance gate. These correctness checks do not establish a native-framework
+speed advantage. The maintainer will measure their
+own FastAPI application after repository release qualification.
 
 This scope revision follows the benchmark objective: stop after the prototype when matched measurements show no meaningful overall gain. The 2026-10-10 measured H1 body-pump source coalesced already-arrived request data with a 256 KiB cap and a 1 ms maximum wait. A 1 MiB cap modestly increased throughput but worsened p95/p99 latency and sampled RSS; the 512 KiB run lacked enough clean repetitions. That 256 KiB source setting is a historical benchmark identity, not a fresh qualification of the current source. Future performance work should target a specific measured bottleneck, preserve ASGI behavior, and show a repeatable end-to-end improvement.
 

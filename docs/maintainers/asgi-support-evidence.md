@@ -9,31 +9,37 @@ The [user-facing ASGI support matrix](../support-matrix.md) summarizes what the 
 
 The Python-free uvicorn-rs Cargo library is the Rust server. uvicorn-rs-py is the optional Python adapter for Python ASGI applications. Python application code remains on its owning asyncio or uvloop event loop; the Rust runtime handles network and protocol work, while application calls and ASGI messages cross the Python boundary.
 
-The confirmed PyPI distribution name is `uvicorn-rs`, following the project's `pillow-rs` naming convention. The root Cargo integration package and optional extra console script remain named `uvicorn-rs-py`; the installed compatibility command and import namespace are `uvicorn`. PR #24 CI #719 passed the indexed Uvicorn 0.54.0 installed-wheel matrix, three-repeat 100% unified coverage, and package consumers. It merged as `242f050`; exact-main CI #720 and benchmark #366 were dispatched, while docs build #314 passed. The active release goal requires exact-source raw 100% coverage and an accepted independent Coverage-MCP review for the final source. See [Uvicorn replacement status](../uvicorn-compatibility.md).
+The planned PyPI distribution is `uvicorn-rs`, following the project's
+`pillow-rs` naming convention. The root Cargo integration package and optional
+extra console script remain named `uvicorn-rs-py`; the installed compatibility
+command and import namespace are `uvicorn`. Exact-main CI #746 passed the
+installed-wheel Uvicorn 0.54.0 matrix, three-repeat 100% unified coverage, and
+candidate package consumers on commit `d0648cc0a4479b246dc7423b22a2b80f333d6193`.
+The three-system benchmark #371 also completed for that source. A separate
+Coverage-MCP receipt is optional; the exact-source raw report and identities
+are the coverage gate. The 0.3.0 package has not yet been published. See
+[Uvicorn replacement status](../uvicorn-compatibility.md).
 
 This matrix records live-tested ASGI and protocol behavior. A passing ASGI case does not by itself establish Uvicorn CLI, Python API, worker, or reload compatibility. The Rust server remains independent of Starlette-RS and FastAPI-RS; they do not need it as a runtime dependency.
 
-### Exact-main unified coverage and platform evidence (2026-11-04)
+### Exact-main unified coverage and platform evidence (2026-11-09)
 
-Exact-main [CI #661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
-passed for clean source `feb955d2758166ad8c4b519903fd1318b29e7d2d`. The unified
-report attributes all **1,453 cases** (1,194 ASGI and 259 native) and passes
-three repeats of each matrix with zero failures and zero infrastructure
-retries. Coverage is **14,965/14,965 regions** and **10,984/10,984 physical
-source lines**. The retained raw artifact is
-[13313323556](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662/artifacts/13313323556),
-SHA-256 `d7ce785d590e7195be7eaa57e7761b8acb182ac4475599e2ab43cbd45567745d`.
-The owner temporarily waived a separate Coverage-MCP review for this exact-main
-baseline; no review receipt is claimed. That waiver is historical. The active
-release goal requires an accepted review bound to the final source and raw
-report. The candidate workflow records and revalidates the exact report,
-context, build, artifact, raw-file identities, and review receipt.
+Exact-main [CI #746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884)
+passed for clean source `d0648cc0a4479b246dc7423b22a2b80f333d6193`. The unified
+report attributes all **1,453 cases** (1,194 ASGI and 259 native), with three
+passing repeats per suite, zero failed or infrastructure cases, and complete
+case attribution. Coverage is **15,061/15,061 regions** and **11,075/11,075
+lines**. Artifact
+[13631702787](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884/artifacts/13631702787)
+has SHA-256 `13180f7c35243e1e4f5679168d2e8d3306511b9f0278f9a829ac0978337965b7`.
+The report, context, source-set, and build identities are recorded in the
+[coverage guide](../coverage.md#current-release-coverage-acceptance-2026-11-09).
+No independent review receipt is required.
 
-The same CI run passed Linux x86-64, macOS ARM64 and Windows x86-64 package
-consumers, the Python 3.9 floor consumer, and the native FastAPI-RS →
-Starlette-RS → Uvicorn-RS composition. Exact-source benchmark #283 completed
-the three-system matrix; its performance interpretation is recorded in the
-[benchmark report](../benchmark-results.md).
+The same CI run passed Linux x86-64, macOS ARM64, and Windows x86-64 candidate
+consumers and the Python 3.9 abi3-wheel consumer. The exact-source benchmark
+#371 completed the three-system ordinary-FastAPI matrix; its performance
+interpretation is recorded in the [benchmark report](../benchmark-results.md).
 
 ### Historical verified coverage (2026-10-19)
 

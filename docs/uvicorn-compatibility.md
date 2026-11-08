@@ -1,56 +1,55 @@
 # Can I replace Uvicorn?
 
-The replacement candidate PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24)
-merged to `main` as `242f050`. The PyPI distribution is
-`uvicorn-rs`; it provides the `uvicorn` command and import namespace. The
-optional internal Python adapter remains `uvicorn-rs-py`. Keep upstream
-`uvicorn` and `uvicorn-rs` in separate environments because they install
-overlapping `uvicorn` files. The [quickstart](quickstart.md) and
-[rollback guide](fastapi-evaluation.md#restore-upstream-uvicorn) describe the
-candidate workflow.
+**Not yet from PyPI.** The tested 0.3.0 candidate has passed the current
+compatibility and package gates, but it has not been published. Its planned
+distribution name is `uvicorn-rs`; it provides the `uvicorn` command, the
+`uvicorn` import namespace, and `python -m uvicorn`. The optional internal
+Cargo/PyO3 adapter remains `uvicorn-rs-py`. Keep upstream `uvicorn` and
+`uvicorn-rs` in separate environments because they install overlapping files.
+The [quickstart](quickstart.md) and [rollback guide](fastapi-evaluation.md#restore-upstream-uvicorn)
+describe the install path after publication.
 
 <a id="current-status-2026-11-02"></a>
 <a id="current-status-2026-11-04"></a>
 <a id="current-status-2026-11-05"></a>
 <a id="current-status-2026-11-06"></a>
 <a id="current-status-2026-11-07"></a>
+<a id="current-status-2026-11-09"></a>
 
-## Current status (2026-11-07)
+## Current status (2026-11-09)
 
-PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) merged to `main` as
-`242f05096181ee1b84aac116bea613c1a6dad76f`. PR-head CI
-[#719](https://github.com/appunni-m/uvicorn-rs/actions/runs/42348498407)
-tested commit `69903ba90f11d22716064dde92c30f98ab631ced`.
-Installed-wheel parity passed 786/786 on Linux x86-64 and macOS ARM64, and
-759/759 applicable cases on Windows x86-64. The 27 Windows exclusions require
-POSIX-only facilities. All 16 custom protocol, `ssl_context_factory`, ALPN,
-and header/trailer-capacity cases passed on all three systems. No accepted
-stock-Uvicorn defect was needed in this run; the candidate worker lifecycle
-cases passed.
+Exact-main CI [#746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884)
+passed on `main` commit `d0648cc0a4479b246dc7423b22a2b80f333d6193`.
+Installed-wheel parity against Uvicorn 0.54.0 passed 786/786 cases on Linux
+x86-64 and macOS ARM64, and 759/759 applicable cases on Windows x86-64; 27
+Windows cases that require POSIX-only facilities are inapplicable. The custom
+protocol, TLS factory/ALPN, import/configuration, worker-lifecycle, and
+header/trailer-capacity cases in the maintained matrix passed. Candidate
+packages and clean consumers passed on Linux, macOS ARM64, and Windows x86-64.
+The CPython 3.9 check verifies the installed abi3 wheel consumer; it is not a
+full parity run on Python 3.9.
 
-The same run passed candidate package/consumer checks on Linux, macOS ARM64,
-Windows x86-64, and the CPython 3.9 floor. See the retained [Linux parity
-artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/42348498407/artifacts/13564214885),
-[macOS artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/42348498407/artifacts/13565221881),
-and [Windows artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/42348498407/artifacts/13565697309).
-These receipts qualify the PR merge source, not the final main release commit.
+The same run passed all 1,453 unified cases through three ASGI and three native
+repeats, with zero failed or infrastructure cases, complete attribution, and
+raw coverage of 15,061/15,061 regions and 11,075/11,075 lines. The exact raw
+report, source, run, artifact, context, build, and matrix identities are
+recorded in the [CI coverage artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884/artifacts/13631702787).
+An independent Coverage-MCP receipt is not required for this release.
 
-Unified coverage passed all 1,453 cases through three ASGI and three native
-repeats: 15,061/15,061 regions and 11,075/11,075 lines. Exact-main CI #720,
-docs #314, and the three-system benchmark #366 were dispatched on commit
-`242f050`; the docs build passed. The active release goal requires a final-source
-Coverage-MCP review in addition to 100% raw coverage. The full
-three-system
-benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265)
-is complete on earlier source `e8b5d6b`, but it reports HTTP/1 FastAPI route
-and WebSocket regressions and cannot satisfy the exact-main benchmark gate.
-Focused upload diagnostic [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289)
-did not reproduce the historical HTTP/1 timeout or establish its cause.
+The complete matched ordinary-FastAPI benchmark [#371](https://github.com/appunni-m/uvicorn-rs/actions/runs/42503892704)
+also used that commit and completed on Linux x86-64, Linux ARM64, and macOS
+ARM64. HTTP/1.1 validated-route results regressed; HTTP/2 and HTTP/3 results
+vary by workload. The data supports no broad FastAPI speedup claim. The
+historical Linux ARM64 upload timeout did not recur; its cause remains unknown
+and is not claimed as fixed. The maintainer will run the real-application trial
+after the repository release gates are complete.
 
-Main docs build #314 passed. Before tagging or publishing 0.3.0, exact-main CI,
-the benchmark, package candidate, and clean consumer checks must pass. The
-maintainer's real FastAPI application trial follows repository release
-qualification.
+Docs deployment [#336](https://github.com/appunni-m/uvicorn-rs/actions/runs/42512183399)
+passed for this source. The 0.3.0 Cargo crates still require the authorized
+local-first publication sequence; no `v0.3.0` tag or PyPI upload exists yet.
+See the [release guide](releases.md) for the current stage and the
+[versioned compatibility contract](maintainers/uvicorn-0.54.0-contract.md)
+for reference-only failures and their candidate acceptance rules.
 
 ### Historical PR #23 follow-up
 
@@ -73,8 +72,9 @@ had three passing repeats across all 1,453 cases, with zero failures or
 infrastructure retries, 15,056/15,057 regions and 11,078/11,078 lines. Its
 single uncovered region was the unreachable None arm of the request-body timer
 state. The PR head encodes the timer invariant directly, removing that arm.
-The final source still requires a fresh 100% report and an accepted
-Coverage-MCP review bound to that report.
+That historical source did not meet the raw coverage gate. The current main
+source's raw 100% result is recorded in the [current status](#current-status-2026-11-09);
+a separate Coverage-MCP receipt is optional.
 
 [CI #640](https://github.com/appunni-m/uvicorn-rs/actions/runs/41641278412)
 tests PR #21 head `8e0f792a7dc00597c580fb7ddc6d5222e0310ec2` at clean

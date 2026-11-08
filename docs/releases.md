@@ -21,16 +21,42 @@ Use these state labels precisely:
 <a id="current-release-gates-2026-11-06"></a>
 <a id="current-release-gates-2026-11-07"></a>
 <a id="current-release-gates-2026-11-08"></a>
+<a id="current-release-gates-2026-11-09"></a>
 
-## Current release gates (2026-11-08)
+## Current release status (2026-11-09)
 
-PR [#25](https://github.com/appunni-m/uvicorn-rs/pull/25) merged to `main` as `be2e8a40cd4f2b9fbfab0e11a25201545b8edde6`. Exact-main CI [#729](https://github.com/appunni-m/uvicorn-rs/actions/runs/42430641475) and the three-system benchmark [#367](https://github.com/appunni-m/uvicorn-rs/actions/runs/42430641462) are still running. Linux package verification has passed; macOS and Windows package checks and the complete coverage matrix remain in progress. No earlier-source result qualifies this commit.
+The exact release source is clean `main` commit
+[`d0648cc0a4479b246dc7423b22a2b80f333d6193`](https://github.com/appunni-m/uvicorn-rs/commit/d0648cc0a4479b246dc7423b22a2b80f333d6193),
+version `0.3.0`. CI, the complete matched benchmark, and the original docs
+deployment ran against this source. The updated documentation is carried in a
+PR whose strict docs check must pass before merge; the main docs workflow then
+builds and deploys the merged content.
 
-The complete earlier benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265) is bound to older source `e8b5d6b`. It reports slower ordinary-FastAPI HTTP/1 route and WebSocket text-echo results, with workload-specific H2/H3 results; no broad FastAPI speedup is claimed. Focused upload diagnostic [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289) did not reproduce or explain the historical upload timeout. Benchmark #367 is the exact-main matrix for `be2e8a40` and is not complete yet.
+| Gate | Current evidence | Status |
+| --- | --- | --- |
+| Installed-wheel Uvicorn 0.54.0 parity | [CI #746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884): Linux 786/786, macOS 786/786, Windows 759/759 applicable; 27 POSIX-only inputs inapplicable | Passed |
+| Unified coverage | [Artifact 13631702787](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884/artifacts/13631702787): 1,453 cases, three ASGI and three native repeats, 15,061/15,061 regions, 11,075/11,075 lines, complete attribution | Passed; exact raw identities recorded; Coverage-MCP receipt optional |
+| Candidate package consumers | CI #746: Linux x86-64, macOS ARM64, Windows x86-64, and CPython 3.9 abi3-wheel consumer | Passed |
+| Three-system ordinary-FastAPI benchmark | [Benchmark #371](https://github.com/appunni-m/uvicorn-rs/actions/runs/42503892704), aggregate [artifact 13629568790](https://github.com/appunni-m/uvicorn-rs/actions/runs/42503892704/artifacts/13629568790), SHA-256 `fc4f0d331603850cdec3b8d84d1f40182f5deec0800e4f51b3d0a613966493f1` | Complete; HTTP/1.1 validated-route regression, H2/H3 results workload-specific; no broad speedup claim |
+| Documentation deployment | [Docs #336](https://github.com/appunni-m/uvicorn-rs/actions/runs/42512183399) built and deployed the original documentation for this source | Passed; updated content goes through the PR docs check and main deployment |
+| Candidate tag workflow | No `v0.3.0` tag exists yet | Pending |
+| Cargo 0.3.0 registry versions | Both candidate archives must be published locally first; neither 0.3.0 version is currently present | Pending |
+| PyPI `uvicorn-rs` 0.3.0 | `release.yml` publishes after the tagged candidate and Cargo registry-byte checks pass | Pending |
 
-Main docs run [#321](https://github.com/appunni-m/uvicorn-rs/actions/runs/42430641471) failed because it selected a benchmark aggregate from an older commit while the current benchmark was still running. PR [#26](https://github.com/appunni-m/uvicorn-rs/pull/26) binds push docs to a benchmark from the pushed commit; its docs check #324 passed. The PR now also aligns candidate coverage acceptance with the maintainer's decision: exact-source raw coverage must be 100% for regions and lines, with source/run/artifact/report/context/build identities retained. Coverage-MCP review is optional and does not gate release. PR CI and the current main runs must pass before release qualification.
+Benchmark #371 did not reproduce the historical Linux ARM64 upload timeout.
+Its cause remains unknown; the completed matrix is valid, and no fix is
+claimed. The maintainer's real FastAPI application trial follows repository
+release qualification.
 
-No 0.3.0 package or tag has been published. The two 0.3.0 Cargo archives must be published locally first. The tag workflow verifies their registry checksums against the candidate before PyPI publication. Recheck registry and trusted-publisher/environment settings before publication.
+The release set is the Python-free Cargo crate `uvicorn-rs` with HTTP/3 behind
+the optional `http3` feature, `asgi-lifespan-protocol-rs`, and PyPI distribution
+`uvicorn-rs` exposing the `uvicorn` command/imports. `uvicorn-rs-py` remains the
+optional internal adapter. Do not publish separate `uvicorn-rs-h3` or Quinn
+crates. For 0.3.0, publish the two Cargo crates locally in dependency order;
+verify each registry checksum; create the immutable `v0.3.0` tag; let
+`candidate.yml` qualify the exact tagged artifacts; then let `release.yml`
+publish PyPI and verify registry bytes. Later Cargo releases can use Trusted
+Publishing. Release controls and publisher entries are configured.
 
 | Superseded CI #712 artifact | Artifact | ZIP SHA-256 | Contents and check |
 | --- | --- | --- | --- |
@@ -49,11 +75,10 @@ published versions are verified and skipped. Build and test jobs have no
 registry credentials.
 
 The exact-source raw coverage gate requires 100% regions and lines, a complete
-passing matrix, and recorded source, run, artifact, report, context, and build
-identities. Coverage-MCP may help diagnose gaps, but no independent receipt is
-required. Candidate assembly revalidates the raw evidence against the final
-source commit. The tag-triggered candidate and publication workflows still
-need to run against the final main commit.
+passing matrix, and recorded source, run, artifact, report, context, build, and
+matrix identities. Candidate assembly revalidates that evidence against the
+tagged source commit. The tag-triggered candidate and publication workflows
+have not run for 0.3.0 yet.
 
 ## Workflow ownership
 
@@ -62,7 +87,7 @@ need to run against the final main commit.
 | Reliability and correctness | `ci.yml` | Rust/MSRV/platform builds, public Uvicorn parity, native framework composition, fault contracts, and clean package consumers. |
 | Coverage | `ci.yml`; optional `coverage-mcp-handoff.yml` | Exact-source 100% unified region/line coverage with recorded source-bound evidence. The handoff workflow is optional diagnostics and does not gate release. |
 | Reliability evidence | `benchmark-categories.yml` | Matched three-system workloads and focused diagnostics; release qualification consumes only a complete exact-source matrix. |
-| Automated release | `candidate.yml`, `release.yml` | Tag-triggered candidate assembly, followed automatically by Cargo/PyPI publishing, byte verification, GitHub Release, and provenance. |
+| Automated release | `candidate.yml`, `release.yml` | Tag-triggered candidate assembly and publication. For 0.3.0 Cargo is published locally first; `release.yml` verifies its bytes, then publishes PyPI. Later Cargo versions use Trusted Publishing. |
 | Documentation | `docs.yml` | Strict documentation build and main deployment; imports the selected main benchmark artifact after each matrix run so reports and status are current in the published site. |
 | Upstream-only diagnostic | `upstream-uvicorn-windows-diagnostic.yml` | Reproduce the stock Uvicorn Windows worker issue; this is not a `uvicorn-rs` release gate. |
 
@@ -524,10 +549,9 @@ version.
    installed-package checks, and native composition inputs.
 3. Record the exact-source raw coverage report and its artifact, report,
    context, build, and full-matrix identities. Require 100% of normalized
-   regions and lines. A separate independent Coverage-MCP review is also
-   required for the exact source and raw report; candidate validation must
-   recheck the raw report, artifact, review receipt and source identities
-   before the tag can be published.
+   regions and lines. A separate Coverage-MCP receipt is optional; candidate
+   validation rechecks the raw report, artifact, and source identities before
+   the tag can be published.
 4. Complete the correctness-gated three-system performance matrix. Require
    matching valid repetitions and report throughput, p50/p95/p99 latency,
    server CPU per operation, and sampled peak RSS. Keep stock FastAPI and
