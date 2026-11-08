@@ -49,12 +49,14 @@ def select_run():
 
     if os.environ.get("GITHUB_REF") != "refs/heads/main":
         return None
+    source_commit = os.environ.get("GITHUB_SHA") if event_name == "push" else None
     payload = github_get(
         "actions/workflows/benchmark-categories.yml/runs?head_branch=main&per_page=100"
     )
     runs = [run for run in payload.get("workflow_runs", [])
             if run.get("name") == WORKFLOW_NAME
             and run.get("head_branch") == "main"
+            and (source_commit is None or run.get("head_sha") == source_commit)
             and run.get("event") in ALLOWED_EVENTS
             and run.get("status") == "completed"]
     if not runs:
