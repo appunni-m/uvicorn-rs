@@ -2,6 +2,23 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
+## Current release coverage acceptance (2026-11-08)
+
+Release requires a successful complete CI report from the exact final `main`
+commit with **100% executable regions and lines**, complete case attribution,
+three passing ASGI and native repeats, and zero failed, infrastructure-failed,
+or unrun cases. Record the source, run and attempt, raw artifact ID and digest,
+report and context hashes, build identity, matrix, and integer totals. Candidate
+and publication workflows revalidate this same evidence. Coverage-MCP may be
+used to investigate gaps, but an independent MCP receipt is not a release
+requirement.
+
+Main CI [#729](https://github.com/appunni-m/uvicorn-rs/actions/runs/42430641475)
+is still producing coverage for `be2e8a40cd4f2b9fbfab0e11a25201545b8edde6`.
+PR #26 CI #734 is also still running on its proposed source; it cannot replace
+the exact-main report. No current 100% result is claimed until the exact-main
+coverage job completes and its retained artifact is verified.
+
 <a id="current-unified-coverage-status-2026-10-22"></a>
 <a id="current-unified-coverage-status-2026-10-29"></a>
 <a id="current-unified-coverage-status-2026-10-30"></a>
@@ -12,19 +29,19 @@
 <a id="current-unified-coverage-status-2026-11-06"></a>
 <a id="current-unified-coverage-status-2026-11-07"></a>
 
-## Current unified coverage status (2026-11-07)
+## Latest recorded unified coverage status (2026-11-07)
 
 PR #24 CI [#719](https://github.com/appunni-m/uvicorn-rs/actions/runs/42348498407), attempt 1, tested commit `69903ba90f11d22716064dde92c30f98ab631ced`. All 1,453 cases (1,194 ASGI and 259 native) passed with three repeats per suite and complete attribution. The raw report records **15,061/15,061 regions and 11,075/11,075 lines**. Coverage artifact [13567108849](https://github.com/appunni-m/uvicorn-rs/actions/runs/42348498407/artifacts/13567108849) has archive SHA-256 `4a670ab7794c50c3104ca9415fc6664f0ec7b7080dc47086864c09949aa8c856`.
 
-Main CI [#720](https://github.com/appunni-m/uvicorn-rs/actions/runs/42356999307) is recording the exact-main raw report on `242f05096181ee1b84aac116bea613c1a6dad76f`; the run was still in progress when this status was written. The active release goal requires 100% raw regions and lines plus a complete, accepted independent Coverage-MCP review bound to the same final source and report. Retain the source, run, artifact, report, context, build, and review-receipt identities.
+Main CI [#720](https://github.com/appunni-m/uvicorn-rs/actions/runs/42356999307) was recording the exact-main raw report on `242f05096181ee1b84aac116bea613c1a6dad76f`; the run was still in progress when this historical status was written. Current release acceptance requires exact-source raw 100% regions and lines and recorded evidence identities. Coverage-MCP review is optional.
 
 ### Historical unified coverage status (2026-11-05)
 
 At that historical checkpoint, the exact-source unified report needed 100%
-regions and lines and the complete matrix needed three passing repeats. A
-temporary waiver of independent Coverage-MCP review was recorded on
-2026-11-07, then superseded by the active release goal requiring a final-source
-review receipt.
+regions and lines and the complete matrix needed three passing repeats. The
+review requirement was waived, reinstated, and later removed by the maintainer;
+the current release gate requires raw exact-source coverage evidence without a
+separate Coverage-MCP receipt.
 
 Exact-main CI [#661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
 passed on clean source `feb955d2758166ad8c4b519903fd1318b29e7d2d`, run
@@ -56,10 +73,8 @@ batch-timer invariant in the type and removes that unreachable state.
 A later follow-up handles the macOS TLS-over-Unix-socket `NotConnected`
 shutdown log mismatch found by CI #689. Because that follow-up changes
 `src/lib.rs`, CI #689 cannot be accepted as exact-source coverage even if its
-job completes; a fresh full report is required. A later waiver of the
-source-bound Coverage-MCP review was historical and has been reversed by the
-active release goal, which requires the accepted final-source review as well as
-the exact 100% raw coverage report.
+job completes; a fresh full report is required. Coverage-MCP review is
+optional and does not gate release.
 
 The matching three-system benchmark [#283](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594681)
 also passed. Its aggregate artifact is
@@ -98,8 +113,8 @@ The diagnostic sources also remain explicit in the source inventory.
 `runtime-diagnostics`. Both are source-bound and classified as having no
 executable counters in this measured configuration because diagnostics are
 disabled. The validator rejects unexpected counters in either file; no
-existing production source or region is removed from the gate. Independent
-review and strict replay of the final source remain required.
+existing production source or region is removed from the gate. Strict replay
+of the final source remains required; Coverage-MCP review is optional.
 
 The preceding [CI #629](https://github.com/appunni-m/uvicorn-rs/actions/runs/41582985537)
 measured **14,740/14,740 regions** and **10,855/10,855 lines** on clean source
@@ -112,9 +127,8 @@ measurement does not qualify current source or complete release acceptance.
 
 The final-source report must retain both measured objects, pass strict replay,
 and record the exact source, run, artifact, report, context, and build
-identities. Coverage thresholds and source exclusions are unchanged. The
-active release goal requires an accepted independent Coverage-MCP review bound
-to the same final source and raw report.
+identities. Coverage thresholds and source exclusions are unchanged. Coverage-
+MCP review is optional and does not gate release.
 See the [release sequence](releases.md).
 
 ### Historical full report: CI #596 (2026-11-01)

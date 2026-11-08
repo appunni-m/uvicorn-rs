@@ -205,35 +205,58 @@ def check_repository_path_projection() -> None:
             raise AssertionError("unbound or inconsistent LLVM source paths must be rejected")
 
 
-def check_release_workflows_require_accepted_review() -> None:
+def check_release_workflows_require_exact_coverage_without_mcp_gate() -> None:
     candidate = (ROOT / ".github/workflows/candidate.yml").read_text(encoding="utf-8")
     release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
-    candidate_steps = (
-        "coverage_mcp_handoff.py select-handoff",
-        "name: Download the selected exact-source Coverage-MCP handoff",
-        "coverage_mcp_handoff.py validate-handoff",
+    required_candidate_evidence = (
+        "coverage_mcp_handoff.py select-ci",
+        "name: Verify and record exact-source 100% unified coverage",
+        "python scripts/check_ci_evidence.py coverage",
+        "python scripts/coverage_evidence.py record",
+        "python scripts/coverage_evidence.py verify",
+        '"schema": "uvicorn-rs-release-candidate@10"',
+        'coverage_evidence.get("coverage", {}).get(metric, {}).get("covered")',
+    )
+    missing = [value for value in required_candidate_evidence if value not in candidate]
+    if missing:
+        raise AssertionError(f"candidate workflow is missing exact-source raw coverage evidence: {missing}")
+    forbidden_candidate_gates = (
+        "select-handoff",
+        "validate-handoff",
         "coverage_mcp_handoff.py verify \\",
         "coverage-mcp-selection.json",
-        '"schema": "uvicorn-rs-release-candidate@9"',
+        '"coverage_mcp"',
     )
-    missing = [value for value in candidate_steps if value not in candidate]
-    if missing:
-        raise AssertionError(f"candidate workflow does not require and retain MCP review: {missing}")
-    if candidate.index(candidate_steps[0]) > candidate.index(candidate_steps[1]) \
-            or candidate.index(candidate_steps[1]) > candidate.index(candidate_steps[3]):
-        raise AssertionError("candidate workflow must select and download MCP evidence before verifying it")
+    present = [value for value in forbidden_candidate_gates if value in candidate]
+    if present:
+        raise AssertionError(f"candidate workflow must not require an independent MCP receipt: {present}")
 
-    release_steps = (
-        "coverage_mcp_handoff.py verify-selection",
-        'candidate.get("coverage_mcp") != expected_coverage_mcp',
-        '"uvicorn-rs-release-candidate@9"',
-        'coverage_mcp.get("schema") != "uvicorn-rs-coverage-mcp-selection@1"',
+    required_release_evidence = (
+        'candidate.get("schema") != "uvicorn-rs-release-candidate@10"',
+        "python scripts/check_ci_evidence.py coverage",
+        "python scripts/coverage_evidence.py verify",
+        'coverage_evidence.get("coverage", {}).get(metric, {}).get("covered")',
+        '!= coverage_evidence.get("coverage", {}).get(metric, {}).get("total")',
+        'manual_cargo_version = "0.3.0"',
+        'version == manual_cargo_version and any(crate_absent.values())',
+        'publish_crates = version != manual_cargo_version and any(crate_absent.values())',
+        '"Cargo 0.3.0 must be published locally and match the candidate before tagging; "',
+        "name: Publish missing Cargo versions to crates.io",
+        "environment: crates-io",
+        "uses: rust-lang/crates-io-auth-action@",
     )
-    missing = [value for value in release_steps if value not in release]
+    missing = [value for value in required_release_evidence if value not in release]
     if missing:
-        raise AssertionError(f"publication workflow does not revalidate retained MCP review: {missing}")
-    if release.index(release_steps[0]) > release.index(release_steps[1]):
-        raise AssertionError("publication workflow must verify the MCP selection before accepting candidate metadata")
+        raise AssertionError(f"publication workflow is missing exact-source raw coverage revalidation: {missing}")
+    forbidden_release_gates = (
+        "verify-selection",
+        "coverage-mcp-selection.json",
+        'candidate.get("coverage_mcp")',
+        "coverage_mcp.get(",
+    )
+    present = [value for value in forbidden_release_gates if value in release]
+    if present:
+        raise AssertionError(f"publication workflow must not require an independent MCP receipt: {present}")
 
 
 def main() -> int:
@@ -247,7 +270,7 @@ def main() -> int:
         raise AssertionError("native fault registry must remain literal and include TLS initialization selectors")
     check_uncovered_function_projection()
     check_repository_path_projection()
-    check_release_workflows_require_accepted_review()
+    check_release_workflows_require_exact_coverage_without_mcp_gate()
     (ROOT / "target").mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="uvicorn-rs-coverage-handoff-", dir=ROOT / "target") as temp:
         root = Path(temp)
@@ -389,7 +412,7 @@ def main() -> int:
         run(str(ATTACH), "--report", str(broken_projection), "--output", str(broken_reviewed),
             "--receipt", str(broken_receipt),
             expected=1, detail="receipt omits later pages")
-    print("PASS exact raw release coverage with required source-bound MCP handoff cases")
+    print("PASS optional Coverage-MCP tooling and exact raw release coverage contract")
     return 0
 
 

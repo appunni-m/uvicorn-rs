@@ -6,22 +6,20 @@ FastAPI evaluation. Kata remains the system of record. The maintainer will run
 their application trial; collecting their application or running its load is not
 a prerequisite for completing the repository work.
 
-## Active release goal — 2026-11-07
+## Active release goal — 2026-11-08
 
-The current release goal requires exact-source raw unified coverage at 100%
-regions and lines plus an accepted independent Coverage-MCP review bound to the
-same final source and report. Record the source, run and attempt, raw artifact
-ID and digest, report and context hashes, build identity, complete matrix
-evidence, and review receipt. Candidate qualification must revalidate those
-identities against the final source.
+The current release gate requires exact-source raw unified coverage at 100%
+regions and lines. Record the source, run and attempt, raw artifact ID and
+digest, report and context hashes, build identity, complete matrix evidence,
+and integer totals. Coverage-MCP can help diagnose gaps, but an independent
+receipt is optional and does not gate candidate or publication.
 
-PR #25 currently removes the independent Coverage-MCP handoff requirement from
-`candidate.yml` and `release.yml`; the local `develop` draft restores it to match
-the active goal. Candidate selection must bind the accepted review artifact to
-the successful main CI run and exact report, then revalidate the raw report,
-complete matrix, and source/build identities. PR-head CI #719 passed raw
-coverage and package checks. Main CI #720 and the exact-main benchmark #366
-started on `242f050`; the final PR merge commit still needs fresh main evidence.
+PR #25 merged as `be2e8a40`. PR #26 fixes benchmark selection for main docs
+pushes and carries the candidate/release workflow correction that removes the
+MCP receipt dependency while preserving exact-source raw coverage
+revalidation. Its docs check #324 passed; CI #734 is still running. Main CI
+#729 and exact-main benchmark #367 are also still running on `be2e8a40`; neither
+is complete release evidence yet.
 
 The raw coverage gate remains 100% for regions and lines, with three passing
 ASGI and native repeats, complete attribution, and zero failures or
@@ -32,9 +30,9 @@ qualification.
 ## Historical review decisions — 2026-11-04 to 2026-11-07
 
 The owner waived independent review on 2026-11-04 and 2026-11-05, then
-reinstated it. A later 2026-11-07 update made the accepted final-source review
-part of the active release goal. Earlier waivers remain historical decisions;
-they do not waive the current gate.
+reinstated it on 2026-11-07. The maintainer later confirmed that no separate
+Coverage-MCP receipt is required. Raw exact-source coverage remains mandatory;
+the earlier review-policy changes are historical.
 
 ## Focused upload diagnostic — 2026-11-07
 
@@ -735,9 +733,10 @@ complete platform candidate qualification is available. Keep the PR head
 unchanged until all active parity, coverage, and package verification jobs
 reach terminal results. Then record raw coverage totals and artifact identities
 and carry the verified package artifacts and consumer receipts into candidate
-assembly. That earlier checkpoint recorded a temporary review waiver. The active
-release goal supersedes it and requires an accepted independent Coverage-MCP
-receipt bound to the exact-source raw report, alongside 100% regions and lines.
+assembly. At that historical checkpoint, a temporary review waiver was
+recorded and later reversed. The maintainer's current decision is that an
+independent Coverage-MCP receipt is optional; exact-source 100% regions and
+lines remain mandatory.
 Start the
 matched three-system ordinary-FastAPI benchmark only after full parity passes.
 Benchmarks use one Tokio thread and report system/workload details alongside
@@ -1481,17 +1480,15 @@ gap against the raw LLVM profile/source identity before adding another case.
 **Close with:** One clean source/build report has 100% executable regions and
 lines, complete per-case attribution and three complete passing repeats with no
 case, infrastructure, retry or unrun failure. Record integer totals and hashes.
-The source-bound report, accepted Coverage-MCP receipt, and artifact identity
-are recorded by 7t4g.
+The source-bound report and artifact identity are recorded by 7t4g.
 
 ## 7t4g — Record final exact-source coverage evidence
 
 **Work:** After the final-source unified coverage job passes, retain the exact
 raw artifact and record its source, CI run/attempt, artifact ID/digest, report
 and context hashes, build identity, complete file inventory, totals, and matrix
-status. An accepted independent Coverage-MCP review bound to the exact final
-source and raw report is also required. Do not rerun the matrix just to create
-the evidence record.
+status. An independent Coverage-MCP review is optional. Do not rerun the matrix
+just to create the evidence record.
 
 **Close with:** The exact final-source report passes the complete three-repeat
 matrix, attribution and 100% regions/lines checks; the retained raw artifact

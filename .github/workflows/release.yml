@@ -159,24 +159,12 @@ jobs:
           cd ../..
           mkdir -p target/asgi-coverage
           cp -a target/release-candidate/evidence/coverage/raw/. target/asgi-coverage/
-          mkdir -p target/asgi-coverage-review target/coverage-handoff
-          cp -a target/release-candidate/evidence/coverage-mcp/asgi-coverage-review/. \
-            target/asgi-coverage-review/
-          cp -a target/release-candidate/evidence/coverage-mcp/coverage-handoff/. \
-            target/coverage-handoff/
           python scripts/check_ci_evidence.py coverage \
             target/asgi-coverage/coverage-report.json --offline --allow-pending-mcp --require-clean
           python scripts/coverage_evidence.py verify \
             --report target/asgi-coverage/coverage-report.json \
             --raw-inventory target/release-candidate/evidence/coverage/raw-inventory.json \
             --source "$RELEASE_COMMIT"
-          python scripts/coverage_mcp_handoff.py verify-selection \
-            --manifest target/coverage-handoff/handoff.json \
-            --selection target/release-candidate/evidence/coverage/coverage-mcp-selection.json \
-            --source "$RELEASE_COMMIT" \
-            --ci-raw-root target/asgi-coverage \
-            --review-root target/asgi-coverage-review \
-            --output target/coverage-mcp-selection-recheck.json
           python - "$RELEASE_VERSION" "$RELEASE_COMMIT" <<'PY'
           import hashlib
           import json
@@ -186,7 +174,7 @@ jobs:
 
           version, commit = sys.argv[1:]
           candidate = json.loads(Path("target/release-candidate/candidate.json").read_text())
-          if (candidate.get("schema") != "uvicorn-rs-release-candidate@9"
+          if (candidate.get("schema") != "uvicorn-rs-release-candidate@10"
                   or candidate.get("state") != "verified candidate; publication disabled"
                   or candidate.get("version") != version
                   or candidate.get("commit") != commit
@@ -196,8 +184,6 @@ jobs:
           root = Path("target/release-candidate/evidence")
           evidence_path = root / "coverage/coverage-evidence.json"
           coverage_evidence = json.loads(evidence_path.read_text())
-          coverage_mcp_path = root / "coverage/coverage-mcp-selection.json"
-          coverage_mcp = json.loads(coverage_mcp_path.read_text())
           coverage = candidate.get("coverage", {})
           expected_ci = {"id": int(candidate["ci_run_id"]),
                          "attempt": int(candidate["ci_run_attempt"]),
@@ -216,26 +202,11 @@ jobs:
                   or coverage_evidence.get("status") != "passed"
                   or coverage_evidence.get("source_commit") != commit
                   or coverage_evidence.get("ci_run") != expected_ci
+                  or any(coverage_evidence.get("coverage", {}).get(metric, {}).get("covered")
+                         != coverage_evidence.get("coverage", {}).get(metric, {}).get("total")
+                         for metric in ("regions", "lines"))
                   or coverage != expected_coverage):
               raise SystemExit("candidate exact-source 100% coverage evidence is missing or inconsistent")
-          expected_coverage_mcp = {
-              "selection_sha256": hashlib.sha256(coverage_mcp_path.read_bytes()).hexdigest(),
-              "source_commit": coverage_mcp.get("source_commit"),
-              "ci_run": coverage_mcp.get("ci_run"),
-              "handoff_run": coverage_mcp.get("handoff_run"),
-              "handoff_artifact": coverage_mcp.get("handoff_artifact"),
-              "raw_report_sha256": coverage_mcp.get("raw_report_sha256"),
-              "reviewed_report_sha256": coverage_mcp.get("reviewed_report_sha256"),
-              "coverage_mcp_receipt_sha256": coverage_mcp.get("coverage_mcp_receipt_sha256"),
-              "build_id": coverage_mcp.get("build_id"),
-          }
-          if (coverage_mcp.get("schema") != "uvicorn-rs-coverage-mcp-selection@1"
-                  or coverage_mcp.get("source_commit") != commit
-                  or coverage_mcp.get("ci_run") != expected_ci
-                  or coverage_mcp.get("raw_coverage_artifact") != coverage_evidence.get("artifact")
-                  or coverage_mcp.get("raw_report_sha256") != coverage_evidence.get("report", {}).get("sha256")
-                  or candidate.get("coverage_mcp") != expected_coverage_mcp):
-              raise SystemExit("candidate accepted Coverage-MCP receipt is missing or bound to another source/report")
           print("Candidate Cargo archives and clean consumers were verified before publication.")
           PY
           rm -rf target/publication-recheck
@@ -333,7 +304,14 @@ jobs:
           crate_absent = {name: check_crate(name) for name in crate_names}
           pypi_absent = check_pypi()
 
-          publish_crates = any(crate_absent.values())
+          manual_cargo_version = "0.3.0"
+          if version == manual_cargo_version and any(crate_absent.values()):
+              missing = [name for name, absent in crate_absent.items() if absent]
+              raise SystemExit(
+                  "Cargo 0.3.0 must be published locally and match the candidate before tagging; "
+                  "missing registry versions: " + ", ".join(missing)
+              )
+          publish_crates = version != manual_cargo_version and any(crate_absent.values())
           publish_pypi = pypi_absent
           registry_state = {
               "version": version,
@@ -357,7 +335,7 @@ jobs:
               summary.write("```json\n")
               summary.write(json.dumps(registry_state, indent=2, sort_keys=True))
               summary.write("\n```\n")
-              summary.write("\nMissing Cargo versions publish through crates.io Trusted Publishing after exact archive revalidation. PyPI publishes only after Cargo verification.\n")
+              summary.write("\nCargo 0.3.0 must be published locally first and match the candidate. Later missing Cargo versions use crates.io Trusted Publishing after exact archive revalidation. PyPI publishes only after Cargo verification.\n")
           values = {
               "publish-crates": str(publish_crates).lower(),
               "publish-pypi": str(publish_pypi).lower(),
