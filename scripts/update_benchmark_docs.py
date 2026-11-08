@@ -10,6 +10,8 @@ import json
 from pathlib import Path
 import re
 
+from benchmark_identity import positive_integer_identity
+
 
 BEGIN = "<!-- BEGIN GENERATED LATEST ATTEMPT -->"
 END = "<!-- END GENERATED LATEST ATTEMPT -->"
@@ -65,6 +67,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if args.run_id <= 0 or args.run_attempt <= 0:
+        raise SystemExit("benchmark run ID and attempt must be positive integers")
     if re.fullmatch(r"[0-9a-f]{40}", args.commit) is None:
         raise SystemExit("benchmark commit must be a full lowercase Git SHA")
     url = f"https://github.com/{args.repository}/actions/runs/{args.run_id}"
@@ -85,8 +89,8 @@ def main() -> int:
         verify_checksums(aggregate)
         matrix = json.loads(matrix_path.read_text(encoding="utf-8"))
         if (matrix.get("schema") != "uvicorn-rs-benchmark-matrix@2"
-                or matrix.get("run_id") != args.run_id
-                or matrix.get("run_attempt") != args.run_attempt
+                or positive_integer_identity(matrix.get("run_id")) != args.run_id
+                or positive_integer_identity(matrix.get("run_attempt")) != args.run_attempt
                 or matrix.get("commit") != args.commit
                 or matrix.get("repository") != args.repository
                 or matrix.get("workflow_run_url") != url):

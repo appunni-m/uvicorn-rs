@@ -20,6 +20,7 @@ from aggregate_benchmark_matrix import (
     load_system,
     render_markdown,
 )
+from benchmark_identity import positive_integer_identity
 from run_benchmark_categories import source_paths, workload_names
 
 
@@ -209,8 +210,8 @@ def verify_complete_matrix(matrix: dict, arguments: argparse.Namespace,
             "benchmark matrix repository differs from the release repository")
     require(matrix.get("commit") == arguments.expected_commit,
             "benchmark matrix commit differs from the release commit")
-    require(str(matrix.get("run_id")) == str(arguments.run_id)
-            and matrix.get("run_attempt") == arguments.run_attempt,
+    require(positive_integer_identity(matrix.get("run_id")) == arguments.run_id
+            and positive_integer_identity(matrix.get("run_attempt")) == arguments.run_attempt,
             "benchmark matrix run identity differs from the selected workflow run")
     require(matrix.get("system_ids") == list(SYSTEMS),
             "benchmark matrix system inventory differs from the maintained inventory")
@@ -432,7 +433,7 @@ def main() -> int:
     parser.add_argument("review", type=Path)
     parser.add_argument("--repository", required=True)
     parser.add_argument("--expected-commit", required=True)
-    parser.add_argument("--run-id", required=True)
+    parser.add_argument("--run-id", required=True, type=int)
     parser.add_argument("--run-attempt", type=int, required=True)
     parser.add_argument("--artifact-id", type=int, required=True)
     parser.add_argument("--artifact-name", required=True)
@@ -444,7 +445,7 @@ def main() -> int:
 
     require(re.fullmatch(r"[0-9a-f]{40}", args.expected_commit) is not None,
             "expected commit must be a full lowercase SHA")
-    require(args.run_attempt > 0 and args.artifact_id > 0 and args.artifact_size > 0,
+    require(args.run_id > 0 and args.run_attempt > 0 and args.artifact_id > 0 and args.artifact_size > 0,
             "benchmark run/artifact metadata is invalid")
     expected_artifact_name = f"asgi-benchmark-matrix-{args.run_id}-{args.run_attempt}"
     require(args.artifact_name == expected_artifact_name,
