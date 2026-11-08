@@ -648,11 +648,13 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--repository", required=True)
-    parser.add_argument("--run-id", required=True)
-    parser.add_argument("--run-attempt", required=True)
+    parser.add_argument("--run-id", required=True, type=int)
+    parser.add_argument("--run-attempt", required=True, type=int)
     args = parser.parse_args()
     if not re.fullmatch(r"[0-9a-f]{40}", args.commit):
         parser.error("--commit must be a full lowercase Git commit SHA")
+    if args.run_id <= 0 or args.run_attempt <= 0:
+        parser.error("--run-id and --run-attempt must be positive integers")
     found = {}
     artifact_paths = {}
     for artifact in sorted(args.artifacts.glob("asgi-category-benchmarks-*")):
