@@ -1,19 +1,17 @@
 # Deployment guidance
 
-The `uvicorn-rs` 0.3.0 PyPI release is not published. PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24)
-merged to `main` as `242f05096181ee1b84aac116bea613c1a6dad76f`. PR-head CI
-[#719](https://github.com/appunni-m/uvicorn-rs/actions/runs/42348498407) passed
-parity, candidate consumers, and unified coverage at 15,061/15,061 regions and
-11,075/11,075 lines. Exact-main CI #720 and benchmark #366 were dispatched; docs
-build #314 passed. The active release goal requires an accepted independent
-Coverage-MCP review bound to the final source and raw report, alongside 100%
-raw coverage. The earlier benchmark
-shows FastAPI HTTP/1 route and WebSocket regressions; it supports no broad
-speedup claim. Focused upload diagnostic [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289)
-did not reproduce the historical timeout or explain its cause. See the
-[compatibility status](uvicorn-compatibility.md) and
-[support matrix](support-matrix.md), then evaluate the published candidate
-with your application before deploying it.
+The `uvicorn-rs` 0.3.0 PyPI release is not published. Exact-main CI
+[#746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884) passed
+compatibility, candidate package and clean-consumer checks, and unified raw
+coverage at 15,061/15,061 regions and 11,075/11,075 lines on commit
+`d0648cc0a4479b246dc7423b22a2b80f333d6193`. The complete three-system ordinary-
+FastAPI benchmark [#371](https://github.com/appunni-m/uvicorn-rs/actions/runs/42503892704)
+passed its matrix gate. It reports an HTTP/1.1 validated-route regression and
+workload-specific H2/H3 results, so it supports no broad speedup claim. The
+historical upload timeout did not recur, but its cause remains unknown. See the
+[compatibility status](uvicorn-compatibility.md), [support matrix](support-matrix.md),
+and [release guide](releases.md). Evaluate your own application only after the
+candidate is published and repository release qualification is complete.
 
 ## Bind and run
 

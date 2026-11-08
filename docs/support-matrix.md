@@ -4,57 +4,57 @@ This page summarizes the maintained Uvicorn 0.54.0 compatibility contract.
 The official ASGI conformance suite has not been run, and the evidence does
 not extend to other Uvicorn versions.
 
-The Python distribution is `uvicorn-rs`, providing `uvicorn` imports and
-command. `uvicorn-rs-py` is the optional internal Cargo/PyO3 adapter. The Cargo
-release targets are the Python-free `uvicorn-rs` server crate with optional
-`http3`, and `asgi-lifespan-protocol-rs`. The publisher is `release.yml`.
+The planned Python distribution is `uvicorn-rs`, providing `uvicorn` imports
+and command. `uvicorn-rs-py` is the optional internal Cargo/PyO3 adapter. The
+Cargo release targets are the Python-free `uvicorn-rs` server crate with
+optional `http3`, and `asgi-lifespan-protocol-rs`. `release.yml` publishes;
+`candidate.yml` qualifies tagged candidates.
 
 <a id="current-verification-status-2026-11-02"></a>
 <a id="current-verification-status-2026-11-04"></a>
 <a id="current-verification-status-2026-11-05"></a>
 <a id="current-verification-status-2026-11-06"></a>
 <a id="current-verification-status-2026-11-07"></a>
+<a id="current-verification-status-2026-11-09"></a>
 
-## Current verification status (2026-11-07)
+## Current verification status (2026-11-09)
 
-PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) merged to `main` as
-`242f05096181ee1b84aac116bea613c1a6dad76f`. PR-head CI
-[#719](https://github.com/appunni-m/uvicorn-rs/actions/runs/42348498407)
-passed installed-wheel Uvicorn 0.54.0 parity on Linux x86-64 (786/786), macOS
-ARM64 (786/786), and Windows x86-64 (759/759 applicable cases; 27 POSIX-only
-cases are inapplicable). The 16 indexed custom HTTP/WebSocket protocol,
-`ssl_context_factory`, ALPN, and response-capacity cases pass on all three.
-Candidate packages and clean consumers passed on all three systems and the
-CPython 3.9 floor.
+Exact-main CI [#746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884)
+passed on commit `d0648cc0a4479b246dc7423b22a2b80f333d6193`. Installed-wheel
+parity against Uvicorn 0.54.0 passed 786/786 cases on Linux x86-64 and macOS
+ARM64 and 759/759 applicable cases on Windows x86-64. The 27 Windows cases
+requiring POSIX-only facilities are inapplicable. The full matrix includes the
+maintained custom HTTP/WebSocket hooks, TLS factory and ALPN, lifecycle,
+configuration, and response-capacity cases.
 
-The same CI run passed all 1,453 unified cases through three ASGI and three
-native repeats, with complete attribution and zero failures or infrastructure
-retries. Raw coverage is 15,061/15,061 regions and 11,075/11,075 lines; artifact
-[13567108849](https://github.com/appunni-m/uvicorn-rs/actions/runs/42348498407/artifacts/13567108849)
-has SHA-256 `4a670ab7794c50c3104ca9415fc6664f0ec7b7080dc47086864c09949aa8c856`.
-Coverage-MCP reviewed the full report with 45/45 region pages (899 groups),
-the full line result, zero gaps, matching source receipt, and passed test
-status. That review is bound to the earlier PR merge source. The active release
-goal requires a new accepted review bound to the final main source. Exact-source
-100% raw coverage remains mandatory. Main CI #720 and the three-system benchmark
-#366 were dispatched on `242f050`; docs build #314 passed.
+| Profile | Result | Scope |
+| --- | --- | --- |
+| Linux x86-64, CPython 3.12.13 | Passed | Installed-wheel parity; candidate package and clean consumer |
+| macOS ARM64, CPython 3.12.13 | Passed | Installed-wheel parity; candidate package and clean consumer |
+| Windows x86-64, CPython 3.12.13 | Passed | 759 applicable parity cases; candidate package and clean consumer |
+| Windows POSIX-only cases | Inapplicable | 27 indexed inputs require unavailable POSIX facilities |
+| Linux x86-64, CPython 3.9.25 | Passed | Installed abi3-wheel consumer only; not the full parity matrix |
 
-The complete matched benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265)
-has 68/69/68 qualified category pairs on Linux x86-64, Linux ARM64, and macOS
-ARM64. FastAPI HTTP/1 validated-route throughput is slower than Uvicorn on all
-six system/loop pairs, and WebSocket text echo is slower; H2/H3 results vary by
-workload. No broad FastAPI speedup is supported. The ARM64 Hypercorn HTTP/3
-slow-reader reference failure has candidate-only passing evidence and no
-comparative ratio. Focused upload trace [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289)
-did not reproduce the historical HTTP/1 timeout and did not establish its
-cause.
+The same run passed all 1,453 unified cases through three ASGI and three native
+repeats, with complete attribution and no failures or infrastructure retries.
+Raw coverage is 15,061/15,061 regions and 11,075/11,075 lines. The report,
+source, run, artifact, context, build, and matrix identities are retained in
+the [coverage artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884/artifacts/13631702787).
+An independent Coverage-MCP receipt is not a release requirement.
 
-Run #364 is bound to earlier source `e8b5d6b`; exact-main benchmark #366 was
-dispatched for `242f050`. The package scope remains
-the Python-free Cargo `uvicorn-rs` crate with optional `http3`,
-`asgi-lifespan-protocol-rs`, and PyPI `uvicorn-rs` exposing the `uvicorn`
-namespace and command. Exact-main CI, benchmark, candidate artifacts, and
-consumers must pass before publication.
+The matched ordinary-FastAPI benchmark [#371](https://github.com/appunni-m/uvicorn-rs/actions/runs/42503892704)
+completed on Linux x86-64, Linux ARM64, and macOS ARM64 on the same source.
+HTTP/1.1 validated-route results regressed; HTTP/2 and HTTP/3 results vary by
+workload. No broad FastAPI speedup is supported. The historical ARM64 upload
+timeout did not recur, and its root cause remains unknown.
+
+The 0.3.0 candidate has not been published. Local Cargo publication, tagged
+candidate qualification, and automated PyPI publication are still pending.
+Docs deployment [#336](https://github.com/appunni-m/uvicorn-rs/actions/runs/42512183399)
+built the original documentation for `d0648cc`. This content refresh is carried
+through the strict docs check on its PR; the main deployment rebuilds the
+updated site after merge. The maintainer will run their real FastAPI
+application after repository release qualification.
 
 ### Historical status (2026-11-05)
 
@@ -78,11 +78,10 @@ retries, but measured 15,056/15,057 regions and 11,078/11,078 lines. The one
 uncovered region was an unreachable optional request-body timer state, removed
 by the invariant change on the #689 head.
 
-That historical snapshot records an earlier review-gate discussion. A temporary
-waiver of independent Coverage-MCP review was later recorded, then superseded by
-the active release goal. Exact-source 100% raw coverage, an accepted independent
-review of that report, and the final-source three-system benchmark are required.
-No 0.3.0 package has been published.
+That historical snapshot records an earlier review-gate discussion. The
+maintainer's current decision is that a separate Coverage-MCP receipt is
+optional. Exact-source 100% raw coverage and the final-source three-system
+benchmark remain required. No 0.3.0 package has been published.
 
 ## Last complete exact-main release baseline (2026-11-04)
 

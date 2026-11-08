@@ -5,12 +5,37 @@
 <a id="current-source-status-2026-11-02"></a>
 <a id="current-source-status-2026-11-06"></a>
 <a id="current-source-status-2026-11-07"></a>
+<a id="current-source-status-2026-11-09"></a>
 
-## Current source status (2026-11-07)
+## Current source status (2026-11-09)
 
-PR #24 merged to `main` as `242f05096181ee1b84aac116bea613c1a6dad76f`. PR-head CI #719 passed the installed-wheel Uvicorn 0.54.0 matrix: Linux x86-64 786/786, macOS ARM64 786/786, and Windows x86-64 759/759 applicable cases. All indexed custom protocol, TLS factory/ALPN, and response-capacity inputs passed. Native composition and package consumers on Linux, macOS, Windows, and Python 3.9 also passed. Unified coverage was 15,061/15,061 regions and 11,075/11,075 lines. Exact-main CI #720 and benchmark #366 were dispatched on `242f050`. The active release goal also requires an accepted independent Coverage-MCP review bound to the exact final-source raw report; neither run is final-source qualification for the open PR changes.
+Exact-main CI [#746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884)
+passed on `main` commit `d0648cc0a4479b246dc7423b22a2b80f333d6193`. The public
+installed-wheel parity matrix against Uvicorn 0.54.0 passed 786/786 on Linux
+x86-64 and macOS ARM64 and 759/759 applicable cases on Windows x86-64. Twenty-
+seven Windows cases requiring POSIX-only facilities are excluded by declared
+platform applicability. Candidate package and clean-consumer checks passed on
+Linux x86-64, macOS ARM64, and Windows x86-64; the CPython 3.9 job passed the
+abi3-wheel consumer check.
 
-The earlier matched benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265) validated 68/69/68 category pairs across Linux x86-64, Linux ARM64, and macOS ARM64 on source `e8b5d6b`. HTTP/1 FastAPI route throughput and WebSocket text echo were slower than Uvicorn in the reported comparisons; H2/H3 results varied by workload. No broad FastAPI speedup is claimed. Exact-main benchmark #366 was dispatched on `242f050`. The maintainer will run their real FastAPI application after release qualification.
+The unified report passed all 1,453 cases across three ASGI and three native
+repeats, with zero failed or infrastructure cases and full case attribution.
+Raw coverage is 15,061/15,061 regions and 11,075/11,075 lines. The source, run,
+artifact, report, context, build, and matrix identities are retained in the
+[CI artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884/artifacts/13631702787).
+No independent Coverage-MCP receipt is required.
+
+The complete matched ordinary-FastAPI benchmark [#371](https://github.com/appunni-m/uvicorn-rs/actions/runs/42503892704)
+completed on Linux x86-64, Linux ARM64, and macOS ARM64 on the same commit.
+HTTP/1.1 validated-route results regressed, while H2/H3 results vary by
+workload. The results support no broad FastAPI speedup claim. The historical
+Linux ARM64 upload timeout did not recur; the available trace does not establish
+its cause. The maintainer will run the real application after the repository
+release gates are complete.
+
+The candidate is not published yet. Local Cargo publication, tag-bound
+candidate qualification, and PyPI publication remain release steps; see the
+[release guide](releases.md).
 
 ### Historical source status (2026-11-03)
 
@@ -2918,7 +2943,7 @@ evidence checker verifies current source, native, input and harness identities;
 tag assembly requires clean receipts from successful CI on the exact commit.
 The former Python unit-test module has been removed; maintained verification
 uses these live workflows and evidence contracts. See [release gates](releases.md)
-for platform scope and the separate Coverage-MCP review.
+for platform scope and exact-source raw coverage requirements.
 
 
 ## Module-CLI HTTP backend live request parity — 2026-10-31

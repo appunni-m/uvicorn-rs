@@ -6,26 +6,36 @@ FastAPI evaluation. Kata remains the system of record. The maintainer will run
 their application trial; collecting their application or running its load is not
 a prerequisite for completing the repository work.
 
-## Active release goal — 2026-11-08
+## Active release goal — 2026-11-09
 
-The current release gate requires exact-source raw unified coverage at 100%
-regions and lines. Record the source, run and attempt, raw artifact ID and
-digest, report and context hashes, build identity, complete matrix evidence,
-and integer totals. Coverage-MCP can help diagnose gaps, but an independent
-receipt is optional and does not gate candidate or publication.
+The current package source is clean `main` commit
+`d0648cc0a4479b246dc7423b22a2b80f333d6193`, version `0.3.0`. CI #746 passed
+installed-wheel compatibility, platform package/consumer checks, and the exact-
+source raw coverage gate: 15,061/15,061 regions and 11,075/11,075 lines across
+1,453 cases, three ASGI and three native repeats, complete attribution, and no
+failed or infrastructure cases. The raw artifact, report, context, source-set,
+build, and matrix identities are recorded in [coverage.md](../coverage.md).
+A separate Coverage-MCP receipt is not required.
 
-PR #25 merged as `be2e8a40`. PR #26 fixes benchmark selection for main docs
-pushes and carries the candidate/release workflow correction that removes the
-MCP receipt dependency while preserving exact-source raw coverage
-revalidation. Its docs check #324 passed; CI #734 is still running. Main CI
-#729 and exact-main benchmark #367 are also still running on `be2e8a40`; neither
-is complete release evidence yet.
+The matched benchmark #371 completed on Linux x86-64, Linux ARM64, and macOS
+ARM64. HTTP/1.1 validated-route results regressed, H2/H3 results vary by
+workload, and no broad FastAPI speedup is supported. The historical upload
+timeout did not recur; its cause remains unknown. Docs #336 passed for the
+original main documentation, and the source docs are now being refreshed to
+match current package names and evidence. Those edits need their own docs build.
 
-The raw coverage gate remains 100% for regions and lines, with three passing
-ASGI and native repeats, complete attribution, and zero failures or
-infrastructure retries. Retain the source, run/attempt, artifact ID/digest,
-report/context hashes, build identity, and revalidate them during candidate
-qualification.
+The 0.3.0 Cargo versions are not yet present on crates.io, PyPI `uvicorn-rs`
+has no 0.3.0 release, and no tag exists. The release order remains local
+publication of `asgi-lifespan-protocol-rs`, registry-checksum verification,
+local publication of `uvicorn-rs`, checksum verification, immutable `v0.3.0`
+tag, candidate qualification, then automated PyPI publication and consumer
+verification. Release controls and Trusted Publisher configuration are set.
+
+Raw coverage acceptance remains exact-source 100% regions and lines with three
+passing ASGI and native repeats, complete attribution, zero failures, and
+retained run/attempt, artifact, report/context, source, build, and matrix
+identities. The maintainer runs the real FastAPI application trial after the
+repository release handoff.
 
 ## Historical review decisions — 2026-11-04 to 2026-11-07
 
@@ -34,11 +44,15 @@ reinstated it on 2026-11-07. The maintainer later confirmed that no separate
 Coverage-MCP receipt is required. Raw exact-source coverage remains mandatory;
 the earlier review-policy changes are historical.
 
-## Focused upload diagnostic — 2026-11-07
+## Focused upload diagnostic — current evidence
 
-Run [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289), artifact [13561333175](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289/artifacts/13561333175), tested PR source be12ff08002fb55ef250eb777198061b4e7c3b4a on Linux ARM64, kernel 7.0.0-1017-azure, CPython 3.12.13, uvloop, 1 MiB uploads in 1 KiB writes, concurrency 8, with the recreated 5 ms timer and proactive 16 KiB peer reads. Three repetitions per server completed with zero timeouts or failed requests. All requests completed and no receive exceeded 100 ms. The historical upload timeout remains unreproduced; its cause and first-stalled boundary remain unknown.
-
-This focused trace is diagnostic only and does not replace the matched three-system matrix. Benchmark #364 is complete but predates the current source and reports HTTP/1 FastAPI and WebSocket regressions; exact-main matrix evidence remains required.
+The focused Linux ARM64 trace #370 and the complete exact-main benchmark #371
+did not reproduce the historical `fastapi-upload-1m-write-1k` timeout. The
+current benchmark passed its workload repetitions with no client timeout; the
+diagnostic did not observe a stalled boundary. The root cause remains unknown,
+so no fix is claimed. Do not rerun the same unchanged trace; add targeted
+instrumentation only if new evidence identifies a plausible boundary. The
+complete three-system benchmark gate is satisfied by #371.
 
 ## Benchmark update — 2026-11-06
 

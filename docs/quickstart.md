@@ -1,8 +1,9 @@
 # Run a Python ASGI app
 
-This guide starts the example from a repository checkout. The `uvicorn-rs`
-0.3.0 PyPI release is still being qualified; the tested candidate is not
-published yet.
+This guide starts the example from a repository checkout. As of 2026-11-09,
+the `uvicorn-rs` 0.3.0 candidate has passed its current exact-main CI and
+benchmark gates, but it has not been published to PyPI. The release page lists
+the remaining staged publication steps.
 
 ## Start the checked-out example
 
@@ -52,22 +53,23 @@ measurements, and restore upstream Uvicorn.
 
 ## Compatibility evidence
 
-PR #24 CI [#718](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980)
-passed installed-wheel Uvicorn 0.54.0 parity on Linux x86-64 (786/786), macOS
-ARM64 (786/786), and Windows x86-64 (759/759 applicable cases). Candidate
-packages and clean consumers passed on all three systems and on the CPython 3.9
-floor. Unified coverage passed all 1,453 cases through three ASGI and three
-native repeats at 15,061/15,061 regions and 11,075/11,075 lines, with a complete
-Coverage-MCP review reporting zero gaps. This is PR-source evidence; exact-main
-coverage and review must still bind to the final release commit.
+Exact-main CI [#746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884)
+passed on commit `d0648cc0a4479b246dc7423b22a2b80f333d6193`. Installed-wheel
+parity passed against Uvicorn 0.54.0 on Linux x86-64 and macOS ARM64 (786/786
+cases each) and Windows x86-64 (759/759 applicable cases; 27 POSIX-only cases
+are inapplicable). The candidate package and clean-consumer checks passed on
+Linux, macOS, and Windows, including the CPython 3.9 wheel consumer. The unified
+matrix passed all 1,453 cases through three ASGI and three native repeats, with
+15,061/15,061 regions and 11,075/11,075 lines. An independent Coverage-MCP
+receipt is not required; the exact-source raw report and its identities are
+recorded in the CI artifact.
 
-The complete three-system benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265)
-passed matrix validation on earlier source `e8b5d6b`. Ordinary-FastAPI HTTP/1.1
-validated-route throughput is below Uvicorn on all six system/loop pairs, and
-WebSocket text echo is slower; H2/H3 results vary by workload. It supports no
-broad FastAPI speedup claim and cannot satisfy the exact-main benchmark gate.
-Focused upload diagnostic [#365](https://github.com/appunni-m/uvicorn-rs/actions/runs/42340595289)
-did not reproduce the historical HTTP/1 timeout or establish its cause. The
-maintainer will perform the real-application trial after repository release
-qualification. See the [compatibility status](uvicorn-compatibility.md) and
-[support matrix](support-matrix.md) for current evidence.
+The matched ordinary-FastAPI benchmark [#371](https://github.com/appunni-m/uvicorn-rs/actions/runs/42503892704)
+completed on the same commit across Linux x86-64, Linux ARM64, and macOS ARM64.
+HTTP/1.1 validated-route results regressed; HTTP/2 and HTTP/3 results vary by
+workload. This evidence supports no broad FastAPI speedup claim. The historical
+Linux ARM64 upload timeout did not recur in the completed matrix or focused
+trace, so its cause remains unknown and it is not claimed as fixed. See the
+[compatibility status](uvicorn-compatibility.md) and [support matrix](support-matrix.md)
+for scope and limitations. The maintainer will run their own real FastAPI
+application trial after repository release qualification.

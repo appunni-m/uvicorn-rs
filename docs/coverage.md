@@ -2,7 +2,7 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Current release coverage acceptance (2026-11-08)
+## Current release coverage acceptance (2026-11-09)
 
 Release requires a successful complete CI report from the exact final `main`
 commit with **100% executable regions and lines**, complete case attribution,
@@ -13,11 +13,27 @@ and publication workflows revalidate this same evidence. Coverage-MCP may be
 used to investigate gaps, but an independent MCP receipt is not a release
 requirement.
 
-Main CI [#729](https://github.com/appunni-m/uvicorn-rs/actions/runs/42430641475)
-is still producing coverage for `be2e8a40cd4f2b9fbfab0e11a25201545b8edde6`.
-PR #26 CI #734 is also still running on its proposed source; it cannot replace
-the exact-main report. No current 100% result is claimed until the exact-main
-coverage job completes and its retained artifact is verified.
+Main CI [#746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884),
+attempt 1, completed on clean commit
+[`d0648cc0a4479b246dc7423b22a2b80f333d6193`](https://github.com/appunni-m/uvicorn-rs/commit/d0648cc0a4479b246dc7423b22a2b80f333d6193).
+The complete unified matrix passed 1,453/1,453 cases: 786/786 public oracle
+parity cases, 452/452 fault contracts, three ASGI repeats of 1,194/1,194 each,
+three native repeats of 259/259 each, and complete attribution for 1,317/1,317
+cases. There were zero failed, infrastructure-failed, retried, or unrun cases.
+Raw coverage passed at **15,061/15,061 regions and 11,075/11,075 lines**.
+
+Coverage artifact [13631702787](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884/artifacts/13631702787)
+is 371,089,548 bytes and has archive SHA-256
+`13180f7c35243e1e4f5679168d2e8d3306511b9f0278f9a829ac0978337965b7`. The
+report SHA-256 is `b40e88c9ce127887dee2f351973904b88b5e98bd94d5f402ae49c8a2b03638d2`;
+the context SHA-256 is
+`277d6f94431e7331f8f6de2c805d1439843112a6d3507885fa3e643a77a87b1`; the
+build ID is `81847bba7d3ce6bc23d611c8d19621c37c2425446123aef8f6e490073b69b05b`;
+the source-set SHA-256 is
+`272eeb8c0ed2d75e69788e94f7cac1ac66f969dcc7e9c99da27f4d570cbce30c`. GitHub
+reports the same archive digest. The report is clean-source and records run
+`42508611884`, attempt `1`, and the exact commit above. An independent
+Coverage-MCP receipt is optional and does not gate release.
 
 <a id="current-unified-coverage-status-2026-10-22"></a>
 <a id="current-unified-coverage-status-2026-10-29"></a>
@@ -28,12 +44,13 @@ coverage job completes and its retained artifact is verified.
 <a id="current-unified-coverage-status-2026-11-05"></a>
 <a id="current-unified-coverage-status-2026-11-06"></a>
 <a id="current-unified-coverage-status-2026-11-07"></a>
+<a id="current-unified-coverage-status-2026-11-09"></a>
 
-## Latest recorded unified coverage status (2026-11-07)
+## Latest recorded unified coverage status (2026-11-09)
 
-PR #24 CI [#719](https://github.com/appunni-m/uvicorn-rs/actions/runs/42348498407), attempt 1, tested commit `69903ba90f11d22716064dde92c30f98ab631ced`. All 1,453 cases (1,194 ASGI and 259 native) passed with three repeats per suite and complete attribution. The raw report records **15,061/15,061 regions and 11,075/11,075 lines**. Coverage artifact [13567108849](https://github.com/appunni-m/uvicorn-rs/actions/runs/42348498407/artifacts/13567108849) has archive SHA-256 `4a670ab7794c50c3104ca9415fc6664f0ec7b7080dc47086864c09949aa8c856`.
-
-Main CI [#720](https://github.com/appunni-m/uvicorn-rs/actions/runs/42356999307) was recording the exact-main raw report on `242f05096181ee1b84aac116bea613c1a6dad76f`; the run was still in progress when this historical status was written. Current release acceptance requires exact-source raw 100% regions and lines and recorded evidence identities. Coverage-MCP review is optional.
+See the exact-main CI #746 result and retained report above. Older PR and main
+run records below remain historical evidence for their own commits; they do
+not supersede the `d0648cc` report or qualify a later source revision.
 
 ### Historical unified coverage status (2026-11-05)
 
