@@ -6,7 +6,7 @@ This is the reviewed parameter-to-input map for Kata `9kbx`. The declared public
 
 - Denominator: 1 positional argument (`APP`) + 51 declared Click options = **52 parameters**. Click adds `--help` automatically; it is included in the CLI input matrix but is not a declaration in `main.py`.
 - The CLI process input file is `tests/parity/inputs/cli.json`, schema `uvicorn-rs-parity/input@47`, with **118 cases** and SHA-256 `d569964a28c49161b60eddf2b8262c901cf0071b15cc93443b98f67048c32002`.
-- Current PR-source parity in CI #718 [run 42337079980](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980), attempt 1, includes the 118-case CLI input matrix and passed the indexed public cases on applicable platforms. The Windows listener exclusions remain limited to platform-inapplicable UDS and inherited-file-descriptor cases; Windows worker reference exceptions use separate policies and retain their raw observations. Final-main parity and release qualification remain pending.
+- PR #24 CI #719 [run 42348498407](https://github.com/appunni-m/uvicorn-rs/actions/runs/42348498407), attempt 1, includes the 118-case CLI input matrix and passed the indexed public cases on applicable platforms. The Windows listener exclusions remain limited to platform-inapplicable UDS and inherited-file-descriptor cases; Windows worker reference exceptions use separate policies and retain their raw observations. Exact-main CI #720 was dispatched on `242f050`; release qualification remains pending.
 - Older run #583 also passed 118 CLI cases on Linux/macOS and 115 Windows-applicable cases; retained as historical. Exact-source run [#586](https://github.com/appunni-m/uvicorn-rs/actions/runs/41281097988) passed Linux x86-64 parity 755/755 and its candidate artifact/consumer. macOS passed 754/755 with one worker-restart log mismatch; Windows had 678 passes and four infrastructure failures. The updated 15-second probe timeout input passed the affected case 1/1 in a focused native macOS run. These earlier receipts are historical and do not replace #596.
 - Commit `6342b20402bf0cceabd8eafde3f067e1620bafba` fixes the h11 incomplete-header limit in the adapter and Rust parser. Its runtime-source SHA-256 is `c00038a3885178b4bb1146fc315a51eb70c5e149a1742a16d3bdada8c7bee50f`. The #596 installed-candidate artifacts pass all 12 related Python API, CLI, and HTTP/1 cases, including the exact-limit and one-byte-over boundaries, on Linux, macOS, and Windows. The broader Windows artifact still has six unrelated worker-shutdown infrastructure failures; those are tracked outside the CLI parameter contract.
 - The preceding full installed-wheel parity on macOS ARM64 / CPython 3.12.13 passed **719/719**, including all **118/118** CLI process cases. Receipt run `4f0fd48142f34ddd931639928a6daf4d`, report SHA-256 `17215002f939d255069c6fef20f0c1cd43ca1d17e981e2c29d2e6edbb6a07780`. It predates the six module-CLI WebSocket inputs, four h11 boundary inputs and runtime fix below; it is historical evidence for that earlier source and input set.
@@ -281,9 +281,9 @@ Every row below is read from the 118 input-only process cases. The exact argumen
 ## Acceptance evidence for `9kbx`
 
 The current CLI input index contains all 118 process cases for the 51 Click
-options and positional application argument. PR CI #718 passed the
-current installed-wheel public matrix, including those CLI cases and the
-platform-applicable inputs. The earlier focused WebSocket and h11 boundary
+options and positional application argument. PR CI #719 passed the current
+installed-wheel public matrix, including those CLI cases and the
+platform-applicable inputs. Exact-main CI #720 will revalidate them. The earlier focused WebSocket and h11 boundary
 receipts remain useful for tracing individual regressions; they are not a
 substitute for the source-bound hosted matrix. The final main-source CI will
 revalidate the release candidate after merge.

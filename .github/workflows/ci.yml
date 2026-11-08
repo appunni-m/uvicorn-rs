@@ -16,7 +16,6 @@ on:
           - focused-windows-parity
           - focused-linux-parity
           - replay-unified-coverage
-          - diagnose-stock-windows-workers
       parity_case_ids:
         description: Comma-separated case IDs for a focused parity mode (up to 20)
         required: false
@@ -215,42 +214,6 @@ jobs:
           path: ${{ runner.temp }}/coverage-replay/
           if-no-files-found: error
           retention-days: 90
-
-  stock-windows-worker-diagnostic:
-    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'diagnose-stock-windows-workers'
-    name: Isolate unmodified Uvicorn Windows worker shutdown
-    runs-on: ${{ inputs.windows_runner || 'windows-2022' }}
-    timeout-minutes: 8
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
-        with:
-          version: ${{ env.UV_VERSION }}
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install only the stock server and minimal dependencies
-        id: stock-install
-        shell: bash
-        run: |
-          uv venv --python "$PYTHON_VERSION" "$RUNNER_TEMP/stock-uvicorn"
-          uv pip install --python "$RUNNER_TEMP/stock-uvicorn/Scripts/python.exe" \
-            uvicorn==0.54.0 click==8.5.0 h11==0.16.0 colorama==0.4.6 py-spy==0.4.3
-      - name: Isolate one ready worker's terminate operation
-        shell: bash
-        working-directory: tools/upstream/uvicorn-windows
-        run: '"$RUNNER_TEMP/stock-uvicorn/Scripts/python.exe" worker_terminate.py --output ../../../target/stock-windows/worker-terminate.json'
-      - name: Capture the first two-worker CLI Ctrl+C failure within ten attempts
-        if: always() && !cancelled() && steps.stock-install.conclusion == 'success'
-        shell: bash
-        working-directory: tools/upstream/uvicorn-windows
-        run: '"$RUNNER_TEMP/stock-uvicorn/Scripts/python.exe" cli_ctrl_c.py --output ../../../target/stock-windows/cli-ctrl-c --attempts 10 --dump-exe "$RUNNER_TEMP/stock-uvicorn/Scripts/py-spy.exe"'
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: always()
-        with:
-          name: uvicorn-stock-windows-worker-diagnostic
-          path: target/stock-windows/
-          if-no-files-found: error
 
   release-evidence-contracts:
     if: github.event_name != 'workflow_dispatch' || inputs.mode == 'full'
@@ -938,10 +901,21 @@ jobs:
           fi
           run_platform_parity() {
             parity_exit=0
-            "$candidate_python" scripts/run_parity.py \
-              --oracle-python "$oracle_python" \
-              --installed-candidate "$@" \
-              --output "target/parity-${{ matrix.platform }}.json" || parity_exit=$?
+            if [ "$RUNNER_OS" = 'macOS' ]; then
+              # Continue only after the exact known stock-Uvicorn TLS-WebSocket
+              # timeout; the checker retains it as an infrastructure failure
+              # and independently requires the candidate exchange to succeed.
+              "$candidate_python" scripts/run_parity.py \
+                --oracle-python "$oracle_python" \
+                --installed-candidate "$@" \
+                --continue-after-macos-reference-wss-handshake-timeout \
+                --output "target/parity-${{ matrix.platform }}.json" || parity_exit=$?
+            else
+              "$candidate_python" scripts/run_parity.py \
+                --oracle-python "$oracle_python" \
+                --installed-candidate "$@" \
+                --output "target/parity-${{ matrix.platform }}.json" || parity_exit=$?
+            fi
             # macOS ships Bash 3.2, where expanding an empty array under
             # nounset fails. Keep the command array nonempty on every platform.
             evidence_args=(scripts/check_ci_evidence.py parity
@@ -952,8 +926,11 @@ jobs:
               # Each has a separate policy; independently verify the candidate.
               evidence_args+=(--accept-windows-reference-hang --accept-windows-reference-startup
                 --acceptance-output "target/parity-diagnostics-${{ matrix.platform }}/compatibility-acceptance.json")
+            elif [ "$RUNNER_OS" = 'macOS' ]; then
+              evidence_args+=(--accept-macos-reference-wss-handshake-timeout
+                --acceptance-output "target/parity-diagnostics-${{ matrix.platform }}/compatibility-acceptance.json")
             fi
-            if ((parity_exit > 1)) || { ((parity_exit != 0)) && [ "$RUNNER_OS" != 'Windows' ]; }; then
+            if ((parity_exit > 1)) || { ((parity_exit != 0)) && [ "$RUNNER_OS" != 'Windows' ] && [ "$RUNNER_OS" != 'macOS' ]; }; then
               return "$parity_exit"
             fi
             "$candidate_python" "${evidence_args[@]}" "$@"
@@ -961,6 +938,8 @@ jobs:
           if [ "$RUNNER_OS" = 'Windows' ]; then
             export UVICORN_RS_SHUTDOWN_TRACE_OUTPUT="target/parity-diagnostics-${{ matrix.platform }}/shutdown-trace.log"
             run_platform_parity "${parity_args[@]}"
+          elif [ "$RUNNER_OS" = 'macOS' ]; then
+            run_platform_parity
           else
             run_platform_parity
           fi

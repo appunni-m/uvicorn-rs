@@ -14,16 +14,17 @@
 
 ## Current unified coverage status (2026-11-07)
 
-PR #24 CI [#718](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980), attempt 1, tested develop head be12ff08002fb55ef250eb777198061b4e7c3b4a at synthetic merge source 292433bdb710774a1156e4c1983a6b4e8a761aca. All 1,453 cases (1,194 ASGI and 259 native) passed with three repeats per suite and complete attribution. The raw report records **15,061/15,061 regions and 11,075/11,075 lines**. Coverage artifact [13563705697](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980/artifacts/13563705697) has archive SHA-256 4a344042e9f56d113fa4a2029d4267a11e863010bcaf0de5eac6f8001b38356d and raw report SHA-256 1b24dc37836737849f98cddbf7002d65fa64d7b22a287e47c5210b20a460881c.
+PR #24 CI [#719](https://github.com/appunni-m/uvicorn-rs/actions/runs/42348498407), attempt 1, tested commit `69903ba90f11d22716064dde92c30f98ab631ced`. All 1,453 cases (1,194 ASGI and 259 native) passed with three repeats per suite and complete attribution. The raw report records **15,061/15,061 regions and 11,075/11,075 lines**. Coverage artifact [13567108849](https://github.com/appunni-m/uvicorn-rs/actions/runs/42348498407/artifacts/13567108849) has archive SHA-256 `4a670ab7794c50c3104ca9415fc6664f0ec7b7080dc47086864c09949aa8c856`.
 
-Coverage-MCP independently reviewed the report: all 45 region pages and 899 groups, plus the complete line result, with zero gaps, matching source receipt, and passed test status. The local page receipt is target/asgi-coverage-review/coverage-mcp-pages.json, SHA-256 c1bc9b344d0be4517df17a4f20273e2228399537f38e432d364ab0d09f554a84. This evidence is bound to the PR merge source. The release workflow still requires a new exact-main report and accepted handoff for the final release commit.
+Main CI [#720](https://github.com/appunni-m/uvicorn-rs/actions/runs/42356999307) is recording the exact-main raw report on `242f05096181ee1b84aac116bea613c1a6dad76f`; the run was still in progress when this status was written. The active release goal requires 100% raw regions and lines plus a complete, accepted independent Coverage-MCP review bound to the same final source and report. Retain the source, run, artifact, report, context, build, and review-receipt identities.
 
 ### Historical unified coverage status (2026-11-05)
 
 At that historical checkpoint, the exact-source unified report needed 100%
-regions and lines and the complete matrix needed three passing repeats. The
-active release goal now also requires an accepted independent Coverage-MCP
-review bound to the same final source and raw report.
+regions and lines and the complete matrix needed three passing repeats. A
+temporary waiver of independent Coverage-MCP review was recorded on
+2026-11-07, then superseded by the active release goal requiring a final-source
+review receipt.
 
 Exact-main CI [#661](https://github.com/appunni-m/uvicorn-rs/actions/runs/41802594662)
 passed on clean source `feb955d2758166ad8c4b519903fd1318b29e7d2d`, run
@@ -111,9 +112,9 @@ measurement does not qualify current source or complete release acceptance.
 
 The final-source report must retain both measured objects, pass strict replay,
 and record the exact source, run, artifact, report, context, and build
-identities. Coverage thresholds and source exclusions are unchanged. The active
-release goal also requires an accepted Coverage-MCP review bound to that exact
-source and report.
+identities. Coverage thresholds and source exclusions are unchanged. The
+active release goal requires an accepted independent Coverage-MCP review bound
+to the same final source and raw report.
 See the [release sequence](releases.md).
 
 ### Historical full report: CI #596 (2026-11-01)
@@ -3470,10 +3471,11 @@ uv run --python 3.12 --locked --group benchmark python scripts/check_ci_evidence
 
 CI accepts the exact-source raw report with `--allow-pending-mcp` during the
 raw evidence stage. This validates the complete indexed matrix, all three
-repeats, clean source and 100% normalized regions and lines. The later release
-qualification stage still requires an accepted independent Coverage-MCP review
-bound to the same source and raw report. A failed matrix, missing counter, or
-uncovered region/line remains a failure.
+repeats, clean source and 100% normalized regions and lines. Release
+qualification also requires those raw totals and revalidates the source, run,
+artifact, report, context, build, and matrix identities. It also requires an
+accepted independent Coverage-MCP review for the same source and report. A
+failed matrix, missing counter, or uncovered region/line remains a failure.
 
 ## Record exact-source release coverage
 

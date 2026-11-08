@@ -1,37 +1,27 @@
-# Staged PyPI release mode. Cargo publication is performed separately by the maintainer.
+# Automatically publish a successful release candidate after its tag workflow completes.
 name: Publish packages
 
 on:
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: Existing annotated vX.Y.Z tag with a verified candidate artifact
-        required: true
-        type: string
-      action:
-        description: Prepare only or publish the exact uvicorn-rs PyPI candidate; this workflow does not publish Cargo crates
-        required: true
-        default: prepare-only
-        type: choice
-        options:
-          - prepare-only
-          - pypi
-      confirmation:
-        description: For publication, enter exactly PUBLISH vX.Y.Z
-        required: false
-        type: string
+  workflow_run:
+    workflows: [Release candidate]
+    types: [completed]
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
-  group: package-publication
+  group: package-publication-${{ github.event.workflow_run.head_sha }}-${{ github.event.workflow_run.run_attempt }}
   cancel-in-progress: false
 
 jobs:
   prepare:
     name: Verify the exact candidate and registry state
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.repository.full_name == github.repository &&
+      startsWith(github.event.workflow_run.head_branch, 'v')
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -44,11 +34,12 @@ jobs:
       run-id: ${{ steps.candidate.outputs.run-id }}
       artifact-id: ${{ steps.candidate.outputs.artifact-id }}
       artifact-digest: ${{ steps.candidate.outputs.artifact-digest }}
+      publish-crates: ${{ steps.registry.outputs.publish-crates }}
       publish-pypi: ${{ steps.registry.outputs.publish-pypi }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -58,12 +49,11 @@ jobs:
         with:
           toolchain: "1.98.1"
           components: llvm-tools-preview
-      - name: Verify the annotated tag, main ancestry, versions and explicit authorization
+      - name: Verify the annotated tag, main ancestry and versions
         id: source
         env:
-          RELEASE_TAG: ${{ inputs.tag }}
-          RELEASE_ACTION: ${{ inputs.action }}
-          RELEASE_CONFIRMATION: ${{ inputs.confirmation }}
+          RELEASE_TAG: ${{ github.event.workflow_run.head_branch }}
+          RELEASE_COMMIT: ${{ github.event.workflow_run.head_sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -75,13 +65,11 @@ jobs:
           test -n "$remote_tag_object"
           test "$remote_tag_object" = "$tag_object"
           commit="$(git rev-parse "$RELEASE_TAG^{commit}")"
+          test "$commit" = "$RELEASE_COMMIT"
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
           git merge-base --is-ancestor "$commit" refs/remotes/origin/main
           test -z "$(git status --porcelain --untracked-files=all)"
           python scripts/check_release_version.py "$version"
-          if [[ "$RELEASE_ACTION" != prepare-only ]]; then
-            test "$RELEASE_CONFIRMATION" = "PUBLISH $RELEASE_TAG"
-          fi
           echo "tag-object=$tag_object" >> "$GITHUB_OUTPUT"
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -89,8 +77,10 @@ jobs:
         id: candidate
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ github.event.workflow_run.head_branch }}
           RELEASE_COMMIT: ${{ steps.source.outputs.commit }}
+          RELEASE_CANDIDATE_RUN_ID: ${{ github.event.workflow_run.id }}
+          RELEASE_CANDIDATE_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
         run: |
           python - <<'PY'
           import json
@@ -103,6 +93,8 @@ jobs:
           repository = os.environ["GITHUB_REPOSITORY"]
           tag = os.environ["RELEASE_TAG"]
           commit = os.environ["RELEASE_COMMIT"]
+          run_id = int(os.environ["RELEASE_CANDIDATE_RUN_ID"])
+          attempt = int(os.environ["RELEASE_CANDIDATE_RUN_ATTEMPT"])
           token = os.environ["GH_TOKEN"]
 
           def get(path):
@@ -115,40 +107,29 @@ jobs:
               with urlopen(request, timeout=30) as response:
                   return json.load(response)
 
-          runs = get("actions/workflows/candidate.yml/runs?per_page=100").get("workflow_runs", [])
-          candidates = []
-          artifact_name = f"uvicorn-rs-candidate-{tag}"
-          for run in runs:
-              if (run.get("head_sha") != commit or run.get("event") != "push"
-                      or run.get("status") != "completed" or run.get("conclusion") != "success"):
-                  continue
-              run_id = run.get("id")
-              if type(run_id) is not int or run_id <= 0:
-                  continue
-              artifacts = get(f"actions/runs/{run_id}/artifacts?per_page=100").get("artifacts", [])
-              matches = [item for item in artifacts
-                         if item.get("name") == artifact_name and item.get("expired") is False]
-              if len(matches) != 1:
-                  continue
-              artifact = matches[0]
-              digest = artifact.get("digest")
-              if (type(artifact.get("id")) is not int or artifact["id"] <= 0
-                      or not isinstance(digest, str)
-                      or re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is None):
-                  continue
-              candidates.append((run, artifact))
-
-          if len(candidates) != 1:
-              raise SystemExit(
-                  f"expected one successful, retained {artifact_name} artifact for {commit}; "
-                  f"found {len(candidates)}"
-              )
-          run, artifact = candidates[0]
+          run = get(f"actions/runs/{run_id}")
+          if (run.get("id") != run_id or run.get("run_attempt") != attempt
+                  or run.get("head_sha") != commit or run.get("head_branch") != tag
+                  or run.get("event") != "push" or run.get("status") != "completed"
+                  or run.get("conclusion") != "success"):
+              raise SystemExit("triggering release-candidate run no longer matches its successful tag identity")
+          artifacts = get(f"actions/runs/{run_id}/artifacts?per_page=100").get("artifacts", [])
+          artifact_name = f"uvicorn-rs-candidate-{tag}-{attempt}"
+          matches = [item for item in artifacts
+                     if item.get("name") == artifact_name and item.get("expired") is False]
+          if len(matches) != 1:
+              raise SystemExit(f"expected one retained {artifact_name} artifact; found {len(matches)}")
+          artifact = matches[0]
+          digest = artifact.get("digest")
+          if (type(artifact.get("id")) is not int or artifact["id"] <= 0
+                  or not isinstance(digest, str)
+                  or re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is None):
+              raise SystemExit("release-candidate artifact identity or digest is invalid")
           values = {
               "tag": tag,
               "commit": commit,
               "version": tag.removeprefix("v"),
-              "run-id": run["id"],
+              "run-id": run_id,
               "artifact-id": artifact["id"],
               "artifact-digest": artifact["digest"],
           }
@@ -170,7 +151,6 @@ jobs:
         env:
           RELEASE_COMMIT: ${{ steps.candidate.outputs.commit }}
           RELEASE_VERSION: ${{ steps.candidate.outputs.version }}
-          RELEASE_ACTION: ${{ inputs.action }}
         shell: bash
         run: |
           set -euo pipefail
@@ -256,8 +236,7 @@ jobs:
                   or coverage_mcp.get("raw_report_sha256") != coverage_evidence.get("report", {}).get("sha256")
                   or candidate.get("coverage_mcp") != expected_coverage_mcp):
               raise SystemExit("candidate accepted Coverage-MCP receipt is missing or bound to another source/report")
-          if os.environ["RELEASE_ACTION"] == "pypi":
-              print("PyPI publication requires both exact candidate Cargo archives to be published and registry-verified first.")
+          print("Candidate Cargo archives and clean consumers were verified before publication.")
           PY
           rm -rf target/publication-recheck
           mkdir -p target/publication-recheck/packages target/publication-recheck/evidence
@@ -269,7 +248,6 @@ jobs:
       - name: Check immutable registry versions without credentials
         id: registry
         env:
-          RELEASE_ACTION: ${{ inputs.action }}
           RELEASE_VERSION: ${{ steps.candidate.outputs.version }}
         run: |
           python - <<'PY'
@@ -280,7 +258,6 @@ jobs:
           from urllib.error import HTTPError
           from urllib.request import Request, urlopen
 
-          action = os.environ["RELEASE_ACTION"]
           version = os.environ["RELEASE_VERSION"]
           root = Path("target/release-candidate")
           packages = root / "packages"
@@ -309,7 +286,7 @@ jobs:
                   return True
               version_info = payload.get("version", {}) if payload else {}
               if version_info.get("yanked") is True:
-                  raise SystemExit(f"crates.io has yanked {name} {version}; stop PyPI publication")
+                  raise SystemExit(f"crates.io has yanked {name} {version}; stop release publication")
               actual = version_info.get("checksum")
               if actual != digest:
                   raise SystemExit(f"crates.io already contains {name} {version} with different bytes")
@@ -346,30 +323,18 @@ jobs:
                   raise SystemExit("PyPI already contains this version with a partial or different distribution set")
               return False
 
-          pypi_selected = action == "pypi"
-          inspect_all = action == "prepare-only"
-          crate_exists = {}
-          crate_absent = {}
-          if pypi_selected or inspect_all:
-              crate_exists = {name: check_crate_exists(name) for name in crate_names}
-              if pypi_selected:
-                  missing_names = [name for name, exists in crate_exists.items() if not exists]
-                  if missing_names:
-                      raise SystemExit("create these crates before the PyPI release: " + ", ".join(missing_names))
-              crate_absent = {
-                  name: check_crate(name) if crate_exists[name] else True
-                  for name in crate_names
-              }
-              if pypi_selected:
-                  unpublished = [name for name, absent in crate_absent.items() if absent]
-                  if unpublished:
-                      raise SystemExit("publish these exact candidate Cargo versions before PyPI: "
-                                       + ", ".join(f"{name} {version}" for name in unpublished))
-          pypi_absent = None
-          if pypi_selected or inspect_all:
-              pypi_absent = check_pypi()
+          crate_exists = {name: check_crate_exists(name) for name in crate_names}
+          first_publish_names = [name for name, exists in crate_exists.items() if not exists]
+          if first_publish_names:
+              raise SystemExit(
+                  "first publication must create these crates locally before tagging: "
+                  + ", ".join(first_publish_names)
+              )
+          crate_absent = {name: check_crate(name) for name in crate_names}
+          pypi_absent = check_pypi()
 
-          publish_pypi = pypi_selected and pypi_absent
+          publish_crates = any(crate_absent.values())
+          publish_pypi = pypi_absent
           registry_state = {
               "version": version,
               "crates_io": {
@@ -382,8 +347,9 @@ jobs:
                       for name, absent in crate_absent.items()
                   },
               } if crate_absent else "not_checked",
-              "pypi": ("version_absent" if pypi_absent else "published_identical")
-              if pypi_absent is not None else "not_checked",
+              "pypi": "version_absent" if pypi_absent else "published_identical",
+              "publish_crates": publish_crates,
+              "publish_pypi": publish_pypi,
           }
           print("Registry preflight: " + json.dumps(registry_state, sort_keys=True))
           with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
@@ -391,19 +357,275 @@ jobs:
               summary.write("```json\n")
               summary.write(json.dumps(registry_state, indent=2, sort_keys=True))
               summary.write("\n```\n")
-              if action == "prepare-only":
-                  summary.write("\nPrepare-only checks registry identity and hashes; publisher jobs remain disabled.\n")
-          values = {"publish-pypi": str(publish_pypi).lower()}
+              summary.write("\nMissing Cargo versions publish through crates.io Trusted Publishing after exact archive revalidation. PyPI publishes only after Cargo verification.\n")
+          values = {
+              "publish-crates": str(publish_crates).lower(),
+              "publish-pypi": str(publish_pypi).lower(),
+          }
           with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
               for key, value in values.items():
                   output.write(f"{key}={value}\n")
           print(json.dumps(values, sort_keys=True))
           PY
 
+  publish-crates:
+    name: Publish missing Cargo versions to crates.io
+    needs: prepare
+    if: needs.prepare.outputs.publish-crates == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: crates-io
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: "1.98.1"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.prepare.outputs.run-id }}
+          artifact-ids: ${{ needs.prepare.outputs.artifact-id }}
+          digest-mismatch: error
+          path: target/release-candidate
+      - name: Verify the lifecycle candidate archive and reproduce its Cargo package
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd target/release-candidate
+          sha256sum --check --strict SHA256SUMS
+          cd ../..
+          cargo package --locked --no-verify -p asgi-lifespan-protocol-rs
+          python - "$RELEASE_VERSION" <<'PY'
+          import hashlib
+          import sys
+          from pathlib import Path
+
+          version = sys.argv[1]
+          candidate = Path("target/release-candidate/packages")
+          generated = Path("target/package")
+          name = "asgi-lifespan-protocol-rs"
+          filename = f"{name}-{version}.crate"
+          expected = hashlib.sha256((candidate / filename).read_bytes()).hexdigest()
+          actual = hashlib.sha256((generated / filename).read_bytes()).hexdigest()
+          if actual != expected:
+              raise SystemExit(f"repacked {filename} differs from the verified candidate archive")
+          print(f"verified exact Cargo archive {filename}: sha256:{actual}")
+          PY
+      - name: Check lifecycle crate version state
+        id: lifecycle
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          from urllib.error import HTTPError
+          from urllib.request import Request, urlopen
+
+          name = "asgi-lifespan-protocol-rs"
+          version = os.environ["RELEASE_VERSION"]
+          archive = Path("target/release-candidate/packages") / f"{name}-{version}.crate"
+          expected = hashlib.sha256(archive.read_bytes()).hexdigest()
+          headers = {"Accept": "application/json", "User-Agent": "uvicorn-rs-release"}
+
+          def get(url):
+              try:
+                  with urlopen(Request(url, headers=headers), timeout=30) as response:
+                      return json.load(response)
+              except HTTPError as error:
+                  if error.code == 404:
+                      return None
+                  raise
+
+          if get(f"https://crates.io/api/v1/crates/{name}") is None:
+              raise SystemExit(f"first publication of {name} must be made locally before this automated release")
+          payload = get(f"https://crates.io/api/v1/crates/{name}/{version}")
+          if payload is None:
+              state = "missing"
+          else:
+              info = payload.get("version", {})
+              if info.get("yanked") is True or info.get("checksum") != expected:
+                  raise SystemExit(f"crates.io {name} {version} is yanked or differs from the candidate")
+              state = "identical"
+          Path(os.environ["GITHUB_OUTPUT"]).write_text(f"state={state}\n", encoding="utf-8")
+          print(f"{name} {version}: {state}")
+          PY
+      - name: Obtain a short-lived crates.io token for the lifecycle crate
+        if: steps.lifecycle.outputs.state == 'missing'
+        id: lifecycle-auth
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+      - name: Publish the lifecycle crate
+        if: steps.lifecycle.outputs.state == 'missing'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.lifecycle-auth.outputs.token }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: cargo publish --locked --no-verify -p asgi-lifespan-protocol-rs
+      - name: Verify lifecycle crate registry bytes before publishing the server
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import time
+          from pathlib import Path
+          from urllib.error import HTTPError
+          from urllib.request import Request, urlopen
+
+          name = "asgi-lifespan-protocol-rs"
+          version = os.environ["RELEASE_VERSION"]
+          archive = Path("target/release-candidate/packages") / f"{name}-{version}.crate"
+          expected = hashlib.sha256(archive.read_bytes()).hexdigest()
+          request_headers = {"Accept": "application/json", "User-Agent": "uvicorn-rs-release"}
+          last_error = None
+          for attempt in range(12):
+              try:
+                  with urlopen(Request(
+                      f"https://crates.io/api/v1/crates/{name}/{version}",
+                      headers=request_headers,
+                  ), timeout=20) as response:
+                      info = json.load(response).get("version", {})
+                  if info.get("checksum") != expected or info.get("yanked") is True:
+                      raise SystemExit("published lifecycle crate does not match the candidate archive")
+                  print(f"verified {name} {version} sha256:{expected}")
+                  break
+              except HTTPError as error:
+                  if error.code != 404:
+                      raise
+                  last_error = error
+              if attempt == 11:
+                  raise SystemExit(f"crates.io did not expose {name} {version}: {last_error}")
+              time.sleep(10)
+          PY
+      - name: Check server crate version state
+        id: server
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          from urllib.error import HTTPError
+          from urllib.request import Request, urlopen
+
+          name = "uvicorn-rs"
+          version = os.environ["RELEASE_VERSION"]
+          archive = Path("target/release-candidate/packages") / f"{name}-{version}.crate"
+          expected = hashlib.sha256(archive.read_bytes()).hexdigest()
+          headers = {"Accept": "application/json", "User-Agent": "uvicorn-rs-release"}
+
+          def get(url):
+              try:
+                  with urlopen(Request(url, headers=headers), timeout=30) as response:
+                      return json.load(response)
+              except HTTPError as error:
+                  if error.code == 404:
+                      return None
+                  raise
+
+          if get(f"https://crates.io/api/v1/crates/{name}") is None:
+              raise SystemExit(f"first publication of {name} must be made locally before this automated release")
+          payload = get(f"https://crates.io/api/v1/crates/{name}/{version}")
+          if payload is None:
+              state = "missing"
+          else:
+              info = payload.get("version", {})
+              if info.get("yanked") is True or info.get("checksum") != expected:
+                  raise SystemExit(f"crates.io {name} {version} is yanked or differs from the candidate")
+              state = "identical"
+          Path(os.environ["GITHUB_OUTPUT"]).write_text(f"state={state}\n", encoding="utf-8")
+          print(f"{name} {version}: {state}")
+          PY
+      - name: Reproduce the uvicorn-rs package after its lifecycle dependency is visible
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          cargo package --locked --no-verify -p uvicorn-rs
+          python - "$RELEASE_VERSION" <<'PY'
+          import hashlib
+          import sys
+          from pathlib import Path
+
+          version = sys.argv[1]
+          filename = f"uvicorn-rs-{version}.crate"
+          candidate = Path("target/release-candidate/packages") / filename
+          generated = Path("target/package") / filename
+          expected = hashlib.sha256(candidate.read_bytes()).hexdigest()
+          actual = hashlib.sha256(generated.read_bytes()).hexdigest()
+          if actual != expected:
+              raise SystemExit(f"repacked {filename} differs from the verified candidate archive")
+          print(f"verified exact Cargo archive {filename}: sha256:{actual}")
+          PY
+      - name: Obtain a short-lived crates.io token for uvicorn-rs
+        if: steps.server.outputs.state == 'missing'
+        id: server-auth
+        uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+      - name: Publish uvicorn-rs
+        if: steps.server.outputs.state == 'missing'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.server-auth.outputs.token }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: cargo publish --locked --no-verify -p uvicorn-rs
+      - name: Verify uvicorn-rs registry bytes
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import time
+          from pathlib import Path
+          from urllib.error import HTTPError
+          from urllib.request import Request, urlopen
+
+          name = "uvicorn-rs"
+          version = os.environ["RELEASE_VERSION"]
+          archive = Path("target/release-candidate/packages") / f"{name}-{version}.crate"
+          expected = hashlib.sha256(archive.read_bytes()).hexdigest()
+          headers = {"Accept": "application/json", "User-Agent": "uvicorn-rs-release"}
+          last_error = None
+          for attempt in range(12):
+              try:
+                  with urlopen(Request(
+                      f"https://crates.io/api/v1/crates/{name}/{version}", headers=headers,
+                  ), timeout=20) as response:
+                      info = json.load(response).get("version", {})
+                  if info.get("checksum") != expected or info.get("yanked") is True:
+                      raise SystemExit("published uvicorn-rs crate does not match the candidate archive")
+                  print(f"verified {name} {version} sha256:{expected}")
+                  break
+              except HTTPError as error:
+                  if error.code != 404:
+                      raise
+                  last_error = error
+              if attempt == 11:
+                  raise SystemExit(f"crates.io did not expose {name} {version}: {last_error}")
+              time.sleep(10)
+          PY
+
   publish-pypi:
     name: Publish uvicorn-rs to PyPI
-    needs: prepare
-    if: needs.prepare.outputs.publish-pypi == 'true'
+    needs: [prepare, publish-crates]
+    if: >-
+      !cancelled() && needs.prepare.result == 'success' &&
+      needs.prepare.outputs.publish-pypi == 'true' &&
+      (needs.publish-crates.result == 'success' || needs.publish-crates.result == 'skipped')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: pypi
@@ -440,10 +662,12 @@ jobs:
     name: Verify registry bytes against the candidate
     needs:
       - prepare
+      - publish-crates
       - publish-pypi
     if: >-
-      !cancelled() && inputs.action == 'pypi' &&
+      !cancelled() &&
       needs.prepare.result == 'success' &&
+      (needs.publish-crates.result == 'success' || needs.publish-crates.result == 'skipped') &&
       (needs.publish-pypi.result == 'success' || needs.publish-pypi.result == 'skipped')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -461,7 +685,6 @@ jobs:
           path: target/release-candidate
       - name: Confirm published registry checksums match the candidate
         env:
-          RELEASE_ACTION: ${{ inputs.action }}
           RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           python - <<'PY'
@@ -473,7 +696,6 @@ jobs:
           from urllib.error import HTTPError
           from urllib.request import Request, urlopen
 
-          action = os.environ["RELEASE_ACTION"]
           version = os.environ["RELEASE_VERSION"]
           packages = Path("target/release-candidate/packages")
 
@@ -519,6 +741,122 @@ jobs:
               if actual != expected:
                   raise SystemExit("published PyPI files differ from the candidate filenames or checksums")
 
-          if action == "pypi":
-              check_registry(verify_pypi, f"uvicorn-rs {version}")
+          def verify_crate(name):
+              archive = packages / f"{name}-{version}.crate"
+              expected = hashlib.sha256(archive.read_bytes()).hexdigest()
+              payload = remote_json(f"https://crates.io/api/v1/crates/{name}/{version}")
+              if payload is None:
+                  raise LookupError(f"{name} {version} not visible yet")
+              info = payload.get("version", {})
+              if info.get("yanked") is True or info.get("checksum") != expected:
+                  raise SystemExit(f"published {name} differs from the candidate archive")
+
+          for crate in ("asgi-lifespan-protocol-rs", "uvicorn-rs"):
+              check_registry(lambda crate=crate: verify_crate(crate), f"{crate} {version}")
+          check_registry(verify_pypi, f"uvicorn-rs {version} on PyPI")
+          PY
+
+  github-release:
+    name: Attest and publish the verified GitHub release
+    needs: [prepare, verify-publication]
+    if: needs.verify-publication.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.prepare.outputs.run-id }}
+          artifact-ids: ${{ needs.prepare.outputs.artifact-id }}
+          digest-mismatch: error
+          path: target/release-candidate
+      - name: Stage the verified release files and checksum manifest
+        run: |
+          set -euo pipefail
+          cd target/release-candidate
+          sha256sum --check --strict SHA256SUMS
+          cd ../..
+          mkdir -p dist/release
+          cp target/release-candidate/packages/*.crate dist/release/
+          cp target/release-candidate/packages/*.whl dist/release/
+          cp target/release-candidate/packages/uvicorn_rs-*.tar.gz dist/release/
+          test "$(find dist/release -maxdepth 1 -type f | wc -l | tr -d ' ')" = 6
+          (cd dist/release && sha256sum *.crate *.whl *.tar.gz > SHA256SUMS && sha256sum --check SHA256SUMS)
+      - name: Attest the published source and Python distributions
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            dist/release/*.crate
+            dist/release/*.whl
+            dist/release/*.tar.gz
+            dist/release/SHA256SUMS
+      - name: Create the GitHub release or verify its asset digests
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+          from urllib.error import HTTPError
+          from urllib.request import Request, urlopen
+
+          tag = os.environ["RELEASE_TAG"]
+          if re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", tag) is None:
+              raise SystemExit("release tag is not a stable vX.Y.Z version")
+          repository = os.environ["GITHUB_REPOSITORY"]
+          token = os.environ["GH_TOKEN"]
+          root = Path("dist/release")
+          files = sorted(path for path in root.iterdir() if path.is_file())
+          expected = {
+              path.name: "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in files
+          }
+          release_url = f"https://api.github.com/repos/{repository}/releases/tags/{tag}"
+
+          def get_release():
+              request = Request(
+                  release_url,
+                  headers={"Accept": "application/vnd.github+json",
+                           "Authorization": f"Bearer {token}",
+                           "X-GitHub-Api-Version": "2022-11-28"},
+              )
+              try:
+                  with urlopen(request, timeout=30) as response:
+                      return json.load(response)
+              except HTTPError as error:
+                  if error.code == 404:
+                      return None
+                  raise
+
+          release = get_release()
+          created = release is None
+
+          if created:
+              subprocess.run([
+                  "gh", "release", "create", tag, "--verify-tag", "--title", tag,
+                  "--generate-notes", *[str(path) for path in files],
+              ], check=True)
+              release = get_release()
+              if release is None:
+                  raise SystemExit("GitHub did not expose the newly created release")
+
+          if release.get("draft") or release.get("tag_name") != tag:
+              raise SystemExit("an existing draft or mismatched GitHub release blocks publication")
+          actual = {asset.get("name"): asset.get("digest") for asset in release.get("assets", [])}
+          if actual != expected:
+              raise SystemExit("GitHub release assets differ from the verified candidate")
+          action = "created and verified" if created else "verified existing"
+          print(f"{action} GitHub release {tag} and all asset digests")
           PY

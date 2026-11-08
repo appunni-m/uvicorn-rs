@@ -17,10 +17,9 @@ release targets are the Python-free `uvicorn-rs` server crate with optional
 
 ## Current verification status (2026-11-07)
 
-PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) is open from
-`develop` head `be12ff08002fb55ef250eb777198061b4e7c3b4a`; its tested synthetic
-merge source is `292433bdb710774a1156e4c1983a6b4e8a761aca`. CI
-[#718](https://github.com/appunni-m/uvicorn-rs/actions/runs/42337079980)
+PR [#24](https://github.com/appunni-m/uvicorn-rs/pull/24) merged to `main` as
+`242f05096181ee1b84aac116bea613c1a6dad76f`. PR-head CI
+[#719](https://github.com/appunni-m/uvicorn-rs/actions/runs/42348498407)
 passed installed-wheel Uvicorn 0.54.0 parity on Linux x86-64 (786/786), macOS
 ARM64 (786/786), and Windows x86-64 (759/759 applicable cases; 27 POSIX-only
 cases are inapplicable). The 16 indexed custom HTTP/WebSocket protocol,
@@ -31,13 +30,14 @@ CPython 3.9 floor.
 The same CI run passed all 1,453 unified cases through three ASGI and three
 native repeats, with complete attribution and zero failures or infrastructure
 retries. Raw coverage is 15,061/15,061 regions and 11,075/11,075 lines; artifact
-13563705697 has SHA-256
-`4a344042e9f56d113fa4a2029d4267a11e863010bcaf0de5eac6f8001b38356d`.
+[13567108849](https://github.com/appunni-m/uvicorn-rs/actions/runs/42348498407/artifacts/13567108849)
+has SHA-256 `4a670ab7794c50c3104ca9415fc6664f0ec7b7080dc47086864c09949aa8c856`.
 Coverage-MCP reviewed the full report with 45/45 region pages (899 groups),
 the full line result, zero gaps, matching source receipt, and passed test
-status. That review is bound to the PR merge source, not yet to a main-branch
-release commit. Documentation build #312 passed before this status refresh; a
-new docs build is required for the updated pages.
+status. That review is bound to the earlier PR merge source. The active release
+goal requires a new accepted review bound to the final main source. Exact-source
+100% raw coverage remains mandatory. Main CI #720 and the three-system benchmark
+#366 were dispatched on `242f050`; docs build #314 passed.
 
 The complete matched benchmark [#364](https://github.com/appunni-m/uvicorn-rs/actions/runs/42325915265)
 has 68/69/68 qualified category pairs on Linux x86-64, Linux ARM64, and macOS
@@ -49,12 +49,12 @@ comparative ratio. Focused upload trace [#365](https://github.com/appunni-m/uvic
 did not reproduce the historical HTTP/1 timeout and did not establish its
 cause.
 
-Run #364 is bound to earlier source `e8b5d6b`, so it cannot satisfy the release
-verifier's exact-main-source benchmark requirement. The package scope remains
+Run #364 is bound to earlier source `e8b5d6b`; exact-main benchmark #366 was
+dispatched for `242f050`. The package scope remains
 the Python-free Cargo `uvicorn-rs` crate with optional `http3`,
 `asgi-lifespan-protocol-rs`, and PyPI `uvicorn-rs` exposing the `uvicorn`
-namespace and command. PR #24 must be merged, then final-main CI, benchmark,
-candidate artifacts, and consumers must pass before publication.
+namespace and command. Exact-main CI, benchmark, candidate artifacts, and
+consumers must pass before publication.
 
 ### Historical status (2026-11-05)
 
@@ -78,10 +78,11 @@ retries, but measured 15,056/15,057 regions and 11,078/11,078 lines. The one
 uncovered region was an unreachable optional request-body timer state, removed
 by the invariant change on the #689 head.
 
-That historical snapshot records a waiver that was later reversed by the active
-release goal. An accepted Coverage-MCP review bound to the final source is now
-required alongside exact-source 100% coverage and the final-source three-system
-benchmark. No 0.3.0 package has been published.
+That historical snapshot records an earlier review-gate discussion. A temporary
+waiver of independent Coverage-MCP review was later recorded, then superseded by
+the active release goal. Exact-source 100% raw coverage, an accepted independent
+review of that report, and the final-source three-system benchmark are required.
+No 0.3.0 package has been published.
 
 ## Last complete exact-main release baseline (2026-11-04)
 
