@@ -38,6 +38,10 @@ REQUIRED_METRICS = (
     "server_rss_sampled_peak_mib",
 )
 GAIN_METRICS = frozenset(("operations_per_second", "p50_ms", "p95_ms", "p99_ms"))
+# This connection-close variant remains in the correctness-gated benchmark
+# matrix, but the maintained release performance scope intentionally excludes
+# it. Keep its raw evidence without requiring a separate performance decision.
+HTTP1_DIAGNOSTIC_ONLY_WORKLOADS = frozenset({"fastapi-upload-1m-write-1k-close"})
 
 
 class AcceptanceError(ValueError):
@@ -277,13 +281,15 @@ def verify_complete_matrix(matrix: dict, arguments: argparse.Namespace,
 
 def fastapi_workloads() -> list[str]:
     return [name for name in workload_names(ROOT / "scripts/run_http_category_bench.py")
-            if name.startswith("fastapi-")]
+            if name.startswith("fastapi-") and name not in HTTP1_DIAGNOSTIC_ONLY_WORKLOADS]
 
 
 def pair_map(system: dict) -> dict[tuple[str, str], dict]:
     pairs = system["categories"]["http1"].get("pairs", [])
     result = {}
     for pair in pairs:
+        if pair.get("workload") in HTTP1_DIAGNOSTIC_ONLY_WORKLOADS:
+            continue
         key = (pair.get("workload"), pair.get("loop"))
         require(key not in result, f"duplicate HTTP/1 workload/loop comparison: {key}")
         result[key] = pair
