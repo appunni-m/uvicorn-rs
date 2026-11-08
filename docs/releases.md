@@ -552,10 +552,13 @@ version.
    regions and lines. A separate Coverage-MCP receipt is optional; candidate
    validation rechecks the raw report, artifact, and source identities before
    the tag can be published.
-4. Complete the correctness-gated three-system performance matrix. Require
-   matching valid repetitions and report throughput, p50/p95/p99 latency,
-   server CPU per operation, and sampled peak RSS. Keep stock FastAPI and
-   Starlette workloads separate from Rust-native application measurements.
+4. Complete the correctness-gated three-system performance matrix on the exact
+   release commit. It may be triggered by a `main` push or a full
+   `workflow_dispatch` run on `main`; candidate qualification accepts either
+   only when all three platform jobs and the aggregate evidence job succeed.
+   Require matching valid repetitions and report throughput, p50/p95/p99
+   latency, server CPU per operation, and sampled peak RSS. Keep stock FastAPI
+   and Starlette workloads separate from Rust-native application measurements.
 5. Build the Cargo and Python packages from the exact clean commit. Inspect
    archive contents, hashes, licenses, versions, and isolated consumers.
 6. Pass the standalone H3 archive consumer described below.
@@ -579,6 +582,10 @@ all gates pass, pushing the annotated version tag is the release authorization:
    move or reuse a tag after a public artifact refers to it.
 2. The workflow checks the remote tag object, tag/version agreement, clean
    checkout, main ancestry, and successful exact-commit CI and performance runs.
+   Performance evidence may come from a `main` push or a full manual dispatch
+   on `main`, but must contain successful Linux x86-64, Linux ARM64, macOS
+   ARM64, and aggregate evidence jobs from the selected run attempt. Focused
+   dispatches cannot qualify.
 3. It downloads the exact retained artifacts, checks their workflow identity
    and digests, and verifies package identity and evidence.
 4. It builds the independent consumer against the extracted Cargo archives and

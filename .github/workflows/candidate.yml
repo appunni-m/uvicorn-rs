@@ -92,8 +92,10 @@ jobs:
                       f"?head_sha={commit}&per_page=100")
           runs = api(endpoint).get("workflow_runs", [])
           runs = sorted(
-              (run for run in runs if run.get("head_sha") == commit and run.get("event") == "push"
+              (run for run in runs if run.get("head_sha") == commit
+               and run.get("event") in {"push", "workflow_dispatch"}
                and run.get("head_branch") == "main" and run.get("status") == "completed"
+               and run.get("conclusion") == "success"
                and type(run.get("run_attempt")) is int and run["run_attempt"] > 0),
               key=lambda run: run.get("updated_at", ""), reverse=True)
           required_jobs = {
@@ -128,7 +130,7 @@ jobs:
                       or not isinstance(digest, str) or re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is None):
                   rejected.append(f"{run_id}/{attempt}: aggregate artifact metadata is incomplete")
                   continue
-              selected = {"run-id": run_id, "run-attempt": attempt,
+              selected = {"run-id": run_id, "run-attempt": attempt, "event": run["event"],
                           "artifact-id": artifact["id"], "artifact-name": expected_name,
                           "artifact-size": size, "artifact-digest": digest}
               break
@@ -233,6 +235,7 @@ jobs:
           RELEASE_COMMIT: ${{ steps.tag.outputs.commit }}
           PERFORMANCE_RUN_ID: ${{ steps.performance-run.outputs.run-id }}
           PERFORMANCE_RUN_ATTEMPT: ${{ steps.performance-run.outputs.run-attempt }}
+          PERFORMANCE_EVENT: ${{ steps.performance-run.outputs.event }}
           PERFORMANCE_ARTIFACT_ID: ${{ steps.performance-run.outputs.artifact-id }}
           PERFORMANCE_ARTIFACT_NAME: ${{ steps.performance-run.outputs.artifact-name }}
           PERFORMANCE_ARTIFACT_SIZE: ${{ steps.performance-run.outputs.artifact-size }}
@@ -310,10 +313,13 @@ jobs:
 
           run_id = os.environ["PERFORMANCE_RUN_ID"]
           attempt = int(os.environ["PERFORMANCE_RUN_ATTEMPT"])
+          event = os.environ["PERFORMANCE_EVENT"]
+          if event not in {"push", "workflow_dispatch"}:
+              raise SystemExit("selected performance run has an unsupported trigger event")
           run = api(f"repos/{repository}/actions/runs/{run_id}")
           expected_run = {"id": int(run_id), "run_attempt": attempt,
-                          "head_sha": os.environ["RELEASE_COMMIT"], "event": "push",
-                          "head_branch": "main", "status": "completed"}
+                          "head_sha": os.environ["RELEASE_COMMIT"], "event": event,
+                          "head_branch": "main", "status": "completed", "conclusion": "success"}
           if any(run.get(key) != value for key, value in expected_run.items()):
               raise SystemExit("selected performance run identity changed during candidate assembly")
 
