@@ -114,10 +114,15 @@ def project_versions(root: Path = ROOT, expected: str | None = None) -> dict[str
 
     if (
         "first publication must create these crates locally before tagging" not in prepare_job
-        or "publish_crates = any(crate_absent.values())" not in prepare_job
+        or 'manual_cargo_version = "0.3.0"' not in prepare_job
+        or "version == manual_cargo_version and any(crate_absent.values())" not in prepare_job
+        or "publish_crates = version != manual_cargo_version and any(crate_absent.values())" not in prepare_job
         or "publish_pypi = pypi_absent" not in prepare_job
     ):
-        raise ValueError("release preflight must preserve local first-name bootstrap and inspect exact versions")
+        raise ValueError(
+            "release preflight must preserve local first-name bootstrap, require Cargo 0.3.0 "
+            "to exist before tagging, and auto-publish missing Cargo versions only afterward"
+        )
     required_crate_publish = (
         "environment: crates-io",
         "id-token: write",
