@@ -1,9 +1,8 @@
 # Deployment guidance
 
-Version 0.3.1 is being prepared; no Cargo or PyPI package has been published.
-The `v0.3.0` candidate stopped at its exact-main CI gate, and its package
-workflow skipped publication. Current exact-main coverage and benchmark
-evidence is incomplete; see the [release status](releases.md) and
+Version 0.3.2 is being prepared; no Cargo or PyPI package has been published.
+The immutable `v0.3.1` candidate failed performance-evidence verification
+because its source inventory omitted workspace Rust files. See the [release status](releases.md) and
 [compatibility status](uvicorn-compatibility.md). Evaluate your application
 after the candidate is published and repository release qualification is
 complete.

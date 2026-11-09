@@ -6,8 +6,8 @@ This document describes the PyO3/ASGI implementation for the PyPI
 distribution `uvicorn-rs` and the Python-free Cargo server crate `uvicorn-rs`.
 The root Cargo integration package and optional extra console script are named
 `uvicorn-rs-py`. The latest published Cargo version is 0.2.1. The immutable
-`v0.3.0` candidate did not pass qualification and no 0.3.0 package was
-published; version 0.3.1 is being prepared. PyPI Trusted
+`v0.3.1` candidate did not pass qualification and no 0.3.1 package was
+published; version 0.3.2 is being prepared. PyPI Trusted
 Publishing is configured for `appunni-m/uvicorn-rs`, workflow `release.yml`,
 environment `pypi`.
 
@@ -18,13 +18,13 @@ the adapter enables the required features and keeps application loading, the
 caller-owned event loop, ASGI scope/messages, context, and app exceptions on
 the Python side. The Rust-native crate remains usable without Python.
 
-Exact-main CI [#746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884)
-passed on commit `d0648cc0a4479b246dc7423b22a2b80f333d6193`, including the
-unified 100% raw coverage gate and candidate package consumers. That source is
-historical release evidence. Current main CI #758 is still running, and
-benchmark #373 failed Linux x86-64 exact-binary HTTP/3 parity before timings;
-the current blockers are listed in the [release status](releases.md). The
-earlier ordinary-FastAPI matrix #371 supports no broad FastAPI speedup claim.
+Exact-main CI [#760](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160493)
+passed on `c42a6d784b34b9bc95ab3fba1a2bf4697f8d0dcb`, including 100% raw
+coverage, parity, and package consumers. Benchmark [#374](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160485)
+completed on all three systems, but candidate verification exposed an
+inventory mismatch between benchmark capture and release acceptance. This is
+being corrected for version 0.3.2; exact-source gates must run again on the
+new commit. The current blockers are listed in the [release status](releases.md).
 The run-specific implementation records below are historical evidence for
 their stated revisions unless linked from the current
 [release status](releases.md#current-release-gates-2026-11-09),

@@ -19,27 +19,26 @@ optional `http3`, and `asgi-lifespan-protocol-rs`. `release.yml` publishes;
 
 ## Current verification status (2026-11-09)
 
-Main commit `7fd9b945e70583e0833ded24fe485fc1e3ccbf1e` has current evidence in
-[CI #758](https://github.com/appunni-m/uvicorn-rs/actions/runs/42563350232).
-Installed-wheel parity against Uvicorn 0.54.0 passed. The unified parity and
-coverage job and Windows x86-64 package/consumer job are still running. Linux
-x86-64 and macOS ARM64 package and consumer checks passed. These
-results are for source version 0.3.0 and do not qualify the 0.3.1 reissue.
+Main commit `c42a6d784b34b9bc95ab3fba1a2bf4697f8d0dcb` passed CI
+[#760](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160493),
+including installed-wheel parity, package consumers, and three-repeat unified
+coverage at 15,106/15,106 regions and 11,106/11,106 lines. Benchmark
+[#374](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160485)
+completed its Linux x86-64, Linux ARM64, and macOS ARM64 categories and
+aggregate validation.
 
-The matched three-system benchmark [#373](https://github.com/appunni-m/uvicorn-rs/actions/runs/42563350265)
-is incomplete. Linux x86-64 failed the normal-binary parity gate when its
-HTTP/3 probe received `H3_INTERNAL_ERROR` while awaiting response headers, and
-its timing steps were skipped. Linux ARM64 and macOS ARM64 are still running.
-No performance conclusion can be drawn from this run. The independent
-Coverage-MCP receipt is optional; exact-source raw coverage remains mandatory.
-
-Docs deployment [#345](https://github.com/appunni-m/uvicorn-rs/actions/runs/42563350295)
-passed for the pre-0.3.1 documentation. The immutable `v0.3.0` tag stopped at
-candidate qualification because exact-main CI was incomplete, and its package
-workflow skipped all publication jobs. No 0.3.0 Cargo or PyPI package was
-published. Version 0.3.1 is being prepared; see the [release status](releases.md)
-for its exact-source gates. The maintainer will run their real FastAPI
-application after repository release qualification.
+The immutable `v0.3.1` candidate did not publish. Candidate run
+[#42576320639, attempt 2](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576320639)
+verified the exact package identities and coverage report but rejected the
+benchmark source inventory: capture includes all workspace Rust sources and
+Cargo manifests, while the release verifier expected only its narrower general
+source list. The inventory lists differed by 194 paths; their union matched
+all 497 benchmark paths. A shared inventory helper and version 0.3.2 are being
+prepared on `develop`; exact-source CI, coverage, benchmark, docs, and candidate
+gates must run again for that new commit. No 0.3.1 package was published.
+The independent Coverage-MCP receipt is optional; raw 100% coverage remains
+mandatory. The maintainer will run their real FastAPI application after
+repository release qualification.
 
 ### Historical status (2026-11-05)
 

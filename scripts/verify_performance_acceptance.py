@@ -22,6 +22,7 @@ from aggregate_benchmark_matrix import (
 )
 from benchmark_identity import positive_integer_identity
 from run_benchmark_categories import source_paths, workload_names
+from benchmark_sources import workspace_rust_source_paths
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -149,7 +150,10 @@ def verify_source_identity(identity: dict, expected_commit: str, expected_native
     source_files = snapshot.get("source_files")
     require(isinstance(source_files, dict) and source_files,
             "benchmark source file inventory is missing")
-    expected_paths = set(source_paths(ROOT))
+    # Match the benchmark's complete inventory: its general source set plus
+    # every workspace Rust source and Cargo manifest captured by
+    # BenchmarkEvidence. Keep both capture and acceptance on the shared helper.
+    expected_paths = set(source_paths(ROOT)) | set(workspace_rust_source_paths(ROOT))
     require(set(source_files) == expected_paths,
             "benchmark source inventory differs from the release checkout")
     for relative, recorded in source_files.items():

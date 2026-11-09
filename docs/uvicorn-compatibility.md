@@ -1,8 +1,9 @@
 # Can I replace Uvicorn?
 
-**Not yet from PyPI.** The immutable `v0.3.0` candidate stopped at its exact-main
-CI gate, and its package workflow skipped publication. Version 0.3.1 is being
-prepared; it has not been published. The distribution name is `uvicorn-rs`; it provides the `uvicorn` command, the
+**Not yet from PyPI.** The immutable `v0.3.1` candidate was not published:
+candidate verification found that its benchmark source inventory includes
+workspace Rust files omitted by the verifier. Version 0.3.2 is being prepared.
+The distribution name is `uvicorn-rs`; it provides the `uvicorn` command, the
 `uvicorn` import namespace, and `python -m uvicorn`. The optional internal
 Cargo/PyO3 adapter remains `uvicorn-rs-py`. Keep upstream `uvicorn` and
 `uvicorn-rs` in separate environments because they install overlapping files.
@@ -18,22 +19,18 @@ describe the install path after publication.
 
 ## Current status (2026-11-09)
 
-Exact-main CI [#758](https://github.com/appunni-m/uvicorn-rs/actions/runs/42563350232)
-is running on commit `7fd9b945e70583e0833ded24fe485fc1e3ccbf1e`.
-Installed-wheel parity and Linux x86-64/macOS ARM64 package and consumer
-checks passed. Unified parity/coverage and Windows artifact jobs are still
-running; exact-source 100% coverage is not yet established.
+Main CI [#760](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160493)
+passed on `c42a6d78`, including 100% unified coverage (15,106/15,106 regions,
+11,106/11,106 lines; three repeats). Benchmark [#374](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160485)
+completed on Linux x86-64, Linux ARM64, and macOS ARM64, with aggregate
+validation. Candidate [#2, attempt 2](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576320639/job/129058654594)
+verified the package identities and raw coverage, but stopped because its
+performance verifier expected an incomplete source inventory. These results
+do not qualify version 0.3.2, which needs exact-source gates after the verifier
+fix is merged.
 
-Benchmark [#373](https://github.com/appunni-m/uvicorn-rs/actions/runs/42563350265)
-failed Linux x86-64 normal-binary parity when the HTTP/3 probe received
-`H3_INTERNAL_ERROR` while awaiting response headers. Timing was skipped; Linux
-ARM64 and macOS ARM64 remain in progress. No performance claim follows from
-this incomplete run. Docs deployment [#345](https://github.com/appunni-m/uvicorn-rs/actions/runs/42563350295)
-passed for the current main source, before the documentation changes for 0.3.1.
-
-The `v0.3.0` tag exists but did not pass candidate qualification; the package
-workflow skipped, so no Cargo or PyPI artifact was published. Version 0.3.1
-is being prepared. See the [release guide](releases.md) for the current stage and the
+The immutable `v0.3.1` tag remains unpublished. No Cargo or PyPI artifact was
+published. See the [release guide](releases.md) for the current stage and the
 [versioned compatibility contract](maintainers/uvicorn-0.54.0-contract.md)
 for reference-only failures and their candidate acceptance rules.
 
@@ -343,7 +340,7 @@ To replace upstream Uvicorn:
 
 ```sh
 python -m pip uninstall uvicorn
-python -m pip install "uvicorn-rs[standard]==0.3.1"
+python -m pip install "uvicorn-rs[standard]==0.3.2"
 uvicorn --help
 python -m uvicorn --help
 ```

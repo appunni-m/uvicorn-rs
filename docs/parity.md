@@ -9,25 +9,19 @@
 
 ## Current source status (2026-11-09)
 
-Exact-main CI [#758](https://github.com/appunni-m/uvicorn-rs/actions/runs/42563350232)
-is running on `main` commit `7fd9b945e70583e0833ded24fe485fc1e3ccbf1e`.
-Installed-wheel Uvicorn 0.54.0 parity and Linux x86-64/macOS ARM64 package and
-consumer checks passed. The unified parity/coverage and Windows package jobs
-are still running. No exact-source 100% coverage totals are available for this
-source.
+Main CI [#760](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160493)
+passed on `c42a6d784b34b9bc95ab3fba1a2bf4697f8d0dcb`, including the complete
+1,453-case matrix and 100% unified coverage: 15,106/15,106 regions and
+11,106/11,106 lines across three repeats. Benchmark [#374](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160485)
+completed successfully on Linux x86-64, Linux ARM64, and macOS ARM64.
+Candidate [#2, attempt 2](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576320639/job/129058654594)
+verified exact package and coverage evidence, then exposed a release-check bug:
+the performance verifier omitted workspace Rust files and Cargo manifests from
+its expected inventory. The shared inventory fix and version 0.3.2 are being
+prepared on `develop`; those exact-source gates must run again after merge.
 
-Benchmark [#373](https://github.com/appunni-m/uvicorn-rs/actions/runs/42563350265)
-failed Linux x86-64 normal-binary parity: the HTTP/3 probe received
-`H3_INTERNAL_ERROR` before response headers, so benchmark timing was skipped.
-Linux ARM64 and macOS ARM64 remain in progress. This run does not provide valid
-performance results. Preserve the failing case and resolve the candidate
-behavior before accepting the benchmark gate.
-
-The immutable `v0.3.0` candidate stopped at the exact-main CI gate, and the
-package workflow skipped publication. No Cargo or PyPI package was published.
-Version 0.3.1 is being prepared on `develop`; its source must pass PR and
-exact-main release checks before a successful candidate can publish through
-GitHub Actions. See the [release guide](releases.md).
+The immutable `v0.3.1` tag remains unpublished; no Cargo or PyPI package has
+been published. See the [release guide](releases.md).
 
 ### Historical source status (2026-11-03)
 
