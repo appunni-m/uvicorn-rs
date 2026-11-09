@@ -8,31 +8,30 @@ a prerequisite for completing the repository work.
 
 ## Release readiness snapshot — 2026-11-09
 
-The current target is version `0.3.0`. PR #29 has merged to `main` as
-`e665bad0922ad19f31edc66c5cc4ff370e5efb7e`; its exact-main CI is running as
-run #748. The PR-head CI passed installed-wheel compatibility, platform
-package/consumer checks, and exact-source raw coverage at 15,061/15,061
-regions and 11,075/11,075 lines across 1,453 cases, three ASGI and three native
-repeats, complete attribution, and no failed or infrastructure cases. That
-PR-head evidence does not replace qualification of the merged main commit.
-The raw report and its identities are documented in [coverage.md](../coverage.md).
-A separate Coverage-MCP receipt is not required.
+The current target is version `0.3.0`. PR #31 is open from `develop` to `main`.
+The latest source changes correct the first Cargo publication path and remove
+outdated local-publishing instructions from the maintainer guide. The PR's
+current CI and docs checks must validate this exact revision; the three-repeat
+unified coverage matrix and all platform candidate artifact/consumer checks
+must pass before merge. PR evidence does not replace exact-main qualification
+after merge. A separate Coverage-MCP receipt is not required; the raw report
+still must show exact-source 100% coverage.
 
-The matched benchmark #371 completed on Linux x86-64, Linux ARM64, and macOS
-ARM64 at the earlier `d0648cc` source. HTTP/1.1 validated-route results
+The matched benchmark #372 completed on Linux x86-64, Linux ARM64, and macOS
+ARM64 at the earlier `1e338c9` source. HTTP/1.1 validated-route results
 regressed, H2/H3 results vary by workload, and no broad FastAPI speedup is
 supported. The historical upload timeout did not recur; its cause remains
 unknown. Because candidate qualification binds the benchmark to the release
-commit, #371 cannot qualify `e665bad` or a later commit. A full manual matrix
-on `main` is required whenever a docs-only or workflow-only merge does not
-trigger the benchmark push filter.
+commit, #372 cannot qualify the PR head or a later commit. Run a full matrix on
+the final `main` source after merge.
 
-The 0.3.0 Cargo versions are not yet present on crates.io, PyPI `uvicorn-rs`
-has no 0.3.0 release, and no tag exists. The release order remains local
-publication of `asgi-lifespan-protocol-rs`, registry-checksum verification,
-local publication of `uvicorn-rs`, checksum verification, immutable `v0.3.0`
-tag, candidate qualification, then automated PyPI publication and consumer
-verification. Release controls and Trusted Publisher configuration are set.
+The 0.3.0 Cargo versions and PyPI `uvicorn-rs` are not yet published, and no
+tag exists. After exact-main gates and candidate qualification pass, GitHub
+`release.yml` publishes the lifecycle crate and then the server crate through
+their configured Trusted Publishers, verifies exact registry checksums,
+publishes PyPI `uvicorn-rs`, and creates the GitHub Release. No local Cargo
+publication or token is used. Release controls and publisher configuration are
+recorded as set.
 
 Raw coverage acceptance remains exact-source 100% regions and lines with three
 passing ASGI and native repeats, complete attribution, zero failures, and
@@ -662,9 +661,10 @@ shutdown. The Windows candidate job failed before package and consumer steps
 before candidate execution (artifact 13083216067). The three-repeat unified parity/coverage step for head f487 was active when
 this report was updated; no final total is recorded here. Follow-up develop
 commit 79549a84d broadcasts worker shutdown signals before waiting for
-acknowledgements. CI #594 predates this commit, so focused Windows parity, a
-new exact-source coverage result, and an accepted independent review receipt
-are still required on the follow-up head.
+acknowledgements. CI #594 predates this commit, so focused Windows parity and a
+new exact-source coverage result were still required on the follow-up head. A
+separate Coverage-MCP receipt is not required under the maintainer's current
+decision.
 macOS ARM64 installed-wheel parity passed 782/782 (artifact `13082370703`,
 SHA-256 `a34c8c8502c46d4d48bb8d6182ad6b0ed637d04f5d9593af8a646c333781d9d1`).
 Its clean candidate wheel consumer passed (artifact `13082505341`, archive
@@ -760,11 +760,13 @@ Benchmarks use one Tokio thread and report system/workload details alongside
 throughput, latency percentiles, CPU, and memory. The maintainer will perform
 their real-application trial after repository acceptance.
 
-The 0.3.0 changelog entry is included with maintainer authorization. No 0.3.0
-package or tag has been published. The publication sequence remains clean local
-Cargo publication of the lifecycle crate, then the server crate, followed by
-the `release.yml` PyPI-only action. The latest registry audit found 0.2.1 as the
-latest Cargo version and no PyPI `uvicorn-rs` release.
+The 0.3.0 changelog entry is included with maintainer authorization. At this
+2026-11-01 checkpoint, the plan was to publish Cargo locally before the
+`release.yml` PyPI-only action. That plan was superseded: the current release is
+GitHub Actions only, with `release.yml` publishing Cargo through the configured
+Trusted Publishers and then publishing PyPI after registry verification. No
+0.3.0 package or tag has been published. The registry audit recorded 0.2.1 as
+the latest Cargo version and no PyPI `uvicorn-rs` release at that checkpoint.
 
 ### Earlier PR validation — 2026-11-01 (CI #583)
 
@@ -790,14 +792,16 @@ evidence note. The selected upload case passed 1/1 locally on macOS; hosted
 Windows validation is pending. Do not push while the coverage job is active
 because a PR push cancels it. After it reaches a terminal state, push the batch
 and run the exact updated source once. Coverage remains unaccepted until the
-exact final source reaches 100% and receives its independent review.
+exact final source reaches 100% with its raw source-bound evidence; no separate
+Coverage-MCP receipt is required.
 Benchmarks remain behind complete compatibility and parity.
 
-No 0.3.0 package or tag has been published. The release sequence remains
-clean local Cargo publication of the lifecycle crate then the server crate,
-followed by the `release.yml` PyPI-only action. The registry audit dated
-2026-11-01 found 0.2.1 as the latest Cargo version and no PyPI `uvicorn-rs`
-release.
+At that 2026-11-01 checkpoint, no 0.3.0 package or tag had been published and
+the planned sequence was local Cargo publication followed by a PyPI-only
+`release.yml` action. That plan is superseded by the current GitHub-only release
+workflow, which publishes Cargo through Trusted Publishing before PyPI. The
+registry audit dated 2026-11-01 found 0.2.1 as the latest Cargo version and no
+PyPI `uvicorn-rs` release at that checkpoint.
 
 ### Earlier diagnosis — 2026-10-31 (CI #537)
 
@@ -1155,7 +1159,8 @@ all eight regions of `invalid_default_header_error`. The selected report is
 source digest is `ff885bc0a79cad1f710e8a2f57cbb63b1e70687759c0a3da4094e8369e3ce208`.
 It was built from a dirty working tree and is diagnostic subset evidence only. The
 retained full report projection still lists those eight regions as missing.
-The full coverage gate and independent review remain open.
+The full coverage gate remained open at that checkpoint; the later maintainer
+decision made a separate Coverage-MCP receipt optional.
 
 The next focused coverage batch adds six HTTP/2 response-event fault cases in
 `AsgiIo::send`: early-hint disconnect/channel closure and trailer
@@ -1301,8 +1306,8 @@ dependencies.
    confirmed the expected one-second and three-second Rust timeouts; the active
    connection completed and drained. This pass does not explain #501. The current branch has no
    full-source platform matrix yet. Do not start benchmarks until complete
-   compatibility parity passes. Coverage and independent review remain
-   mandatory release gates.
+   compatibility parity passes. Exact-source 100% coverage remains a release
+   gate; a separate Coverage-MCP receipt is optional.
 2. Audit the fixed compatibility inventory and architecture against current
    source. List each concrete missing or mismatched contract item with its owner,
    existing case or new input needed, and observable acceptance. Descriptions
@@ -1311,12 +1316,13 @@ dependencies.
    cases locally. Push one reviewed batch, then consume its hosted full run.
 4. Close compatibility once its behavioral and platform evidence passes.
    Benchmarks then run on a frozen normal build, using one Tokio worker thread.
-   Coverage and independent review remain mandatory release gates.
-5. Merge after the PR correctness/parity/quality gates pass. Obtain the required
-   exact-main CI, independent review, benchmarks, and package-consumer receipts.
-   PR evidence is not silently relabeled as main evidence.
-6. Assemble the complete bundle, qualify controls and bytes, then perform the
-   already-requested Cargo/PyPI release and verify the registries.
+   Exact-source 100% coverage remains a release gate; a separate Coverage-MCP
+   receipt is optional.
+5. Merge after the PR correctness/parity/quality gates pass. Obtain exact-main
+   CI, benchmark, and package-consumer receipts. PR evidence is not silently
+   relabeled as main evidence.
+6. Assemble the complete bundle, qualify controls and bytes, then let GitHub
+   `release.yml` publish Cargo and PyPI and verify the registries.
 
 The repaired dependency chain is:
 
@@ -1608,7 +1614,7 @@ outside this repository benchmark task.
 
 ## zep3 — Assemble the immutable candidate evidence
 
-**Work:** After compatibility, native acceptance, coverage, independent review
+**Work:** After compatibility, native acceptance, exact-source 100% coverage,
 and benchmark evidence qualify, assemble artifacts from the clean main source.
 Use the existing Linux/macOS/Windows packaging jobs, Python-floor consumer,
 `verify_release_candidate.py` and standalone H3 archive consumer. Inspect both

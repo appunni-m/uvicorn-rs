@@ -25,25 +25,24 @@ Use these state labels precisely:
 
 ## Current release status (2026-11-09)
 
-The exact release source is clean `main` commit
-[`d0648cc0a4479b246dc7423b22a2b80f333d6193`](https://github.com/appunni-m/uvicorn-rs/commit/d0648cc0a4479b246dc7423b22a2b80f333d6193),
-version `0.3.0`. CI, the complete matched benchmark, and the original docs
-deployment ran against this source. The updated documentation is carried in a
-PR whose strict docs check must pass before merge; the main docs workflow then
-builds and deploys the merged content.
+Release qualification is being assembled in PR #31 from `develop` to `main`.
+Its source includes the bodyless-response parity fix and GitHub-only first
+Cargo publication path. Treat the PR checks as provisional: after merge, exact
+`main` coverage, benchmark, candidate artifacts/consumers, and docs deployment
+must qualify the final release source. Kata `m8mx` tracks the live gate status.
 
 | Gate | Current evidence | Status |
 | --- | --- | --- |
-| Installed-wheel Uvicorn 0.54.0 parity | [CI #746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884): Linux 786/786, macOS 786/786, Windows 759/759 applicable; 27 POSIX-only inputs inapplicable | Passed |
-| Unified coverage | [Artifact 13631702787](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884/artifacts/13631702787): 1,453 cases, three ASGI and three native repeats, 15,061/15,061 regions, 11,075/11,075 lines, complete attribution | Passed; exact raw identities recorded; Coverage-MCP receipt optional |
-| Candidate package consumers | CI #746: Linux x86-64, macOS ARM64, Windows x86-64, and CPython 3.9 abi3-wheel consumer | Passed |
-| Three-system ordinary-FastAPI benchmark | [Benchmark #371](https://github.com/appunni-m/uvicorn-rs/actions/runs/42503892704), aggregate [artifact 13629568790](https://github.com/appunni-m/uvicorn-rs/actions/runs/42503892704/artifacts/13629568790), SHA-256 `fc4f0d331603850cdec3b8d84d1f40182f5deec0800e4f51b3d0a613966493f1` | Complete; HTTP/1.1 validated-route regression, H2/H3 results workload-specific; no broad speedup claim |
-| Documentation deployment | [Docs #336](https://github.com/appunni-m/uvicorn-rs/actions/runs/42512183399) built and deployed the original documentation for this source | Passed; updated content goes through the PR docs check and main deployment |
+| Installed-wheel Uvicorn 0.54.0 parity | PR #31 current CI | Must pass on the current PR head; exact-main evidence remains required after merge |
+| Unified coverage | PR #31 current CI | Exact-source three-repeat 100% matrix pending |
+| Candidate package consumers | PR #31 current CI | Linux x86-64 passed on an earlier head; rerun on current head, Windows/macOS pending |
+| Three-system ordinary-FastAPI benchmark | [Benchmark #372](https://github.com/appunni-m/uvicorn-rs/actions/runs/42540526882), exact-source aggregate from the PR's `main` base | Complete for that earlier source; HTTP/1 regression and workload-specific H2/H3 results, no broad speedup claim; rerun for final release source |
+| Documentation deployment | PR #31 Documentation workflow | Rebuild current docs on this PR, then deploy merged docs from `main` |
 | Candidate tag workflow | No `v0.3.0` tag exists yet | Pending |
 | Cargo 0.3.0 registry versions | `release.yml` publishes missing crates in dependency order through the configured crates.io Trusted Publishers, then verifies their candidate checksums | Pending |
 | PyPI `uvicorn-rs` 0.3.0 | `release.yml` publishes after the tagged candidate and Cargo registry-byte checks pass | Pending |
 
-Benchmark #371 did not reproduce the historical Linux ARM64 upload timeout.
+Benchmark #372 did not reproduce the historical Linux ARM64 upload timeout.
 Its cause remains unknown; the completed matrix is valid, and no fix is
 claimed. The maintainer's real FastAPI application trial follows repository
 release qualification.
@@ -141,9 +140,10 @@ uses PR #21 head `8e0f792a7dc00597c580fb7ddc6d5222e0310ec2` and clean
 merge source `f42a99b1555133be4ba5095a6f48fe4fb9ffa22f`, after peer-read
 recycling was rejected and removed. Linux and macOS pass 786/786 public inputs,
 package consumers and strict offline source/native checks. Rust quality,
-features, minimum version and native composition pass. Unified coverage is
-still completing its required repeats; a final report and independent review
-are not yet available.
+features, minimum version and native composition pass. Unified coverage was
+still completing its required repeats at that checkpoint, so a final report was
+not yet available. A separate Coverage-MCP review is optional under the current
+release policy.
 
 | Candidate evidence | Artifact | Verification |
 | --- | --- | --- |
@@ -324,13 +324,12 @@ first versions can use the same short-lived OIDC flow as later releases. Exact
 prepublished bytes are verified and skipped. The release therefore has no
 local publishing step or long-lived Cargo credential.
 
-For a first Cargo publication, use a separate clean checkout of the accepted
-tag and the same Cargo 1.98.1 packaging inputs as CI. The server package uses the
-`patch.crates-io.asgi-lifespan-protocol-rs.path` override to the accepted
-checkout's lifecycle crate. Keep this override for local preparation and
-publication so Cargo reproduces the qualified archive, including Cargo.lock.
-Use an absolute override path for extracted-package verification. Compare both
-prepared archives byte-for-byte with the candidate before uploading.
+The GitHub release workflow owns first and subsequent Cargo publication. It
+reproduces each candidate archive with the pinned Cargo toolchain and compares
+the bytes before publishing. It publishes the lifecycle crate first, waits for
+the exact registry checksum to become visible, then reproduces and verifies the
+server archive before publishing it. Do not publish Cargo crates locally or
+provide a local Cargo token.
 
 Local `cargo publish --dry-run` checks on CI #636 source reproduced both
 Linux candidate archive hashes on macOS with Cargo 1.98.1. They did not upload
