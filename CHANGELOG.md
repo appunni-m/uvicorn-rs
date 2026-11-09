@@ -4,7 +4,12 @@ Notable user-facing changes are listed here. An `Unreleased` entry describes
 work in progress; it does not mean a candidate has passed the release gates or
 that a package has been published.
 
-## 0.3.0 (Unreleased)
+## 0.3.1 (Unreleased)
+
+Version 0.3.1 reissues the 0.3.0 candidate source under a fresh version. The
+immutable `v0.3.0` tag did not pass candidate qualification, and no 0.3.0 Cargo
+or PyPI artifacts were published. This version bump introduces no server
+behavior change; publication remains gated on exact-source release evidence.
 
 ### Added
 

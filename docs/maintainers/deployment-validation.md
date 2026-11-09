@@ -3,13 +3,14 @@
 The [deployment guide](../deployment.md) is the operator-facing entry point. This page preserves validation procedures, framework comparison setup, and run-specific evidence for maintainers.
 
 
-As of 2026-11-09, exact-main CI [#746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884)
-passed installed-wheel Uvicorn 0.54.0 parity on Linux x86-64 and macOS ARM64
-(786/786 each) and Windows x86-64 (759/759 applicable cases; 27 POSIX-only
-cases are inapplicable). Candidate packages and clean consumers passed on all
-three systems, and the CPython 3.9 abi3-wheel consumer passed. See the
-[support matrix](../support-matrix.md) for verified profiles and remaining
-platform-specific exclusions.
+As of 2026-11-09, main CI [#758](https://github.com/appunni-m/uvicorn-rs/actions/runs/42563350232)
+has passed installed-wheel Uvicorn 0.54.0 parity and Linux x86-64/macOS ARM64
+package/consumer checks on commit `7fd9b945e70583e0833ded24fe485fc1e3ccbf1e`.
+Its unified parity/coverage and Windows package job are still running. The
+separate benchmark [#373](https://github.com/appunni-m/uvicorn-rs/actions/runs/42563350265)
+failed Linux x86-64 normal-binary HTTP/3 parity before timing; the other two
+systems are still running. See the [support matrix](../support-matrix.md) for
+the current source status and platform exclusions.
 
 The PyPI distribution is `uvicorn-rs`, exposing `uvicorn` imports and command;
 the optional internal Cargo/PyO3 adapter remains `uvicorn-rs-py`. The optional Cargo/PyO3 integration package declares the project-specific
@@ -21,11 +22,13 @@ and proxy-header claims should use the indexed current-source parity results
 linked from the support matrix rather than these deployment probes.
 
 The old Cargo 0.1.0 releases are historical. Both `asgi-lifespan-protocol-rs`
-and the consolidated `uvicorn-rs` crate have published 0.2.1 releases; their
-0.3.0 candidate versions and the PyPI `uvicorn-rs` distribution are not yet
-published. The release workflow requires the Cargo 0.3.0 local-first uploads
-before it publishes PyPI. Build and install a wheel into the same environment
-as the application and its Python dependencies only after publication.
+and the consolidated `uvicorn-rs` crate have published 0.2.1 releases. The
+immutable `v0.3.0` tag stopped at candidate qualification, and no 0.3.0 Cargo
+or PyPI artifact was published. Version 0.3.1 is being prepared; `release.yml`
+publishes Cargo and PyPI through GitHub Trusted Publishing after its exact
+candidate gates pass. No local Cargo publish or token is used. Build and
+install a wheel into the same environment as the application and its Python
+dependencies only after publication.
 
 ## Start an application
 

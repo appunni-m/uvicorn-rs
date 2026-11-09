@@ -1,17 +1,12 @@
 # Deployment guidance
 
-The `uvicorn-rs` 0.3.0 PyPI release is not published. Exact-main CI
-[#746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884) passed
-compatibility, candidate package and clean-consumer checks, and unified raw
-coverage at 15,061/15,061 regions and 11,075/11,075 lines on commit
-`d0648cc0a4479b246dc7423b22a2b80f333d6193`. The complete three-system ordinary-
-FastAPI benchmark [#371](https://github.com/appunni-m/uvicorn-rs/actions/runs/42503892704)
-passed its matrix gate. It reports an HTTP/1.1 validated-route regression and
-workload-specific H2/H3 results, so it supports no broad speedup claim. The
-historical upload timeout did not recur, but its cause remains unknown. See the
-[compatibility status](uvicorn-compatibility.md), [support matrix](support-matrix.md),
-and [release guide](releases.md). Evaluate your own application only after the
-candidate is published and repository release qualification is complete.
+Version 0.3.1 is being prepared; no Cargo or PyPI package has been published.
+The `v0.3.0` candidate stopped at its exact-main CI gate, and its package
+workflow skipped publication. Current exact-main coverage and benchmark
+evidence is incomplete; see the [release status](releases.md) and
+[compatibility status](uvicorn-compatibility.md). Evaluate your application
+after the candidate is published and repository release qualification is
+complete.
 
 ## Bind and run
 

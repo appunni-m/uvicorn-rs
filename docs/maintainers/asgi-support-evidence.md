@@ -9,15 +9,19 @@ The [user-facing ASGI support matrix](../support-matrix.md) summarizes what the 
 
 The Python-free uvicorn-rs Cargo library is the Rust server. uvicorn-rs-py is the optional Python adapter for Python ASGI applications. Python application code remains on its owning asyncio or uvloop event loop; the Rust runtime handles network and protocol work, while application calls and ASGI messages cross the Python boundary.
 
-The planned PyPI distribution is `uvicorn-rs`, following the project's
+The PyPI distribution is `uvicorn-rs`, following the project's
 `pillow-rs` naming convention. The root Cargo integration package and optional
 extra console script remain named `uvicorn-rs-py`; the installed compatibility
-command and import namespace are `uvicorn`. Exact-main CI #746 passed the
-installed-wheel Uvicorn 0.54.0 matrix, three-repeat 100% unified coverage, and
-candidate package consumers on commit `d0648cc0a4479b246dc7423b22a2b80f333d6193`.
-The three-system benchmark #371 also completed for that source. A separate
-Coverage-MCP receipt is optional; the exact-source raw report and identities
-are the coverage gate. The 0.3.0 package has not yet been published. See
+command and import namespace are `uvicorn`. Current main CI #758 passed
+installed-wheel parity and the Linux/macOS package/consumer checks on
+`7fd9b945e70583e0833ded24fe485fc1e3ccbf1e`; exact-source unified coverage and
+the Windows package are still running. Benchmark #373 failed Linux
+x86-64 HTTP/3 parity before timing; ARM64 and macOS remain in progress. The
+previous #746/#371 receipts are historical evidence and do not qualify the
+current source. A separate Coverage-MCP receipt is optional; exact-source raw
+coverage is mandatory. The immutable `v0.3.0` candidate stopped before
+qualification and no packages were published. Version 0.3.1 is being prepared.
+See
 [Uvicorn replacement status](../uvicorn-compatibility.md).
 
 This matrix records live-tested ASGI and protocol behavior. A passing ASGI case does not by itself establish Uvicorn CLI, Python API, worker, or reload compatibility. The Rust server remains independent of Starlette-RS and FastAPI-RS; they do not need it as a runtime dependency.

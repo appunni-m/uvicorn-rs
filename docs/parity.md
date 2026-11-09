@@ -9,33 +9,25 @@
 
 ## Current source status (2026-11-09)
 
-Exact-main CI [#746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884)
-passed on `main` commit `d0648cc0a4479b246dc7423b22a2b80f333d6193`. The public
-installed-wheel parity matrix against Uvicorn 0.54.0 passed 786/786 on Linux
-x86-64 and macOS ARM64 and 759/759 applicable cases on Windows x86-64. Twenty-
-seven Windows cases requiring POSIX-only facilities are excluded by declared
-platform applicability. Candidate package and clean-consumer checks passed on
-Linux x86-64, macOS ARM64, and Windows x86-64; the CPython 3.9 job passed the
-abi3-wheel consumer check.
+Exact-main CI [#758](https://github.com/appunni-m/uvicorn-rs/actions/runs/42563350232)
+is running on `main` commit `7fd9b945e70583e0833ded24fe485fc1e3ccbf1e`.
+Installed-wheel Uvicorn 0.54.0 parity and Linux x86-64/macOS ARM64 package and
+consumer checks passed. The unified parity/coverage and Windows package jobs
+are still running. No exact-source 100% coverage totals are available for this
+source.
 
-The unified report passed all 1,453 cases across three ASGI and three native
-repeats, with zero failed or infrastructure cases and full case attribution.
-Raw coverage is 15,061/15,061 regions and 11,075/11,075 lines. The source, run,
-artifact, report, context, build, and matrix identities are retained in the
-[CI artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884/artifacts/13631702787).
-No independent Coverage-MCP receipt is required.
+Benchmark [#373](https://github.com/appunni-m/uvicorn-rs/actions/runs/42563350265)
+failed Linux x86-64 normal-binary parity: the HTTP/3 probe received
+`H3_INTERNAL_ERROR` before response headers, so benchmark timing was skipped.
+Linux ARM64 and macOS ARM64 remain in progress. This run does not provide valid
+performance results. Preserve the failing case and resolve the candidate
+behavior before accepting the benchmark gate.
 
-The complete matched ordinary-FastAPI benchmark [#371](https://github.com/appunni-m/uvicorn-rs/actions/runs/42503892704)
-completed on Linux x86-64, Linux ARM64, and macOS ARM64 on the same commit.
-HTTP/1.1 validated-route results regressed, while H2/H3 results vary by
-workload. The results support no broad FastAPI speedup claim. The historical
-Linux ARM64 upload timeout did not recur; the available trace does not establish
-its cause. The maintainer will run the real application after the repository
-release gates are complete.
-
-The candidate is not published yet. Local Cargo publication, tag-bound
-candidate qualification, and PyPI publication remain release steps; see the
-[release guide](releases.md).
+The immutable `v0.3.0` candidate stopped at the exact-main CI gate, and the
+package workflow skipped publication. No Cargo or PyPI package was published.
+Version 0.3.1 is being prepared on `develop`; its source must pass PR and
+exact-main release checks before a successful candidate can publish through
+GitHub Actions. See the [release guide](releases.md).
 
 ### Historical source status (2026-11-03)
 

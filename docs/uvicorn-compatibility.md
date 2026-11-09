@@ -1,8 +1,8 @@
 # Can I replace Uvicorn?
 
-**Not yet from PyPI.** The tested 0.3.0 candidate has passed the current
-compatibility and package gates, but it has not been published. Its planned
-distribution name is `uvicorn-rs`; it provides the `uvicorn` command, the
+**Not yet from PyPI.** The immutable `v0.3.0` candidate stopped at its exact-main
+CI gate, and its package workflow skipped publication. Version 0.3.1 is being
+prepared; it has not been published. The distribution name is `uvicorn-rs`; it provides the `uvicorn` command, the
 `uvicorn` import namespace, and `python -m uvicorn`. The optional internal
 Cargo/PyO3 adapter remains `uvicorn-rs-py`. Keep upstream `uvicorn` and
 `uvicorn-rs` in separate environments because they install overlapping files.
@@ -18,36 +18,22 @@ describe the install path after publication.
 
 ## Current status (2026-11-09)
 
-Exact-main CI [#746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884)
-passed on `main` commit `d0648cc0a4479b246dc7423b22a2b80f333d6193`.
-Installed-wheel parity against Uvicorn 0.54.0 passed 786/786 cases on Linux
-x86-64 and macOS ARM64, and 759/759 applicable cases on Windows x86-64; 27
-Windows cases that require POSIX-only facilities are inapplicable. The custom
-protocol, TLS factory/ALPN, import/configuration, worker-lifecycle, and
-header/trailer-capacity cases in the maintained matrix passed. Candidate
-packages and clean consumers passed on Linux, macOS ARM64, and Windows x86-64.
-The CPython 3.9 check verifies the installed abi3 wheel consumer; it is not a
-full parity run on Python 3.9.
+Exact-main CI [#758](https://github.com/appunni-m/uvicorn-rs/actions/runs/42563350232)
+is running on commit `7fd9b945e70583e0833ded24fe485fc1e3ccbf1e`.
+Installed-wheel parity and Linux x86-64/macOS ARM64 package and consumer
+checks passed. Unified parity/coverage and Windows artifact jobs are still
+running; exact-source 100% coverage is not yet established.
 
-The same run passed all 1,453 unified cases through three ASGI and three native
-repeats, with zero failed or infrastructure cases, complete attribution, and
-raw coverage of 15,061/15,061 regions and 11,075/11,075 lines. The exact raw
-report, source, run, artifact, context, build, and matrix identities are
-recorded in the [CI coverage artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884/artifacts/13631702787).
-An independent Coverage-MCP receipt is not required for this release.
+Benchmark [#373](https://github.com/appunni-m/uvicorn-rs/actions/runs/42563350265)
+failed Linux x86-64 normal-binary parity when the HTTP/3 probe received
+`H3_INTERNAL_ERROR` while awaiting response headers. Timing was skipped; Linux
+ARM64 and macOS ARM64 remain in progress. No performance claim follows from
+this incomplete run. Docs deployment [#345](https://github.com/appunni-m/uvicorn-rs/actions/runs/42563350295)
+passed for the current main source, before the documentation changes for 0.3.1.
 
-The complete matched ordinary-FastAPI benchmark [#371](https://github.com/appunni-m/uvicorn-rs/actions/runs/42503892704)
-also used that commit and completed on Linux x86-64, Linux ARM64, and macOS
-ARM64. HTTP/1.1 validated-route results regressed; HTTP/2 and HTTP/3 results
-vary by workload. The data supports no broad FastAPI speedup claim. The
-historical Linux ARM64 upload timeout did not recur; its cause remains unknown
-and is not claimed as fixed. The maintainer will run the real-application trial
-after the repository release gates are complete.
-
-Docs deployment [#336](https://github.com/appunni-m/uvicorn-rs/actions/runs/42512183399)
-passed for this source. The 0.3.0 Cargo crates still require the authorized
-local-first publication sequence; no `v0.3.0` tag or PyPI upload exists yet.
-See the [release guide](releases.md) for the current stage and the
+The `v0.3.0` tag exists but did not pass candidate qualification; the package
+workflow skipped, so no Cargo or PyPI artifact was published. Version 0.3.1
+is being prepared. See the [release guide](releases.md) for the current stage and the
 [versioned compatibility contract](maintainers/uvicorn-0.54.0-contract.md)
 for reference-only failures and their candidate acceptance rules.
 
@@ -357,7 +343,7 @@ To replace upstream Uvicorn:
 
 ```sh
 python -m pip uninstall uvicorn
-python -m pip install "uvicorn-rs[standard]==0.3.0"
+python -m pip install "uvicorn-rs[standard]==0.3.1"
 uvicorn --help
 python -m uvicorn --help
 ```
