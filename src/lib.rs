@@ -3082,7 +3082,7 @@ struct ResponseStart {
 }
 
 fn hyper_suppresses_response_body(method: &http::Method, status: StatusCode) -> bool {
-    method == &http::Method::HEAD
+    method == http::Method::HEAD
         || matches!(status, StatusCode::NO_CONTENT | StatusCode::NOT_MODIFIED)
 }
 
