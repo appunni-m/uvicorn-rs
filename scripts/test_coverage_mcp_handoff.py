@@ -237,10 +237,9 @@ def check_release_workflows_require_exact_coverage_without_mcp_gate() -> None:
         "python scripts/coverage_evidence.py verify",
         'coverage_evidence.get("coverage", {}).get(metric, {}).get("covered")',
         '!= coverage_evidence.get("coverage", {}).get(metric, {}).get("total")',
-        'manual_cargo_version = "0.3.0"',
-        'version == manual_cargo_version and any(crate_absent.values())',
-        'publish_crates = version != manual_cargo_version and any(crate_absent.values())',
-        '"Cargo 0.3.0 must be published locally and match the candidate before tagging; "',
+        'publish_crates = any(crate_absent.values())',
+        '"pending_first_publish"',
+        "Missing Cargo versions, including first publications with a configured pending Trusted Publisher, are published by this GitHub workflow after exact archive revalidation. PyPI publishes only after Cargo registry verification.",
         "name: Publish missing Cargo versions to crates.io",
         "environment: crates-io",
         "uses: rust-lang/crates-io-auth-action@",
@@ -253,6 +252,9 @@ def check_release_workflows_require_exact_coverage_without_mcp_gate() -> None:
         "coverage-mcp-selection.json",
         'candidate.get("coverage_mcp")',
         "coverage_mcp.get(",
+        "manual_cargo_version = \"0.3.0\"",
+        "first publication must create these crates locally before tagging",
+        "must be published locally and match the candidate before tagging",
     )
     present = [value for value in forbidden_release_gates if value in release]
     if present:

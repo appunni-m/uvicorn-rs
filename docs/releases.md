@@ -25,25 +25,24 @@ Use these state labels precisely:
 
 ## Current release status (2026-11-09)
 
-The exact release source is clean `main` commit
-[`d0648cc0a4479b246dc7423b22a2b80f333d6193`](https://github.com/appunni-m/uvicorn-rs/commit/d0648cc0a4479b246dc7423b22a2b80f333d6193),
-version `0.3.0`. CI, the complete matched benchmark, and the original docs
-deployment ran against this source. The updated documentation is carried in a
-PR whose strict docs check must pass before merge; the main docs workflow then
-builds and deploys the merged content.
+Release qualification is being assembled in PR #31 from `develop` to `main`.
+Its source includes the bodyless-response parity fix and GitHub-only first
+Cargo publication path. Treat the PR checks as provisional: after merge, exact
+`main` coverage, benchmark, candidate artifacts/consumers, and docs deployment
+must qualify the final release source. Kata `m8mx` tracks the live gate status.
 
 | Gate | Current evidence | Status |
 | --- | --- | --- |
-| Installed-wheel Uvicorn 0.54.0 parity | [CI #746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884): Linux 786/786, macOS 786/786, Windows 759/759 applicable; 27 POSIX-only inputs inapplicable | Passed |
-| Unified coverage | [Artifact 13631702787](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884/artifacts/13631702787): 1,453 cases, three ASGI and three native repeats, 15,061/15,061 regions, 11,075/11,075 lines, complete attribution | Passed; exact raw identities recorded; Coverage-MCP receipt optional |
-| Candidate package consumers | CI #746: Linux x86-64, macOS ARM64, Windows x86-64, and CPython 3.9 abi3-wheel consumer | Passed |
-| Three-system ordinary-FastAPI benchmark | [Benchmark #371](https://github.com/appunni-m/uvicorn-rs/actions/runs/42503892704), aggregate [artifact 13629568790](https://github.com/appunni-m/uvicorn-rs/actions/runs/42503892704/artifacts/13629568790), SHA-256 `fc4f0d331603850cdec3b8d84d1f40182f5deec0800e4f51b3d0a613966493f1` | Complete; HTTP/1.1 validated-route regression, H2/H3 results workload-specific; no broad speedup claim |
-| Documentation deployment | [Docs #336](https://github.com/appunni-m/uvicorn-rs/actions/runs/42512183399) built and deployed the original documentation for this source | Passed; updated content goes through the PR docs check and main deployment |
+| Installed-wheel Uvicorn 0.54.0 parity | PR #31 current CI | Must pass on the current PR head; exact-main evidence remains required after merge |
+| Unified coverage | PR #31 current CI | Exact-source three-repeat 100% matrix pending |
+| Candidate package consumers | PR #31 current CI | Linux x86-64 passed on an earlier head; rerun on current head, Windows/macOS pending |
+| Three-system ordinary-FastAPI benchmark | [Benchmark #372](https://github.com/appunni-m/uvicorn-rs/actions/runs/42540526882), exact-source aggregate from the PR's `main` base | Complete for that earlier source; HTTP/1 regression and workload-specific H2/H3 results, no broad speedup claim; rerun for final release source |
+| Documentation deployment | PR #31 Documentation workflow | Rebuild current docs on this PR, then deploy merged docs from `main` |
 | Candidate tag workflow | No `v0.3.0` tag exists yet | Pending |
-| Cargo 0.3.0 registry versions | Both candidate archives must be published locally first; neither 0.3.0 version is currently present | Pending |
+| Cargo 0.3.0 registry versions | `release.yml` publishes missing crates in dependency order through the configured crates.io Trusted Publishers, then verifies their candidate checksums | Pending |
 | PyPI `uvicorn-rs` 0.3.0 | `release.yml` publishes after the tagged candidate and Cargo registry-byte checks pass | Pending |
 
-Benchmark #371 did not reproduce the historical Linux ARM64 upload timeout.
+Benchmark #372 did not reproduce the historical Linux ARM64 upload timeout.
 Its cause remains unknown; the completed matrix is valid, and no fix is
 claimed. The maintainer's real FastAPI application trial follows repository
 release qualification.
@@ -52,11 +51,12 @@ The release set is the Python-free Cargo crate `uvicorn-rs` with HTTP/3 behind
 the optional `http3` feature, `asgi-lifespan-protocol-rs`, and PyPI distribution
 `uvicorn-rs` exposing the `uvicorn` command/imports. `uvicorn-rs-py` remains the
 optional internal adapter. Do not publish separate `uvicorn-rs-h3` or Quinn
-crates. For 0.3.0, publish the two Cargo crates locally in dependency order;
-verify each registry checksum; create the immutable `v0.3.0` tag; let
-`candidate.yml` qualify the exact tagged artifacts; then let `release.yml`
-publish PyPI and verify registry bytes. Later Cargo releases can use Trusted
-Publishing. Release controls and publisher entries are configured.
+crates. For 0.3.0, create the immutable `v0.3.0` tag after candidate gates;
+`candidate.yml` qualifies the exact tagged artifacts, then `release.yml`
+publishes missing Cargo versions in dependency order through crates.io Trusted
+Publishing, verifies them, publishes PyPI, and verifies registry bytes. Both
+crate names have pending Trusted Publisher entries, so no local Cargo publish
+or token is required. Release controls and publisher entries are configured.
 
 | Superseded CI #712 artifact | Artifact | ZIP SHA-256 | Contents and check |
 | --- | --- | --- | --- |
@@ -65,14 +65,13 @@ Publishing. Release controls and publisher entries are configured.
 | Windows x86-64 | [13523938563](https://github.com/appunni-m/uvicorn-rs/actions/runs/42255484334/artifacts/13523938563) | `7ea545070d73360a0f15beb8f6b68f4edf00ccfe877e3501387ff8e4db6d6988` | Wheel and package checks passed; clean consumer passed |
 
 An annotated version tag starts `candidate.yml`; a successful candidate
-automatically starts `release.yml`. For 0.3.0, release preflight requires the
-two Cargo versions to have been published locally and to match the candidate;
-the Cargo publisher job is skipped. Later tags can publish missing Cargo
-versions through crates.io Trusted Publishing. PyPI publication follows exact
-Cargo registry verification. The workflow then verifies registry bytes and
-creates the GitHub Release with artifact attestations. Identical already-
-published versions are verified and skipped. Build and test jobs have no
-registry credentials.
+automatically starts `release.yml`. For 0.3.0, release preflight recognizes the
+configured pending Trusted Publisher entries and publishes both first Cargo
+versions in dependency order. Later tags use the same path for missing
+versions. PyPI publication follows exact Cargo registry verification. The
+workflow then verifies registry bytes and creates the GitHub Release with
+artifact attestations. Identical already-published versions are verified and
+skipped. Build and test jobs have no registry credentials.
 
 The exact-source raw coverage gate requires 100% regions and lines, a complete
 passing matrix, and recorded source, run, artifact, report, context, build, and
@@ -87,7 +86,7 @@ have not run for 0.3.0 yet.
 | Reliability and correctness | `ci.yml` | Rust/MSRV/platform builds, public Uvicorn parity, native framework composition, fault contracts, and clean package consumers. |
 | Coverage | `ci.yml`; optional `coverage-mcp-handoff.yml` | Exact-source 100% unified region/line coverage with recorded source-bound evidence. The handoff workflow is optional diagnostics and does not gate release. |
 | Reliability evidence | `benchmark-categories.yml` | Matched three-system workloads and focused diagnostics; release qualification consumes only a complete exact-source matrix. |
-| Automated release | `candidate.yml`, `release.yml` | Tag-triggered candidate assembly and publication. For 0.3.0 Cargo is published locally first; `release.yml` verifies its bytes, then publishes PyPI. Later Cargo versions use Trusted Publishing. |
+| Automated release | `candidate.yml`, `release.yml` | Tag-triggered candidate assembly and publication. GitHub Trusted Publishing handles first and subsequent Cargo versions, then PyPI after Cargo checksum verification. |
 | Documentation | `docs.yml` | Strict documentation build and main deployment; imports the selected main benchmark artifact after each matrix run so reports and status are current in the published site. |
 | Upstream-only diagnostic | `upstream-uvicorn-windows-diagnostic.yml` | Reproduce the stock Uvicorn Windows worker issue; this is not a `uvicorn-rs` release gate. |
 
@@ -124,9 +123,10 @@ raw-coverage evidence workflow and a candidate for the resulting exact commit.
 The release set is the Python-free **uvicorn-rs** crate with optional **http3**,
 **asgi-lifespan-protocol-rs**, and the PyPI distribution **uvicorn-rs**.
 The optional internal Cargo/PyO3 adapter remains **uvicorn-rs-py**.
-**release.yml** publishes PyPI after the locally published Cargo candidates are
-registry-verified; **candidate.yml** verifies staged candidates. The configured publisher tuples
-are `appunni-m/uvicorn-rs / release.yml / pypi` for PyPI and
+**candidate.yml** verifies staged candidates; **release.yml** uses GitHub
+Trusted Publishing for missing Cargo and PyPI versions, then verifies the
+registry bytes before creating the GitHub Release. The configured publisher
+tuples are `appunni-m/uvicorn-rs / release.yml / pypi` for PyPI and
 `appunni-m/uvicorn-rs / release.yml / crates-io` for both crates.
 
 The registry audit on 2026-11-03 at 09:20 UTC found both Cargo crates at 0.2.1
@@ -140,9 +140,10 @@ uses PR #21 head `8e0f792a7dc00597c580fb7ddc6d5222e0310ec2` and clean
 merge source `f42a99b1555133be4ba5095a6f48fe4fb9ffa22f`, after peer-read
 recycling was rejected and removed. Linux and macOS pass 786/786 public inputs,
 package consumers and strict offline source/native checks. Rust quality,
-features, minimum version and native composition pass. Unified coverage is
-still completing its required repeats; a final report and independent review
-are not yet available.
+features, minimum version and native composition pass. Unified coverage was
+still completing its required repeats at that checkpoint, so a final report was
+not yet available. A separate Coverage-MCP review is optional under the current
+release policy.
 
 | Candidate evidence | Artifact | Verification |
 | --- | --- | --- |
@@ -190,10 +191,12 @@ built successfully for its recorded source, with PR deployment skipped; this
 subsequent documentation refresh needs its own strict build.
 
 After all gates pass, verify exact-main CI, raw 100% coverage and benchmark
-evidence, assemble the complete candidate,
-publish Cargo locally in lifecycle/server order, then publish PyPI `uvicorn-rs`
-through `release.yml`. Verify registry bytes and clean installs. No 0.3.0 tag
-or publication has been made. See the [completion plan](maintainers/release-completion-plan.md).
+evidence, assemble the complete candidate, and create the immutable release
+tag. The successful candidate automatically starts `release.yml`, which
+publishes Cargo in lifecycle/server order and then PyPI `uvicorn-rs` through
+GitHub Trusted Publishing. Verify registry bytes and clean installs. No 0.3.0
+tag or publication has been made. See the
+[completion plan](maintainers/release-completion-plan.md).
 
 ## Registry and packaging audit (2026-10-27; earlier source snapshot)
 
@@ -309,23 +312,24 @@ exact-commit CI, coverage review, three-system benchmark, and consumer evidence.
 Only a successful candidate run triggers `release.yml`. That workflow selects
 the exact candidate run and attempt, rechecks the tag, source, artifact digest
 and candidate manifest, then publishes missing Cargo versions in dependency
-order through crates.io OIDC. It verifies each crate checksum before publishing
-PyPI through the `pypi` trusted publisher. Its final job verifies registry
-bytes, attests the candidate files, and creates or verifies the GitHub Release.
+order through crates.io OIDC. Pending Trusted Publisher entries allow the two
+first crate versions to be published through this same workflow. It verifies
+each crate checksum before publishing PyPI through the `pypi` trusted
+publisher. Its final job verifies registry bytes, attests the candidate files,
+and creates or verifies the GitHub Release.
 
-The first publication of a Cargo crate name remains a local bootstrap because
-crates.io Trusted Publishing is configured on an existing crate. Once the
-crate exists, later versions publish automatically; exact prepublished bytes
-are verified and skipped. This keeps the local-first bootstrap while making
-subsequent tag releases automatic.
+The crates.io Trusted Publisher entries are configured in pending state for
+the not-yet-published crate names. crates.io supports this initial state so the
+first versions can use the same short-lived OIDC flow as later releases. Exact
+prepublished bytes are verified and skipped. The release therefore has no
+local publishing step or long-lived Cargo credential.
 
-For a first Cargo publication, use a separate clean checkout of the accepted
-tag and the same Cargo 1.98.1 packaging inputs as CI. The server package uses the
-`patch.crates-io.asgi-lifespan-protocol-rs.path` override to the accepted
-checkout's lifecycle crate. Keep this override for local preparation and
-publication so Cargo reproduces the qualified archive, including Cargo.lock.
-Use an absolute override path for extracted-package verification. Compare both
-prepared archives byte-for-byte with the candidate before uploading.
+The GitHub release workflow owns first and subsequent Cargo publication. It
+reproduces each candidate archive with the pinned Cargo toolchain and compares
+the bytes before publishing. It publishes the lifecycle crate first, waits for
+the exact registry checksum to become visible, then reproduces and verifies the
+server archive before publishing it. Do not publish Cargo crates locally or
+provide a local Cargo token.
 
 Local `cargo publish --dry-run` checks on CI #636 source reproduced both
 Linux candidate archive hashes on macOS with Cargo 1.98.1. They did not upload
@@ -347,11 +351,12 @@ manual Cargo/PyPI actions, and the 2026-11-06 snapshot temporarily put PyPI
 before Cargo. The current workflow model replaces those manual steps: an
 annotated tag starts candidate qualification, then successful candidate
 completion automatically starts Cargo/PyPI publication and GitHub Release
-creation. The first publication of each Cargo package name remains a local
-bootstrap; both current names already exist, so later versions use the
-configured OIDC publisher. Release still requires a clean tagged commit on
-`main`, a successful exact candidate artifact, all required release evidence,
-and configured publisher trust.
+creation. At that 2026-10-25 snapshot, first publication of each Cargo package
+name required a local bootstrap; both names later existed, so subsequent
+versions used OIDC. For the 0.3.0 release, crates.io pending Trusted Publisher
+entries let `release.yml` publish both initial versions from GitHub. Release
+still requires a clean tagged commit on `main`, a successful exact candidate
+artifact, all required release evidence, and configured publisher trust.
 
 Local Cargo candidate status (2026-10-25): the clean 0.2.1 archives were built
 with Cargo 1.85.0 from commit `7754895262c7b1d7baa2e9595277a81607634d38`.
@@ -618,20 +623,18 @@ response. A local or dirty-source receipt is diagnostic only.
 ## Publication
 
 After candidate success, `release.yml` validates the exact artifact bundle and
-checks registry state without credentials. It stops if either crate name has
-not been bootstrapped locally. For the existing crate names, it publishes
-missing versions in dependency order with short-lived OIDC tokens, then
-publishes PyPI and verifies all registry checksums. It creates the GitHub
-Release only after registry verification. A mismatch or failed candidate gate
-stops publication.
+checks registry state without credentials. It publishes every missing Cargo
+version, including the first version of a pending-publisher crate, in
+dependency order with short-lived OIDC tokens. It then publishes PyPI and
+verifies all registry checksums. It creates the GitHub Release only after
+registry verification. A mismatch or failed candidate gate stops publication.
 
 ### Cargo publisher configuration
 
-The recorded Trusted Publisher entry on each crate is `appunni-m / uvicorn-rs /
-release.yml / crates-io`. It is used only after the crate name has been
-bootstrapped locally. Future versions receive short-lived OIDC tokens inside
-the isolated Cargo publish job. Never supply a Cargo token through workflow
-inputs or commit one to the repository.
+The pending Trusted Publisher entry for each crate is `appunni-m / uvicorn-rs /
+release.yml / crates-io`. The isolated Cargo publish job obtains a short-lived
+OIDC token for both initial and later versions. Never supply a Cargo token
+through workflow inputs or commit one to the repository.
 
 ### First PyPI publication
 

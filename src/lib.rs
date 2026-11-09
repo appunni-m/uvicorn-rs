@@ -3081,6 +3081,11 @@ struct ResponseStart {
     trailers: bool,
 }
 
+fn hyper_suppresses_response_body(method: &http::Method, status: StatusCode) -> bool {
+    method == http::Method::HEAD
+        || matches!(status, StatusCode::NO_CONTENT | StatusCode::NOT_MODIFIED)
+}
+
 #[derive(Default)]
 struct ResponseTrailerFields {
     headers: HeaderMap,
@@ -4000,6 +4005,7 @@ enum LifespanEvent {
 struct AsgiIo {
     request_messages: Arc<Mutex<mpsc::Receiver<RequestMessage>>>,
     _request_sender: Option<mpsc::Sender<RequestMessage>>,
+    request_method: http::Method,
     connection_closed: ConnectionClosed,
     request_cancellation: CancellationToken,
     request_disconnected: Arc<AtomicBool>,
@@ -4008,6 +4014,7 @@ struct AsgiIo {
     response_started: Arc<AtomicBool>,
     response_body_completed: Arc<AtomicBool>,
     response_content_length_satisfied: Arc<AtomicBool>,
+    body_suppressed_by_transport: Arc<AtomicBool>,
     response_trailers_expected: AtomicBool,
     response_trailer_fields: StdMutex<ResponseTrailerFields>,
     response_trailer_order: Option<ResponseTrailerOrder>,
@@ -4307,6 +4314,10 @@ impl AsgiIo {
                 slf.response_body_completed.store(false, Ordering::Release);
                 slf.response_trailers_expected
                     .store(trailers, Ordering::Release);
+                slf.body_suppressed_by_transport.store(
+                    hyper_suppresses_response_body(&slf.request_method, status),
+                    Ordering::Release,
+                );
                 slf.diagnostics.http_response_start();
                 #[cfg(coverage)]
                 let start_send_result = if coverage_fault_is_armed(
@@ -4341,6 +4352,8 @@ impl AsgiIo {
                 });
                 if let Err(error) = start_send_result {
                     slf.response_started.store(false, Ordering::Release);
+                    slf.body_suppressed_by_transport
+                        .store(false, Ordering::Release);
                     slf.response_trailers_expected
                         .store(false, Ordering::Release);
                     return Err(PyOSError::new_err(format!(
@@ -4356,18 +4369,21 @@ impl AsgiIo {
                 Ok(py.None().into_bound(py))
             }
             AsgiEventType::HttpResponseBody => {
-                let body_after_content_length = slf
-                    .response_content_length_satisfied
-                    .load(Ordering::Acquire)
-                    && (message
-                        .get_item("more_body")
-                        .ok()
-                        .flatten()
-                        .and_then(|value| value.extract::<bool>().ok())
-                        == Some(false)
-                        || message.get_item("body").ok().flatten().is_none_or(|value| {
-                            value.extract::<Bytes>().is_ok_and(|body| body.is_empty())
-                        }));
+                let body_suppressed_by_transport =
+                    slf.body_suppressed_by_transport.load(Ordering::Acquire);
+                let body_after_content_length = body_suppressed_by_transport
+                    || (slf
+                        .response_content_length_satisfied
+                        .load(Ordering::Acquire)
+                        && (message
+                            .get_item("more_body")
+                            .ok()
+                            .flatten()
+                            .and_then(|value| value.extract::<bool>().ok())
+                            == Some(false)
+                            || message.get_item("body").ok().flatten().is_none_or(|value| {
+                                value.extract::<Bytes>().is_ok_and(|body| body.is_empty())
+                            })));
                 // Hyper can finish an HTTP/1 transport at Content-Length
                 // before ASGI sends its empty terminal events. Keep accepting
                 // those events even when the client closes after reading the
@@ -4400,6 +4416,12 @@ impl AsgiIo {
                     }
                     None => false,
                 };
+                if body_suppressed_by_transport {
+                    if !more_body {
+                        slf.response_body_completed.store(true, Ordering::Release);
+                    }
+                    return Ok(py.None().into_bound(py));
+                }
                 let body_len = body.len();
                 slf.diagnostics
                     .upload_event("asgi-response-body", body_len, more_body);
@@ -5916,6 +5938,7 @@ struct AsgiBody {
     app_task_tracker: TaskTracker,
     response_body_completed: Arc<AtomicBool>,
     response_content_length_satisfied: Arc<AtomicBool>,
+    body_suppressed_by_transport: Arc<AtomicBool>,
     expected_content_length: Option<u64>,
     response_body_bytes: u64,
     trailers_expected: bool,
@@ -5958,6 +5981,11 @@ impl Drop for AsgiBody {
             // Uvicorn keeps the ASGI task alive after the response completes;
             // transfer it to the shutdown tracker instead of aborting it here.
             self.finish_response(application);
+        } else if self.body_suppressed_by_transport.load(Ordering::Acquire) {
+            // Hyper intentionally does not poll bodies for HEAD, 204, and 304
+            // responses. The ASGI app still owns the response lifecycle, so
+            // let it finish while the transport suppresses body events.
+            self.finish_response(application);
         } else if self
             .expected_content_length
             .is_some_and(|expected| self.response_body_bytes >= expected)
@@ -5965,10 +5993,10 @@ impl Drop for AsgiBody {
             self.response_content_length_satisfied
                 .store(true, Ordering::Release);
             // Hyper may stop polling an HTTP/1 body once its declared
-            // Content-Length has reached the wire. Uvicorn keeps the ASGI
-            // task alive after that point, so retain and drain the response
-            // channel until the final body and any negotiated trailers
-            // have been accepted.
+            // Content-Length has reached the wire. Uvicorn keeps the ASGI task
+            // alive after that point, so retain and drain the response
+            // channel until the final body and any negotiated trailers have
+            // been accepted.
             let (replacement_sender, replacement_receiver) =
                 mpsc::channel(RESPONSE_BODY_QUEUE_CAPACITY);
             drop(replacement_sender);
@@ -10739,6 +10767,7 @@ async fn handle_request_parts(
     context: ConnectionContext,
 ) -> Result<Response<ResponseBody>, BoxError> {
     let http_version = parts.version;
+    let request_method = parts.method.clone();
     let response_trailer_order = (http_version == Version::HTTP_2
         && parts
             .headers
@@ -10778,10 +10807,13 @@ async fn handle_request_parts(
     let response_started = Arc::new(AtomicBool::new(false));
     let response_body_completed = Arc::new(AtomicBool::new(false));
     let response_content_length_satisfied = Arc::new(AtomicBool::new(false));
+    let body_suppressed_by_transport = Arc::new(AtomicBool::new(false));
     let app_response_start_attempted = Arc::clone(&response_start_attempted);
     let app_response_started = Arc::clone(&response_started);
     let app_response_body_completed = Arc::clone(&response_body_completed);
     let app_response_content_length_satisfied = Arc::clone(&response_content_length_satisfied);
+    let app_body_suppressed_by_transport = Arc::clone(&body_suppressed_by_transport);
+    let app_request_method = request_method;
     let app_response_trailer_order = response_trailer_order.clone();
     let preserve_application_on_disconnect = Arc::new(AtomicBool::new(false));
     let app_preserve_application_on_disconnect = Arc::clone(&preserve_application_on_disconnect);
@@ -10807,6 +10839,7 @@ async fn handle_request_parts(
                     AsgiIo {
                         request_messages: Arc::new(Mutex::new(request_messages)),
                         _request_sender: request_sender,
+                        request_method: app_request_method,
                         connection_closed: context.connection_closed,
                         request_cancellation,
                         request_disconnected: Arc::new(AtomicBool::new(false)),
@@ -10815,6 +10848,7 @@ async fn handle_request_parts(
                         response_started: app_response_started,
                         response_body_completed: app_response_body_completed,
                         response_content_length_satisfied: app_response_content_length_satisfied,
+                        body_suppressed_by_transport: app_body_suppressed_by_transport,
                         response_trailers_expected: AtomicBool::new(false),
                         response_trailer_fields: StdMutex::new(ResponseTrailerFields::default()),
                         response_trailer_order: app_response_trailer_order,
@@ -10935,6 +10969,7 @@ async fn handle_request_parts(
         app_task_tracker,
         response_body_completed,
         response_content_length_satisfied,
+        body_suppressed_by_transport,
         expected_content_length: start.content_length,
         response_body_bytes: 0,
         trailers_expected,
