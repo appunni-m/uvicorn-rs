@@ -239,7 +239,7 @@ def check_release_workflows_require_exact_coverage_without_mcp_gate() -> None:
         '!= coverage_evidence.get("coverage", {}).get(metric, {}).get("total")',
         'publish_crates = any(crate_absent.values())',
         '"pending_first_publish"',
-        '"Missing Cargo versions, including first publications with a configured pending Trusted Publisher, are published by this GitHub workflow after exact archive revalidation. PyPI publishes only after Cargo registry verification.\\n"',
+        "Missing Cargo versions, including first publications with a configured pending Trusted Publisher, are published by this GitHub workflow after exact archive revalidation. PyPI publishes only after Cargo registry verification.",
         "name: Publish missing Cargo versions to crates.io",
         "environment: crates-io",
         "uses: rust-lang/crates-io-auth-action@",
