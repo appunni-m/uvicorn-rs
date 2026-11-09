@@ -112,16 +112,21 @@ def project_versions(root: Path = ROOT, expected: str | None = None) -> dict[str
     verify_job = workflow_job("verify-publication")
     github_release_job = workflow_job("github-release")
 
+    local_bootstrap_gates = (
+        "first publication must create these crates locally before tagging",
+        'manual_cargo_version = "0.3.0"',
+        "must be published locally and match the candidate before tagging",
+        "must be made locally before this automated release",
+    )
     if (
-        "first publication must create these crates locally before tagging" not in prepare_job
-        or 'manual_cargo_version = "0.3.0"' not in prepare_job
-        or "version == manual_cargo_version and any(crate_absent.values())" not in prepare_job
-        or "publish_crates = version != manual_cargo_version and any(crate_absent.values())" not in prepare_job
+        "publish_crates = any(crate_absent.values())" not in prepare_job
+        or '"pending_first_publish"' not in prepare_job
         or "publish_pypi = pypi_absent" not in prepare_job
+        or any(marker in release_workflow for marker in local_bootstrap_gates)
     ):
         raise ValueError(
-            "release preflight must preserve local first-name bootstrap, require Cargo 0.3.0 "
-            "to exist before tagging, and auto-publish missing Cargo versions only afterward"
+            "release preflight must publish missing and first Cargo versions through the "
+            "GitHub Trusted Publisher workflow"
         )
     required_crate_publish = (
         "environment: crates-io",

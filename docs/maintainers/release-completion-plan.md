@@ -1650,8 +1650,9 @@ starts `candidate.yml`; its successful completion automatically starts
 `release.yml`. The publisher verifies the candidate bundle, publishes missing
 `asgi-lifespan-protocol-rs` and dependent `uvicorn-rs` versions through their
 Trusted Publishers, verifies exact registry checksums, publishes PyPI
-`uvicorn-rs` 0.3.0, and creates the GitHub Release. A first-ever Cargo package
-name still requires a local bootstrap before tagging; both current names exist.
+`uvicorn-rs` 0.3.0, and creates the GitHub Release. The pending Trusted
+Publisher entries let GitHub publish the first versions of both Cargo package
+names without local Cargo publication.
 Recheck registries before retrying any upload; never overwrite an existing
 version. Do not publish while any required release gate is open.
 

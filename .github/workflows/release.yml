@@ -295,29 +295,16 @@ jobs:
               return False
 
           crate_exists = {name: check_crate_exists(name) for name in crate_names}
-          first_publish_names = [name for name, exists in crate_exists.items() if not exists]
-          if first_publish_names:
-              raise SystemExit(
-                  "first publication must create these crates locally before tagging: "
-                  + ", ".join(first_publish_names)
-              )
           crate_absent = {name: check_crate(name) for name in crate_names}
           pypi_absent = check_pypi()
 
-          manual_cargo_version = "0.3.0"
-          if version == manual_cargo_version and any(crate_absent.values()):
-              missing = [name for name, absent in crate_absent.items() if absent]
-              raise SystemExit(
-                  "Cargo 0.3.0 must be published locally and match the candidate before tagging; "
-                  "missing registry versions: " + ", ".join(missing)
-              )
-          publish_crates = version != manual_cargo_version and any(crate_absent.values())
+          publish_crates = any(crate_absent.values())
           publish_pypi = pypi_absent
           registry_state = {
               "version": version,
               "crates_io": {
                   "packages": {
-                      name: ("exists" if exists else "first_publish_required")
+                      name: ("exists" if exists else "pending_first_publish")
                       for name, exists in crate_exists.items()
                   },
                   "versions": {
@@ -335,7 +322,7 @@ jobs:
               summary.write("```json\n")
               summary.write(json.dumps(registry_state, indent=2, sort_keys=True))
               summary.write("\n```\n")
-              summary.write("\nCargo 0.3.0 must be published locally first and match the candidate. Later missing Cargo versions use crates.io Trusted Publishing after exact archive revalidation. PyPI publishes only after Cargo verification.\n")
+              summary.write("\nMissing Cargo versions, including first publications with a configured pending Trusted Publisher, are published by this GitHub workflow after exact archive revalidation. PyPI publishes only after Cargo registry verification.\n")
           values = {
               "publish-crates": str(publish_crates).lower(),
               "publish-pypi": str(publish_pypi).lower(),
@@ -426,8 +413,6 @@ jobs:
                       return None
                   raise
 
-          if get(f"https://crates.io/api/v1/crates/{name}") is None:
-              raise SystemExit(f"first publication of {name} must be made locally before this automated release")
           payload = get(f"https://crates.io/api/v1/crates/{name}/{version}")
           if payload is None:
               state = "missing"
@@ -515,8 +500,6 @@ jobs:
                       return None
                   raise
 
-          if get(f"https://crates.io/api/v1/crates/{name}") is None:
-              raise SystemExit(f"first publication of {name} must be made locally before this automated release")
           payload = get(f"https://crates.io/api/v1/crates/{name}/{version}")
           if payload is None:
               state = "missing"
