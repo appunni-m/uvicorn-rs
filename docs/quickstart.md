@@ -1,8 +1,9 @@
 # Run a Python ASGI app
 
 This guide starts the example from a repository checkout. As of 2026-11-09,
-version 0.3.1 is being prepared after the immutable 0.3.0 candidate stopped at
-the exact-main CI gate. No 0.3.0 package was published. Check the
+version 0.3.2 is being prepared. The immutable `v0.3.1` candidate was not
+published because its performance-evidence verifier rejected the benchmark's
+complete workspace source inventory. Check the
 [release status](releases.md) before installing a registry version.
 
 ## Start the checked-out example
@@ -31,12 +32,12 @@ Create an environment that contains your application dependencies and the
 candidate server, but not upstream Uvicorn. Both distributions provide files
 under the `uvicorn` import name, so keep them in separate environments.
 
-After `uvicorn-rs` 0.3.1 is available on PyPI:
+After `uvicorn-rs` 0.3.2 is available on PyPI:
 
 ```sh
 python -m venv .venv-uvicorn-rs
 . .venv-uvicorn-rs/bin/activate
-python -m pip install "fastapi" "uvicorn-rs[standard]==0.3.1"
+python -m pip install "fastapi" "uvicorn-rs[standard]==0.3.2"
 python -m uvicorn myapp.main:app --host 127.0.0.1 --port 8000
 ```
 

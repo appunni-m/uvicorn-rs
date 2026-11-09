@@ -4,12 +4,31 @@ Notable user-facing changes are listed here. An `Unreleased` entry describes
 work in progress; it does not mean a candidate has passed the release gates or
 that a package has been published.
 
-## 0.3.1 (Unreleased)
+## 0.3.2 (Unreleased)
 
-Version 0.3.1 reissues the 0.3.0 candidate source under a fresh version. The
-immutable `v0.3.0` tag did not pass candidate qualification, and no 0.3.0 Cargo
-or PyPI artifacts were published. This version bump introduces no server
-behavior change; publication remains gated on exact-source release evidence.
+The immutable `v0.3.1` candidate tag failed qualification because the release
+performance verifier did not include the workspace Rust files captured by the
+benchmark. No 0.3.1 Cargo or PyPI artifacts were published. Version 0.3.2
+aligns benchmark capture and acceptance source inventories; it introduces no
+server behavior change and remains gated on exact-source release evidence.
+
+### Fixed
+
+- Shared the benchmark workspace source inventory between capture and release
+  verification so all Rust sources and Cargo manifests are checked consistently.
+
+### Packaging
+
+- Prepare the consolidated Cargo crates and PyPI `uvicorn-rs` distribution as
+  version 0.3.2. The `v0.3.1` tag is retained as an unpublished, failed
+  candidate; GitHub Actions remains the only publication path.
+
+## 0.3.1 (Unreleased candidate)
+
+Version 0.3.1 reissued the 0.3.0 candidate source under a fresh version. The
+immutable `v0.3.1` tag did not pass release-candidate qualification; its
+performance verifier rejected the correct complete source inventory. No
+0.3.1 Cargo or PyPI artifacts were published.
 
 ### Added
 

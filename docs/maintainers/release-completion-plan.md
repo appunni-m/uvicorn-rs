@@ -8,29 +8,27 @@ a prerequisite for completing the repository work.
 
 ## Release readiness snapshot — 2026-11-09
 
-The target is version `0.3.1`, a version-only reissue of the source previously
-tagged `v0.3.0`. That immutable tag's candidate run stopped while exact-main CI
-was incomplete, and its package workflow skipped publication. No 0.3.0
-registry artifact exists. The 0.3.1 preparation is being made on `develop` for
-promotion to `main` by PR; its version metadata, locks, changelog, and current
-release documentation must pass the PR checks before merge.
+The target is version `0.3.2`. The immutable `v0.3.1` tag points to
+`c42a6d784b34b9bc95ab3fba1a2bf4697f8d0dcb`; its candidate verified exact-main
+CI, package identities, and coverage, then failed performance acceptance. The
+benchmark artifact contains 497 source paths because benchmark capture adds
+all workspace Rust files and Cargo manifests. The verifier expected only 303
+paths from the general source list. Their union exactly matches the retained
+artifact. No 0.3.1 Cargo or PyPI artifact was published. The shared source
+inventory correction and 0.3.2 version metadata are being prepared on `develop`
+for promotion by PR.
 
-On main commit `7fd9b945e70583e0833ded24fe485fc1e3ccbf1e`, CI #758 has passed
-installed-wheel Uvicorn parity and the Linux x86-64/macOS ARM64 package and
-consumer jobs. Windows artifact verification and the unified three-repeat
-coverage/parity job are still running. Benchmark #373 failed its Linux x86-64 exact-binary parity gate:
-the HTTP/3 probe received `H3_INTERNAL_ERROR` before response headers, so
-benchmark timing was skipped; the ARM64 and macOS jobs are still running. Docs
-#345 passed on the pre-0.3.1 documentation. These checks do not qualify the
-new version source.
+On the 0.3.1 source, CI #760 passed the complete 1,453-case matrix and three
+coverage repeats at 15,106/15,106 regions and 11,106/11,106 lines. Benchmark
+#374 completed on Linux x86-64, Linux ARM64, and macOS ARM64, including
+aggregate validation. Candidate #2 attempt 2 exposed the verifier defect. None
+of these results qualifies the new 0.3.2 commit; after its PR merge, require
+fresh exact-main CI, 100% coverage, all candidate consumer checks, the complete
+three-system benchmark, and docs deployment. The maintainer waived a separate
+Coverage-MCP receipt. Their real FastAPI application trial remains after
+repository release qualification.
 
-After PR merge, require exact-main coverage at 100% regions and lines, complete
-parity and candidate consumers, a complete three-system ordinary-FastAPI
-benchmark, and a docs build for the final source. The maintainer removed the
-separate Coverage-MCP receipt requirement. The real FastAPI application trial
-remains the maintainer's next step after repository release qualification.
-
-For 0.3.1, an accepted immutable tag starts `candidate.yml`; successful
+For 0.3.2, an accepted immutable tag starts `candidate.yml`; successful
 qualification automatically starts `release.yml`. GitHub Trusted Publishing
 publishes the lifecycle crate and server crate in dependency order, verifies
 their registry checksums, then publishes PyPI `uvicorn-rs` and creates the

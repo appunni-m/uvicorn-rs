@@ -21,7 +21,7 @@ Python ASGI boundary.
 
 ## Install
 
-The current source targets version 0.3.1 and has not yet been published. After the
+The current source targets version 0.3.2 and has not yet been published. After the
 release appears on crates.io, these dependency requirements are Cargo semver
 ranges, not exact patch pins. Cargo resolves the newest compatible versions;
 commit `Cargo.lock` in applications to keep a deployment's exact dependency

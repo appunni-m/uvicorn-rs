@@ -27,6 +27,8 @@ from pathlib import Path
 
 import psutil
 
+from benchmark_sources import workspace_rust_source_paths
+
 try:
     import resource
 except ImportError:
@@ -67,19 +69,6 @@ def median_valid(rows: list[dict], metric: str):
     ]
     repetitions = {row["repetition"] for row in rows if row.get("timing_valid", True) and row.get(metric) is not None}
     return statistics.median(values) if len(repetitions) >= 3 else None
-
-
-def workspace_rust_source_paths(root: Path) -> list[str]:
-    """Return Rust sources and Cargo manifests present in the benchmark checkout."""
-    workspace_files = subprocess.check_output(
-        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
-        cwd=root,
-    ).decode().split("\0")
-    return sorted(
-        name for name in workspace_files
-        if name and (root / name).is_file()
-        and (name.endswith(".rs") or Path(name).name == "Cargo.toml")
-    )
 
 
 def host_cpu_model() -> str:
