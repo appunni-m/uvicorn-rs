@@ -8,36 +8,38 @@ a prerequisite for completing the repository work.
 
 ## Release readiness snapshot — 2026-11-09
 
-The current target is version `0.3.0`. PR #31 is open from `develop` to `main`.
-The latest source changes correct the first Cargo publication path and remove
-outdated local-publishing instructions from the maintainer guide. The PR's
-current CI and docs checks must validate this exact revision; the three-repeat
-unified coverage matrix and all platform candidate artifact/consumer checks
-must pass before merge. PR evidence does not replace exact-main qualification
-after merge. A separate Coverage-MCP receipt is not required; the raw report
-still must show exact-source 100% coverage.
+The target is version `0.3.1`, a version-only reissue of the source previously
+tagged `v0.3.0`. That immutable tag's candidate run stopped while exact-main CI
+was incomplete, and its package workflow skipped publication. No 0.3.0
+registry artifact exists. The 0.3.1 preparation is being made on `develop` for
+promotion to `main` by PR; its version metadata, locks, changelog, and current
+release documentation must pass the PR checks before merge.
 
-The matched benchmark #372 completed on Linux x86-64, Linux ARM64, and macOS
-ARM64 at the earlier `1e338c9` source. HTTP/1.1 validated-route results
-regressed, H2/H3 results vary by workload, and no broad FastAPI speedup is
-supported. The historical upload timeout did not recur; its cause remains
-unknown. Because candidate qualification binds the benchmark to the release
-commit, #372 cannot qualify the PR head or a later commit. Run a full matrix on
-the final `main` source after merge.
+On main commit `7fd9b945e70583e0833ded24fe485fc1e3ccbf1e`, CI #758 has passed
+installed-wheel Uvicorn parity and the Linux x86-64/macOS ARM64 package and
+consumer jobs. Windows artifact verification and the unified three-repeat
+coverage/parity job are still running. Benchmark #373 failed its Linux x86-64 exact-binary parity gate:
+the HTTP/3 probe received `H3_INTERNAL_ERROR` before response headers, so
+benchmark timing was skipped; the ARM64 and macOS jobs are still running. Docs
+#345 passed on the pre-0.3.1 documentation. These checks do not qualify the
+new version source.
 
-The 0.3.0 Cargo versions and PyPI `uvicorn-rs` are not yet published, and no
-tag exists. After exact-main gates and candidate qualification pass, GitHub
-`release.yml` publishes the lifecycle crate and then the server crate through
-their configured Trusted Publishers, verifies exact registry checksums,
-publishes PyPI `uvicorn-rs`, and creates the GitHub Release. No local Cargo
-publication or token is used. Release controls and publisher configuration are
-recorded as set.
+After PR merge, require exact-main coverage at 100% regions and lines, complete
+parity and candidate consumers, a complete three-system ordinary-FastAPI
+benchmark, and a docs build for the final source. The maintainer removed the
+separate Coverage-MCP receipt requirement. The real FastAPI application trial
+remains the maintainer's next step after repository release qualification.
+
+For 0.3.1, an accepted immutable tag starts `candidate.yml`; successful
+qualification automatically starts `release.yml`. GitHub Trusted Publishing
+publishes the lifecycle crate and server crate in dependency order, verifies
+their registry checksums, then publishes PyPI `uvicorn-rs` and creates the
+GitHub Release. Local Cargo publication and tokens are not used.
 
 Raw coverage acceptance remains exact-source 100% regions and lines with three
 passing ASGI and native repeats, complete attribution, zero failures, and
 retained run/attempt, artifact, report/context, source, build, and matrix
-identities. The maintainer runs the real FastAPI application trial after the
-repository release handoff.
+identities.
 
 ## Historical review decisions — 2026-11-04 to 2026-11-07
 

@@ -40,13 +40,13 @@ The response should have status `200` and a text body beginning with
 
 ## Install for a FastAPI trial
 
-After version 0.3.0 is published, create a clean environment for the candidate
+After version 0.3.1 is published, create a clean environment for the candidate
 and install its standard dependencies:
 
 ```sh
 python -m venv .venv-uvicorn-rs
 . .venv-uvicorn-rs/bin/activate
-python -m pip install "uvicorn-rs[standard]==0.3.0"
+python -m pip install "uvicorn-rs[standard]==0.3.1"
 python -m uvicorn myapp.main:app --host 127.0.0.1 --port 8000
 ```
 

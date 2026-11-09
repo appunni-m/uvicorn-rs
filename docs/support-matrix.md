@@ -4,7 +4,7 @@ This page summarizes the maintained Uvicorn 0.54.0 compatibility contract.
 The official ASGI conformance suite has not been run, and the evidence does
 not extend to other Uvicorn versions.
 
-The planned Python distribution is `uvicorn-rs`, providing `uvicorn` imports
+The Python distribution is `uvicorn-rs`, providing `uvicorn` imports
 and command. `uvicorn-rs-py` is the optional internal Cargo/PyO3 adapter. The
 Cargo release targets are the Python-free `uvicorn-rs` server crate with
 optional `http3`, and `asgi-lifespan-protocol-rs`. `release.yml` publishes;
@@ -19,41 +19,26 @@ optional `http3`, and `asgi-lifespan-protocol-rs`. `release.yml` publishes;
 
 ## Current verification status (2026-11-09)
 
-Exact-main CI [#746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884)
-passed on commit `d0648cc0a4479b246dc7423b22a2b80f333d6193`. Installed-wheel
-parity against Uvicorn 0.54.0 passed 786/786 cases on Linux x86-64 and macOS
-ARM64 and 759/759 applicable cases on Windows x86-64. The 27 Windows cases
-requiring POSIX-only facilities are inapplicable. The full matrix includes the
-maintained custom HTTP/WebSocket hooks, TLS factory and ALPN, lifecycle,
-configuration, and response-capacity cases.
+Main commit `7fd9b945e70583e0833ded24fe485fc1e3ccbf1e` has current evidence in
+[CI #758](https://github.com/appunni-m/uvicorn-rs/actions/runs/42563350232).
+Installed-wheel parity against Uvicorn 0.54.0 passed. The unified parity and
+coverage job and Windows x86-64 package/consumer job are still running. Linux
+x86-64 and macOS ARM64 package and consumer checks passed. These
+results are for source version 0.3.0 and do not qualify the 0.3.1 reissue.
 
-| Profile | Result | Scope |
-| --- | --- | --- |
-| Linux x86-64, CPython 3.12.13 | Passed | Installed-wheel parity; candidate package and clean consumer |
-| macOS ARM64, CPython 3.12.13 | Passed | Installed-wheel parity; candidate package and clean consumer |
-| Windows x86-64, CPython 3.12.13 | Passed | 759 applicable parity cases; candidate package and clean consumer |
-| Windows POSIX-only cases | Inapplicable | 27 indexed inputs require unavailable POSIX facilities |
-| Linux x86-64, CPython 3.9.25 | Passed | Installed abi3-wheel consumer only; not the full parity matrix |
+The matched three-system benchmark [#373](https://github.com/appunni-m/uvicorn-rs/actions/runs/42563350265)
+is incomplete. Linux x86-64 failed the normal-binary parity gate when its
+HTTP/3 probe received `H3_INTERNAL_ERROR` while awaiting response headers, and
+its timing steps were skipped. Linux ARM64 and macOS ARM64 are still running.
+No performance conclusion can be drawn from this run. The independent
+Coverage-MCP receipt is optional; exact-source raw coverage remains mandatory.
 
-The same run passed all 1,453 unified cases through three ASGI and three native
-repeats, with complete attribution and no failures or infrastructure retries.
-Raw coverage is 15,061/15,061 regions and 11,075/11,075 lines. The report,
-source, run, artifact, context, build, and matrix identities are retained in
-the [coverage artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884/artifacts/13631702787).
-An independent Coverage-MCP receipt is not a release requirement.
-
-The matched ordinary-FastAPI benchmark [#371](https://github.com/appunni-m/uvicorn-rs/actions/runs/42503892704)
-completed on Linux x86-64, Linux ARM64, and macOS ARM64 on the same source.
-HTTP/1.1 validated-route results regressed; HTTP/2 and HTTP/3 results vary by
-workload. No broad FastAPI speedup is supported. The historical ARM64 upload
-timeout did not recur, and its root cause remains unknown.
-
-The 0.3.0 candidate has not been published. Local Cargo publication, tagged
-candidate qualification, and automated PyPI publication are still pending.
-Docs deployment [#336](https://github.com/appunni-m/uvicorn-rs/actions/runs/42512183399)
-built the original documentation for `d0648cc`. This content refresh is carried
-through the strict docs check on its PR; the main deployment rebuilds the
-updated site after merge. The maintainer will run their real FastAPI
+Docs deployment [#345](https://github.com/appunni-m/uvicorn-rs/actions/runs/42563350295)
+passed for the pre-0.3.1 documentation. The immutable `v0.3.0` tag stopped at
+candidate qualification because exact-main CI was incomplete, and its package
+workflow skipped all publication jobs. No 0.3.0 Cargo or PyPI package was
+published. Version 0.3.1 is being prepared; see the [release status](releases.md)
+for its exact-source gates. The maintainer will run their real FastAPI
 application after repository release qualification.
 
 ### Historical status (2026-11-05)

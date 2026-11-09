@@ -2,11 +2,12 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-This document describes the PyO3/ASGI implementation for the planned PyPI
+This document describes the PyO3/ASGI implementation for the PyPI
 distribution `uvicorn-rs` and the Python-free Cargo server crate `uvicorn-rs`.
 The root Cargo integration package and optional extra console script are named
-`uvicorn-rs-py`. The latest published Cargo version is 0.2.1; the 0.3.0 Cargo
-candidate and PyPI distribution have not yet been published. PyPI Trusted
+`uvicorn-rs-py`. The latest published Cargo version is 0.2.1. The immutable
+`v0.3.0` candidate did not pass qualification and no 0.3.0 package was
+published; version 0.3.1 is being prepared. PyPI Trusted
 Publishing is configured for `appunni-m/uvicorn-rs`, workflow `release.yml`,
 environment `pypi`.
 
@@ -19,11 +20,13 @@ the Python side. The Rust-native crate remains usable without Python.
 
 Exact-main CI [#746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884)
 passed on commit `d0648cc0a4479b246dc7423b22a2b80f333d6193`, including the
-unified 100% raw coverage gate and candidate package consumers. The complete
-ordinary-FastAPI matrix [#371](https://github.com/appunni-m/uvicorn-rs/actions/runs/42503892704)
-is complete on Linux x86-64, Linux ARM64, and macOS ARM64; it supports no broad
-FastAPI speedup claim. The run-specific implementation records below are
-historical evidence for their stated revisions unless linked from the current
+unified 100% raw coverage gate and candidate package consumers. That source is
+historical release evidence. Current main CI #758 is still running, and
+benchmark #373 failed Linux x86-64 exact-binary HTTP/3 parity before timings;
+the current blockers are listed in the [release status](releases.md). The
+earlier ordinary-FastAPI matrix #371 supports no broad FastAPI speedup claim.
+The run-specific implementation records below are historical evidence for
+their stated revisions unless linked from the current
 [release status](releases.md#current-release-gates-2026-11-09),
 [coverage record](coverage.md#current-release-coverage-acceptance-2026-11-09),
 or [benchmark report](benchmark-results.md).

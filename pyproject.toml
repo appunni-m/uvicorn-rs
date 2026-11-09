@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "uvicorn-rs"
-version = "0.3.0"
+version = "0.3.1"
 license = "BSD-3-Clause OR MIT"
 license-files = [
     "LICENSE",

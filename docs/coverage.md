@@ -13,7 +13,12 @@ and publication workflows revalidate this same evidence. Coverage-MCP may be
 used to investigate gaps, but an independent MCP receipt is not a release
 requirement.
 
-Main CI [#746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884),
+Current exact-main CI [#758](https://github.com/appunni-m/uvicorn-rs/actions/runs/42563350232)
+is still running on commit `7fd9b945e70583e0833ded24fe485fc1e3ccbf1e`; its
+unified coverage/parity job has not produced a completed raw report. Do not use
+the prior green report below to qualify this source or the 0.3.1 reissue.
+
+The last completed report, main CI [#746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884),
 attempt 1, completed on clean commit
 [`d0648cc0a4479b246dc7423b22a2b80f333d6193`](https://github.com/appunni-m/uvicorn-rs/commit/d0648cc0a4479b246dc7423b22a2b80f333d6193).
 The complete unified matrix passed 1,453/1,453 cases: 786/786 public oracle
@@ -46,11 +51,12 @@ Coverage-MCP receipt is optional and does not gate release.
 <a id="current-unified-coverage-status-2026-11-07"></a>
 <a id="current-unified-coverage-status-2026-11-09"></a>
 
-## Latest recorded unified coverage status (2026-11-09)
+## Latest completed unified coverage report (previous source)
 
-See the exact-main CI #746 result and retained report above. Older PR and main
-run records below remain historical evidence for their own commits; they do
-not supersede the `d0648cc` report or qualify a later source revision.
+The exact-main CI #746 report above is complete for `d0648cc0a4479b246dc7423b22a2b80f333d6193`.
+CI #758 is newer but still running; no coverage totals are available for its
+`7fd9b945e70583e0833ded24fe485fc1e3ccbf1e` source. Older PR and main run
+records below remain historical evidence for their own commits.
 
 ### Historical unified coverage status (2026-11-05)
 
