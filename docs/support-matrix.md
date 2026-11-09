@@ -19,23 +19,22 @@ optional `http3`, and `asgi-lifespan-protocol-rs`. `release.yml` publishes;
 
 ## Current verification status (2026-11-09)
 
-Main commit `c42a6d784b34b9bc95ab3fba1a2bf4697f8d0dcb` passed CI
-[#760](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160493),
+Main commit `46b6ce8c9773eaee5e29a818993a48787034b023` passed CI
+[#763](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763775),
 including installed-wheel parity, package consumers, and three-repeat unified
 coverage at 15,106/15,106 regions and 11,106/11,106 lines. Benchmark
-[#374](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160485)
+[#375](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763738)
 completed its Linux x86-64, Linux ARM64, and macOS ARM64 categories and
 aggregate validation.
 
-The immutable `v0.3.1` candidate did not publish. Candidate run
-[#42576320639, attempt 2](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576320639)
-verified the exact package identities and coverage report but rejected the
-benchmark source inventory: capture includes all workspace Rust sources and
-Cargo manifests, while the release verifier expected only its narrower general
-source list. The inventory lists differed by 194 paths; their union matched
-all 497 benchmark paths. A shared inventory helper and version 0.3.2 are being
-prepared on `develop`; exact-source CI, coverage, benchmark, docs, and candidate
-gates must run again for that new commit. No 0.3.1 package was published.
+The immutable `v0.3.2` candidate did not publish. Candidate run
+[#3, attempt 2](https://github.com/appunni-m/uvicorn-rs/actions/runs/42620942874)
+verified package identities and exact-source coverage, then failed performance
+acceptance because its verifier looked for stock Uvicorn in the candidate
+environment instead of the separate verified oracle environment. Version
+0.3.3 corrects that validator and is being prepared on `develop`; exact-source
+CI, coverage, benchmark, docs, and candidate gates must pass for that commit.
+Neither the immutable `v0.3.1` nor `v0.3.2` candidate published a package.
 The independent Coverage-MCP receipt is optional; raw 100% coverage remains
 mandatory. The maintainer will run their real FastAPI application after
 repository release qualification.

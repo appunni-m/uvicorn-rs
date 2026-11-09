@@ -4,13 +4,35 @@ Notable user-facing changes are listed here. An `Unreleased` entry describes
 work in progress; it does not mean a candidate has passed the release gates or
 that a package has been published.
 
-## 0.3.2 (Unreleased)
+## 0.3.3 (Unreleased)
 
-The immutable `v0.3.1` candidate tag failed qualification because the release
-performance verifier did not include the workspace Rust files captured by the
-benchmark. No 0.3.1 Cargo or PyPI artifacts were published. Version 0.3.2
-aligns benchmark capture and acceptance source inventories; it introduces no
-server behavior change and remains gated on exact-source release evidence.
+The immutable `v0.3.2` candidate passed exact-source CI coverage and the
+three-system benchmark, but its release verifier rejected the stock Uvicorn
+identity because it was recorded in the isolated oracle environment rather
+than the candidate environment. No 0.3.2 Cargo or PyPI artifacts were
+published. Version 0.3.3 corrects that evidence check; its own exact-source
+release gates must pass before publication.
+
+### Fixed
+
+- Validate the separately installed stock Uvicorn oracle against the benchmark
+  environment receipt, lockfile, source hashes, and candidate dependency
+  versions.
+
+### Packaging
+
+- Prepare the consolidated Cargo crates and PyPI `uvicorn-rs` distribution as
+  version 0.3.3. The `v0.3.2` tag remains an unpublished, failed candidate;
+  GitHub Actions remains the only publication path.
+
+## 0.3.2 (Unpublished candidate)
+
+The immutable `v0.3.2` tag failed qualification because its release
+performance verifier looked for stock Uvicorn in the candidate environment,
+although the benchmark correctly isolated it and recorded a verified
+`uvicorn_oracle` identity. No 0.3.2 Cargo or PyPI artifacts were published.
+Version 0.3.2 also corrected the source-inventory mismatch found by the failed
+0.3.1 candidate, but remains unpublished.
 
 ### Fixed
 
@@ -19,9 +41,8 @@ server behavior change and remains gated on exact-source release evidence.
 
 ### Packaging
 
-- Prepare the consolidated Cargo crates and PyPI `uvicorn-rs` distribution as
-  version 0.3.2. The `v0.3.1` tag is retained as an unpublished, failed
-  candidate; GitHub Actions remains the only publication path.
+- Version 0.3.2 was an unpublished candidate; its immutable tag is retained.
+  GitHub Actions remains the only publication path.
 
 ## 0.3.1 (Unreleased candidate)
 

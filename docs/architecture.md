@@ -6,8 +6,8 @@ This document describes the PyO3/ASGI implementation for the PyPI
 distribution `uvicorn-rs` and the Python-free Cargo server crate `uvicorn-rs`.
 The root Cargo integration package and optional extra console script are named
 `uvicorn-rs-py`. The latest published Cargo version is 0.2.1. The immutable
-`v0.3.1` candidate did not pass qualification and no 0.3.1 package was
-published; version 0.3.2 is being prepared. PyPI Trusted
+`v0.3.1` and `v0.3.2` candidates did not pass qualification; no 0.3.1 or 0.3.2
+package was published. Version 0.3.3 is being prepared. PyPI Trusted
 Publishing is configured for `appunni-m/uvicorn-rs`, workflow `release.yml`,
 environment `pypi`.
 
@@ -18,13 +18,15 @@ the adapter enables the required features and keeps application loading, the
 caller-owned event loop, ASGI scope/messages, context, and app exceptions on
 the Python side. The Rust-native crate remains usable without Python.
 
-Exact-main CI [#760](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160493)
-passed on `c42a6d784b34b9bc95ab3fba1a2bf4697f8d0dcb`, including 100% raw
-coverage, parity, and package consumers. Benchmark [#374](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160485)
-completed on all three systems, but candidate verification exposed an
-inventory mismatch between benchmark capture and release acceptance. This is
-being corrected for version 0.3.2; exact-source gates must run again on the
-new commit. The current blockers are listed in the [release status](releases.md).
+Exact-main CI [#763](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763775)
+passed on `46b6ce8c9773eaee5e29a818993a48787034b023`, including 100% raw
+coverage, parity, and package consumers. Benchmark [#375](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763738)
+completed on all three systems. Candidate [#3, attempt 2](https://github.com/appunni-m/uvicorn-rs/actions/runs/42620942874)
+failed because the performance verifier looked for stock Uvicorn in the
+candidate environment instead of the separate verified oracle environment.
+The validator correction and version 0.3.3 are being prepared; exact-source
+gates must run on that new commit. The current blockers are listed in the
+[release status](releases.md).
 The run-specific implementation records below are historical evidence for
 their stated revisions unless linked from the current
 [release status](releases.md#current-release-gates-2026-11-09),

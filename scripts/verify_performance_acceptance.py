@@ -30,6 +30,7 @@ SCHEMA = "uvicorn-rs-performance-review@1"
 SYSTEMS = tuple(EXPECTED_SYSTEMS)
 LOOPS = ("asyncio", "uvloop")
 MINIMUM_MATCHED_REPETITIONS = 3
+EXPECTED_UVICORN_ORACLE_VERSION = "0.54.0"
 REQUIRED_METRICS = (
     "operations_per_second",
     "p50_ms",
@@ -124,8 +125,8 @@ def extract_evidence(archive_path: Path, destination: Path) -> None:
         raise AcceptanceError(f"cannot read benchmark evidence archive {archive_path}: {error}") from error
 
 
-def verify_source_identity(identity: dict, expected_commit: str, expected_native: str,
-                           system_id: str) -> None:
+def verify_source_identity(identity: dict, environment: dict, expected_commit: str,
+                           expected_native: str, system_id: str) -> dict:
     require(identity.get("git_revision") == expected_commit,
             "benchmark run commit differs from the release commit")
     require(identity.get("dirty_target") is False and identity.get("tracked_worktree_changes") == [],
@@ -187,8 +188,11 @@ def verify_source_identity(identity: dict, expected_commit: str, expected_native
     dependencies = identity.get("dependencies")
     require(isinstance(dependencies, dict) and dependencies,
             "benchmark dependency identity is missing")
-    required = {"fastapi", "starlette", "uvicorn", "uvicorn-rs", "uvloop", "httptools"}
-    require(required <= set(dependencies), "benchmark omitted a required upstream dependency identity")
+    # The candidate distribution installs the `uvicorn` import namespace, so
+    # stock Uvicorn is measured in a separate oracle environment. Validate its
+    # recorded identity below instead of requiring both distributions together.
+    required = {"fastapi", "starlette", "uvicorn-rs", "uvloop", "httptools"}
+    require(required <= set(dependencies), "benchmark omitted a required candidate dependency identity")
     forbidden_references = {"fastapi-rs", "starlette-rs"}
     require(not (forbidden_references & {
         name.lower().replace("_", "-") for name in dependencies
@@ -206,6 +210,46 @@ def verify_source_identity(identity: dict, expected_commit: str, expected_native
         require(not (isinstance(direct_url, dict)
                      and direct_url.get("dir_info", {}).get("editable")),
                 f"measured dependency is editable: {raw_name}")
+
+    oracle = environment.get("uvicorn_oracle")
+    require(isinstance(oracle, dict)
+            and oracle.get("status") == "verified_stock_uvicorn_oracle",
+            f"{system_id}: verified stock Uvicorn oracle identity is missing")
+    oracle_packages = oracle.get("packages")
+    required_oracle_packages = {"uvicorn", "fastapi", "starlette", "httptools", "uvloop", "websockets"}
+    require(isinstance(oracle_packages, dict)
+            and required_oracle_packages <= set(oracle_packages)
+            and oracle.get("uvicorn_version") == EXPECTED_UVICORN_ORACLE_VERSION
+            and oracle_packages.get("uvicorn") == EXPECTED_UVICORN_ORACLE_VERSION,
+            f"{system_id}: stock Uvicorn oracle package inventory is incomplete")
+    oracle_runtime = oracle.get("python_version")
+    require(oracle.get("python_implementation") == "CPython"
+            and isinstance(oracle_runtime, str) and oracle_runtime.split()
+            and oracle_runtime.split(maxsplit=1)[0] == "3.12.13"
+            and oracle_runtime.split(maxsplit=1)[0] == runtime_version.split(maxsplit=1)[0],
+            f"{system_id}: stock Uvicorn oracle Python runtime differs from the maintained runtime")
+    require(oracle.get("uvicorn_record_content_mismatches") == [],
+            f"{system_id}: stock Uvicorn oracle package files differ from their installed record")
+    oracle_record_sha = oracle.get("uvicorn_record_sha256")
+    oracle_source_sha = oracle.get("uvicorn_source_files_sha256")
+    require(isinstance(oracle_record_sha, str) and re.fullmatch(r"[0-9a-f]{64}", oracle_record_sha)
+            and isinstance(oracle_source_sha, str) and re.fullmatch(r"[0-9a-f]{64}", oracle_source_sha),
+            f"{system_id}: stock Uvicorn oracle source identity is missing or malformed")
+    for raw_name, version in oracle_packages.items():
+        name = str(raw_name).lower().replace("_", "-")
+        require(isinstance(version, str) and version in locked_versions.get(name, set()),
+                f"stock Uvicorn oracle dependency {raw_name} is not pinned to uv.lock")
+        if name != "uvicorn":
+            candidate_package = dependencies.get(name)
+            require(isinstance(candidate_package, dict) and candidate_package.get("version") == version,
+                    f"stock Uvicorn oracle dependency {raw_name} differs from the candidate environment")
+    return {
+        "version": oracle["uvicorn_version"],
+        "python_version": oracle_runtime.split(maxsplit=1)[0],
+        "source_files_sha256": oracle_source_sha,
+        "record_sha256": oracle_record_sha,
+        "package_versions": dict(sorted(oracle_packages.items())),
+    }
 
 
 def verify_complete_matrix(matrix: dict, arguments: argparse.Namespace,
@@ -234,17 +278,20 @@ def verify_complete_matrix(matrix: dict, arguments: argparse.Namespace,
     recomputed: list[dict] = []
     source_identity: dict | None = None
     native_hashes: dict[str, str] = {}
+    stock_uvicorn_by_system: dict[str, dict] = {}
     for system_id in SYSTEMS:
         archive_path = safe_relative_file(arguments.artifact_dir,
                                           f"evidence/{system_id}-evidence.tar.gz")
         extracted = work / f"{system_id}-evidence"
         extract_evidence(archive_path, extracted)
+        environment = read_json(extracted / "benchmark-preparation/environment.json")
         run = read_json(extracted / "benchmark-categories/run.json")
         identity = run.get("identity_before")
         require(isinstance(identity, dict) and run.get("identity_after") == identity,
                 f"{system_id}: benchmark identity changed during measurement")
-        verify_source_identity(identity, arguments.expected_commit,
-                               arguments.expected_native_sha256, system_id)
+        stock_uvicorn_by_system[system_id] = verify_source_identity(
+            identity, environment, arguments.expected_commit, arguments.expected_native_sha256, system_id
+        )
         native_binary = safe_relative_file(extracted, "benchmark-preparation/native-extension.bin")
         native_bytes = native_binary.read_bytes()
         require(sha256_bytes(native_bytes) == identity["native"],
@@ -269,6 +316,11 @@ def verify_complete_matrix(matrix: dict, arguments: argparse.Namespace,
         recomputed.append(load_system(artifact, system_id, arguments.expected_commit))
 
     assert_common_identity(recomputed)
+    first_oracle = stock_uvicorn_by_system[SYSTEMS[0]]
+    for system_id, oracle in stock_uvicorn_by_system.items():
+        for key in ("version", "python_version", "source_files_sha256", "package_versions"):
+            require(oracle[key] == first_oracle[key],
+                    f"stock Uvicorn oracle identity differs across systems for {key}: {system_id}")
     by_system = {item["system_id"]: item for item in reported}
     for system in recomputed:
         require(by_system[system["system_id"]] == system,
@@ -279,6 +331,7 @@ def verify_complete_matrix(matrix: dict, arguments: argparse.Namespace,
                 f"{system['system_id']}: fewer than three repetitions were requested")
 
     return {"matrix": matrix, "systems": by_system, "source_identity": source_identity,
+            "stock_uvicorn_oracle_by_system": stock_uvicorn_by_system,
             "native_hashes": native_hashes,
             "artifact_hashes": artifact_hashes}
 
@@ -518,6 +571,7 @@ def main() -> int:
             "system_evidence_sha256": evidence_hashes,
             "source_sha256": matrix["systems"][0]["source_sha256"],
             "native_extension_sha256_by_system": complete["native_hashes"],
+            "stock_uvicorn_oracle_by_system": complete["stock_uvicorn_oracle_by_system"],
             "systems": list(SYSTEMS),
             "workloads": workloads,
             "loops": list(LOOPS),
