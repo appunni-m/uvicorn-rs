@@ -2557,6 +2557,9 @@ async def server_readiness_observation() -> dict[str, object]:
             await allow_http_response.wait()
             if scope["path"] == "/no-content":
                 await send({"type": "http.response.start", "status": 204, "headers": []})
+                # Let the transport suppress the body before the app sends
+                # ASGI's required final empty body event.
+                await asyncio.sleep(0.01)
                 await send({"type": "http.response.body", "body": b""})
             else:
                 await send({"type": "http.response.start", "status": 200, "headers": []})
