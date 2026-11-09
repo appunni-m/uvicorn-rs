@@ -13,14 +13,17 @@ and publication workflows revalidate this same evidence. Coverage-MCP may be
 used to investigate gaps, but an independent MCP receipt is not a release
 requirement.
 
-Exact-main CI [#760](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160493)
-completed on commit `c42a6d784b34b9bc95ab3fba1a2bf4697f8d0dcb`. The complete
+Exact-main CI [#763](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763775)
+completed on commit `46b6ce8c9773eaee5e29a818993a48787034b023`. The complete
 1,453-case matrix passed, including three ASGI and native repeats, with
-15,106/15,106 regions and 11,106/11,106 lines. Raw artifact
-[#13659056387](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160493/artifacts/13659056387)
-has SHA-256 `b10781acca4a13c824d119a3887c4ba29b8fd0c9b90a8fda4e74bb67476fb58a`.
-This exact-source evidence qualified the unpublished 0.3.1 candidate commit,
-but does not qualify 0.3.2 or any later source.
+15,106/15,106 regions and 11,106/11,106 lines. Coverage job
+[#129124763860](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763775/job/129124763860)
+uploaded raw artifact [#13676951658](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763775/artifacts/13676951658),
+372,172,709 bytes, SHA-256
+`048e3bba1f52de54d80c4e32eedeff6af7568884399d741f4c41846fb488cfe1`. This
+evidence is bound to the unpublished `v0.3.2` candidate commit. Candidate
+performance acceptance failed later on an oracle-identity validation error;
+the report does not qualify version 0.3.3 or any later source.
 
 The last completed report, main CI [#746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884),
 attempt 1, completed on clean commit
@@ -57,14 +60,15 @@ Coverage-MCP receipt is optional and does not gate release.
 
 ## Latest completed unified coverage report
 
-Exact-main CI #760 passed for commit `c42a6d784b34b9bc95ab3fba1a2bf4697f8d0dcb`.
+Exact-main CI #763 passed for commit `46b6ce8c9773eaee5e29a818993a48787034b023`.
 It attributed all 1,453 cases, passed three ASGI and native repeats, and
 reported 15,106/15,106 regions and 11,106/11,106 lines. Its raw artifact is
-[13659056387](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160493/artifacts/13659056387)
-with SHA-256 `b10781acca4a13c824d119a3887c4ba29b8fd0c9b90a8fda4e74bb67476fb58a`.
-This is valid exact-source evidence for the unpublished `v0.3.1` candidate
-commit; it does not qualify the new 0.3.2 commit. Older PR and main run records
-below remain historical evidence for their own commits.
+[#13676951658](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763775/artifacts/13676951658)
+with SHA-256 `048e3bba1f52de54d80c4e32eedeff6af7568884399d741f4c41846fb488cfe1`.
+This is valid exact-source coverage evidence for the unpublished `v0.3.2`
+candidate commit; its candidate failed a separate performance-acceptance gate.
+It does not qualify the new 0.3.3 commit. Older reports remain historical
+evidence for their own commits.
 
 ### Historical unified coverage status (2026-11-05)
 

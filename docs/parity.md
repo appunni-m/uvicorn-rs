@@ -9,19 +9,20 @@
 
 ## Current source status (2026-11-09)
 
-Main CI [#760](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160493)
-passed on `c42a6d784b34b9bc95ab3fba1a2bf4697f8d0dcb`, including the complete
+Main CI [#763](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763775)
+passed on `46b6ce8c9773eaee5e29a818993a48787034b023`, including the complete
 1,453-case matrix and 100% unified coverage: 15,106/15,106 regions and
-11,106/11,106 lines across three repeats. Benchmark [#374](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160485)
-completed successfully on Linux x86-64, Linux ARM64, and macOS ARM64.
-Candidate [#2, attempt 2](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576320639/job/129058654594)
-verified exact package and coverage evidence, then exposed a release-check bug:
-the performance verifier omitted workspace Rust files and Cargo manifests from
-its expected inventory. The shared inventory fix and version 0.3.2 are being
-prepared on `develop`; those exact-source gates must run again after merge.
+11,106/11,106 lines across three repeats. Benchmark [#375](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763738)
+completed on Linux x86-64, Linux ARM64, and macOS ARM64.
+Candidate [#3, attempt 2](https://github.com/appunni-m/uvicorn-rs/actions/runs/42620942874)
+validated the tag, source, packages, and coverage, then failed performance
+acceptance because its verifier looked for stock Uvicorn in the candidate
+environment instead of the separate verified oracle environment. Version
+0.3.3 corrects that validator and is being prepared on `develop`; its exact
+source must pass CI, coverage, benchmark, docs, and candidate gates.
 
-The immutable `v0.3.1` tag remains unpublished; no Cargo or PyPI package has
-been published. See the [release guide](releases.md).
+The immutable `v0.3.1` and `v0.3.2` tags remain unpublished; no Cargo or PyPI
+package has been published. See the [release guide](releases.md).
 
 ### Historical source status (2026-11-03)
 

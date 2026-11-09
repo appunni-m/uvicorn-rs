@@ -25,44 +25,45 @@ Use these state labels precisely:
 
 ## Current release status (2026-11-09)
 
-The immutable `v0.3.1` tag points to main commit
-`c42a6d784b34b9bc95ab3fba1a2bf4697f8d0dcb`. Candidate run
-[#42576320639, attempt 2](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576320639)
-passed source/tag validation, exact CI and benchmark selection, artifact
-identity checks, and raw coverage verification, then failed performance
-acceptance. The verifier expected 303 paths while benchmark capture recorded
-497, including all workspace Rust sources and Cargo manifests. Their union
-matches exactly. No 0.3.1 Cargo or PyPI package was published. The fix and
-version 0.3.2 are being prepared on `develop` for promotion through a PR. Kata
-`zep3` and `m8mx` track the candidate and release gates.
+The immutable `v0.3.2` tag points to main commit
+`46b6ce8c9773eaee5e29a818993a48787034b023`. Candidate
+[#3, attempt 2](https://github.com/appunni-m/uvicorn-rs/actions/runs/42620942874)
+passed tag, CI, benchmark-artifact, package, and raw-coverage checks, then
+failed performance acceptance. The benchmark records stock Uvicorn 0.54.0 in
+its separate verified oracle environment on all three systems; the verifier
+incorrectly required it in the candidate environment, which installs the
+overlapping `uvicorn-rs` distribution. No candidate bundle or registry package
+was published. The `v0.3.2` tag cannot be moved, so the correction and version
+0.3.3 are being prepared on `develop` for promotion through a PR.
 
 | Gate | Current evidence | Status |
 | --- | --- | --- |
-| Exact-main Uvicorn 0.54.0 parity | [CI #760](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160493), source `c42a6d78` | Passed; the complete 1,453-case matrix is for the unpublished 0.3.1 candidate source |
-| Unified coverage | [CI #760](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160493), raw artifact [13659056387](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160493/artifacts/13659056387) | Passed at 15,106/15,106 regions and 11,106/11,106 lines, three repeats; must rerun for 0.3.2 exact commit |
-| Candidate package consumers | [CI #760](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160493) | Linux x86-64, macOS ARM64, Windows x86-64, and Python floor checks passed for 0.3.1 source; candidate attempt verified package identities |
-| Three-system ordinary-FastAPI benchmark | [Benchmark #374](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160485), source `c42a6d78` | All platform jobs and aggregate validation passed. Candidate verifier rejected the artifact because it omitted 194 workspace Rust/Cargo paths from its expected inventory. The shared inventory fix requires fresh exact-source evidence. |
-| Documentation deployment | [Docs #346](https://github.com/appunni-m/uvicorn-rs/actions/runs/42576160508), source `c42a6d78` | Passed for 0.3.1 docs; current 0.3.2 documentation needs a new docs build |
-| 0.3.2 candidate artifacts and clean consumers | No 0.3.2 candidate yet | Pending PR merge and new exact-source CI and benchmark gates |
-| Cargo and PyPI publication | `release.yml` uses configured crates.io and PyPI Trusted Publishers | Pending successful 0.3.2 candidate qualification; GitHub Actions is the only publication path |
+| Exact-main Uvicorn 0.54.0 parity and unified coverage | [CI #763](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763775), coverage job [129124763860](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763775/job/129124763860), source `46b6ce8c` | Passed 1,453 cases and three repeats; 15,106/15,106 regions and 11,106/11,106 lines |
+| Candidate packages and consumers | [CI #763](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763775) | Platform packages, Python floor, and package identities passed. The candidate-only extracted Cargo HTTP/3 consumer was skipped after performance acceptance failed. |
+| Three-system ordinary-FastAPI benchmark | [Benchmark #375](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763738), source `46b6ce8c` | Linux x86-64, Linux ARM64, macOS ARM64, and aggregate validation passed. The release verifier must consume the separate stock-Uvicorn oracle identity correctly; no broad speedup claim is made. |
+| Documentation deployment | [Docs #352](https://github.com/appunni-m/uvicorn-rs/actions/runs/42620285035), source `46b6ce8c` | Passed for the 0.3.2 source docs; updated 0.3.3 docs need their own build after merge. |
+| 0.3.2 candidate qualification | [Candidate #3, attempt 2](https://github.com/appunni-m/uvicorn-rs/actions/runs/42620942874) | Failed at performance acceptance because the validator looked for stock Uvicorn in the wrong environment; no candidate bundle was uploaded. |
+| 0.3.3 candidate artifacts and clean consumers | Not assembled | Pending the validator fix, PR merge, and new exact-source CI, coverage, and benchmark evidence. |
+| Cargo and PyPI publication | `release.yml` uses configured crates.io and PyPI Trusted Publishers | Pending successful 0.3.3 candidate qualification; GitHub Actions is the only publication path. |
 
-The 0.3.1 benchmark itself completed its parity and workload matrix on all
-three systems. Its performance acceptance step failed because the verifier's
-expected inventory disagreed with the inventory captured by the benchmark;
-this is an evidence-check bug, not a measured performance regression. No broad
-speedup claim is made. The maintainer's real FastAPI application trial follows
-repository release qualification.
+The 0.3.2 benchmark completed its parity and workload matrix on all three
+systems. Its release acceptance failure is caused by the verifier reading the
+stock Uvicorn identity from the candidate environment instead of the verified
+isolated oracle receipt; it does not indicate a benchmark failure or measured
+performance regression. No broad speedup claim is made. The maintainer's real
+FastAPI application trial follows repository release qualification.
 
 The release set is the Python-free Cargo crate `uvicorn-rs` with HTTP/3 behind
 the optional `http3` feature, `asgi-lifespan-protocol-rs`, and PyPI distribution
 `uvicorn-rs` exposing the `uvicorn` command/imports. `uvicorn-rs-py` remains the
 optional internal adapter. Do not publish separate `uvicorn-rs-h3` or Quinn
-crates. Candidate qualification will use a new immutable `v0.3.2` tag and its
+crates. Candidate qualification will use a new immutable `v0.3.3` tag and its
 exact main-source evidence; after it passes, `release.yml` publishes the lifecycle
 crate then the server crate through crates.io Trusted Publishing, verifies
 their registry checksums, publishes PyPI, verifies registry bytes, and creates
 the GitHub Release. Publisher entries and release controls are configured;
-no local Cargo publish or token is used.
+no local Cargo publish or token is used. The failed `v0.3.2` tag remains
+unpublished and will not be moved.
 
 | Superseded CI #712 artifact | Artifact | ZIP SHA-256 | Contents and check |
 | --- | --- | --- | --- |
@@ -81,9 +82,9 @@ skipped. Build and test jobs have no registry credentials.
 The exact-source raw coverage gate requires 100% regions and lines, a complete
 passing matrix, and recorded source, run, artifact, report, context, build, and
 matrix identities. Candidate assembly revalidates that evidence against the
-tagged source commit. The immutable `v0.3.1` candidate did not qualify and its
-publication workflow did not publish. Version 0.3.2 must pass the same checks
-on its own exact source before publication.
+tagged source commit. The immutable `v0.3.1` and `v0.3.2` candidates did not
+qualify and their publication workflows did not publish. Version 0.3.3 must
+pass the same checks on its own exact source before publication.
 
 ## Workflow ownership
 
@@ -286,7 +287,7 @@ and consumers are verified.
 | PyPI | uvicorn-rs | Optional Python compatibility client for standard Python ASGI applications. It is not required by the Python-free Rust library. |
 | Documentation | README, MkDocs site, and docs.rs | Repository docs deploy through GitHub Pages; crate API docs are generated from published Cargo archives. |
 
-The PyPI distribution is `uvicorn-rs`, following the project's `pillow-rs` naming convention. It provides the `uvicorn` import namespace, `uvicorn` command, and `python -m uvicorn` entry point for in-place use. The root Cargo/PyO3 integration package remains `uvicorn-rs-py`; that internal name and optional console alias are not the PyPI distribution name. The current source metadata declares version `0.3.2`, Python `>=3.9`, Uvicorn-style base dependencies, and a `[standard]` extra. The immutable `v0.3.1` tag did not pass candidate qualification, and no 0.3.1 package is present in the registries. The 2026-11-01 read-only registry check found 0.2.1 as the latest published version of both Cargo crates; PyPI had no `uvicorn-rs` release. The exact compatibility scope is in the [support matrix](support-matrix.md). Historical `0.2.2` inspection receipts below are retained as historical evidence and do not describe the current candidate.
+The PyPI distribution is `uvicorn-rs`, following the project's `pillow-rs` naming convention. It provides the `uvicorn` import namespace, `uvicorn` command, and `python -m uvicorn` entry point for in-place use. The root Cargo/PyO3 integration package remains `uvicorn-rs-py`; that internal name and optional console alias are not the PyPI distribution name. The current source metadata declares version `0.3.3`, Python `>=3.9`, Uvicorn-style base dependencies, and a `[standard]` extra. The immutable `v0.3.1` and `v0.3.2` tags did not pass candidate qualification; no 0.3.1, 0.3.2, or PyPI `uvicorn-rs` release is present in the registries. The 2026-11-01 read-only registry check found 0.2.1 as the latest published version of both Cargo crates; PyPI had no `uvicorn-rs` release. The exact compatibility scope is in the [support matrix](support-matrix.md). Historical `0.2.2` inspection receipts below are retained as historical evidence and do not describe the current candidate.
 
 The historical 0.1.0 Cargo bootstrap is recorded below. A registry API check on 2026-10-25 returned HTTP 404 for the then-removed `uvicorn-rs`, `uvicorn-rs-h3`, and `uvicorn-rs-h3-quinn` names; the subsequent `uvicorn-rs` 0.2.1 publication is recorded above. The old H3/Quinn package identities are not current release targets. The `uvicorn-rs` package vendors the H3 protocol and Quinn adapter source behind `http3`; it does not depend on separate project-owned H3 crates. `asgi-lifespan-protocol-rs` is the current lifecycle-contract package. The Python adapter depends on `uvicorn-rs`; Rust-native frameworks can depend on `uvicorn-rs` without Python.
 

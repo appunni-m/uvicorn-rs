@@ -1,8 +1,9 @@
 # Deployment guidance
 
-Version 0.3.2 is being prepared; no Cargo or PyPI package has been published.
-The immutable `v0.3.1` candidate failed performance-evidence verification
-because its source inventory omitted workspace Rust files. See the [release status](releases.md) and
+Version 0.3.3 is being prepared; no Cargo or PyPI package has been published.
+The immutable `v0.3.2` candidate failed performance-evidence verification
+because its validator looked for stock Uvicorn in the candidate environment
+instead of the separate oracle environment. See the [release status](releases.md) and
 [compatibility status](uvicorn-compatibility.md). Evaluate your application
 after the candidate is published and repository release qualification is
 complete.
