@@ -6,23 +6,26 @@ FastAPI evaluation. Kata remains the system of record. The maintainer will run
 their application trial; collecting their application or running its load is not
 a prerequisite for completing the repository work.
 
-## Active release goal — 2026-11-09
+## Release readiness snapshot — 2026-11-09
 
-The current package source is clean `main` commit
-`d0648cc0a4479b246dc7423b22a2b80f333d6193`, version `0.3.0`. CI #746 passed
-installed-wheel compatibility, platform package/consumer checks, and the exact-
-source raw coverage gate: 15,061/15,061 regions and 11,075/11,075 lines across
-1,453 cases, three ASGI and three native repeats, complete attribution, and no
-failed or infrastructure cases. The raw artifact, report, context, source-set,
-build, and matrix identities are recorded in [coverage.md](../coverage.md).
+The current target is version `0.3.0`. PR #29 has merged to `main` as
+`e665bad0922ad19f31edc66c5cc4ff370e5efb7e`; its exact-main CI is running as
+run #748. The PR-head CI passed installed-wheel compatibility, platform
+package/consumer checks, and exact-source raw coverage at 15,061/15,061
+regions and 11,075/11,075 lines across 1,453 cases, three ASGI and three native
+repeats, complete attribution, and no failed or infrastructure cases. That
+PR-head evidence does not replace qualification of the merged main commit.
+The raw report and its identities are documented in [coverage.md](../coverage.md).
 A separate Coverage-MCP receipt is not required.
 
 The matched benchmark #371 completed on Linux x86-64, Linux ARM64, and macOS
-ARM64. HTTP/1.1 validated-route results regressed, H2/H3 results vary by
-workload, and no broad FastAPI speedup is supported. The historical upload
-timeout did not recur; its cause remains unknown. Docs #336 passed for the
-original main documentation, and the source docs are now being refreshed to
-match current package names and evidence. Those edits need their own docs build.
+ARM64 at the earlier `d0648cc` source. HTTP/1.1 validated-route results
+regressed, H2/H3 results vary by workload, and no broad FastAPI speedup is
+supported. The historical upload timeout did not recur; its cause remains
+unknown. Because candidate qualification binds the benchmark to the release
+commit, #371 cannot qualify `e665bad` or a later commit. A full manual matrix
+on `main` is required whenever a docs-only or workflow-only merge does not
+trigger the benchmark push filter.
 
 The 0.3.0 Cargo versions are not yet present on crates.io, PyPI `uvicorn-rs`
 has no 0.3.0 release, and no tag exists. The release order remains local
