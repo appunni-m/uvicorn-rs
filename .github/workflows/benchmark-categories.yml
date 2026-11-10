@@ -312,8 +312,30 @@ jobs:
           mkdir -p target/benchmark-preparation
           exec > >(tee target/benchmark-preparation/environment.log) 2>&1
           if [[ "$RUNNER_OS" == "Linux" ]]; then
-            sudo apt-get update
-            sudo apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev libcurl4-openssl-dev
+            # GitHub's Ubuntu image can route apt through an HTTP Azure mirror
+            # that stalls on hosted runners. Pin the Ubuntu archive to the
+            # canonical HTTPS endpoint for this runner architecture, then bound
+            # each apt request so a dead mirror cannot consume the whole job.
+            case "$(dpkg --print-architecture)" in
+              amd64) ubuntu_archive="https://archive.ubuntu.com/ubuntu" ;;
+              arm64) ubuntu_archive="https://ports.ubuntu.com/ubuntu-ports" ;;
+              *) echo "Unsupported Ubuntu architecture: $(dpkg --print-architecture)" >&2; exit 1 ;;
+            esac
+            if [[ -f /etc/apt/apt-mirrors.txt ]]; then
+              printf '%s\n' "$ubuntu_archive" | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+            fi
+            for source_file in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources; do
+              [[ -f "$source_file" ]] || continue
+              sudo sed -i \
+                -e "s#mirror+file:/etc/apt/apt-mirrors.txt#$ubuntu_archive#g" \
+                -e "s#http://azure.archive.ubuntu.com/ubuntu#$ubuntu_archive#g" \
+                "$source_file"
+            done
+            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 \
+              -o Acquire::https::Timeout=20 update
+            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 \
+              -o Acquire::https::Timeout=20 install -y --no-install-recommends \
+              build-essential pkg-config libssl-dev libcurl4-openssl-dev
             dpkg-query -W build-essential pkg-config libssl-dev libcurl4-openssl-dev > target/benchmark-preparation/system-packages.txt
             lscpu
             cpu_model="$(lscpu -J | python3 -c 'import json,sys; print(next((item["data"] for item in json.load(sys.stdin)["lscpu"] if item["field"].strip(":") == "Model name"), "unknown"))')"
