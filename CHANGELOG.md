@@ -4,26 +4,46 @@ Notable user-facing changes are listed here. An `Unreleased` entry describes
 work in progress; it does not mean a candidate has passed the release gates or
 that a package has been published.
 
-## 0.3.4 (Unreleased)
+## 0.3.5 (Unreleased)
 
-The immutable `v0.3.3` candidate passed exact-source coverage and package
-verification, but candidate qualification stopped when the performance
-verifier compared complete dependency receipts across operating systems. Those
-receipts correctly contain machine-specific install paths and compiled-file
-hashes. Version 0.3.4 compares pinned dependency versions across systems while
-retaining each platform's full lockfile and installed-file integrity checks.
-The new version needs fresh exact-source CI, coverage, benchmark, docs, and
-candidate evidence before GitHub Actions can publish it.
+The immutable `v0.3.4` candidate passed exact-source CI, 100% unified coverage,
+the three-system benchmark, and docs deployment, but its standalone HTTP/3
+archive consumer rejected the test server certificate: the harness presented
+a self-signed CA as an end-entity certificate. This fix-forward issues a
+proper CA and a separately signed server certificate. The server crate itself
+was not changed by that candidate failure. Fresh exact-source gates and
+candidate qualification are required before GitHub Actions can publish 0.3.5.
 
 ### Fixed
 
-- Compare normalized dependency versions across benchmark systems instead of
-  comparing machine-specific package paths and platform-compiled files.
+- Use the shared benchmark certificate generator for the standalone archive
+  consumer, trusting the CA while serving a `CA:FALSE` localhost leaf.
+- Carry forward normalized dependency-version comparison across benchmark
+  systems while retaining each platform's full lockfile and installed-file
+  integrity checks.
 
 ### Packaging
 
 - Prepare the consolidated Cargo crates and PyPI `uvicorn-rs` distribution as
-  version 0.3.4. GitHub Actions remains the only publication path.
+  version 0.3.5. GitHub Actions remains the only publication path.
+
+## 0.3.4 (Unpublished candidate)
+
+The immutable `v0.3.3` candidate passed exact-source coverage and package
+verification, but performance acceptance compared complete dependency
+receipts across operating systems. Those receipts correctly contain
+machine-specific install paths and compiled-file hashes. Version 0.3.4
+normalized the cross-system dependency comparison while retaining each
+platform's full lockfile and installed-file integrity checks. Candidate #5 for
+`v0.3.4` then passed source coverage and performance acceptance but failed its
+standalone HTTP/3 archive consumer because the test harness used its CA as the
+server certificate. No 0.3.4 Cargo or PyPI artifact was published; its tag
+remains immutable.
+
+### Packaging
+
+- The 0.3.4 Cargo crates and PyPI `uvicorn-rs` distribution were not published.
+  GitHub Actions remains the only publication path.
 
 ## 0.3.3 (Unpublished candidate)
 
@@ -48,7 +68,7 @@ will not be moved.
 
 - Version 0.3.3 remains an unpublished candidate. Its exact-main coverage and
   package evidence are historical inputs for that candidate only; they do not
-  qualify version 0.3.4.
+  qualify version 0.3.5.
 
 ## 0.3.2 (Unpublished candidate)
 

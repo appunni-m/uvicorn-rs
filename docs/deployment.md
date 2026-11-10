@@ -1,12 +1,11 @@
 # Deployment guidance
 
-Version 0.3.4 is being prepared; no 0.3.3 Cargo or PyPI package was published.
-The immutable `v0.3.3` candidate passed coverage and package checks, then failed
-performance acceptance because the verifier compared platform-specific
-dependency paths and compiled files across systems. See the [release status](releases.md) and
-[compatibility status](uvicorn-compatibility.md). Evaluate your application
-after the candidate is published and repository release qualification is
-complete.
+Version 0.3.5 is being prepared. The immutable `v0.3.4` candidate failed its
+standalone HTTP/3 archive consumer because the harness presented a CA
+certificate as the server identity; no Cargo or PyPI artifact was published.
+See the [release status](releases.md) and [compatibility status](uvicorn-compatibility.md).
+Evaluate your application after the candidate is published and repository
+release qualification is complete.
 
 ## Bind and run
 

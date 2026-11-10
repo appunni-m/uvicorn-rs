@@ -17,6 +17,8 @@ import tempfile
 import time
 import tomllib
 
+from benchmark_certificates import generate_server_certificate
+
 
 ROOT = Path(__file__).resolve().parents[1]
 CRATES = (
@@ -195,33 +197,6 @@ def build_probe(scratch: Path) -> Path:
     return executable
 
 
-def create_certificate(scratch: Path) -> tuple[Path, Path]:
-    key = scratch / "server-key.pem"
-    certificate = scratch / "server-cert.pem"
-    run(
-        [
-            "openssl",
-            "req",
-            "-x509",
-            "-newkey",
-            "rsa:2048",
-            "-keyout",
-            str(key),
-            "-out",
-            str(certificate),
-            "-days",
-            "1",
-            "-nodes",
-            "-subj",
-            "/CN=localhost",
-            "-addext",
-            "subjectAltName=DNS:localhost,IP:127.0.0.1",
-        ],
-        cwd=scratch,
-    )
-    return certificate, key
-
-
 def start_server(executable: Path, certificate: Path, key: Path, scratch: Path) -> tuple[subprocess.Popen[str], str]:
     log_path = scratch / "server.log"
     with (scratch / "server.log").open("w", encoding="utf-8") as log:
@@ -365,13 +340,13 @@ def execute(
         }
         server = build_consumer(version, extracted, scratch)
         probe = build_probe(scratch)
-        certificate, key = create_certificate(scratch)
-        process, address = start_server(server, certificate, key, scratch)
+        ca_certificate, server_certificate, key = generate_server_certificate(scratch)
+        process, address = start_server(server, server_certificate, key, scratch)
         server_log = scratch / "server.log"
         try:
-            observed_error = malformed_frame_probe(probe, address, certificate, scratch)
+            observed_error = malformed_frame_probe(probe, address, ca_certificate, scratch)
             follow_up_status = healthy_fresh_connection_probe(
-                probe, address, certificate, scratch
+                probe, address, ca_certificate, scratch
             )
         finally:
             if process.poll() is None:

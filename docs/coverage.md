@@ -13,14 +13,14 @@ and publication workflows revalidate this same evidence. Coverage-MCP may be
 used to investigate gaps, but an independent MCP receipt is not a release
 requirement.
 
-Main CI [#774](https://github.com/appunni-m/uvicorn-rs/actions/runs/42776625577)
-completed on `a8cef4ccaa32859553718017ad65d7fdad61769c`. The full 1,455-case
+Main CI [#777](https://github.com/appunni-m/uvicorn-rs/actions/runs/42840520790)
+completed on `bd134de9118da88309dd3f0e7e91cb59712b8215`. The full 1,455-case
 matrix passed with three ASGI and native repeats and **15,120/15,120 regions
-and 11,120/11,120 lines**. Candidate #4 rechecked the exact-source raw report
-and passed the coverage gate. The candidate later failed the separate
-performance-identity check, so no package was published. These receipts bind
-to the unpublished `v0.3.3` source and do not qualify the 0.3.4 fix-forward;
-the updated source needs its own hosted CI report and raw coverage artifact.
+and 11,120/11,120 lines**. Candidate #5 rechecked the exact-source raw report
+and passed the coverage gate before a later standalone HTTP/3 archive-consumer
+failure. These receipts bind to the unpublished `v0.3.4` source and do not
+qualify the 0.3.5 fix-forward; the updated source needs its own hosted report
+and raw coverage artifact.
 
 The last completed report, main CI [#746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884),
 attempt 1, completed on clean commit
