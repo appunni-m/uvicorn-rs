@@ -2,7 +2,7 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Current release coverage acceptance (2026-11-09)
+## Current release coverage acceptance (2026-11-10)
 
 Release requires a successful complete CI report from the exact final `main`
 commit with **100% executable regions and lines**, complete case attribution,
@@ -13,17 +13,14 @@ and publication workflows revalidate this same evidence. Coverage-MCP may be
 used to investigate gaps, but an independent MCP receipt is not a release
 requirement.
 
-Exact-main CI [#763](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763775)
-completed on commit `46b6ce8c9773eaee5e29a818993a48787034b023`. The complete
-1,453-case matrix passed, including three ASGI and native repeats, with
-15,106/15,106 regions and 11,106/11,106 lines. Coverage job
-[#129124763860](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763775/job/129124763860)
-uploaded raw artifact [#13676951658](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763775/artifacts/13676951658),
-372,172,709 bytes, SHA-256
-`048e3bba1f52de54d80c4e32eedeff6af7568884399d741f4c41846fb488cfe1`. This
-evidence is bound to the unpublished `v0.3.2` candidate commit. Candidate
-performance acceptance failed later on an oracle-identity validation error;
-the report does not qualify version 0.3.3 or any later source.
+Main CI [#774](https://github.com/appunni-m/uvicorn-rs/actions/runs/42776625577)
+completed on `a8cef4ccaa32859553718017ad65d7fdad61769c`. The full 1,455-case
+matrix passed with three ASGI and native repeats and **15,120/15,120 regions
+and 11,120/11,120 lines**. Candidate #4 rechecked the exact-source raw report
+and passed the coverage gate. The candidate later failed the separate
+performance-identity check, so no package was published. These receipts bind
+to the unpublished `v0.3.3` source and do not qualify the 0.3.4 fix-forward;
+the updated source needs its own hosted CI report and raw coverage artifact.
 
 The last completed report, main CI [#746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884),
 attempt 1, completed on clean commit
@@ -57,8 +54,9 @@ Coverage-MCP receipt is optional and does not gate release.
 <a id="current-unified-coverage-status-2026-11-06"></a>
 <a id="current-unified-coverage-status-2026-11-07"></a>
 <a id="current-unified-coverage-status-2026-11-09"></a>
+<a id="current-unified-coverage-status-2026-11-10"></a>
 
-## Latest completed unified coverage report
+## Earlier exact-main coverage report (2026-11-09)
 
 Exact-main CI #763 passed for commit `46b6ce8c9773eaee5e29a818993a48787034b023`.
 It attributed all 1,453 cases, passed three ASGI and native repeats, and
@@ -67,7 +65,7 @@ reported 15,106/15,106 regions and 11,106/11,106 lines. Its raw artifact is
 with SHA-256 `048e3bba1f52de54d80c4e32eedeff6af7568884399d741f4c41846fb488cfe1`.
 This is valid exact-source coverage evidence for the unpublished `v0.3.2`
 candidate commit; its candidate failed a separate performance-acceptance gate.
-It does not qualify the new 0.3.3 commit. Older reports remain historical
+It does not qualify version 0.3.3 or any later source. Older reports remain historical
 evidence for their own commits.
 
 ### Historical unified coverage status (2026-11-05)

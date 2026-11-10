@@ -20,7 +20,7 @@ remaining independent of any particular server or runtime.
 
 ## Install
 
-The current source targets version 0.3.3 and has not yet been published. After the
+The current source targets version 0.3.4 and has not yet been published. After the
 release appears on crates.io, the version below is a Cargo semver requirement,
 not an exact patch pin. A committed `Cargo.lock` selects the exact versions for
 an application build.

@@ -1,9 +1,10 @@
 # Can I replace Uvicorn?
 
-**Not yet from PyPI.** The immutable `v0.3.2` candidate was not published:
-candidate verification failed because the performance validator looked for
-stock Uvicorn in the candidate environment instead of its separately recorded
-oracle environment. Version 0.3.3 is being prepared.
+**Not yet from PyPI.** Immutable tag `v0.3.3` failed candidate qualification
+when performance acceptance compared machine-specific dependency receipt
+paths and compiled-file hashes across systems. Version 0.3.4 is being prepared
+with normalized cross-system version comparison; its own exact-source gates
+must pass before publication.
 The distribution name is `uvicorn-rs`; it provides the `uvicorn` command, the
 `uvicorn` import namespace, and `python -m uvicorn`. The optional internal
 Cargo/PyO3 adapter remains `uvicorn-rs-py`. Keep upstream `uvicorn` and
@@ -17,21 +18,22 @@ describe the install path after publication.
 <a id="current-status-2026-11-06"></a>
 <a id="current-status-2026-11-07"></a>
 <a id="current-status-2026-11-09"></a>
+<a id="current-status-2026-11-10"></a>
 
-## Current status (2026-11-09)
+## Current status (2026-11-10)
 
-Main CI [#763](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763775)
-passed on `46b6ce8c`, including 100% unified coverage (15,106/15,106 regions,
-11,106/11,106 lines; three repeats). Benchmark [#375](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763738)
-completed on Linux x86-64, Linux ARM64, and macOS ARM64, with aggregate
-validation. Candidate [#3, attempt 2](https://github.com/appunni-m/uvicorn-rs/actions/runs/42620942874)
-verified package identities and raw coverage, then failed because its
-performance verifier expected stock Uvicorn in the candidate environment,
-although the benchmark records it in a separate verified oracle environment.
-Version 0.3.3 corrects that validator and still needs exact-source gates.
+Main commit `a8cef4cc` passed CI [#774](https://github.com/appunni-m/uvicorn-rs/actions/runs/42776625577)
+with 100% unified coverage (15,120/15,120 regions and 11,120/11,120 lines),
+and benchmark [#381](https://github.com/appunni-m/uvicorn-rs/actions/runs/42796770165)
+completed on Linux x86-64, Linux ARM64, and macOS ARM64. Candidate
+[#4](https://github.com/appunni-m/uvicorn-rs/actions/runs/42813769106) passed
+package checks and its exact-source coverage recheck, then failed performance
+acceptance because it compared full dependency receipts across platforms.
+Version 0.3.4 fixes that false cross-platform comparison and requires fresh
+exact-source CI, coverage, benchmark, docs, and candidate checks.
 
-The immutable `v0.3.1` and `v0.3.2` tags remain unpublished. No Cargo or PyPI
-artifact was published. See the [release guide](releases.md) for the current stage and the
+The immutable `v0.3.1`, `v0.3.2`, and `v0.3.3` tags remain unpublished. No
+Cargo or PyPI artifact was published. See the [release guide](releases.md) for the current stage and the
 [versioned compatibility contract](maintainers/uvicorn-0.54.0-contract.md)
 for reference-only failures and their candidate acceptance rules.
 
@@ -341,7 +343,7 @@ To replace upstream Uvicorn:
 
 ```sh
 python -m pip uninstall uvicorn
-python -m pip install "uvicorn-rs[standard]==0.3.3"
+python -m pip install "uvicorn-rs[standard]==0.3.4"
 uvicorn --help
 python -m uvicorn --help
 ```

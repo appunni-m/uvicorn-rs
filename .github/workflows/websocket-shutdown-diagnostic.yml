@@ -1,0 +1,132 @@
+name: WebSocket shutdown diagnostic
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - .github/workflows/websocket-shutdown-diagnostic.yml
+      - scripts/run_websocket_category_bench.py
+      - scripts/benchmark_evidence.py
+      - tools/http3-probe/src/bin/websocket.rs
+      - examples/bench_fastapi.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: websocket-shutdown-diagnostic-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.12.13"
+  RUST_TOOLCHAIN: "1.98.1"
+
+jobs:
+  diagnose-linux-aarch64:
+    name: Linux ARM64 WebSocket binary echo shutdown
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - name: Prepare native build and debugger tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update \
+            -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=30 \
+            -o Acquire::https::Timeout=30
+          sudo apt-get install -y --no-install-recommends \
+            build-essential gdb libcurl4-openssl-dev libssl-dev pkg-config
+          mkdir -p target/benchmark-preparation
+          uv sync --python "$PYTHON_VERSION" \
+            --group benchmark --group fastapi-benchmark --frozen --no-install-project
+          .venv/bin/python --version
+          rustc --version --verbose
+          gdb --version
+      - name: Build the candidate with native debug symbols
+        shell: bash
+        env:
+          CARGO_PROFILE_RELEASE_DEBUG: "2"
+          CARGO_PROFILE_RELEASE_STRIP: "none"
+        run: |
+          set -euo pipefail
+          mkdir -p target/benchmark-preparation/server-wheels
+          uvx --from maturin==1.14.1 maturin build --release --locked \
+            --interpreter "$GITHUB_WORKSPACE/.venv/bin/python" \
+            --out "$GITHUB_WORKSPACE/target/benchmark-preparation/server-wheels" \
+            2>&1 | tee target/benchmark-preparation/server-build.log
+          server_wheel="$(.venv/bin/python -c 'from pathlib import Path; import sys; wheels = sorted(Path("target/benchmark-preparation/server-wheels").glob("*.whl")); print(wheels[0]) if len(wheels) == 1 else sys.exit("expected exactly one server wheel")')"
+          uv pip install --python .venv/bin/python --no-deps "$server_wheel" \
+            2>&1 | tee target/benchmark-preparation/server-install.log
+      - name: Build the maintained WebSocket load client
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --release --locked \
+            --manifest-path tools/http3-probe/Cargo.toml --bin websocket \
+            2>&1 | tee target/benchmark-preparation/websocket-client-build.log
+      - name: Run the exact failing benchmark and capture native cores
+        shell: bash
+        env:
+          PYTHONFAULTHANDLER: "1"
+          RUST_BACKTRACE: "1"
+          UVICORN_RS_SHUTDOWN_TRACE: "1"
+        run: |
+          set -euo pipefail
+          diagnostic_dir="$GITHUB_WORKSPACE/target/websocket-shutdown-diagnostic"
+          mkdir -p "$diagnostic_dir"
+          core_pattern="$diagnostic_dir/core.%e.%p"
+          if sudo sysctl -w "kernel.core_pattern=$core_pattern" \
+            > "$diagnostic_dir/core-pattern.txt" 2>&1; then
+            cat "$diagnostic_dir/core-pattern.txt"
+          else
+            echo "Could not change kernel.core_pattern; benchmark and server logs will still be retained." \
+              | tee -a "$diagnostic_dir/core-pattern.txt"
+          fi
+          cat /proc/sys/kernel/core_pattern >> "$diagnostic_dir/core-pattern.txt"
+          ulimit -c unlimited
+          set +e
+          .venv/bin/python scripts/run_websocket_category_bench.py \
+            --python "$GITHUB_WORKSPACE/.venv/bin/python" \
+            --servers uvicorn-rs-asyncio \
+            --workloads binary-64k-echo \
+            --duration 5 --warmup 1 --concurrency 64 --repetitions 25 \
+            --output "$diagnostic_dir/results.json" \
+            > "$diagnostic_dir/benchmark.log" 2>&1
+          benchmark_status=$?
+          set -e
+          printf 'focused_benchmark_exit_status=%s\n' "$benchmark_status" \
+            | tee -a "$diagnostic_dir/core-pattern.txt"
+          for core in "$diagnostic_dir"/core.*; do
+            if [ ! -f "$core" ]; then
+              continue
+            fi
+            backtrace="$diagnostic_dir/core-backtrace-$(basename "$core").log"
+            gdb --quiet --batch "$GITHUB_WORKSPACE/.venv/bin/python" "$core" \
+              -ex "set debuginfod enabled off" \
+              -ex "thread apply all bt full 40" \
+              > "$backtrace" 2>&1 || true
+            rm -f "$core"
+          done
+          cat "$diagnostic_dir/benchmark.log"
+      - name: Retain the focused crash trace
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: websocket-shutdown-diagnostic-${{ github.sha }}
+          path: |
+            target/benchmark-preparation/
+            target/websocket-shutdown-diagnostic/
+          if-no-files-found: warn
+          retention-days: 90
