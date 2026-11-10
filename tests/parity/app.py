@@ -1212,6 +1212,17 @@ async def _app_impl(scope, receive, send):
         await send({"type": "http.response.body", "body": b"", "more_body": False})
         return
 
+    if path == "/not-modified-with-body":
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 304,
+                "headers": [(b"content-type", b"text/plain")],
+            }
+        )
+        await send({"type": "http.response.body", "body": b"must be suppressed"})
+        return
+
     if path == "/invalid-asgi/header-name":
         await send(
             {

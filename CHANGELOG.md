@@ -15,6 +15,8 @@ release gates must pass before publication.
 
 ### Fixed
 
+- Suppress HTTP/3 response bodies for `HEAD`, `204 No Content`, and `304 Not
+  Modified` responses instead of polling an ASGI body the protocol must omit.
 - Validate the separately installed stock Uvicorn oracle against the benchmark
   environment receipt, lockfile, source hashes, and candidate dependency
   versions.
