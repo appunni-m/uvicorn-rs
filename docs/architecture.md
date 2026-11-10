@@ -30,7 +30,7 @@ on that new commit. The current blockers are listed in the
 The run-specific implementation records below are historical evidence for
 their stated revisions unless linked from the current
 [release status](releases.md#current-release-gates-2026-11-09),
-[coverage record](coverage.md#current-release-coverage-acceptance-2026-11-09),
+[coverage record](coverage.md#current-release-coverage-acceptance-2026-11-10),
 or [benchmark report](benchmark-results.md).
 
 Coverage builds still compile limited legacy H3 helpers for fault-contract
@@ -77,7 +77,7 @@ and build, but the report was tied to a dirty worktree and did not establish
 clean hosted release evidence. No normal-build parity run was included in that
 instrumented report. The current exact-main coverage result and its package
 graph limitations are recorded in
-[coverage evidence](coverage.md#current-release-coverage-acceptance-2026-11-09).
+[coverage evidence](coverage.md#current-release-coverage-acceptance-2026-11-10).
 See the [coverage history](coverage.md) and the candidate-wheel smoke
 (`benchmarks/results/2026-10-12/uvicorn-rs-py-wheel-consumer/report.md`).
 Older 506-, 494-, 485-, 451-, and 448-case results below are historical and do not

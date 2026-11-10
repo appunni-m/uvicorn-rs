@@ -37,7 +37,7 @@ lines**. Artifact
 [13631702787](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884/artifacts/13631702787)
 has SHA-256 `13180f7c35243e1e4f5679168d2e8d3306511b9f0278f9a829ac0978337965b7`.
 The report, context, source-set, and build identities are recorded in the
-[coverage guide](../coverage.md#current-release-coverage-acceptance-2026-11-09).
+[coverage guide](../coverage.md#current-release-coverage-acceptance-2026-11-10).
 No independent review receipt is required.
 
 The same CI run passed Linux x86-64, macOS ARM64, and Windows x86-64 candidate
