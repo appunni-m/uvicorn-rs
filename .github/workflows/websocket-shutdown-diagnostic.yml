@@ -81,6 +81,7 @@ jobs:
         env:
           PYTHONFAULTHANDLER: "1"
           RUST_BACKTRACE: "1"
+          UVICORN_RS_SHUTDOWN_TRACE: "1"
         run: |
           set -euo pipefail
           diagnostic_dir="$GITHUB_WORKSPACE/target/websocket-shutdown-diagnostic"
@@ -100,7 +101,7 @@ jobs:
             --python "$GITHUB_WORKSPACE/.venv/bin/python" \
             --servers uvicorn-rs-asyncio \
             --workloads binary-64k-echo \
-            --duration 5 --warmup 1 --concurrency 64 --repetitions 10 \
+            --duration 5 --warmup 1 --concurrency 64 --repetitions 25 \
             --output "$diagnostic_dir/results.json" \
             > "$diagnostic_dir/benchmark.log" 2>&1
           benchmark_status=$?
