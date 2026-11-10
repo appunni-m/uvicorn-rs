@@ -3,18 +3,15 @@
 <!-- BEGIN GENERATED LATEST ATTEMPT -->
 ## Latest automated benchmark attempt
 
-- Run: [42503892704 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/42503892704)
-- Commit: [`d0648cc0a4479b246dc7423b22a2b80f333d6193`](https://github.com/appunni-m/uvicorn-rs/commit/d0648cc0a4479b246dc7423b22a2b80f333d6193)
-- Recorded: 2026-11-08T20:10:52Z
-- Workflow conclusion: `success`
-- Linux x86-64 category matrix: `validated_complete_system` (`completed_correctness_gated`, 67 qualified pairs)
-- Linux ARM64 category matrix: `validated_complete_system` (`completed_correctness_gated`, 69 qualified pairs)
-- macOS ARM64 category matrix: `validated_complete_system` (`completed_correctness_gated`, 69 qualified pairs)
+- Run: [42647124753 (benchmark #377)](https://github.com/appunni-m/uvicorn-rs/actions/runs/42647124753)
+- Commit: [`d622509b987708f24501d6ab73aba4cbbaba8aee`](https://github.com/appunni-m/uvicorn-rs/commit/d622509b987708f24501d6ab73aba4cbbaba8aee)
+- Recorded: 2026-11-09
+- Workflow conclusion: `failure` (Linux ARM64 HTTP/3 reference correctness failure)
+- Linux x86-64 category matrix: completed successfully
+- Linux ARM64 category matrix: incomplete; Hypercorn asyncio raised `KeyError(17172)` in HTTP/3 `fixed`, and one request timed out waiting for response headers
+- macOS ARM64 category matrix: completed successfully
 
-Aggregate: `validated_complete_matrix`
-Aggregate artifact: [13629568790](https://github.com/appunni-m/uvicorn-rs/actions/runs/42503892704/artifacts/13629568790) with SHA-256 `fc4f0d331603850cdec3b8d84d1f40182f5deec0800e4f51b3d0a613966493f1`.
-
-All three systems produced a complete validated matrix. This report is rendered from the checksummed aggregate artifact; raw platform bundles remain attached to the benchmark workflow run.
+No `validated_complete_matrix` aggregate was produced. The Linux ARM64 category artifact is [13695060796](https://github.com/appunni-m/uvicorn-rs/actions/runs/42647124753/artifacts/13695060796), SHA-256 `0e9ce785f253e6b0a71c8c58ac5523b1d4946e5e548bc7fff1e9776aa55fdc58`. The raw artifact retains the Hypercorn server traceback and the successful Rust candidate rows; see the dated run analysis below.
 <!-- END GENERATED LATEST ATTEMPT -->
 
 ## PR #24 benchmark status (2026-11-07)
@@ -4784,3 +4781,35 @@ A focused five-run macOS H3 `large-response` asyncio-pair run is still needed
 to check all candidate repetitions under the new exact reference exception.
 The PR candidate also needs the exact-main three-system benchmark after merge;
 run 351 is useful development evidence, not final main-source qualification.
+
+## Exact-main benchmark #377: Linux ARM64 Hypercorn stream-map failure (2026-11-10)
+
+Benchmark [#377](https://github.com/appunni-m/uvicorn-rs/actions/runs/42647124753)
+used main commit
+[`d622509b987708f24501d6ab73aba4cbbaba8aee`](https://github.com/appunni-m/uvicorn-rs/commit/d622509b987708f24501d6ab73aba4cbbaba8aee).
+Linux x86-64 and macOS ARM64 completed their category jobs. Linux ARM64
+completed parity, the FastAPI-only comparison, and several categories, then
+stopped during HTTP/3 `fixed`, Hypercorn 0.18.0 asyncio, repetition 3. The
+[Linux ARM64 category artifact](https://github.com/appunni-m/uvicorn-rs/actions/runs/42647124753/artifacts/13695060796)
+has SHA-256
+`0e9ce785f253e6b0a71c8c58ac5523b1d4946e5e548bc7fff1e9776aa55fdc58`.
+
+The client reported 4,294 requests and one timeout waiting for response
+headers. The retained Hypercorn server log shows its UDP task raising
+`KeyError(17172)` at `self.streams[event.stream_id].handle(event)` in
+`hypercorn/protocol/h3.py`. This supports a missing-stream-map failure in the
+reference, but the artifact has no per-event trace to prove ordering or the
+cause of the timeout. It remains an incomplete reference result, not evidence
+of a candidate failure.
+
+In the same exact-source run, the `fixed` HTTP/3 rows for `uvicorn-rs-asyncio`
+and `uvicorn-rs-uvloop` each passed repetitions 1-3 with zero request failures,
+valid timings, and graceful shutdown. Repetitions 4-5 were not reached, so
+these rows do not qualify the full workload or matrix.
+
+The accompanying develop change adds a source-audited exception only for
+Hypercorn 0.18.0 asyncio on Linux `aarch64`, HTTP/3 `fixed`. It keeps every
+Rust candidate correctness and lifecycle check and emits no ratio for that
+reference pair. The policy does not convert run #377 into a completed result;
+a fresh complete three-system matrix on the updated main source remains
+required. No timeout or server behavior was changed.
