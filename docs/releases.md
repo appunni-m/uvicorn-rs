@@ -22,36 +22,31 @@ Use these state labels precisely:
 <a id="current-release-gates-2026-11-07"></a>
 <a id="current-release-gates-2026-11-08"></a>
 <a id="current-release-gates-2026-11-09"></a>
+<a id="current-release-gates-2026-11-10"></a>
 
-## Current release status (2026-11-09)
+## Current release status (2026-11-10)
 
-The immutable `v0.3.2` tag points to main commit
-`46b6ce8c9773eaee5e29a818993a48787034b023`. Candidate
-[#3, attempt 2](https://github.com/appunni-m/uvicorn-rs/actions/runs/42620942874)
-passed tag, CI, benchmark-artifact, package, and raw-coverage checks, then
-failed performance acceptance. The benchmark records stock Uvicorn 0.54.0 in
-its separate verified oracle environment on all three systems; the verifier
-incorrectly required it in the candidate environment, which installs the
-overlapping `uvicorn-rs` distribution. No candidate bundle or registry package
-was published. The `v0.3.2` tag cannot be moved, so the correction and version
-0.3.3 are being prepared on `develop` for promotion through a PR.
+Version 0.3.3 is prepared on main commit
+`d622509b987708f24501d6ab73aba4cbbaba8aee`. It has not been tagged or
+published. The failed `v0.3.2` tag remains immutable and will not be moved.
 
 | Gate | Current evidence | Status |
 | --- | --- | --- |
-| Exact-main Uvicorn 0.54.0 parity and unified coverage | [CI #763](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763775), coverage job [129124763860](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763775/job/129124763860), source `46b6ce8c` | Passed 1,453 cases and three repeats; 15,106/15,106 regions and 11,106/11,106 lines |
-| Candidate packages and consumers | [CI #763](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763775) | Platform packages, Python floor, and package identities passed. The candidate-only extracted Cargo HTTP/3 consumer was skipped after performance acceptance failed. |
-| Three-system ordinary-FastAPI benchmark | [Benchmark #375](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763738), source `46b6ce8c` | Linux x86-64, Linux ARM64, macOS ARM64, and aggregate validation passed. The release verifier must consume the separate stock-Uvicorn oracle identity correctly; no broad speedup claim is made. |
-| Documentation deployment | [Docs #352](https://github.com/appunni-m/uvicorn-rs/actions/runs/42620285035), source `46b6ce8c` | Passed for the 0.3.2 source docs; updated 0.3.3 docs need their own build after merge. |
-| 0.3.2 candidate qualification | [Candidate #3, attempt 2](https://github.com/appunni-m/uvicorn-rs/actions/runs/42620942874) | Failed at performance acceptance because the validator looked for stock Uvicorn in the wrong environment; no candidate bundle was uploaded. |
-| 0.3.3 candidate artifacts and clean consumers | Not assembled | Pending the validator fix, PR merge, and new exact-source CI, coverage, and benchmark evidence. |
+| Exact-main parity and raw unified coverage | [CI #766](https://github.com/appunni-m/uvicorn-rs/actions/runs/42647124915), coverage job [129263470299](https://github.com/appunni-m/uvicorn-rs/actions/runs/42647124915/job/129263470299), source `d622509b` | Passed 1,453/1,453 cases; 15,106/15,106 regions and 11,106/11,106 lines. Rust/MSRV, native composition, installed-wheel parity, and platform package jobs also passed. |
+| Three-system ordinary-FastAPI benchmark | [Benchmark #377](https://github.com/appunni-m/uvicorn-rs/actions/runs/42647124753), source `d622509b` | Linux x86-64 and macOS ARM64 passed. Linux ARM64 stopped in HTTP/3 `fixed` against Hypercorn asyncio after `KeyError(17172)` and one response-header timeout. A narrow reference-cell policy is being added; this run remains incomplete. |
+| Documentation deployment | [Docs #355](https://github.com/appunni-m/uvicorn-rs/actions/runs/42647124698), source `d622509b` | Passed. |
+| 0.3.3 tag-bound candidate artifacts and consumers | No `v0.3.3` tag | Pending a complete exact-source benchmark, then tag-triggered candidate assembly and clean-consumer checks. |
 | Cargo and PyPI publication | `release.yml` uses configured crates.io and PyPI Trusted Publishers | Pending successful 0.3.3 candidate qualification; GitHub Actions is the only publication path. |
 
-The 0.3.2 benchmark completed its parity and workload matrix on all three
-systems. Its release acceptance failure is caused by the verifier reading the
-stock Uvicorn identity from the candidate environment instead of the verified
-isolated oracle receipt; it does not indicate a benchmark failure or measured
-performance regression. No broad speedup claim is made. The maintainer's real
-FastAPI application trial follows repository release qualification.
+Benchmark #377's retained Linux ARM64 artifact records the Hypercorn stream-map
+failure while the Rust HTTP/3 candidates passed the same workload for the first
+three repetitions. The accompanying develop change adds a policy that will
+exclude only that exact Hypercorn asyncio reference cell on Linux ARM64 with
+Hypercorn 0.18.0; candidate correctness and lifecycle checks remain required,
+and that cell will produce no speed ratio. The policy cannot retroactively
+complete #377. A fresh full three-system benchmark on the updated exact main
+source is still required. No broad FastAPI speedup claim is made; the
+maintainer's real-server trial follows repository qualification.
 
 The release set is the Python-free Cargo crate `uvicorn-rs` with HTTP/3 behind
 the optional `http3` feature, `asgi-lifespan-protocol-rs`, and PyPI distribution

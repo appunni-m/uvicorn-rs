@@ -107,12 +107,37 @@ HYPERCORN_H3_FIXED_LINUX_X86_64 = {
     ),
 }
 
+HYPERCORN_H3_FIXED_LINUX_AARCH64 = {
+    "policy_id": "hypercorn-0.18.0-h3-fixed-linux-aarch64-stream-keyerror",
+    "category": "http3",
+    "workload": "fixed",
+    "reference": "hypercorn-asyncio",
+    "candidate": "uvicorn-rs-asyncio",
+    "platform_system": "Linux",
+    "machine": "aarch64",
+    "hypercorn_version": "0.18.0",
+    "reason": (
+        "On Linux ARM64, Hypercorn 0.18.0 asyncio raised KeyError(17172) "
+        "while indexing its HTTP/3 stream map during the fixed FastAPI "
+        "workload. The client reported 4,294 requests and one timeout "
+        "waiting for response headers. The retained server traceback "
+        "confirms the missing stream-map lookup, but does not establish "
+        "event ordering or root cause. In the same exact-source run, "
+        "uvicorn-rs asyncio and uvloop each passed repetitions 1-3 with "
+        "zero failures, valid timing, and graceful shutdown; repetitions "
+        "4-5 were not reached. Keep this exact reference cell candidate-only "
+        "and emit no matched speed ratio for it. A complete qualifying run "
+        "must still collect every candidate repetition."
+    ),
+}
+
 HYPERCORN_H3_REFERENCE_EXCEPTIONS = (
     HYPERCORN_H3_SLOW_READER_LINUX_AARCH64,
     HYPERCORN_H3_SLOW_READER_LINUX_X86_64,
     HYPERCORN_H3_LARGE_RESPONSE_MACOS_ARM64,
     HYPERCORN_H3_LARGE_RESPONSE_LINUX_X86_64,
     HYPERCORN_H3_FIXED_LINUX_X86_64,
+    HYPERCORN_H3_FIXED_LINUX_AARCH64,
 )
 
 
