@@ -918,6 +918,36 @@ jobs:
                 --installed-candidate "$@" \
                 --output "target/parity-${{ matrix.platform }}.json" || parity_exit=$?
             fi
+            if [ "$RUNNER_OS" = 'macOS' ] && ((parity_exit == 1)) && \
+              [ -s "target/parity-${{ matrix.platform }}.json" ] && \
+              "$candidate_python" - "target/parity-${{ matrix.platform }}.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          outcome = next(
+              (case.get("status") for case in data.get("cases", [])
+               if case.get("case_id") == "http3.no-content-status-with-empty-body"),
+              None,
+          )
+          raise SystemExit(0 if outcome != "passed" else 1)
+          PY
+            then
+              diagnostics="target/parity-diagnostics-${{ matrix.platform }}"
+              mkdir -p "$diagnostics"
+              trace_exit=0
+              ASGI_PARITY_TRACE_HTTP3_CASE=http3.no-content-status-with-empty-body \
+                "$candidate_python" scripts/run_parity.py \
+                  --oracle-python "$oracle_python" \
+                  --installed-candidate \
+                  --case-id http3.no-content-status-with-empty-body \
+                  --output "$diagnostics/http3-no-content-trace.json" \
+                  2>&1 | tee "$diagnostics/http3-no-content-trace.log" || trace_exit=$?
+              if ((trace_exit != 0)); then
+                echo "Focused HTTP/3 diagnostic exited with status $trace_exit"
+              fi
+            fi
             # macOS ships Bash 3.2, where expanding an empty array under
             # nounset fails. Keep the command array nonempty on every platform.
             evidence_args=(scripts/check_ci_evidence.py parity

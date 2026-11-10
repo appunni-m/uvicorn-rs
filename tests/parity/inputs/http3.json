@@ -2345,6 +2345,34 @@
       }
     },
     {
+      "case_id": "http3.head-response-body-is-suppressed",
+      "profile": "http3",
+      "operation": "http.application-status",
+      "covers": [
+        "http.application-status"
+      ],
+      "request": {
+        "method": "HEAD",
+        "path": "/response-burst",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
+      "case_id": "http3.not-modified-response-body-is-suppressed",
+      "profile": "http3",
+      "operation": "http.application-status",
+      "covers": [
+        "http.application-status"
+      ],
+      "request": {
+        "method": "GET",
+        "path": "/not-modified-with-body",
+        "headers": [],
+        "body_base64": ""
+      }
+    },
+    {
       "case_id": "http3.upload-body-shorter-than-content-length",
       "profile": "http3",
       "operation": "http3.invalid-content-length-status",

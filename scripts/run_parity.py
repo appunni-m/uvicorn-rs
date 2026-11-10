@@ -16325,24 +16325,19 @@ def start_profile_servers(
     target_server_options = dict(server_options)
     if any(case.get("server_options", {}) != server_options for case in cases):
         raise ParityError("profile cases with different server options must use separate processes")
+    trace_case_id = os.environ.get("ASGI_PARITY_TRACE_HTTP3_CASE")
     if any(
         case.get("fault", {}).get("contract")
         == "http3-connection-error-cancels-held-response-followup-200"
         for case in cases
     ) or (
-        os.environ.get("ASGI_PARITY_TRACE_HTTP3_CASE")
-        == "http3.concurrent-stream-load-slow-reader-resource-bound"
-        and any(
-            case.get("case_id") == os.environ["ASGI_PARITY_TRACE_HTTP3_CASE"]
-            for case in cases
-        )
+        trace_case_id is not None
+        and any(case.get("case_id") == trace_case_id for case in cases)
     ):
         # The held-response fault needs its dispatch trace before its request
-        # clears the selector. For the load case, collect the same trace only
-        # when the focused diagnostic workflow opts into that exact case.
-        # This option controls only candidate-side diagnostics. Do not pass it
-        # to the reference adapter: Hypercorn does not accept candidate server
-        # options and would fail before the selected parity case starts.
+        # clears the selector. Focused parity diagnostics may request the same
+        # bounded trace for one exact HTTP/3 input. This option controls only
+        # candidate-side diagnostics; never pass it to the reference adapter.
         target_server_options["http3_trace"] = True
     client_tls = any(case.get("client_tls") is True for case in cases)
     if any(case.get("client_tls", False) != client_tls for case in cases):

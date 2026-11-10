@@ -868,6 +868,7 @@ where
     B::Error: Into<super::BoxBodyError> + Send + Sync + 'static,
 {
     let stream_id = send_stream.send_id();
+    let request_method = request.method().clone();
     trace_http3(format_args!("stream={stream_id} service-call-started"));
     let response = match AssertUnwindSafe(futures_util::future::poll_fn(|context| {
         service.poll_ready(context)
@@ -912,6 +913,14 @@ where
             super::internal_server_error()
         }
     };
+    let response_status = response.status();
+    // Unlike Hyper's HTTP/1 and HTTP/2 encoders, the native HTTP/3 driver
+    // emits response frames directly and must suppress forbidden bodies.
+    let suppress_response_body = request_method == http::Method::HEAD
+        || matches!(
+            response_status,
+            StatusCode::NO_CONTENT | StatusCode::NOT_MODIFIED
+        );
     let body_size_hint = response.body().size_hint();
     trace_http3(format_args!(
         "stream={stream_id} service-response-ready status={} body_size_lower={} body_size_upper={:?}",
@@ -936,43 +945,51 @@ where
         ));
         result?;
 
-        loop {
-            let frame = AssertUnwindSafe(body.frame())
-                .catch_unwind()
-                .await
-                .map_err(|_| {
-                    Http3RequestStreamError::Body(Box::new(io::Error::other(
-                        "HTTP/3 application response body panicked",
-                    )))
-                })?;
-            let Some(frame) = frame else {
-                break;
-            };
-            let frame = frame.map_err(Http3RequestStreamError::Body)?;
-            match frame.into_data() {
-                Ok(data) => {
-                    data_frame_count += 1;
-                    data_byte_count = data_byte_count.saturating_add(data.len());
-                    send_stream
-                        .send_data(data)
-                        .await
-                        .map_err(Http3RequestStreamError::H3)?;
-                }
-                Err(frame) => {
-                    // `Frame` can contain only DATA or trailers. Since DATA
-                    // extraction failed above, the remaining frame is trailers.
-                    let trailers = frame.into_trailers().unwrap_or_default();
-                    trailer_frame_count += 1;
-                    send_stream
-                        .send_trailers(trailers)
-                        .await
-                        .map_err(Http3RequestStreamError::H3)?;
+        if suppress_response_body {
+            trace_http3(format_args!(
+                "stream={stream_id} response-body-suppressed method={request_method} status={}",
+                response_status
+            ));
+            drop(body);
+        } else {
+            loop {
+                let frame = AssertUnwindSafe(body.frame())
+                    .catch_unwind()
+                    .await
+                    .map_err(|_| {
+                        Http3RequestStreamError::Body(Box::new(io::Error::other(
+                            "HTTP/3 application response body panicked",
+                        )))
+                    })?;
+                let Some(frame) = frame else {
+                    break;
+                };
+                let frame = frame.map_err(Http3RequestStreamError::Body)?;
+                match frame.into_data() {
+                    Ok(data) => {
+                        data_frame_count += 1;
+                        data_byte_count = data_byte_count.saturating_add(data.len());
+                        send_stream
+                            .send_data(data)
+                            .await
+                            .map_err(Http3RequestStreamError::H3)?;
+                    }
+                    Err(frame) => {
+                        // `Frame` can contain only DATA or trailers. Since DATA
+                        // extraction failed above, the remaining frame is trailers.
+                        let trailers = frame.into_trailers().unwrap_or_default();
+                        trailer_frame_count += 1;
+                        send_stream
+                            .send_trailers(trailers)
+                            .await
+                            .map_err(Http3RequestStreamError::H3)?;
+                    }
                 }
             }
+            trace_http3(format_args!(
+                "stream={stream_id} response-body-eof data_frames={data_frame_count} data_bytes={data_byte_count} trailer_frames={trailer_frame_count}"
+            ));
         }
-        trace_http3(format_args!(
-            "stream={stream_id} response-body-eof data_frames={data_frame_count} data_bytes={data_byte_count} trailer_frames={trailer_frame_count}"
-        ));
         trace_http3(format_args!("stream={stream_id} response-finish-start"));
         let result = finish_http3_response::<S::Error>(send_stream).await;
         trace_http3(format_args!(
