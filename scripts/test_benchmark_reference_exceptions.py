@@ -6,11 +6,13 @@ import unittest
 from pathlib import Path
 
 from benchmark_reference_exceptions import (
+    HYPERCORN_H3_FIXED_LINUX_AARCH64,
     HYPERCORN_H3_FIXED_LINUX_X86_64,
     HYPERCORN_H3_LARGE_RESPONSE_MACOS_ARM64,
     HYPERCORN_H3_LARGE_RESPONSE_LINUX_X86_64,
     HYPERCORN_H3_SLOW_READER_LINUX_AARCH64,
     HYPERCORN_H3_SLOW_READER_LINUX_X86_64,
+    HYPERCORN_H3_SLOW_READER_LINUX_X86_64_UVLOOP,
     active_reference_exclusions,
     exclusions_by_workload,
     reference_exclusion_metadata_errors,
@@ -94,6 +96,19 @@ def matching_x86_exclusion(**overrides):
     return active_reference_exclusions(**context)
 
 
+def matching_x86_uvloop_exclusion(**overrides):
+    context = {
+        "category": "http3",
+        "workloads": [WORKLOAD],
+        "servers": ["hypercorn-uvloop", "uvicorn-rs-uvloop"],
+        "platform_system": "Linux",
+        "machine": "x86_64",
+        "hypercorn_version": "0.18.0",
+    }
+    context.update(overrides)
+    return active_reference_exclusions(**context)
+
+
 class HypercornH3ReferenceExceptionTests(unittest.TestCase):
     def test_only_exact_linux_arm64_full_pair_is_excluded(self):
         self.assertEqual(matching_exclusion(), [HYPERCORN_H3_SLOW_READER_LINUX_AARCH64])
@@ -112,13 +127,19 @@ class HypercornH3ReferenceExceptionTests(unittest.TestCase):
                 self.assertEqual(matching_exclusion(**overrides), [])
         self.assertEqual(
             matching_exclusion(machine="x86_64"),
-            [HYPERCORN_H3_SLOW_READER_LINUX_X86_64],
+            [
+                HYPERCORN_H3_SLOW_READER_LINUX_X86_64,
+                HYPERCORN_H3_SLOW_READER_LINUX_X86_64_UVLOOP,
+            ],
         )
 
     def test_only_exact_linux_x86_64_slow_reader_pair_is_excluded(self):
         self.assertEqual(
             matching_x86_exclusion(),
-            [HYPERCORN_H3_SLOW_READER_LINUX_X86_64],
+            [
+                HYPERCORN_H3_SLOW_READER_LINUX_X86_64,
+                HYPERCORN_H3_SLOW_READER_LINUX_X86_64_UVLOOP,
+            ],
         )
 
         cases = (
@@ -137,6 +158,25 @@ class HypercornH3ReferenceExceptionTests(unittest.TestCase):
             matching_x86_exclusion(machine="aarch64"),
             [HYPERCORN_H3_SLOW_READER_LINUX_AARCH64],
         )
+
+    def test_only_exact_linux_x86_64_uvloop_slow_reader_pair_is_excluded(self):
+        self.assertEqual(
+            matching_x86_uvloop_exclusion(),
+            [HYPERCORN_H3_SLOW_READER_LINUX_X86_64_UVLOOP],
+        )
+
+        cases = (
+            {"category": "http2"},
+            {"workloads": ["protocol-scope"]},
+            {"platform_system": "Darwin"},
+            {"hypercorn_version": "0.18.1"},
+            {"servers": ["hypercorn-uvloop"]},
+            {"servers": ["uvicorn-rs-uvloop"]},
+            {"enabled": False},
+        )
+        for overrides in cases:
+            with self.subTest(overrides=overrides):
+                self.assertEqual(matching_x86_uvloop_exclusion(**overrides), [])
 
     def test_only_exact_macos_arm64_large_response_pair_is_excluded(self):
         self.assertEqual(
@@ -192,7 +232,6 @@ class HypercornH3ReferenceExceptionTests(unittest.TestCase):
             {"category": "http2"},
             {"workloads": ["protocol-scope"]},
             {"platform_system": "Darwin"},
-            {"machine": "aarch64"},
             {"hypercorn_version": "0.18.1"},
             {"servers": ["hypercorn-asyncio"]},
             {"servers": ["uvicorn-rs-asyncio"]},
@@ -201,6 +240,10 @@ class HypercornH3ReferenceExceptionTests(unittest.TestCase):
         for overrides in cases:
             with self.subTest(overrides=overrides):
                 self.assertEqual(matching_linux_x86_fixed_exclusion(**overrides), [])
+        self.assertEqual(
+            matching_linux_x86_fixed_exclusion(machine="aarch64"),
+            [HYPERCORN_H3_FIXED_LINUX_AARCH64],
+        )
 
     def test_plan_skips_only_the_failed_reference_and_keeps_candidate_repetitions(self):
         planned = expected_rows(
@@ -249,13 +292,19 @@ class HypercornH3ReferenceExceptionTests(unittest.TestCase):
         )
 
         self.assertEqual(len(planned), 20)
-        self.assertEqual(len(admitted), 15)
+        self.assertEqual(len(admitted), 10)
         self.assertEqual(planned - admitted, {
-            (WORKLOAD, "hypercorn-asyncio", number) for number in range(1, 6)
+            (WORKLOAD, server, number)
+            for server in ("hypercorn-asyncio", "hypercorn-uvloop")
+            for number in range(1, 6)
         })
         self.assertEqual(
             {row for row in admitted if row[1] == "uvicorn-rs-asyncio"},
             {(WORKLOAD, "uvicorn-rs-asyncio", number) for number in range(1, 6)},
+        )
+        self.assertEqual(
+            {row for row in admitted if row[1] == "uvicorn-rs-uvloop"},
+            {(WORKLOAD, "uvicorn-rs-uvloop", number) for number in range(1, 6)},
         )
 
     def test_macos_plan_keeps_every_candidate_repetition(self):
