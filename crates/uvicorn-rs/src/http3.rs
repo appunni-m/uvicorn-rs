@@ -950,7 +950,8 @@ where
                 "stream={stream_id} response-body-suppressed method={request_method} status={}",
                 response_status
             ));
-            drop(body);
+            // Do not poll or send this body. Keep it in the outer scope so a
+            // later send error is handled before the body destructor runs.
         } else {
             loop {
                 let frame = AssertUnwindSafe(body.frame())
