@@ -44,6 +44,28 @@ HYPERCORN_H3_SLOW_READER_LINUX_X86_64 = {
     ),
 }
 
+HYPERCORN_H3_SLOW_READER_LINUX_X86_64_UVLOOP = {
+    "policy_id": "hypercorn-0.18.0-h3-slow-reader-linux-x86-64-uvloop-stream-keyerror",
+    "category": "http3",
+    "workload": "slow-reader-backpressure",
+    "reference": "hypercorn-uvloop",
+    "candidate": "uvicorn-rs-uvloop",
+    "platform_system": "Linux",
+    "machine": "x86_64",
+    "hypercorn_version": "0.18.0",
+    "reason": (
+        "On Linux x86-64, Hypercorn 0.18.0 uvloop raised KeyError(72) in "
+        "its HTTP/3 stream-map lookup during slow-reader backpressure. The "
+        "client completed 38 requests and received 39,845,888 response bytes "
+        "before two requests timed out waiting for response headers. The "
+        "retained traceback confirms the missing stream lookup but does not "
+        "establish event ordering or causal direction. The category stopped "
+        "before uvicorn-rs uvloop ran, so the exact candidate cell must still "
+        "pass every candidate-only repetition with correct responses and clean "
+        "shutdown; no matched speed comparison is available."
+    ),
+}
+
 HYPERCORN_H3_LARGE_RESPONSE_MACOS_ARM64 = {
     "policy_id": "hypercorn-0.18.0-h3-large-response-macos-arm64-stream-keyerror",
     "category": "http3",
@@ -134,6 +156,7 @@ HYPERCORN_H3_FIXED_LINUX_AARCH64 = {
 HYPERCORN_H3_REFERENCE_EXCEPTIONS = (
     HYPERCORN_H3_SLOW_READER_LINUX_AARCH64,
     HYPERCORN_H3_SLOW_READER_LINUX_X86_64,
+    HYPERCORN_H3_SLOW_READER_LINUX_X86_64_UVLOOP,
     HYPERCORN_H3_LARGE_RESPONSE_MACOS_ARM64,
     HYPERCORN_H3_LARGE_RESPONSE_LINUX_X86_64,
     HYPERCORN_H3_FIXED_LINUX_X86_64,
