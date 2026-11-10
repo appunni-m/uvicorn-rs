@@ -1,9 +1,9 @@
 # Deployment guidance
 
-Version 0.3.3 is being prepared; no Cargo or PyPI package has been published.
-The immutable `v0.3.2` candidate failed performance-evidence verification
-because its validator looked for stock Uvicorn in the candidate environment
-instead of the separate oracle environment. See the [release status](releases.md) and
+Version 0.3.4 is being prepared; no 0.3.3 Cargo or PyPI package was published.
+The immutable `v0.3.3` candidate passed coverage and package checks, then failed
+performance acceptance because the verifier compared platform-specific
+dependency paths and compiled files across systems. See the [release status](releases.md) and
 [compatibility status](uvicorn-compatibility.md). Evaluate your application
 after the candidate is published and repository release qualification is
 complete.

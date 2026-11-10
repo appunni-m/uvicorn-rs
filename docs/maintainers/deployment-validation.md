@@ -3,16 +3,16 @@
 The [deployment guide](../deployment.md) is the operator-facing entry point. This page preserves validation procedures, framework comparison setup, and run-specific evidence for maintainers.
 
 
-As of 2026-11-09, main CI [#763](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763775)
+As of 2026-11-10, main CI [#774](https://github.com/appunni-m/uvicorn-rs/actions/runs/42776625577)
 passed installed-wheel Uvicorn 0.54.0 parity, package consumers, and complete
-unified coverage on commit `46b6ce8c9773eaee5e29a818993a48787034b023`.
-Benchmark [#375](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763738)
-completed across all three systems. Candidate [#3, attempt 2](https://github.com/appunni-m/uvicorn-rs/actions/runs/42620942874)
-stopped at performance acceptance because the validator looked for stock
-Uvicorn in the candidate environment instead of the verified oracle
-environment. The corrected validator and version 0.3.3 are being prepared on
-`develop`. See the [support matrix](../support-matrix.md) for exact-source
-qualification.
+unified coverage on commit `a8cef4ccaa32859553718017ad65d7fdad61769c`.
+Benchmark [#381](https://github.com/appunni-m/uvicorn-rs/actions/runs/42796770165)
+completed across all three systems. Candidate [#4](https://github.com/appunni-m/uvicorn-rs/actions/runs/42813769106)
+passed package and coverage checks, then stopped at performance acceptance
+because full dependency receipts include machine-specific paths and compiled
+files. The normalized comparison fix and version 0.3.4 are being prepared on
+`develop`; exact-source qualification is required for that version. See the
+[support matrix](../support-matrix.md) for current status.
 
 The PyPI distribution is `uvicorn-rs`, exposing `uvicorn` imports and command;
 the optional internal Cargo/PyO3 adapter remains `uvicorn-rs-py`. The optional Cargo/PyO3 integration package declares the project-specific
@@ -25,8 +25,9 @@ linked from the support matrix rather than these deployment probes.
 
 The old Cargo 0.1.0 releases are historical. Both `asgi-lifespan-protocol-rs`
 and the consolidated `uvicorn-rs` crate have published 0.2.1 releases. The
-immutable `v0.3.1` and `v0.3.2` tags stopped at candidate qualification, and no
-0.3.1 or 0.3.2 Cargo or PyPI artifact was published. Version 0.3.3 is being prepared; `release.yml`
+immutable `v0.3.1`, `v0.3.2`, and `v0.3.3` tags stopped at candidate
+qualification, and no candidate Cargo or PyPI artifact was published. Version
+0.3.4 is being prepared; `release.yml`
 publishes Cargo and PyPI through GitHub Trusted Publishing after its exact
 candidate gates pass. No local Cargo publish or token is used. Build and
 install a wheel into the same environment as the application and its Python

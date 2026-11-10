@@ -16,25 +16,20 @@ optional `http3`, and `asgi-lifespan-protocol-rs`. `release.yml` publishes;
 <a id="current-verification-status-2026-11-06"></a>
 <a id="current-verification-status-2026-11-07"></a>
 <a id="current-verification-status-2026-11-09"></a>
+<a id="current-verification-status-2026-11-10"></a>
 
-## Current verification status (2026-11-09)
+## Current verification status (2026-11-10)
 
-Main commit `46b6ce8c9773eaee5e29a818993a48787034b023` passed CI
-[#763](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763775),
-including installed-wheel parity, package consumers, and three-repeat unified
-coverage at 15,106/15,106 regions and 11,106/11,106 lines. Benchmark
-[#375](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763738)
-completed its Linux x86-64, Linux ARM64, and macOS ARM64 categories and
-aggregate validation.
-
-The immutable `v0.3.2` candidate did not publish. Candidate run
-[#3, attempt 2](https://github.com/appunni-m/uvicorn-rs/actions/runs/42620942874)
-verified package identities and exact-source coverage, then failed performance
-acceptance because its verifier looked for stock Uvicorn in the candidate
-environment instead of the separate verified oracle environment. Version
-0.3.3 corrects that validator and is being prepared on `develop`; exact-source
-CI, coverage, benchmark, docs, and candidate gates must pass for that commit.
-Neither the immutable `v0.3.1` nor `v0.3.2` candidate published a package.
+Main commit `a8cef4cc` passed CI [#774](https://github.com/appunni-m/uvicorn-rs/actions/runs/42776625577)
+and 100% raw coverage: 15,120/15,120 regions and 11,120/11,120 lines.
+Benchmark [#381](https://github.com/appunni-m/uvicorn-rs/actions/runs/42796770165)
+completed its Linux x86-64, Linux ARM64, and macOS ARM64 matrix and aggregate
+validation. Candidate [#4](https://github.com/appunni-m/uvicorn-rs/actions/runs/42813769106)
+passed package and coverage verification, then failed the cross-platform
+dependency identity comparison because its full receipts include local paths
+and compiled files. Version 0.3.4 is being prepared on `develop`; fresh
+exact-source CI, coverage, benchmark, docs, and candidate checks are required.
+The immutable `v0.3.1`, `v0.3.2`, and `v0.3.3` tags did not publish packages.
 The independent Coverage-MCP receipt is optional; raw 100% coverage remains
 mandatory. The maintainer will run their real FastAPI application after
 repository release qualification.

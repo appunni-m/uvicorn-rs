@@ -304,7 +304,14 @@ def verify_complete_matrix(matrix: dict, arguments: argparse.Namespace,
         if source_identity is None:
             source_identity = identity
         else:
-            for key in ("source", "harness", "examples", "dependencies", "optional_workloads"):
+            # Per-system dependency receipts include installation paths and
+            # hashes of compiled extension files, which legitimately differ
+            # across operating systems and architectures. verify_source_identity
+            # validates every receipt against uv.lock and its installed RECORD;
+            # load_system then reduces the inventory to pinned package versions,
+            # and assert_common_identity below requires those versions to match
+            # across all three systems.
+            for key in ("source", "harness", "examples", "optional_workloads"):
                 require(identity.get(key) == source_identity.get(key),
                         f"benchmark runner identities differ across systems for {key}")
         artifact = work / f"asgi-category-benchmarks-{system_id}"

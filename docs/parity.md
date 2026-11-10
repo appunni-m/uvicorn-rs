@@ -6,22 +6,21 @@
 <a id="current-source-status-2026-11-06"></a>
 <a id="current-source-status-2026-11-07"></a>
 <a id="current-source-status-2026-11-09"></a>
+<a id="current-source-status-2026-11-10"></a>
 
-## Current source status (2026-11-09)
+## Current source status (2026-11-10)
 
-Main CI [#763](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763775)
-passed on `46b6ce8c9773eaee5e29a818993a48787034b023`, including the complete
-1,453-case matrix and 100% unified coverage: 15,106/15,106 regions and
-11,106/11,106 lines across three repeats. Benchmark [#375](https://github.com/appunni-m/uvicorn-rs/actions/runs/42606763738)
+Main CI [#774](https://github.com/appunni-m/uvicorn-rs/actions/runs/42776625577)
+passed on `a8cef4ccaa32859553718017ad65d7fdad61769c`, including the complete
+1,455-case matrix and 100% unified coverage: 15,120/15,120 regions and
+11,120/11,120 lines. Benchmark [#381](https://github.com/appunni-m/uvicorn-rs/actions/runs/42796770165)
 completed on Linux x86-64, Linux ARM64, and macOS ARM64.
-Candidate [#3, attempt 2](https://github.com/appunni-m/uvicorn-rs/actions/runs/42620942874)
-validated the tag, source, packages, and coverage, then failed performance
-acceptance because its verifier looked for stock Uvicorn in the candidate
-environment instead of the separate verified oracle environment. Version
-0.3.3 corrects that validator and is being prepared on `develop`; its exact
-source must pass CI, coverage, benchmark, docs, and candidate gates.
+Candidate [#4](https://github.com/appunni-m/uvicorn-rs/actions/runs/42813769106)
+failed only at performance acceptance after comparing full platform-specific
+dependency receipts for equality. Version 0.3.4 updates that comparison and
+needs fresh exact-source CI, coverage, benchmark, docs, and candidate gates.
 
-The immutable `v0.3.1` and `v0.3.2` tags remain unpublished; no Cargo or PyPI
+The immutable `v0.3.1`, `v0.3.2`, and `v0.3.3` tags remain unpublished; no Cargo or PyPI
 package has been published. See the [release guide](releases.md).
 
 ### Historical source status (2026-11-03)

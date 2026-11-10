@@ -4,14 +4,37 @@ Notable user-facing changes are listed here. An `Unreleased` entry describes
 work in progress; it does not mean a candidate has passed the release gates or
 that a package has been published.
 
-## 0.3.3 (Unreleased)
+## 0.3.4 (Unreleased)
+
+The immutable `v0.3.3` candidate passed exact-source coverage and package
+verification, but candidate qualification stopped when the performance
+verifier compared complete dependency receipts across operating systems. Those
+receipts correctly contain machine-specific install paths and compiled-file
+hashes. Version 0.3.4 compares pinned dependency versions across systems while
+retaining each platform's full lockfile and installed-file integrity checks.
+The new version needs fresh exact-source CI, coverage, benchmark, docs, and
+candidate evidence before GitHub Actions can publish it.
+
+### Fixed
+
+- Compare normalized dependency versions across benchmark systems instead of
+  comparing machine-specific package paths and platform-compiled files.
+
+### Packaging
+
+- Prepare the consolidated Cargo crates and PyPI `uvicorn-rs` distribution as
+  version 0.3.4. GitHub Actions remains the only publication path.
+
+## 0.3.3 (Unpublished candidate)
 
 The immutable `v0.3.2` candidate passed exact-source CI coverage and the
 three-system benchmark, but its release verifier rejected the stock Uvicorn
 identity because it was recorded in the isolated oracle environment rather
 than the candidate environment. No 0.3.2 Cargo or PyPI artifacts were
-published. Version 0.3.3 corrects that evidence check; its own exact-source
-release gates must pass before publication.
+published. Version 0.3.3 corrected that earlier oracle-identity evidence
+check, but its own immutable tag stopped at a second cross-system dependency
+identity comparison. No 0.3.3 Cargo or PyPI artifacts were published; its tag
+will not be moved.
 
 ### Fixed
 
@@ -23,9 +46,9 @@ release gates must pass before publication.
 
 ### Packaging
 
-- Prepare the consolidated Cargo crates and PyPI `uvicorn-rs` distribution as
-  version 0.3.3. The `v0.3.2` tag remains an unpublished, failed candidate;
-  GitHub Actions remains the only publication path.
+- Version 0.3.3 remains an unpublished candidate. Its exact-main coverage and
+  package evidence are historical inputs for that candidate only; they do not
+  qualify version 0.3.4.
 
 ## 0.3.2 (Unpublished candidate)
 

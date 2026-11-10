@@ -191,6 +191,6 @@ descriptor listener paths. TLS 1.0 and 1.1 are rejected in accordance with
 [RFC 8996](https://www.rfc-editor.org/rfc/rfc8996.html). The support matrix
 records platform-specific parity exclusions and the exact inputs exercised.
 Passing those inputs is evidence for the recorded contract, not a claim that
-every possible option combination has been tested. The `uvicorn-rs` 0.3.3
+every possible option combination has been tested. The `uvicorn-rs` 0.3.4
 release is being prepared; see the
 [release status](uvicorn-compatibility.md).
