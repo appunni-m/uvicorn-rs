@@ -1,10 +1,10 @@
 # Can I replace Uvicorn?
 
-**Not yet from PyPI.** Immutable tag `v0.3.3` failed candidate qualification
-when performance acceptance compared machine-specific dependency receipt
-paths and compiled-file hashes across systems. Version 0.3.4 is being prepared
-with normalized cross-system version comparison; its own exact-source gates
-must pass before publication.
+**Not yet from PyPI.** Immutable tag `v0.3.4` passed exact-source CI,
+three-system benchmark, and documentation checks, but its standalone HTTP/3
+archive consumer failed before the protocol probe because its fixture used a
+self-signed CA as the server leaf. Version 0.3.5 corrects the fixture and
+needs fresh exact-source gates before publication.
 The distribution name is `uvicorn-rs`; it provides the `uvicorn` command, the
 `uvicorn` import namespace, and `python -m uvicorn`. The optional internal
 Cargo/PyO3 adapter remains `uvicorn-rs-py`. Keep upstream `uvicorn` and
@@ -22,17 +22,16 @@ describe the install path after publication.
 
 ## Current status (2026-11-10)
 
-Main commit `a8cef4cc` passed CI [#774](https://github.com/appunni-m/uvicorn-rs/actions/runs/42776625577)
+Main commit `bd134de` passed CI [#777](https://github.com/appunni-m/uvicorn-rs/actions/runs/42840520790)
 with 100% unified coverage (15,120/15,120 regions and 11,120/11,120 lines),
-and benchmark [#381](https://github.com/appunni-m/uvicorn-rs/actions/runs/42796770165)
+and benchmark [#384](https://github.com/appunni-m/uvicorn-rs/actions/runs/42840521044)
 completed on Linux x86-64, Linux ARM64, and macOS ARM64. Candidate
-[#4](https://github.com/appunni-m/uvicorn-rs/actions/runs/42813769106) passed
-package checks and its exact-source coverage recheck, then failed performance
-acceptance because it compared full dependency receipts across platforms.
-Version 0.3.4 fixes that false cross-platform comparison and requires fresh
-exact-source CI, coverage, benchmark, docs, and candidate checks.
+[#5](https://github.com/appunni-m/uvicorn-rs/actions/runs/42859321214) passed
+the exact-source coverage and performance rechecks, then failed the standalone
+HTTP/3 archive consumer because the harness used its CA as the server leaf.
+Version 0.3.5 fixes this fixture and requires fresh exact-source gates.
 
-The immutable `v0.3.1`, `v0.3.2`, and `v0.3.3` tags remain unpublished. No
+The immutable `v0.3.1` through `v0.3.4` tags remain unpublished. No
 Cargo or PyPI artifact was published. See the [release guide](releases.md) for the current stage and the
 [versioned compatibility contract](maintainers/uvicorn-0.54.0-contract.md)
 for reference-only failures and their candidate acceptance rules.
@@ -343,7 +342,7 @@ To replace upstream Uvicorn:
 
 ```sh
 python -m pip uninstall uvicorn
-python -m pip install "uvicorn-rs[standard]==0.3.4"
+python -m pip install "uvicorn-rs[standard]==0.3.5"
 uvicorn --help
 python -m uvicorn --help
 ```

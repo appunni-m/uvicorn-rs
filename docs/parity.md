@@ -10,17 +10,16 @@
 
 ## Current source status (2026-11-10)
 
-Main CI [#774](https://github.com/appunni-m/uvicorn-rs/actions/runs/42776625577)
-passed on `a8cef4ccaa32859553718017ad65d7fdad61769c`, including the complete
+Main CI [#777](https://github.com/appunni-m/uvicorn-rs/actions/runs/42840520790)
+passed on `bd134de9118da88309dd3f0e7e91cb59712b8215`, including the complete
 1,455-case matrix and 100% unified coverage: 15,120/15,120 regions and
-11,120/11,120 lines. Benchmark [#381](https://github.com/appunni-m/uvicorn-rs/actions/runs/42796770165)
-completed on Linux x86-64, Linux ARM64, and macOS ARM64.
-Candidate [#4](https://github.com/appunni-m/uvicorn-rs/actions/runs/42813769106)
-failed only at performance acceptance after comparing full platform-specific
-dependency receipts for equality. Version 0.3.4 updates that comparison and
+11,120/11,120 lines. Benchmark [#384](https://github.com/appunni-m/uvicorn-rs/actions/runs/42840521044)
+completed on Linux x86-64, Linux ARM64, and macOS ARM64. Candidate [#5](https://github.com/appunni-m/uvicorn-rs/actions/runs/42859321214)
+failed at the standalone archive-consumer check because its certificate
+fixture used a CA as a server leaf. Version 0.3.5 corrects the fixture and
 needs fresh exact-source CI, coverage, benchmark, docs, and candidate gates.
 
-The immutable `v0.3.1`, `v0.3.2`, and `v0.3.3` tags remain unpublished; no Cargo or PyPI
+The immutable `v0.3.1` through `v0.3.4` tags remain unpublished; no Cargo or PyPI
 package has been published. See the [release guide](releases.md).
 
 ### Historical source status (2026-11-03)

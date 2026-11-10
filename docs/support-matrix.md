@@ -20,16 +20,16 @@ optional `http3`, and `asgi-lifespan-protocol-rs`. `release.yml` publishes;
 
 ## Current verification status (2026-11-10)
 
-Main commit `a8cef4cc` passed CI [#774](https://github.com/appunni-m/uvicorn-rs/actions/runs/42776625577)
+Main commit `bd134de` passed CI [#777](https://github.com/appunni-m/uvicorn-rs/actions/runs/42840520790)
 and 100% raw coverage: 15,120/15,120 regions and 11,120/11,120 lines.
-Benchmark [#381](https://github.com/appunni-m/uvicorn-rs/actions/runs/42796770165)
+Benchmark [#384](https://github.com/appunni-m/uvicorn-rs/actions/runs/42840521044)
 completed its Linux x86-64, Linux ARM64, and macOS ARM64 matrix and aggregate
-validation. Candidate [#4](https://github.com/appunni-m/uvicorn-rs/actions/runs/42813769106)
-passed package and coverage verification, then failed the cross-platform
-dependency identity comparison because its full receipts include local paths
-and compiled files. Version 0.3.4 is being prepared on `develop`; fresh
-exact-source CI, coverage, benchmark, docs, and candidate checks are required.
-The immutable `v0.3.1`, `v0.3.2`, and `v0.3.3` tags did not publish packages.
+validation. Candidate [#5](https://github.com/appunni-m/uvicorn-rs/actions/runs/42859321214)
+passed source coverage and performance validation, then failed the standalone
+HTTP/3 archive consumer because its test fixture served a CA as the leaf.
+Version 0.3.5 fixes that harness issue on `develop`; fresh exact-source CI,
+coverage, benchmark, docs, and candidate checks are required. Immutable tags
+`v0.3.1` through `v0.3.4` did not publish packages.
 The independent Coverage-MCP receipt is optional; raw 100% coverage remains
 mandatory. The maintainer will run their real FastAPI application after
 repository release qualification.
