@@ -10918,9 +10918,24 @@ def http3_peer_close_request(
     """
     log_offset = len(read_server_log(server))
     observation = http3_request(server["port"], trust_anchor, request, client)
-    observation["followup"] = http3_request(
-        server["port"], trust_anchor, request, client
-    )
+    try:
+        observation["followup"] = http3_request(
+            server["port"], trust_anchor, request, client
+        )
+    except Exception as error:
+        # Preserve the first divergence in the focused/full-matrix report.
+        # The opt-in server trace is case-scoped and bounded so this failure
+        # remains useful without copying unrelated server logs into the JSON.
+        server_log = read_server_log(server)[log_offset:]
+        diagnostic = {
+            "client_error": str(error)[:1200],
+            "initial_response_status": observation.get("status"),
+            "server_log_tail": server_log.splitlines()[-30:],
+        }
+        raise ParityError(
+            "HTTP/3 peer-close follow-up failed: "
+            + json.dumps(diagnostic, sort_keys=True, separators=(",", ":"))[:3600]
+        ) from error
     exit_code, _ = stop_server(server, graceful=True)
     case_log = read_server_log(server)[log_offset:]
     observation["process_terminated"] = exit_code is not None
