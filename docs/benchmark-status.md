@@ -3,15 +3,18 @@
 <!-- BEGIN GENERATED LATEST ATTEMPT -->
 ## Latest automated benchmark attempt
 
-- Run: [42647124753 (benchmark #377)](https://github.com/appunni-m/uvicorn-rs/actions/runs/42647124753)
-- Commit: [`d622509b987708f24501d6ab73aba4cbbaba8aee`](https://github.com/appunni-m/uvicorn-rs/commit/d622509b987708f24501d6ab73aba4cbbaba8aee)
-- Recorded: 2026-11-09
-- Workflow conclusion: `failure` (Linux ARM64 HTTP/3 reference correctness failure)
-- Linux x86-64 category matrix: completed successfully
-- Linux ARM64 category matrix: incomplete; Hypercorn asyncio raised `KeyError(17172)` in HTTP/3 `fixed`, and one request timed out waiting for response headers
-- macOS ARM64 category matrix: completed successfully
+- Run: [43007285362 (attempt 1)](https://github.com/appunni-m/uvicorn-rs/actions/runs/43007285362)
+- Commit: [`70217a7c3a9a964128086141387a2b7015ccc931`](https://github.com/appunni-m/uvicorn-rs/commit/70217a7c3a9a964128086141387a2b7015ccc931)
+- Recorded: 2026-11-11T12:39:52Z
+- Workflow conclusion: `failure`
+- Linux x86-64 category matrix: `validated_complete_system` (`completed_correctness_gated`, 65 qualified pairs)
+- Linux ARM64 category matrix: `validated_partial_system` (`completed_with_failures`, 56 qualified pairs)
+- macOS ARM64 category matrix: `validated_complete_system` (`completed_correctness_gated`, 69 qualified pairs)
 
-No `validated_complete_matrix` aggregate was produced. The Linux ARM64 category artifact is [13695060796](https://github.com/appunni-m/uvicorn-rs/actions/runs/42647124753/artifacts/13695060796), SHA-256 `0e9ce785f253e6b0a71c8c58ac5523b1d4946e5e548bc7fff1e9776aa55fdc58`. The raw artifact retains the Hypercorn server traceback and the successful Rust candidate rows; see the dated run analysis below.
+Aggregate: `validated_partial_matrix`
+Aggregate artifact: [13855367054](https://github.com/appunni-m/uvicorn-rs/actions/runs/43007285362/artifacts/13855367054) with SHA-256 `d99ca5901ab4951ecfc988d543325aa52a171fd2380f1933486a9e90391dd9fa`.
+
+The aggregate contains a validated partial matrix. The previous complete benchmark report remains unchanged; inspect this run's artifact for the partial inputs.
 <!-- END GENERATED LATEST ATTEMPT -->
 
 ## PR #24 benchmark status (2026-11-07)

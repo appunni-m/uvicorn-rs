@@ -29,29 +29,35 @@ Use these state labels precisely:
 
 The release target is `0.3.6`; there is no `v0.3.6` tag or published package.
 Exact-main CI [#794](https://github.com/appunni-m/uvicorn-rs/actions/runs/43007285333)
-is running against `70217a7c3a9a964128086141387a2b7015ccc931`, which matches
-`origin/main`. Platform, package, and consumer jobs have passed; the three
-complete parity and coverage repeats are still running, so no exact-source
-coverage result is available yet. The docs deployment
+passed against `70217a7c3a9a964128086141387a2b7015ccc931`, which matched
+`origin/main` when checked. It completed 1,455/1,455 indexed cases and three
+ASGI/native repeats with 15,188/15,188 regions and 11,177/11,177 lines. All
+platform, package, and consumer jobs passed. This is baseline evidence for
+that commit; [PR #43](https://github.com/appunni-m/uvicorn-rs/pull/43) changes
+the benchmark reference policy and needs fresh exact-source main evidence
+after merge. Its current PR checks are running. The docs deployment
 [#379](https://github.com/appunni-m/uvicorn-rs/actions/runs/43007285311)
-passed for this main commit.
+passed for the baseline main commit; the updated PR documentation is being
+validated now.
 
 The exact-main benchmark
-[#389](https://github.com/appunni-m/uvicorn-rs/actions/runs/43007285362) is
-incomplete on Linux ARM64. Hypercorn 0.18.0 asyncio timed out waiting for HTTP/3
-response headers in repetition 3 of `fastapi-validated-route` after 3,020
-requests; its server log is empty, so the cause and event ordering are unknown.
-Candidate cells collected before the failure passed, but all five candidate
-repetitions were not collected. A source-audited exception now omits only this
-reference cell; a fresh benchmark must still pass all five Rust repetitions
-and the remaining complete three-system matrix. Existing results do not
-support a broad FastAPI speedup claim.
+[#389](https://github.com/appunni-m/uvicorn-rs/actions/runs/43007285362)
+produced a validated partial aggregate: Linux x86-64 and macOS ARM64 completed,
+while Linux ARM64 had 56 qualified pairs and failed its H3
+`fastapi-validated-route` Hypercorn reference at repetition 3. The client timed
+out waiting for response headers after 3,020 requests; the server log is empty,
+so cause and event ordering are unknown. Candidate rows collected before the
+failure passed, but all five candidate repetitions were not collected. PR #43
+records an exception for only that reference cell; a fresh three-system run on
+the final main source must still pass all five Rust repetitions. Existing
+results do not support a broad FastAPI speedup claim.
 
 | Gate | Current evidence | Status |
 | --- | --- | --- |
-| Main compatibility and coverage | [CI #794](https://github.com/appunni-m/uvicorn-rs/actions/runs/43007285333) | In progress on exact `main`; the three-repeat parity and raw coverage job has not finished. |
-| Three-system ordinary-FastAPI benchmark | [Benchmark #389](https://github.com/appunni-m/uvicorn-rs/actions/runs/43007285362) | Incomplete on Linux ARM64 H3 `fastapi-validated-route`; a narrow reference exception is recorded, and a fresh complete candidate/system matrix is still required. |
-| Documentation | [Docs #379](https://github.com/appunni-m/uvicorn-rs/actions/runs/43007285311) | Passed for exact main commit `70217a7`. |
+| Main compatibility and coverage | [CI #794](https://github.com/appunni-m/uvicorn-rs/actions/runs/43007285333) | Passed for baseline main commit `70217a7`: 1,455/1,455 cases, 15,188/15,188 regions and 11,177/11,177 lines. Final release source needs a new exact-main run after PR #43 merges. |
+| PR checks | [PR #43](https://github.com/appunni-m/uvicorn-rs/pull/43) | Coverage, package, parity, and documentation checks are running on the current develop head; this does not replace the final main run. |
+| Three-system ordinary-FastAPI benchmark | [Benchmark #389](https://github.com/appunni-m/uvicorn-rs/actions/runs/43007285362) | Validated partial aggregate: x86-64 and macOS completed; ARM64 H3 `fastapi-validated-route` reference timed out. Fresh complete final-source evidence is required. |
+| Documentation | [Docs #379](https://github.com/appunni-m/uvicorn-rs/actions/runs/43007285311) | Passed for baseline main; the current PR documentation update is being validated. |
 | Candidate artifacts and clean consumers | `candidate.yml` for `v0.3.6` | Pending exact-source CI, coverage, benchmark and docs gates. |
 | Cargo and PyPI publication | `release.yml` with configured crates.io and PyPI Trusted Publishers | Pending a successful `0.3.6` candidate; GitHub Actions is the only publication path. |
 
