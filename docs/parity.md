@@ -11,17 +11,19 @@
 
 ## Current source status (2026-11-11)
 
-Main CI [#783](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765868)
-passed on `f21bb1967837b2c981208ac865e52ba68d887d35`, including the complete
-1,455-case matrix and 100% unified coverage: 15,120/15,120 regions and
-11,120/11,120 lines. Benchmark [#387](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765874)
-completed on Linux x86-64, Linux ARM64, and macOS ARM64; docs [#373](https://github.com/appunni-m/uvicorn-rs/actions/runs/42931481551)
-passed. Candidate [#6](https://github.com/appunni-m/uvicorn-rs/actions/runs/42933366398)
-passed coverage and performance rechecks and the standalone HTTP/3 archive
-consumer, then failed final performance-artifact revalidation because
-`PERFORMANCE_EVENT` was missing from the step environment. Version 0.3.6 fixes
-that candidate workflow input and needs fresh exact-source CI, coverage,
-benchmark, docs, and candidate gates.
+Main CI [#785](https://github.com/appunni-m/uvicorn-rs/actions/runs/42951138788)
+has one unexplained CLI exit-code mismatch in repeat 1/3; focused run
+[#790](https://github.com/appunni-m/uvicorn-rs/actions/runs/42964190383) passed
+100 targeted attempts without reproducing it. PR CI
+[#791](https://github.com/appunni-m/uvicorn-rs/actions/runs/42976830658) failed
+all three coverage repeats at `fault.http3.connection-accept-error-aborts-held-response`
+because the harness expected a removed dispatch marker. The expected marker is
+being corrected. The Windows package job also found a stock Uvicorn oracle
+`WinError 10054` in the early-response upload case; a new case-local trace is
+needed before exact reference-only acceptance. Benchmark
+[#388](https://github.com/appunni-m/uvicorn-rs/actions/runs/42951138724) is
+incomplete on two Hypercorn HTTP/3 reference cells. 0.3.6 needs fresh complete
+parity, coverage, benchmark, docs, and candidate evidence.
 
 The immutable `v0.3.1` through `v0.3.5` tags remain unpublished; no Cargo or PyPI
 package has been published. See the [release guide](releases.md).

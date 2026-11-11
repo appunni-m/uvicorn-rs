@@ -3,15 +3,16 @@
 The [deployment guide](../deployment.md) is the operator-facing entry point. This page preserves validation procedures, framework comparison setup, and run-specific evidence for maintainers.
 
 
-As of 2026-11-11, main CI [#783](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765868)
-passed installed-wheel Uvicorn 0.54.0 parity, package consumers, and exact-source
-100% unified coverage on commit `f21bb1967837b2c981208ac865e52ba68d887d35`.
-Benchmark [#387](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765874)
-completed across all three systems. Candidate [#6](https://github.com/appunni-m/uvicorn-rs/actions/runs/42933366398)
-passed coverage, performance, and the standalone archive consumer, then failed
-the final performance-artifact recheck because `PERFORMANCE_EVENT` was missing
-from that step's environment. Version 0.3.6 fixes the workflow input and needs
-fresh exact-source qualification. See the
+As of 2026-11-11, main CI [#785](https://github.com/appunni-m/uvicorn-rs/actions/runs/42951138788)
+has one unexplained CLI exit-code mismatch in repeat 1/3; focused run
+[#790](https://github.com/appunni-m/uvicorn-rs/actions/runs/42964190383) did not
+reproduce it in 100 attempts. PR CI [#791](https://github.com/appunni-m/uvicorn-rs/actions/runs/42976830658)
+also found a stale HTTP/3 trace marker and a stock-Windows-Uvicorn oracle reset
+in the early-response upload case. Main benchmark
+[#388](https://github.com/appunni-m/uvicorn-rs/actions/runs/42951138724) is
+incomplete on two Hypercorn HTTP/3 reference cells. Version 0.3.6 needs fresh
+exact-source coverage/parity, a complete three-system benchmark, docs
+deployment, candidate artifacts, and clean consumers. See the
 [support matrix](../support-matrix.md) for current status.
 
 The PyPI distribution is `uvicorn-rs`, exposing `uvicorn` imports and command;

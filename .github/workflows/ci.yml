@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Run full CI, selected parity, or retained coverage replay
+        description: Run full CI, selected parity, retained coverage replay, or a focused coverage case
         required: true
         type: choice
         default: full
@@ -16,6 +16,7 @@ on:
           - focused-windows-parity
           - focused-linux-parity
           - replay-unified-coverage
+          - focused-linux-coverage-case
       parity_case_ids:
         description: Comma-separated case IDs for a focused parity mode (up to 20)
         required: false
@@ -50,6 +51,15 @@ on:
           - "10"
           - "100"
           - "1000"
+      coverage_case_repeats:
+        description: Repetitions of the selected Linux coverage attribution case
+        required: true
+        type: choice
+        default: "10"
+        options:
+          - "1"
+          - "3"
+          - "10"
       coverage_ci_run_id:
         description: Original completed CI run for retained coverage replay
         required: false
@@ -1191,6 +1201,73 @@ jobs:
         with:
           name: uvicorn-rs-focused-windows-parity
           path: target/focused-windows/
+          if-no-files-found: error
+          retention-days: 30
+
+  focused-linux-coverage-case:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'focused-linux-coverage-case'
+    name: Focused Linux HTTP/3 legacy coverage case
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # reviewed stable action
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: llvm-tools-preview
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+      - name: Install locked references and pinned coverage tools
+        run: |
+          uv sync --python "$PYTHON_VERSION" --group benchmark --extra standard --frozen
+          uv pip install --python .venv/bin/python "gunicorn==$GUNICORN_VERSION"
+          cargo install cargo-llvm-cov --version 0.8.7 --locked
+      - name: Prepare the isolated stock Uvicorn oracle
+        run: |
+          oracle_environment="$RUNNER_TEMP/uvicorn-rs-focused-coverage-oracle"
+          UV_PROJECT_ENVIRONMENT="$oracle_environment" uv sync --python "$PYTHON_VERSION" \
+            --only-group benchmark --only-group uvicorn-oracle --no-install-project --frozen
+          uv pip install --python "$oracle_environment/bin/python" "gunicorn==$GUNICORN_VERSION"
+          echo "UVICORN_RS_FOCUSED_ORACLE=$oracle_environment/bin/python" >> "$GITHUB_ENV"
+      - name: Repeat only the legacy HTTP/3 peer-close attribution case
+        shell: bash
+        env:
+          COVERAGE_CASE_REPEATS: ${{ inputs.coverage_case_repeats }}
+          ASGI_PARITY_TRACE_HTTP3_CASE: fault.http3.peer-close-h3-no-error-legacy
+        run: |
+          set -euo pipefail
+          case "$COVERAGE_CASE_REPEATS" in
+            1|3|10) ;;
+            *) echo "Select 1, 3 or 10 case repetitions" >&2; exit 2 ;;
+          esac
+          mkdir -p target/focused-http3-coverage
+          for ((attempt = 1; attempt <= COVERAGE_CASE_REPEATS; attempt++)); do
+            attempt_dir="target/focused-http3-coverage/attempt-$attempt"
+            mkdir -p "$attempt_dir"
+            args=(
+              --oracle-python "$UVICORN_RS_FOCUSED_ORACLE"
+              --output "$attempt_dir/coverage-report.json"
+              --artifacts-dir "$attempt_dir/artifacts"
+              --case-id asgi:fault.http3.peer-close-h3-no-error-legacy
+              --matrix-repeats 0
+              --case-infra-retries 0
+            )
+            if ((attempt > 1)); then
+              args+=(--skip-build)
+            fi
+            .venv/bin/python scripts/run_unified_coverage.py "${args[@]}" \
+              2>&1 | tee "$attempt_dir/run.log"
+          done
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: uvicorn-rs-focused-http3-legacy-coverage
+          path: target/focused-http3-coverage/
           if-no-files-found: error
           retention-days: 30
 

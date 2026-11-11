@@ -27,31 +27,36 @@ Use these state labels precisely:
 
 ## Current release status (2026-11-11)
 
-The next release target is `0.3.6`. Immutable candidate tag `v0.3.5` points to
-`f21bb1967837b2c981208ac865e52ba68d887d35`. On that source, main CI
-[#783](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765868)
-passed, including exact-source 100% unified coverage; benchmark
-[#387](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765874)
-passed on Linux x86-64, Linux ARM64, and macOS ARM64; docs deployment
-[#373](https://github.com/appunni-m/uvicorn-rs/actions/runs/42931481551) passed.
+The release target is `0.3.6`; there is no `v0.3.6` tag or published package.
+The latest main CI, [#785](https://github.com/appunni-m/uvicorn-rs/actions/runs/42951138788),
+reported 15,120/15,120 regions and 11,120/11,120 lines, but did not qualify
+`main`: one of three coverage/parity repeats differed on
+`cli.explicit-loop-over-invalid-environment` (`exit_code`). A focused 100-attempt
+run [#790](https://github.com/appunni-m/uvicorn-rs/actions/runs/42964190383)
+did not reproduce it, so the cause remains unknown. The latest main benchmark,
+[#388](https://github.com/appunni-m/uvicorn-rs/actions/runs/42951138724), is
+incomplete: two Hypercorn HTTP/3 reference cells timed out, and current results
+do not support a broad performance-gain claim.
 
-Candidate [#6](https://github.com/appunni-m/uvicorn-rs/actions/runs/42933366398)
-verified the exact tag, CI/benchmark evidence and package artifacts. Its raw
-coverage recheck and performance acceptance passed, and the extracted Cargo
-archives built as an independent HTTP/3 consumer. The candidate then failed
-the final performance-artifact recheck with `KeyError: PERFORMANCE_EVENT`
-because that step lacked the selected run's event input. The candidate bundle
-was not uploaded, `release.yml` did not start, and nothing was published.
-Because `v0.3.5` is immutable, the workflow fix uses the new version `0.3.6`.
+PR [#42](https://github.com/appunni-m/uvicorn-rs/pull/42) has CI
+[#791](https://github.com/appunni-m/uvicorn-rs/actions/runs/42976830658) on
+source `a5a3860`. Its full coverage matrix stopped three times at
+`fault.http3.connection-accept-error-aborts-held-response` because the harness
+waited for an obsolete dispatch marker. A focused correction is in progress.
+The Windows package job also stopped when stock Uvicorn's oracle client got
+`WinError 10054` in `http1.request-body-batch-early-response-drain`; a new
+case-local trace is being added before that reference-only result can be
+accepted. PR documentation #378 passed, but the final release source still
+needs a main docs deployment.
 
 | Gate | Current evidence | Status |
 | --- | --- | --- |
-| Previous exact-main CI, raw coverage and package consumers | [CI #783](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765868), source `f21bb19` | Passed for the 0.3.5 source; 0.3.6 needs its own exact-source run. |
-| Previous three-system ordinary-FastAPI benchmark | [Benchmark #387](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765874), source `f21bb19` | Linux x86-64, Linux ARM64, macOS ARM64, and aggregate evidence validation passed. |
-| Previous documentation deployment | [Docs #373](https://github.com/appunni-m/uvicorn-rs/actions/runs/42931481551), source `f21bb19` | Passed; 0.3.6 documentation needs its own deployment. |
-| Immutable `v0.3.5` candidate | [Candidate #6](https://github.com/appunni-m/uvicorn-rs/actions/runs/42933366398) | Failed final performance metadata revalidation due to missing `PERFORMANCE_EVENT`; no candidate bundle or publication. |
-| `0.3.6` exact-source qualification | Version and candidate-workflow correction on `develop` | Pending PR, exact-main CI/coverage, benchmark, docs deployment, and candidate assembly. |
-| Cargo and PyPI publication | `release.yml` with configured crates.io and PyPI Trusted Publishers | Pending successful `0.3.6` candidate; GitHub Actions is the only publication path. |
+| Main compatibility and coverage | [CI #785](https://github.com/appunni-m/uvicorn-rs/actions/runs/42951138788) | Blocked by one unexplained CLI exit-code mismatch in repeat 1/3; focused run #790 passed 100 attempts but does not clear full CI. |
+| Current PR coverage and Windows consumer | [PR CI #791](https://github.com/appunni-m/uvicorn-rs/actions/runs/42976830658) | Blocked by an obsolete HTTP/3 trace marker and a stock-Windows-Uvicorn oracle reset; both need exact-case evidence and candidate success. |
+| Three-system ordinary-FastAPI benchmark | [Benchmark #388](https://github.com/appunni-m/uvicorn-rs/actions/runs/42951138724) | Incomplete on two Hypercorn HTTP/3 reference cells; rerun after scoped acceptance and require every candidate repetition to pass. |
+| Documentation | PR docs #378 | Passed on PR #42; a main deployment is still needed for the final release source. |
+| Candidate artifacts and clean consumers | `candidate.yml` for `v0.3.6` | Pending exact-source CI, coverage, benchmark and docs gates. |
+| Cargo and PyPI publication | `release.yml` with configured crates.io and PyPI Trusted Publishers | Pending a successful `0.3.6` candidate; GitHub Actions is the only publication path. |
 
 The package graph remains the Python-free Cargo crate `uvicorn-rs` with HTTP/3
 behind the optional `http3` feature, `asgi-lifespan-protocol-rs`, and PyPI

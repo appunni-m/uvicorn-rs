@@ -16,15 +16,19 @@ and publication workflows revalidate this same evidence. Coverage-MCP may be
 used to investigate gaps, but an independent MCP receipt is not a release
 requirement.
 
-Main CI [#783](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765868)
-completed on `f21bb1967837b2c981208ac865e52ba68d887d35`. The full 1,455-case
-matrix passed with three ASGI and native repeats and **15,120/15,120 regions
-and 11,120/11,120 lines**. Candidate [#6](https://github.com/appunni-m/uvicorn-rs/actions/runs/42933366398)
-rechecked the exact-source raw report and passed coverage, then failed a later
-performance-artifact revalidation because the workflow step lacked
-`PERFORMANCE_EVENT`. These receipts bind to the unpublished `v0.3.5` source
-and do not qualify the 0.3.6 fix-forward; the updated source needs its own
-hosted report and raw coverage artifact.
+The latest candidate-source coverage run is PR CI
+[#791](https://github.com/appunni-m/uvicorn-rs/actions/runs/42976830658) on
+`a5a3860`. Each of its three repeats stopped at
+`fault.http3.connection-accept-error-aborts-held-response` because the harness
+waited for an obsolete HTTP/3 dispatch marker; attribution did not complete, so
+this run is not a 100% coverage receipt. The marker now matches the event
+emitted by the server, and the exact fault-contract case passed locally 1/1.
+That selected-case result does not qualify the full matrix; a new full hosted
+report and raw coverage artifact are still required. The older 100% receipt is bound to the unpublished
+`v0.3.5` source and does not qualify 0.3.6. Main CI #785 reported
+15,120/15,120 regions and 11,120/11,120 lines, but one CLI parity case failed
+in repeat 1/3, so the full exact-source acceptance still failed. Focused run
+#790 passed 100 attempts without reproducing that mismatch.
 
 Coverage artifact
 [13816632079](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765868/artifacts/13816632079)

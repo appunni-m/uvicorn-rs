@@ -1,11 +1,10 @@
 # Run a Python ASGI app
 
-This guide starts the example from a repository checkout. As of 2026-11-11,
-version 0.3.6 is being prepared. Candidate `v0.3.5` passed its exact-source
-coverage and performance rechecks and built the standalone HTTP/3 consumer, but
-its final performance-artifact recheck failed because a required workflow
-environment value was missing. No package was published. Check the
-[release status](releases.md) before installing a registry version.
+This guide starts the example from a repository checkout. Version 0.3.6 is
+still being qualified: exact-main coverage/parity and the three-system
+benchmark have unresolved failures. There is no 0.3.6 tag or published
+`uvicorn-rs` package. Check the [release status](releases.md) before installing
+a registry version.
 
 ## Start the checked-out example
 

@@ -8,23 +8,15 @@ a prerequisite for completing the repository work.
 
 ## Release readiness snapshot — 2026-11-11
 
-The target is version `0.3.6`. Exact-main commit
-`f21bb1967837b2c981208ac865e52ba68d887d35` passed CI #783, including exact-source
-100% unified coverage, benchmark #387 on Linux x86-64, Linux ARM64, and macOS
-ARM64, and [docs deployment #373](https://github.com/appunni-m/uvicorn-rs/actions/runs/42931481551).
-Candidate [#6](https://github.com/appunni-m/uvicorn-rs/actions/runs/42933366398)
-revalidated the source evidence and exact artifacts; its coverage and
-performance checks passed, as did the standalone HTTP/3 archive consumer. The
-candidate failed the final performance-artifact recheck because the workflow
-step omitted `PERFORMANCE_EVENT`. No 0.3.5 Cargo or PyPI artifact was
-published, and immutable tag `v0.3.5` remains unchanged.
-
-Version 0.3.6 adds the missing event binding and synchronizes the Cargo and
-PyPI version metadata. After its PR merges, require fresh exact-main CI, 100%
-raw coverage, the complete three-system benchmark, docs deployment, and
-candidate assembly on the new source. The maintainer waived a separate
-Coverage-MCP receipt. Their real FastAPI application trial remains after
-repository release qualification.
+The target is version `0.3.6`. Main CI #785 has one unexplained CLI exit-code
+mismatch in repeat 1/3; focused run #790 did not reproduce it in 100 attempts.
+PR CI #791 failed on an obsolete HTTP/3 dispatch marker and a stock-Windows
+Uvicorn oracle reset in the early-response upload case. Main benchmark #388 is
+incomplete on two Hypercorn HTTP/3 reference cells. The PR documentation check
+passed, but exact-main docs deployment, complete parity, 100% raw coverage,
+three-system benchmark evidence, and candidate artifacts/consumers remain
+required. The maintainer waived a separate Coverage-MCP receipt. Their real
+FastAPI application trial remains after repository release qualification.
 
 For 0.3.6, an accepted immutable tag starts `candidate.yml`; successful
 qualification automatically starts `release.yml`. GitHub Trusted Publishing

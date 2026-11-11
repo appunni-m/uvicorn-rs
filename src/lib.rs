@@ -1229,6 +1229,20 @@ fn log_error(message: fmt::Arguments<'_>) {
     let _ = std::io::Write::write_fmt(&mut std::io::stderr().lock(), format_args!("{message}\n"));
 }
 
+#[cfg(any(not(uvicorn_rs_native_transport), coverage))]
+fn trace_legacy_http3(event: fmt::Arguments<'_>) {
+    // Opt-in only; focused parity runs enable this for the single legacy H3 case.
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    let enabled = ENABLED.get_or_init(|| {
+        std::env::var_os("UVICORN_RS_TRACE_HTTP3").as_deref() == Some(std::ffi::OsStr::new("1"))
+    });
+    if !enabled {
+        return;
+    }
+
+    log_error(format_args!("uvicorn-rs h3-trace {event}"));
+}
+
 #[cfg(coverage)]
 fn log_coverage_marker(message: fmt::Arguments<'_>) {
     // Keep coverage-only markers separate from operational errors and emit the
@@ -9860,11 +9874,10 @@ fn coverage_legacy_http3_fault_is_armed() -> bool {
         .into_iter()
         .any(coverage_fault_is_armed)
     };
-    if std::env::var_os("UVICORN_RS_TRACE_HTTP3").as_deref() == Some(std::ffi::OsStr::new("1")) {
-        log_coverage_marker(format_args!(
-            "uvicorn-rs: coverage HTTP/3 dispatch selected {} path",
-            if selected_legacy { "legacy" } else { "native" }
-        ));
+    if selected_legacy {
+        trace_legacy_http3(format_args!("dispatch-selected path=legacy"));
+    } else {
+        trace_legacy_http3(format_args!("dispatch-selected path=native"));
     }
     selected_legacy
 }
@@ -9874,14 +9887,19 @@ async fn serve_legacy_http3(
     endpoint: uvicorn_rs::Http3Endpoint,
     server: Arc<ServerContext>,
 ) -> Result<(), BoxError> {
+    static NEXT_CONNECTION_ID: AtomicUsize = AtomicUsize::new(1);
     let mut connections = tokio::task::JoinSet::new();
     #[cfg(coverage)]
     let mut inject_connection_task_shutdown_hang = false;
     loop {
         tokio::select! {
             biased;
-            _ = server.cancellation.cancelled() => break,
+            _ = server.cancellation.cancelled() => {
+                trace_legacy_http3(format_args!("server cancellation-observed"));
+                break;
+            }
             Some(result) = connections.join_next(), if !connections.is_empty() => {
+                trace_legacy_http3(format_args!("connection-task-joined result={result:?}"));
                 if let Err(error) = result {
                     log_error(format_args!("uvicorn-rs: HTTP/3 connection task failed: {error}"));
                 }
@@ -9893,7 +9911,12 @@ async fn serve_legacy_http3(
                 }
                 endpoint.accept().await
             } => {
-                let Some(incoming) = incoming else { break; };
+                let Some(incoming) = incoming else {
+                    trace_legacy_http3(format_args!("endpoint accept-ended"));
+                    break;
+                };
+                let connection_id = NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
+                trace_legacy_http3(format_args!("connection={connection_id} incoming-accepted"));
                 let server = Arc::clone(&server);
                 #[cfg(coverage)]
                 let inject_join_error =
@@ -9911,6 +9934,7 @@ async fn serve_legacy_http3(
                 #[cfg(coverage)]
                 let connection_cancellation = server.cancellation.clone();
                 connections.spawn(async move {
+                    trace_legacy_http3(format_args!("connection={connection_id} handshake-started"));
                     #[cfg(coverage)]
                     if inject_join_error {
                         coverage_panic("coverage-injected HTTP/3 connection task panic");
@@ -9918,10 +9942,22 @@ async fn serve_legacy_http3(
                     match incoming.await {
                         Ok(connection) => {
                             let peer_addr = connection.remote_address();
-                            if let Err(error) =
-                                serve_http3_connection(connection, Arc::clone(&server)).await
+                            trace_legacy_http3(format_args!(
+                                "connection={connection_id} handshake-completed peer={peer_addr}"
+                            ));
+                            if let Err(error) = serve_http3_connection(
+                                connection,
+                                Arc::clone(&server),
+                                connection_id,
+                            )
+                            .await
                             {
+                                trace_legacy_http3(format_args!(
+                                    "connection={connection_id} serve-failed error={error}"
+                                ));
                                 log_error(format_args!("uvicorn-rs: HTTP/3 connection from {peer_addr} failed: {error}"));
+                            } else {
+                                trace_legacy_http3(format_args!("connection={connection_id} serve-completed"));
                             }
                             #[cfg(coverage)]
                             if inject_shutdown_panic {
@@ -9934,13 +9970,19 @@ async fn serve_legacy_http3(
                                 std::future::pending::<()>().await;
                             }
                         }
-                        Err(error) => log_error(format_args!("uvicorn-rs: HTTP/3 handshake failed: {error}")),
+                        Err(error) => {
+                            trace_legacy_http3(format_args!(
+                                "connection={connection_id} handshake-failed error={error}"
+                            ));
+                            log_error(format_args!("uvicorn-rs: HTTP/3 handshake failed: {error}"));
+                        }
                     }
                 });
             }
         }
     }
 
+    trace_legacy_http3(format_args!("server endpoint-close-started"));
     endpoint.close(quinn::VarInt::from_u32(0), b"server shutdown");
     #[cfg(coverage)]
     if coverage_fault_take(CoverageFaultPoint::ServerHttp3TaskShutdownHang) {
@@ -9956,6 +9998,9 @@ async fn serve_legacy_http3(
     let connection_drain_timeout = server.graceful_timeout;
     if timeout_optional(connection_drain_timeout, async {
         while let Some(result) = connections.join_next().await {
+            trace_legacy_http3(format_args!(
+                "shutdown connection-task-joined result={result:?}"
+            ));
             if let Err(error) = result {
                 log_error(format_args!(
                     "uvicorn-rs: HTTP/3 connection task failed during shutdown: {error}"
@@ -9966,6 +10011,7 @@ async fn serve_legacy_http3(
     .await
     .is_err()
     {
+        trace_legacy_http3(format_args!("shutdown connection-drain-timed-out"));
         log_error(format_args!(
             "uvicorn-rs: HTTP/3 connection tasks exceeded grace period; aborting remaining tasks"
         ));
@@ -9973,6 +10019,7 @@ async fn serve_legacy_http3(
         while connections.join_next().await.is_some() {}
     }
     let _ = timeout_optional(server.graceful_timeout, endpoint.wait_idle()).await;
+    trace_legacy_http3(format_args!("server shutdown-completed"));
     Ok(())
 }
 
@@ -9980,12 +10027,16 @@ async fn serve_legacy_http3(
 async fn serve_http3_connection(
     connection: quinn::Connection,
     server: Arc<ServerContext>,
+    connection_id: usize,
 ) -> Result<(), BoxError> {
     // HTTP/3 defines H3_INTERNAL_ERROR as 0x102; its u32 representation
     // constructs a QUIC variable integer without a fallible conversion.
     const INTERNAL_ERROR_CODE: quinn::VarInt = quinn::VarInt::from_u32(0x102);
 
     let peer_addr = connection.remote_address();
+    trace_legacy_http3(format_args!(
+        "connection={connection_id} opened peer={peer_addr}"
+    ));
     let (closed_tx, closed_rx) = watch::channel(false);
     let close_monitor = connection.clone();
     tokio::spawn(async move {
@@ -9999,6 +10050,9 @@ async fn serve_http3_connection(
     let mut h3_connection = match created {
         Ok(connection) => connection,
         Err(error) => {
+            trace_legacy_http3(format_args!(
+                "connection={connection_id} initialization-failed error={error}"
+            ));
             connection.close(
                 INTERNAL_ERROR_CODE,
                 b"HTTP/3 connection initialization failed",
@@ -10006,12 +10060,15 @@ async fn serve_http3_connection(
             return Err(error);
         }
     };
+    trace_legacy_http3(format_args!("connection={connection_id} h3-ready"));
     let mut requests = tokio::task::JoinSet::new();
     let mut connection_result = Ok(());
+    let mut request_count = 0usize;
     loop {
         let accepted_result = tokio::select! {
             biased;
             _ = server.cancellation.cancelled() => {
+                trace_legacy_http3(format_args!("connection={connection_id} shutdown-started"));
                 connection_result = h3_connection.shutdown(0).await.map_err(BoxError::from);
                 break;
             }
@@ -10033,23 +10090,30 @@ async fn serve_http3_connection(
         };
         let accepted = match accepted_result {
             Ok(accepted) => accepted,
-            Err(error) if is_http3_peer_close_ignorable(error.as_ref(), &connection) => {
-                // RFC 9114 requires unknown application close codes to be
-                // treated as H3_NO_ERROR. A peer's normal HTTP/3 close ends
-                // acceptance; drain owned request tasks below.
-                break;
-            }
             Err(error) => {
-                let _ = h3_connection.shutdown(0).await;
-                connection.close(INTERNAL_ERROR_CODE, b"HTTP/3 request acceptance failed");
-                connection_result = Err(error);
-                requests.abort_all();
+                let ignorable = is_http3_peer_close_ignorable(error.as_ref(), &connection);
+                trace_legacy_http3(format_args!(
+                    "connection={connection_id} accept-error ignorable={ignorable} error={error} close_reason={:?}",
+                    connection.close_reason()
+                ));
+                if !ignorable {
+                    let _ = h3_connection.shutdown(0).await;
+                    connection.close(INTERNAL_ERROR_CODE, b"HTTP/3 request acceptance failed");
+                    connection_result = Err(error);
+                    requests.abort_all();
+                }
                 break;
             }
         };
         let Some(resolver) = accepted else {
+            trace_legacy_http3(format_args!("connection={connection_id} accept-ended"));
             break;
         };
+        request_count += 1;
+        let request_id = request_count;
+        trace_legacy_http3(format_args!(
+            "connection={connection_id} request={request_id} stream-accepted"
+        ));
         let context = ConnectionContext {
             server: Arc::clone(&server),
             peer_addr,
@@ -10060,14 +10124,25 @@ async fn serve_http3_connection(
             native_upgrade: None,
         };
         requests.spawn(async move {
+            trace_legacy_http3(format_args!(
+                "connection={connection_id} request={request_id} task-started"
+            ));
             #[cfg(coverage)]
             if coverage_fault_take(CoverageFaultPoint::Http3RequestTaskPanic) {
                 coverage_panic("coverage-injected HTTP/3 request task panic");
             }
-            if let Err(error) = handle_http3_request(resolver, context).await {
-                log_error(format_args!(
-                    "uvicorn-rs: HTTP/3 request from {peer_addr} failed: {error}"
-                ));
+            match handle_http3_request(resolver, context).await {
+                Ok(()) => trace_legacy_http3(format_args!(
+                    "connection={connection_id} request={request_id} task-completed"
+                )),
+                Err(error) => {
+                    trace_legacy_http3(format_args!(
+                        "connection={connection_id} request={request_id} task-failed error={error}"
+                    ));
+                    log_error(format_args!(
+                        "uvicorn-rs: HTTP/3 request from {peer_addr} failed: {error}"
+                    ));
+                }
             }
             #[cfg(coverage)]
             if coverage_fault_take(CoverageFaultPoint::Http3RequestTaskPanicAfterResponse) {
@@ -10084,6 +10159,10 @@ async fn serve_http3_connection(
     while let Some(result) = requests.join_next().await {
         observe_http3_request_task(result);
     }
+    trace_legacy_http3(format_args!(
+        "connection={connection_id} request-tasks-drained error={:?}",
+        connection_result.as_ref().err()
+    ));
     connection_result
 }
 
