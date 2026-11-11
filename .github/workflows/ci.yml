@@ -28,7 +28,7 @@ on:
         type: boolean
         default: false
       trace_startup_teardown:
-        description: Repeat the selected Linux parity case and collect a native core backtrace if it crashes
+        description: Repeat the selected Linux parity case, preserving traces and core files (symbolicated when GDB is available)
         required: false
         type: boolean
         default: false
@@ -1333,17 +1333,25 @@ jobs:
             --installed-candidate \
             "${parity_args[@]}" \
             --output target/focused-linux/parity.json
-      - name: Install the native crash debugger
+      - name: Detect the native crash debugger
         if: ${{ !cancelled() && inputs.trace_startup_teardown }}
+        id: native_debugger
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends gdb
-      - name: Repeat the selected installed-wheel case with native backtraces
+          if command -v gdb >/dev/null 2>&1; then
+            echo "available=true" >>"$GITHUB_OUTPUT"
+            echo "GDB is available; native core files will be symbolicated."
+          else
+            echo "available=false" >>"$GITHUB_OUTPUT"
+            echo "GDB is unavailable; repeated parity diagnostics will continue and any core file will be retained."
+          fi
+      - name: Repeat the selected installed-wheel case with crash diagnostics
         if: ${{ !cancelled() && inputs.trace_startup_teardown }}
         shell: bash
         env:
           PARITY_CASE_IDS: ${{ inputs.parity_case_ids }}
           PARITY_REPEATS: ${{ inputs.parity_repeats }}
+          GDB_AVAILABLE: ${{ steps.native_debugger.outputs.available }}
         run: |
           set -euo pipefail
           IFS=',' read -r -a case_ids <<< "$PARITY_CASE_IDS"
@@ -1360,7 +1368,6 @@ jobs:
           fi
           core_directory="$RUNNER_TEMP/uvicorn-rs-focused-linux-cores"
           mkdir -p "$core_directory"
-          command -v gdb
           ulimit -c unlimited
           sudo sysctl -w "kernel.core_pattern=$core_directory/core.%p"
           export PYTHONFAULTHANDLER=1
@@ -1402,10 +1409,15 @@ jobs:
               "$attempt" "$runner_exit" "$target_exit" >"$attempt_dir/exit-summary.json"
             for core in "$core_directory"/core.*; do
               [[ -f "$core" ]] || continue
-              gdb --batch -ex 'set pagination off' -ex 'thread apply all bt 32' \
-                "$PWD/.venv/bin/python" "$core" \
-                >"$attempt_dir/$(basename "$core").backtrace" 2>&1 || true
-              rm -f "$core"
+              if [[ "$GDB_AVAILABLE" == "true" ]]; then
+                gdb --batch -ex 'set pagination off' -ex 'thread apply all bt 32' \
+                  "$PWD/.venv/bin/python" "$core" \
+                  >"$attempt_dir/$(basename "$core").backtrace" 2>&1 || true
+                rm -f "$core"
+              else
+                cp "$core" "$attempt_dir/$(basename "$core")"
+                rm -f "$core"
+              fi
             done
             if [[ "$target_exit" == -11 ]]; then
               reproduced=1

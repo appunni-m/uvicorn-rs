@@ -21,20 +21,25 @@ optional `http3`, and `asgi-lifespan-protocol-rs`. `release.yml` publishes;
 
 ## Current verification status (2026-11-11)
 
-Main CI [#785](https://github.com/appunni-m/uvicorn-rs/actions/runs/42951138788)
-did not complete cleanly: one of three full parity/coverage repeats reported an
-`exit_code` mismatch in `cli.explicit-loop-over-invalid-environment`. Focused
-run [#790](https://github.com/appunni-m/uvicorn-rs/actions/runs/42964190383)
-passed 100 attempts without reproducing it. PR CI
-[#791](https://github.com/appunni-m/uvicorn-rs/actions/runs/42976830658)
-stopped on a stale HTTP/3 trace marker and a stock Windows Uvicorn oracle reset
-in `http1.request-body-batch-early-response-drain`; the candidate result and
-new isolated trace are being checked. Benchmark
-[#388](https://github.com/appunni-m/uvicorn-rs/actions/runs/42951138724) is
-incomplete on two Hypercorn HTTP/3 reference cells. These runs do not qualify
-0.3.6. The separate Coverage-MCP receipt is optional; exact-source raw 100%
-coverage remains mandatory. The maintainer will run their real FastAPI
-application after repository release qualification.
+Main CI [#794](https://github.com/appunni-m/uvicorn-rs/actions/runs/43007285333)
+passed on main commit `70217a7c3a9a964128086141387a2b7015ccc931`: all 1,455
+indexed cases and three ASGI/native repeats passed, with 15,188/15,188 regions
+and 11,177/11,177 lines. Platform, package, and consumer jobs also passed.
+This baseline predates [PR #43](https://github.com/appunni-m/uvicorn-rs/pull/43)'s
+benchmark-policy change; the final release source needs a fresh exact-main CI
+run after merge. Benchmark
+[#389](https://github.com/appunni-m/uvicorn-rs/actions/runs/43007285362) is
+recorded as a validated partial aggregate: Linux x86-64 and macOS ARM64 completed;
+Linux ARM64 recorded 56 qualified pairs and a Hypercorn 0.18.0 asyncio timeout
+waiting for HTTP/3 `fastapi-validated-route` response headers after 3,020
+requests. The server output is empty; cause and event order are unknown. PR #43
+scopes the exception to that exact reference cell and keeps all five Rust
+candidate repetitions required. A fresh complete three-system run remains
+necessary on the final main source. Documentation deployment
+[#379](https://github.com/appunni-m/uvicorn-rs/actions/runs/43007285311) passed
+for the baseline main source. These receipts do not qualify 0.3.6 yet. The
+maintainer will run their real FastAPI application after repository release
+qualification.
 
 ### Historical status (2026-11-05)
 

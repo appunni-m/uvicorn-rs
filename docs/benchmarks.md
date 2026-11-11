@@ -59,17 +59,15 @@ despite `Content-Length: 1048576`, then Hypercorn's QUIC UDP task raised
 confirms the truncation and missing map entry but not event ordering. The run
 ended before collecting all uvicorn-rs repetitions for this workload.
 
-The maintained matrix has two exact reference exceptions. When both
-`hypercorn-asyncio` and `uvicorn-rs-asyncio` are selected, the runner omits only
-the Hypercorn 0.18.0 `slow-reader-backpressure` cell on Linux `aarch64`, or the
-Hypercorn 0.18.0 `large-response` cell on macOS `arm64`. Each H3 report and
-driver receipt records the policy ID, reason, platform, version, and omitted
-reference. The Rust candidate still runs every planned repetition and must
-pass response and shutdown checks. An excluded cell has no live reference and
-cannot produce a speedup or latency comparison. These exceptions do not apply
-to other workloads, servers, versions, or systems; the slow-reader trace-only
-mode still runs Hypercorn so the earlier failure can be investigated. Neither
-captured log establishes event ordering or root cause. A complete exact-main
+The maintained matrix has narrow, workload-specific reference exceptions for
+known Hypercorn 0.18.0 HTTP/3 failures. Each policy is bound to an exact
+reference, candidate, workload, operating system, and architecture. The H3
+report and driver receipt record the policy ID, reason, platform, version, and
+omitted reference. The Rust candidate still runs every planned repetition and
+must pass response and shutdown checks. An excluded cell has no live reference
+and cannot produce a speedup or latency comparison. Exceptions do not apply to
+other workloads, servers, versions, or systems; diagnostic modes still run the
+reference so prior failures can be investigated. A complete exact-main
 three-system run is still required for release qualification.
 
 **Timing qualification:** the category runners now explicitly match access-log,
@@ -1018,6 +1016,17 @@ failure has a confirmed cause. The matching Rust candidate must still complete
 all five repetitions with correct responses and graceful shutdown. These
 exceptions provide no matched speed ratio and do not apply to other platforms,
 workloads, server loops, or Hypercorn versions.
+
+Exact-main benchmark run [#389](https://github.com/appunni-m/uvicorn-rs/actions/runs/43007285362)
+added one further reference-only exception for Linux ARM64 Hypercorn 0.18.0
+asyncio on the HTTP/3 `fastapi-validated-route` workload. At repetition 3, the
+client completed 3,020 requests in 7.9358 seconds and then timed out waiting
+for response headers. The retained server output is empty, so the cause and
+event order are unknown. The old run did not have this policy and stopped
+before collecting all candidate repetitions; it is not qualification evidence
+for this cell. On a fresh run, all five `uvicorn-rs-asyncio` repetitions must
+return correct responses and shut down cleanly. The reference is omitted only
+for this exact cell, and no matched ratio is reported.
 
 The public parity gate also has one narrowly scoped candidate-only policy for
 the intermittent macOS ARM64 stock Uvicorn 0.54.0 TLS-WebSocket handshake

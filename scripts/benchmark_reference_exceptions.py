@@ -194,6 +194,30 @@ HYPERCORN_H3_FIXED_LINUX_AARCH64 = {
     ),
 }
 
+HYPERCORN_H3_VALIDATED_ROUTE_LINUX_AARCH64 = {
+    "policy_id": "hypercorn-0.18.0-h3-validated-route-linux-aarch64-header-timeout",
+    "category": "http3",
+    "workload": "fastapi-validated-route",
+    "reference": "hypercorn-asyncio",
+    "candidate": "uvicorn-rs-asyncio",
+    "platform_system": "Linux",
+    "machine": "aarch64",
+    "hypercorn_version": "0.18.0",
+    "reason": (
+        "Exact-main benchmark run #389 (GitHub run 43007285362, source "
+        "70217a7c3a9a964128086141387a2b7015ccc931) recorded a Hypercorn "
+        "0.18.0 asyncio HTTP/3 failure on Linux ARM64 during the FastAPI "
+        "validated-route workload at repetition 3. The client completed "
+        "3,020 requests in 7.9358 seconds, then reported one timeout waiting "
+        "for response headers; the retained server output is empty, so cause "
+        "and event ordering are unconfirmed. Candidate cells captured before "
+        "the reference failure had zero client failures and clean shutdown. "
+        "Exclude only this exact reference cell, require a fresh run to pass "
+        "all five candidate repetitions with correct responses and graceful "
+        "shutdown, and emit no matched speed ratio for this pair."
+    ),
+}
+
 HYPERCORN_H3_REFERENCE_EXCEPTIONS = (
     HYPERCORN_H3_SLOW_READER_LINUX_AARCH64,
     HYPERCORN_H3_SLOW_READER_LINUX_X86_64,
@@ -204,6 +228,7 @@ HYPERCORN_H3_REFERENCE_EXCEPTIONS = (
     HYPERCORN_H3_LARGE_RESPONSE_LINUX_AARCH64,
     HYPERCORN_H3_FIXED_LINUX_X86_64,
     HYPERCORN_H3_FIXED_LINUX_AARCH64,
+    HYPERCORN_H3_VALIDATED_ROUTE_LINUX_AARCH64,
 )
 
 
