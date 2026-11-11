@@ -2,7 +2,10 @@
 
 > **Evidence path note:** Paths under `benchmarks/results/` identify local-only receipts excluded from Git. They are available only in a maintainer working copy when the referenced files are present; hosted artifacts are linked directly where available.
 
-## Current release coverage acceptance (2026-11-10)
+<a id="current-release-coverage-acceptance-2026-11-10"></a>
+<a id="current-release-coverage-acceptance-2026-11-11"></a>
+
+## Current release coverage acceptance (2026-11-11)
 
 Release requires a successful complete CI report from the exact final `main`
 commit with **100% executable regions and lines**, complete case attribution,
@@ -13,14 +16,23 @@ and publication workflows revalidate this same evidence. Coverage-MCP may be
 used to investigate gaps, but an independent MCP receipt is not a release
 requirement.
 
-Main CI [#777](https://github.com/appunni-m/uvicorn-rs/actions/runs/42840520790)
-completed on `bd134de9118da88309dd3f0e7e91cb59712b8215`. The full 1,455-case
+Main CI [#783](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765868)
+completed on `f21bb1967837b2c981208ac865e52ba68d887d35`. The full 1,455-case
 matrix passed with three ASGI and native repeats and **15,120/15,120 regions
-and 11,120/11,120 lines**. Candidate #5 rechecked the exact-source raw report
-and passed the coverage gate before a later standalone HTTP/3 archive-consumer
-failure. These receipts bind to the unpublished `v0.3.4` source and do not
-qualify the 0.3.5 fix-forward; the updated source needs its own hosted report
-and raw coverage artifact.
+and 11,120/11,120 lines**. Candidate [#6](https://github.com/appunni-m/uvicorn-rs/actions/runs/42933366398)
+rechecked the exact-source raw report and passed coverage, then failed a later
+performance-artifact revalidation because the workflow step lacked
+`PERFORMANCE_EVENT`. These receipts bind to the unpublished `v0.3.5` source
+and do not qualify the 0.3.6 fix-forward; the updated source needs its own
+hosted report and raw coverage artifact.
+
+Coverage artifact
+[13816632079](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765868/artifacts/13816632079)
+is 372,754,233 bytes with archive SHA-256
+`d7e74456472e3f2f287bfe32ffb53e8849b2f7e82cc3eab997184d2de62fad4`. The
+report records source SHA-256
+`e92d743b0a6bc280b550eb71233bff103f4a29e5661e8ef87e0783114665b78f` and six
+complete repeats across 1,455/1,455 indexed cases.
 
 The last completed report, main CI [#746](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884),
 attempt 1, completed on clean commit

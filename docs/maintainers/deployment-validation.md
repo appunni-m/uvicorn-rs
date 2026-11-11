@@ -3,15 +3,15 @@
 The [deployment guide](../deployment.md) is the operator-facing entry point. This page preserves validation procedures, framework comparison setup, and run-specific evidence for maintainers.
 
 
-As of 2026-11-10, main CI [#777](https://github.com/appunni-m/uvicorn-rs/actions/runs/42840520790)
-passed installed-wheel Uvicorn 0.54.0 parity, package consumers, and complete
-unified coverage on commit `bd134de9118da88309dd3f0e7e91cb59712b8215`.
-Benchmark [#384](https://github.com/appunni-m/uvicorn-rs/actions/runs/42840521044)
-completed across all three systems. Candidate [#5](https://github.com/appunni-m/uvicorn-rs/actions/runs/42859321214)
-passed coverage and performance, then failed the standalone archive consumer
-because its test fixture served a CA certificate as the server leaf. Version
-0.3.5 corrects that fixture on `develop`; exact-source qualification is
-required for that version. See the
+As of 2026-11-11, main CI [#783](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765868)
+passed installed-wheel Uvicorn 0.54.0 parity, package consumers, and exact-source
+100% unified coverage on commit `f21bb1967837b2c981208ac865e52ba68d887d35`.
+Benchmark [#387](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765874)
+completed across all three systems. Candidate [#6](https://github.com/appunni-m/uvicorn-rs/actions/runs/42933366398)
+passed coverage, performance, and the standalone archive consumer, then failed
+the final performance-artifact recheck because `PERFORMANCE_EVENT` was missing
+from that step's environment. Version 0.3.6 fixes the workflow input and needs
+fresh exact-source qualification. See the
 [support matrix](../support-matrix.md) for current status.
 
 The PyPI distribution is `uvicorn-rs`, exposing `uvicorn` imports and command;
@@ -25,9 +25,9 @@ linked from the support matrix rather than these deployment probes.
 
 The old Cargo 0.1.0 releases are historical. Both `asgi-lifespan-protocol-rs`
 and the consolidated `uvicorn-rs` crate have published 0.2.1 releases. The
-immutable tags `v0.3.1` through `v0.3.4` stopped at candidate
+immutable tags `v0.3.1` through `v0.3.5` stopped at candidate
 qualification, and no candidate Cargo or PyPI artifact was published. Version
-0.3.5 is being prepared; `release.yml`
+0.3.6 is being prepared; `release.yml`
 publishes Cargo and PyPI through GitHub Trusted Publishing after its exact
 candidate gates pass. No local Cargo publish or token is used. Build and
 install a wheel into the same environment as the application and its Python

@@ -23,8 +23,45 @@ Use these state labels precisely:
 <a id="current-release-gates-2026-11-08"></a>
 <a id="current-release-gates-2026-11-09"></a>
 <a id="current-release-gates-2026-11-10"></a>
+<a id="current-release-gates-2026-11-11"></a>
 
-## Current release status (2026-11-10)
+## Current release status (2026-11-11)
+
+The next release target is `0.3.6`. Immutable candidate tag `v0.3.5` points to
+`f21bb1967837b2c981208ac865e52ba68d887d35`. On that source, main CI
+[#783](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765868)
+passed, including exact-source 100% unified coverage; benchmark
+[#387](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765874)
+passed on Linux x86-64, Linux ARM64, and macOS ARM64; docs deployment
+[#373](https://github.com/appunni-m/uvicorn-rs/actions/runs/42931481551) passed.
+
+Candidate [#6](https://github.com/appunni-m/uvicorn-rs/actions/runs/42933366398)
+verified the exact tag, CI/benchmark evidence and package artifacts. Its raw
+coverage recheck and performance acceptance passed, and the extracted Cargo
+archives built as an independent HTTP/3 consumer. The candidate then failed
+the final performance-artifact recheck with `KeyError: PERFORMANCE_EVENT`
+because that step lacked the selected run's event input. The candidate bundle
+was not uploaded, `release.yml` did not start, and nothing was published.
+Because `v0.3.5` is immutable, the workflow fix uses the new version `0.3.6`.
+
+| Gate | Current evidence | Status |
+| --- | --- | --- |
+| Previous exact-main CI, raw coverage and package consumers | [CI #783](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765868), source `f21bb19` | Passed for the 0.3.5 source; 0.3.6 needs its own exact-source run. |
+| Previous three-system ordinary-FastAPI benchmark | [Benchmark #387](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765874), source `f21bb19` | Linux x86-64, Linux ARM64, macOS ARM64, and aggregate evidence validation passed. |
+| Previous documentation deployment | [Docs #373](https://github.com/appunni-m/uvicorn-rs/actions/runs/42931481551), source `f21bb19` | Passed; 0.3.6 documentation needs its own deployment. |
+| Immutable `v0.3.5` candidate | [Candidate #6](https://github.com/appunni-m/uvicorn-rs/actions/runs/42933366398) | Failed final performance metadata revalidation due to missing `PERFORMANCE_EVENT`; no candidate bundle or publication. |
+| `0.3.6` exact-source qualification | Version and candidate-workflow correction on `develop` | Pending PR, exact-main CI/coverage, benchmark, docs deployment, and candidate assembly. |
+| Cargo and PyPI publication | `release.yml` with configured crates.io and PyPI Trusted Publishers | Pending successful `0.3.6` candidate; GitHub Actions is the only publication path. |
+
+The package graph remains the Python-free Cargo crate `uvicorn-rs` with HTTP/3
+behind the optional `http3` feature, `asgi-lifespan-protocol-rs`, and PyPI
+distribution `uvicorn-rs` exposing the `uvicorn` command/imports. The optional
+internal adapter remains `uvicorn-rs-py`; no separate H3 or Quinn crate is
+published. `release.yml` publishes the lifecycle crate, verifies it, publishes
+the server crate, verifies registry checksums, then publishes PyPI and creates
+the GitHub Release through Trusted Publishing.
+
+## Previous release status (2026-11-10; superseded)
 
 Version 0.3.5 is being prepared on `develop` after immutable tag `v0.3.4`
 failed its candidate smoke check. Exact-main commit
@@ -83,8 +120,8 @@ skipped. Build and test jobs have no registry credentials.
 The exact-source raw coverage gate requires 100% regions and lines, a complete
 passing matrix, and recorded source, run, artifact, report, context, build, and
 matrix identities. Candidate assembly revalidates that evidence against the
-tagged source commit. The immutable `v0.3.1` through `v0.3.4` candidates did not
-qualify and their publication workflows did not publish. Version 0.3.5 must
+tagged source commit. The immutable `v0.3.1` through `v0.3.5` candidates did not
+qualify and their publication workflows did not publish. Version 0.3.6 must
 pass the same checks on its own exact source before publication.
 
 ## Workflow ownership
@@ -198,9 +235,9 @@ boundary; see [benchmark status](benchmark-status.md#focused-exact-main-http1-up
 built successfully for its recorded source, with PR deployment skipped; this
 subsequent documentation refresh needs its own strict build.
 
-For version 0.3.5, after all gates pass, verify exact-main CI, raw 100% coverage
+For version 0.3.6, after all gates pass, verify exact-main CI, raw 100% coverage
 and benchmark evidence, assemble the complete candidate, and create the
-immutable `v0.3.5` tag. The successful candidate automatically starts
+immutable `v0.3.6` tag. The successful candidate automatically starts
 `release.yml`, which publishes Cargo in lifecycle/server order and then PyPI
 `uvicorn-rs` through GitHub Trusted Publishing. Verify registry bytes and clean
 installs. The earlier `v0.3.3` tag remains unpublished and will not be moved. See the
@@ -288,7 +325,7 @@ and consumers are verified.
 | PyPI | uvicorn-rs | Optional Python compatibility client for standard Python ASGI applications. It is not required by the Python-free Rust library. |
 | Documentation | README, MkDocs site, and docs.rs | Repository docs deploy through GitHub Pages; crate API docs are generated from published Cargo archives. |
 
-The PyPI distribution is `uvicorn-rs`, following the project's `pillow-rs` naming convention. It provides the `uvicorn` import namespace, `uvicorn` command, and `python -m uvicorn` entry point for in-place use. The root Cargo/PyO3 integration package remains `uvicorn-rs-py`; that internal name and optional console alias are not the PyPI distribution name. The current source metadata declares target version `0.3.5`, Python `>=3.9`, Uvicorn-style base dependencies, and a `[standard]` extra. Immutable tags `v0.3.1` through `v0.3.4` did not pass candidate qualification; no candidate PyPI `uvicorn-rs` release is present in the registries. The 2026-11-10 read-only registry check found 0.2.1 as the latest published version of both Cargo crates; PyPI had no `uvicorn-rs` release. The exact compatibility scope is in the [support matrix](support-matrix.md). Historical `0.2.2` inspection receipts below are retained as historical evidence and do not describe the current candidate.
+The PyPI distribution is `uvicorn-rs`, following the project's `pillow-rs` naming convention. It provides the `uvicorn` import namespace, `uvicorn` command, and `python -m uvicorn` entry point for in-place use. The root Cargo/PyO3 integration package remains `uvicorn-rs-py`; that internal name and optional console alias are not the PyPI distribution name. The current source metadata declares target version `0.3.6`, Python `>=3.9`, Uvicorn-style base dependencies, and a `[standard]` extra. Immutable tags `v0.3.1` through `v0.3.5` did not pass candidate qualification; no candidate PyPI `uvicorn-rs` release is present in the registries. The 2026-11-10 read-only registry check found 0.2.1 as the latest published version of both Cargo crates; PyPI had no `uvicorn-rs` release. The exact compatibility scope is in the [support matrix](support-matrix.md). Historical `0.2.2` inspection receipts below are retained as historical evidence and do not describe the current candidate.
 
 The historical 0.1.0 Cargo bootstrap is recorded below. A registry API check on 2026-10-25 returned HTTP 404 for the then-removed `uvicorn-rs`, `uvicorn-rs-h3`, and `uvicorn-rs-h3-quinn` names; the subsequent `uvicorn-rs` 0.2.1 publication is recorded above. The old H3/Quinn package identities are not current release targets. The `uvicorn-rs` package vendors the H3 protocol and Quinn adapter source behind `http3`; it does not depend on separate project-owned H3 crates. `asgi-lifespan-protocol-rs` is the current lifecycle-contract package. The Python adapter depends on `uvicorn-rs`; Rust-native frameworks can depend on `uvicorn-rs` without Python.
 

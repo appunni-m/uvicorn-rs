@@ -1,8 +1,9 @@
 # Deployment guidance
 
-Version 0.3.5 is being prepared. The immutable `v0.3.4` candidate failed its
-standalone HTTP/3 archive consumer because the harness presented a CA
-certificate as the server identity; no Cargo or PyPI artifact was published.
+Version 0.3.6 is being prepared. Immutable tag `v0.3.5` passed candidate
+coverage, performance, and standalone HTTP/3 consumer checks, then failed the
+final performance-artifact recheck because a workflow environment value was
+missing. No Cargo or PyPI artifact was published.
 See the [release status](releases.md) and [compatibility status](uvicorn-compatibility.md).
 Evaluate your application after the candidate is published and repository
 release qualification is complete.

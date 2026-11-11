@@ -295,6 +295,7 @@ jobs:
           RELEASE_COMMIT: ${{ steps.tag.outputs.commit }}
           PERFORMANCE_RUN_ID: ${{ steps.performance-run.outputs.run-id }}
           PERFORMANCE_RUN_ATTEMPT: ${{ steps.performance-run.outputs.run-attempt }}
+          PERFORMANCE_EVENT: ${{ steps.performance-run.outputs.event }}
           PERFORMANCE_ARTIFACT_ID: ${{ steps.performance-run.outputs.artifact-id }}
           PERFORMANCE_ARTIFACT_NAME: ${{ steps.performance-run.outputs.artifact-name }}
           PERFORMANCE_ARTIFACT_SIZE: ${{ steps.performance-run.outputs.artifact-size }}

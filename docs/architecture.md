@@ -6,8 +6,8 @@ This document describes the PyO3/ASGI implementation for the PyPI
 distribution `uvicorn-rs` and the Python-free Cargo server crate `uvicorn-rs`.
 The root Cargo integration package and optional extra console script are named
 `uvicorn-rs-py`. The latest published Cargo version is 0.2.1. Immutable tags
-`v0.3.1` through `v0.3.4` did not pass qualification; no candidate release was
-published. Version 0.3.5 is being prepared. PyPI Trusted
+`v0.3.1` through `v0.3.5` did not pass qualification; no candidate release was
+published. Version 0.3.6 is being prepared. PyPI Trusted
 Publishing is configured for `appunni-m/uvicorn-rs`, workflow `release.yml`,
 environment `pypi`.
 
@@ -18,19 +18,20 @@ the adapter enables the required features and keeps application loading, the
 caller-owned event loop, ASGI scope/messages, context, and app exceptions on
 the Python side. The Rust-native crate remains usable without Python.
 
-Exact-main CI [#777](https://github.com/appunni-m/uvicorn-rs/actions/runs/42840520790)
-passed on `bd134de` with 100% raw coverage, parity, and package consumers.
-Benchmark [#384](https://github.com/appunni-m/uvicorn-rs/actions/runs/42840521044)
-completed on all three systems, and [docs #367](https://github.com/appunni-m/uvicorn-rs/actions/runs/42840520577)
-passed. Candidate [#5](https://github.com/appunni-m/uvicorn-rs/actions/runs/42859321214)
-failed only in the standalone archive consumer because the test fixture served
-a CA certificate as its leaf. Version 0.3.5 corrects that fixture; the new
-source needs fresh exact-source gates. Current blockers are listed in the
+Exact-main CI [#783](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765868)
+passed on `f21bb19` with 100% raw coverage, parity, and package consumers.
+Benchmark [#387](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765874)
+completed on all three systems, and [docs #373](https://github.com/appunni-m/uvicorn-rs/actions/runs/42931481551)
+passed. Candidate [#6](https://github.com/appunni-m/uvicorn-rs/actions/runs/42933366398)
+passed its coverage, performance, and standalone archive-consumer checks, then
+failed final performance-artifact revalidation because the step lacked
+`PERFORMANCE_EVENT`. Version 0.3.6 fixes that workflow input; the new source
+needs fresh exact-source gates. Current blockers are listed in the
 [release status](releases.md).
 The run-specific implementation records below are historical evidence for
 their stated revisions unless linked from the current
-[release status](releases.md#current-release-gates-2026-11-09),
-[coverage record](coverage.md#current-release-coverage-acceptance-2026-11-10),
+[release status](releases.md#current-release-gates-2026-11-11),
+[coverage record](coverage.md#current-release-coverage-acceptance-2026-11-11),
 or [benchmark report](benchmark-results.md).
 
 Coverage builds still compile limited legacy H3 helpers for fault-contract
