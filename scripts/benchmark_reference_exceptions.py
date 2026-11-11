@@ -66,6 +66,26 @@ HYPERCORN_H3_SLOW_READER_LINUX_X86_64_UVLOOP = {
     ),
 }
 
+HYPERCORN_H3_FIXED_LINUX_X86_64_UVLOOP = {
+    "policy_id": "hypercorn-0.18.0-h3-fixed-linux-x86-64-uvloop-header-timeout",
+    "category": "http3",
+    "workload": "fixed",
+    "reference": "hypercorn-uvloop",
+    "candidate": "uvicorn-rs-uvloop",
+    "platform_system": "Linux",
+    "machine": "x86_64",
+    "hypercorn_version": "0.18.0",
+    "reason": (
+        "In the exact-main benchmark run, Hypercorn 0.18.0 uvloop failed the "
+        "fixed FastAPI reference workload on Linux x86-64: the client attempted "
+        "4,792 requests and recorded one timeout waiting for HTTP/3 response "
+        "headers. The retained reference output has no server traceback, so the "
+        "cause is unconfirmed. Keep only this exact reference cell candidate-only; "
+        "uvicorn-rs uvloop must still pass all five repetitions with correct "
+        "responses and graceful shutdown. Do not emit a matched speed ratio."
+    ),
+}
+
 HYPERCORN_H3_LARGE_RESPONSE_MACOS_ARM64 = {
     "policy_id": "hypercorn-0.18.0-h3-large-response-macos-arm64-stream-keyerror",
     "category": "http3",
@@ -104,6 +124,27 @@ HYPERCORN_H3_LARGE_RESPONSE_LINUX_X86_64 = {
         "source, uvicorn-rs asyncio passed five candidate-only repetitions with "
         "zero failures and clean shutdown. Keep this exact reference cell "
         "candidate-only; no matched speed comparison is available."
+    ),
+}
+
+HYPERCORN_H3_LARGE_RESPONSE_LINUX_AARCH64 = {
+    "policy_id": "hypercorn-0.18.0-h3-large-response-linux-aarch64-header-timeout",
+    "category": "http3",
+    "workload": "large-response",
+    "reference": "hypercorn-asyncio",
+    "candidate": "uvicorn-rs-asyncio",
+    "platform_system": "Linux",
+    "machine": "aarch64",
+    "hypercorn_version": "0.18.0",
+    "reason": (
+        "In the exact-main benchmark run, Hypercorn 0.18.0 asyncio failed the "
+        "1 MiB large-response reference workload on Linux ARM64 at repetition 2. "
+        "The client recorded one timeout waiting for HTTP/3 response headers "
+        "while reporting 10 MiB of response data. The retained reference output "
+        "does not establish the cause. Keep only this exact reference cell "
+        "candidate-only; uvicorn-rs asyncio must still pass all five repetitions "
+        "with correct responses and graceful shutdown. Do not emit a matched "
+        "speed ratio."
     ),
 }
 
@@ -157,8 +198,10 @@ HYPERCORN_H3_REFERENCE_EXCEPTIONS = (
     HYPERCORN_H3_SLOW_READER_LINUX_AARCH64,
     HYPERCORN_H3_SLOW_READER_LINUX_X86_64,
     HYPERCORN_H3_SLOW_READER_LINUX_X86_64_UVLOOP,
+    HYPERCORN_H3_FIXED_LINUX_X86_64_UVLOOP,
     HYPERCORN_H3_LARGE_RESPONSE_MACOS_ARM64,
     HYPERCORN_H3_LARGE_RESPONSE_LINUX_X86_64,
+    HYPERCORN_H3_LARGE_RESPONSE_LINUX_AARCH64,
     HYPERCORN_H3_FIXED_LINUX_X86_64,
     HYPERCORN_H3_FIXED_LINUX_AARCH64,
 )

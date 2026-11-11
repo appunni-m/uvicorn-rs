@@ -1006,6 +1006,19 @@ passed all five repetitions with valid timings and clean shutdown. This cell
 has no matched performance ratio; the exception does not apply to other
 Hypercorn versions, platforms, servers, or workloads.
 
+The exact-main benchmark run 42951138724 added two narrowly scoped
+candidate-only reference exceptions. On Linux ARM64, Hypercorn 0.18.0 asyncio
+timed out waiting for response headers during repetition 2 of the HTTP/3
+`large-response` FastAPI workload; its client recorded 10 requests and 10 MiB
+of response data, and the retained reference output contains no server
+traceback. On Linux x86-64, Hypercorn 0.18.0 uvloop timed out waiting for
+response headers during repetition 3 of the HTTP/3 `fixed` workload after
+4,792 requests; its retained output also contains no server traceback. Neither
+failure has a confirmed cause. The matching Rust candidate must still complete
+all five repetitions with correct responses and graceful shutdown. These
+exceptions provide no matched speed ratio and do not apply to other platforms,
+workloads, server loops, or Hypercorn versions.
+
 The public parity gate also has one narrowly scoped candidate-only policy for
 the intermittent macOS ARM64 stock Uvicorn 0.54.0 TLS-WebSocket handshake
 timeout. It applies only to
