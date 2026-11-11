@@ -17,19 +17,22 @@ optional `http3`, and `asgi-lifespan-protocol-rs`. `release.yml` publishes;
 <a id="current-verification-status-2026-11-07"></a>
 <a id="current-verification-status-2026-11-09"></a>
 <a id="current-verification-status-2026-11-10"></a>
+<a id="current-verification-status-2026-11-11"></a>
 
-## Current verification status (2026-11-10)
+## Current verification status (2026-11-11)
 
-Main commit `bd134de` passed CI [#777](https://github.com/appunni-m/uvicorn-rs/actions/runs/42840520790)
+Main commit `f21bb19` passed CI [#783](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765868)
 and 100% raw coverage: 15,120/15,120 regions and 11,120/11,120 lines.
-Benchmark [#384](https://github.com/appunni-m/uvicorn-rs/actions/runs/42840521044)
+Benchmark [#387](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765874)
 completed its Linux x86-64, Linux ARM64, and macOS ARM64 matrix and aggregate
-validation. Candidate [#5](https://github.com/appunni-m/uvicorn-rs/actions/runs/42859321214)
-passed source coverage and performance validation, then failed the standalone
-HTTP/3 archive consumer because its test fixture served a CA as the leaf.
-Version 0.3.5 fixes that harness issue on `develop`; fresh exact-source CI,
-coverage, benchmark, docs, and candidate checks are required. Immutable tags
-`v0.3.1` through `v0.3.4` did not publish packages.
+validation; docs [#373](https://github.com/appunni-m/uvicorn-rs/actions/runs/42931481551)
+passed. Candidate [#6](https://github.com/appunni-m/uvicorn-rs/actions/runs/42933366398)
+passed coverage, performance, and the standalone HTTP/3 archive consumer, then
+failed final performance-artifact revalidation because `PERFORMANCE_EVENT` was
+missing from the step environment. Version 0.3.6 fixes that candidate input.
+Fresh exact-source CI, coverage, benchmark, docs, and candidate checks are
+required. Immutable tags `v0.3.1` through
+`v0.3.5` did not publish packages.
 The independent Coverage-MCP receipt is optional; raw 100% coverage remains
 mandatory. The maintainer will run their real FastAPI application after
 repository release qualification.

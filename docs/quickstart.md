@@ -1,11 +1,11 @@
 # Run a Python ASGI app
 
-This guide starts the example from a repository checkout. As of 2026-11-10,
-version 0.3.5 is being prepared. Candidate `v0.3.4` passed exact-source CI,
-coverage, benchmark, and docs gates but its standalone HTTP/3 archive consumer
-used a CA certificate as the server identity. Rustls rejected that invalid
-fixture before the protocol probe ran. Check the [release status](releases.md)
-before installing a registry version.
+This guide starts the example from a repository checkout. As of 2026-11-11,
+version 0.3.6 is being prepared. Candidate `v0.3.5` passed its exact-source
+coverage and performance rechecks and built the standalone HTTP/3 consumer, but
+its final performance-artifact recheck failed because a required workflow
+environment value was missing. No package was published. Check the
+[release status](releases.md) before installing a registry version.
 
 ## Start the checked-out example
 
@@ -33,12 +33,12 @@ Create an environment that contains your application dependencies and the
 candidate server, but not upstream Uvicorn. Both distributions provide files
 under the `uvicorn` import name, so keep them in separate environments.
 
-After `uvicorn-rs` 0.3.5 is available on PyPI:
+After `uvicorn-rs` 0.3.6 is available on PyPI:
 
 ```sh
 python -m venv .venv-uvicorn-rs
 . .venv-uvicorn-rs/bin/activate
-python -m pip install "fastapi" "uvicorn-rs[standard]==0.3.5"
+python -m pip install "fastapi" "uvicorn-rs[standard]==0.3.6"
 python -m uvicorn myapp.main:app --host 127.0.0.1 --port 8000
 ```
 

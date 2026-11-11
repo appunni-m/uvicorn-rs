@@ -7,19 +7,23 @@
 <a id="current-source-status-2026-11-07"></a>
 <a id="current-source-status-2026-11-09"></a>
 <a id="current-source-status-2026-11-10"></a>
+<a id="current-source-status-2026-11-11"></a>
 
-## Current source status (2026-11-10)
+## Current source status (2026-11-11)
 
-Main CI [#777](https://github.com/appunni-m/uvicorn-rs/actions/runs/42840520790)
-passed on `bd134de9118da88309dd3f0e7e91cb59712b8215`, including the complete
+Main CI [#783](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765868)
+passed on `f21bb1967837b2c981208ac865e52ba68d887d35`, including the complete
 1,455-case matrix and 100% unified coverage: 15,120/15,120 regions and
-11,120/11,120 lines. Benchmark [#384](https://github.com/appunni-m/uvicorn-rs/actions/runs/42840521044)
-completed on Linux x86-64, Linux ARM64, and macOS ARM64. Candidate [#5](https://github.com/appunni-m/uvicorn-rs/actions/runs/42859321214)
-failed at the standalone archive-consumer check because its certificate
-fixture used a CA as a server leaf. Version 0.3.5 corrects the fixture and
-needs fresh exact-source CI, coverage, benchmark, docs, and candidate gates.
+11,120/11,120 lines. Benchmark [#387](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765874)
+completed on Linux x86-64, Linux ARM64, and macOS ARM64; docs [#373](https://github.com/appunni-m/uvicorn-rs/actions/runs/42931481551)
+passed. Candidate [#6](https://github.com/appunni-m/uvicorn-rs/actions/runs/42933366398)
+passed coverage and performance rechecks and the standalone HTTP/3 archive
+consumer, then failed final performance-artifact revalidation because
+`PERFORMANCE_EVENT` was missing from the step environment. Version 0.3.6 fixes
+that candidate workflow input and needs fresh exact-source CI, coverage,
+benchmark, docs, and candidate gates.
 
-The immutable `v0.3.1` through `v0.3.4` tags remain unpublished; no Cargo or PyPI
+The immutable `v0.3.1` through `v0.3.5` tags remain unpublished; no Cargo or PyPI
 package has been published. See the [release guide](releases.md).
 
 ### Historical source status (2026-11-03)

@@ -1,10 +1,10 @@
 # Can I replace Uvicorn?
 
-**Not yet from PyPI.** Immutable tag `v0.3.4` passed exact-source CI,
-three-system benchmark, and documentation checks, but its standalone HTTP/3
-archive consumer failed before the protocol probe because its fixture used a
-self-signed CA as the server leaf. Version 0.3.5 corrects the fixture and
-needs fresh exact-source gates before publication.
+**Not yet from PyPI.** Immutable tag `v0.3.5` passed exact-source coverage,
+performance acceptance, and the standalone HTTP/3 archive-consumer check, but
+its final performance-artifact recheck failed because the candidate workflow
+omitted a required environment value. Version 0.3.6 fixes that workflow input
+and requires fresh exact-source gates before publication.
 The distribution name is `uvicorn-rs`; it provides the `uvicorn` command, the
 `uvicorn` import namespace, and `python -m uvicorn`. The optional internal
 Cargo/PyO3 adapter remains `uvicorn-rs-py`. Keep upstream `uvicorn` and
@@ -19,20 +19,25 @@ describe the install path after publication.
 <a id="current-status-2026-11-07"></a>
 <a id="current-status-2026-11-09"></a>
 <a id="current-status-2026-11-10"></a>
+<a id="current-status-2026-11-11"></a>
 
-## Current status (2026-11-10)
+## Current status (2026-11-11)
 
-Main commit `bd134de` passed CI [#777](https://github.com/appunni-m/uvicorn-rs/actions/runs/42840520790)
-with 100% unified coverage (15,120/15,120 regions and 11,120/11,120 lines),
-and benchmark [#384](https://github.com/appunni-m/uvicorn-rs/actions/runs/42840521044)
-completed on Linux x86-64, Linux ARM64, and macOS ARM64. Candidate
-[#5](https://github.com/appunni-m/uvicorn-rs/actions/runs/42859321214) passed
-the exact-source coverage and performance rechecks, then failed the standalone
-HTTP/3 archive consumer because the harness used its CA as the server leaf.
-Version 0.3.5 fixes this fixture and requires fresh exact-source gates.
+Main commit `f21bb1967837b2c981208ac865e52ba68d887d35` passed CI
+[#783](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765868),
+including the exact-source raw 100% unified coverage gate. Benchmark
+[#387](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765874)
+completed on Linux x86-64, Linux ARM64, and macOS ARM64, and docs deployment
+[#373](https://github.com/appunni-m/uvicorn-rs/actions/runs/42931481551) passed.
+Candidate [#6](https://github.com/appunni-m/uvicorn-rs/actions/runs/42933366398)
+passed coverage and performance rechecks and built the exact Cargo archives as
+a standalone HTTP/3 consumer. It then failed final performance-artifact
+revalidation with `KeyError: PERFORMANCE_EVENT`; no candidate bundle was
+uploaded and `release.yml` did not start. Version 0.3.6 supplies that missing
+workflow value and requires fresh exact-source gates.
 
-The immutable `v0.3.1` through `v0.3.4` tags remain unpublished. No
-Cargo or PyPI artifact was published. See the [release guide](releases.md) for the current stage and the
+The immutable `v0.3.1` through `v0.3.5` tags remain unpublished. No Cargo or
+PyPI artifact was published. See the [release guide](releases.md) for the current stage and the
 [versioned compatibility contract](maintainers/uvicorn-0.54.0-contract.md)
 for reference-only failures and their candidate acceptance rules.
 
@@ -342,7 +347,7 @@ To replace upstream Uvicorn:
 
 ```sh
 python -m pip uninstall uvicorn
-python -m pip install "uvicorn-rs[standard]==0.3.5"
+python -m pip install "uvicorn-rs[standard]==0.3.6"
 uvicorn --help
 python -m uvicorn --help
 ```

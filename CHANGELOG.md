@@ -4,15 +4,15 @@ Notable user-facing changes are listed here. An `Unreleased` entry describes
 work in progress; it does not mean a candidate has passed the release gates or
 that a package has been published.
 
-## 0.3.5 (Unreleased)
+## 0.3.6 (Unreleased)
 
-The immutable `v0.3.4` candidate passed exact-source CI, 100% unified coverage,
-the three-system benchmark, and docs deployment, but its standalone HTTP/3
-archive consumer rejected the test server certificate: the harness presented
-a self-signed CA as an end-entity certificate. This fix-forward issues a
-proper CA and a separately signed server certificate. The server crate itself
-was not changed by that candidate failure. Fresh exact-source gates and
-candidate qualification are required before GitHub Actions can publish 0.3.5.
+The immutable `v0.3.5` candidate passed exact-source coverage, performance
+acceptance, and the standalone HTTP/3 archive consumer, but failed its final
+performance-artifact recheck because the workflow omitted the selected event
+from that step's environment. No 0.3.5 artifacts were published. This
+fix-forward passes the event identity to the recheck and prepares version
+0.3.6; fresh exact-source gates and candidate qualification are required before
+GitHub Actions can publish it.
 
 ### Fixed
 
@@ -21,11 +21,21 @@ candidate qualification are required before GitHub Actions can publish 0.3.5.
 - Carry forward normalized dependency-version comparison across benchmark
   systems while retaining each platform's full lockfile and installed-file
   integrity checks.
+- Pass the selected benchmark event to the final candidate-artifact
+  revalidation step.
 
 ### Packaging
 
 - Prepare the consolidated Cargo crates and PyPI `uvicorn-rs` distribution as
-  version 0.3.5. GitHub Actions remains the only publication path.
+  version 0.3.6. GitHub Actions remains the only publication path.
+
+## 0.3.5 (Unpublished candidate)
+
+The immutable `v0.3.5` candidate passed the exact-source coverage and
+performance rechecks and built the Cargo archives as a standalone HTTP/3
+consumer. Its final performance-artifact recheck failed because the step did
+not receive `PERFORMANCE_EVENT`. No Cargo or PyPI artifacts were published;
+the tag remains immutable.
 
 ## 0.3.4 (Unpublished candidate)
 

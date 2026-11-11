@@ -12,15 +12,16 @@ The Python-free uvicorn-rs Cargo library is the Rust server. uvicorn-rs-py is th
 The PyPI distribution is `uvicorn-rs`, following the project's
 `pillow-rs` naming convention. The root Cargo integration package and optional
 extra console script remain named `uvicorn-rs-py`; the installed compatibility
-command and import namespace are `uvicorn`. Main CI #777 passed installed-wheel
+command and import namespace are `uvicorn`. Main CI #783 passed installed-wheel
 parity, package consumers, and exact-source coverage on
-`bd134de9118da88309dd3f0e7e91cb59712b8215`; benchmark #384 completed on all
-three systems. Candidate #5 passed package, coverage, and performance checks
-but failed the standalone archive consumer because its harness used a CA as a
-server leaf. Version 0.3.5 fixes the certificate fixture and needs fresh
-exact-source CI, coverage, benchmark, and docs evidence. A separate
+`f21bb1967837b2c981208ac865e52ba68d887d35`; benchmark #387 completed on all
+three systems. Candidate #6 passed package, coverage, performance, and the
+standalone archive consumer, then failed final performance-artifact
+revalidation because its step lacked `PERFORMANCE_EVENT`. Version 0.3.6 fixes
+the workflow input and needs fresh exact-source CI, coverage, benchmark, and
+docs evidence. A separate
 Coverage-MCP receipt is optional; exact-source raw coverage is mandatory. The
-immutable `v0.3.1` through `v0.3.4` candidates did not qualify and no package
+immutable `v0.3.1` through `v0.3.5` candidates did not qualify and no package
 was published. See
 [Uvicorn replacement status](../uvicorn-compatibility.md).
 
@@ -37,7 +38,7 @@ lines**. Artifact
 [13631702787](https://github.com/appunni-m/uvicorn-rs/actions/runs/42508611884/artifacts/13631702787)
 has SHA-256 `13180f7c35243e1e4f5679168d2e8d3306511b9f0278f9a829ac0978337965b7`.
 The report, context, source-set, and build identities are recorded in the
-[coverage guide](../coverage.md#current-release-coverage-acceptance-2026-11-10).
+[coverage guide](../coverage.md#current-release-coverage-acceptance-2026-11-11).
 No independent review receipt is required.
 
 The same CI run passed Linux x86-64, macOS ARM64, and Windows x86-64 candidate
