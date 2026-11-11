@@ -743,6 +743,17 @@ class _LifespanIO:
         self.owner = owner
         self.requests: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
 
+    @property
+    def is_auto(self) -> bool:
+        """Expose the configured fallback mode expected by the ASGI bridge."""
+        return self.owner.mode == "auto"
+
+    def report_exception(self, phase: str) -> None:
+        """Record an application exception reported by the ASGI bridge."""
+        if phase not in {"startup", "shutdown"}:
+            raise ValueError(f"unknown ASGI lifespan phase: {phase!r}")
+        self.owner.error_occurred = True
+
     async def receive(self) -> dict[str, Any]:
         return await self.requests.get()
 
@@ -1318,7 +1329,9 @@ class Server:
                 sock.close()
 
             for connection in list(self.server_state.connections):
-                connection.shutdown()
+                shutdown = getattr(connection, "shutdown", None)
+                if callable(shutdown):
+                    shutdown()
             await asyncio.sleep(0.1)
 
             try:
