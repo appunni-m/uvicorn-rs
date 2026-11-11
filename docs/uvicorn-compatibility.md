@@ -1,10 +1,9 @@
 # Can I replace Uvicorn?
 
-**Not yet from PyPI.** Immutable tag `v0.3.5` passed exact-source coverage,
-performance acceptance, and the standalone HTTP/3 archive-consumer check, but
-its final performance-artifact recheck failed because the candidate workflow
-omitted a required environment value. Version 0.3.6 fixes that workflow input
-and requires fresh exact-source gates before publication.
+**Not yet from PyPI.** Version 0.3.6 has no release tag or registry package.
+Exact-main parity/coverage, the three-system benchmark, and candidate artifact
+checks remain open. See the [current release gates](releases.md) for the
+specific failures and hosted evidence.
 The distribution name is `uvicorn-rs`; it provides the `uvicorn` command, the
 `uvicorn` import namespace, and `python -m uvicorn`. The optional internal
 Cargo/PyO3 adapter remains `uvicorn-rs-py`. Keep upstream `uvicorn` and
@@ -23,18 +22,17 @@ describe the install path after publication.
 
 ## Current status (2026-11-11)
 
-Main commit `f21bb1967837b2c981208ac865e52ba68d887d35` passed CI
-[#783](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765868),
-including the exact-source raw 100% unified coverage gate. Benchmark
-[#387](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765874)
-completed on Linux x86-64, Linux ARM64, and macOS ARM64, and docs deployment
-[#373](https://github.com/appunni-m/uvicorn-rs/actions/runs/42931481551) passed.
-Candidate [#6](https://github.com/appunni-m/uvicorn-rs/actions/runs/42933366398)
-passed coverage and performance rechecks and built the exact Cargo archives as
-a standalone HTTP/3 consumer. It then failed final performance-artifact
-revalidation with `KeyError: PERFORMANCE_EVENT`; no candidate bundle was
-uploaded and `release.yml` did not start. Version 0.3.6 supplies that missing
-workflow value and requires fresh exact-source gates.
+Main CI [#785](https://github.com/appunni-m/uvicorn-rs/actions/runs/42951138788)
+has one unexplained `exit_code` mismatch in the first of three full parity and
+coverage repeats. Focused run [#790](https://github.com/appunni-m/uvicorn-rs/actions/runs/42964190383)
+passed 100 attempts of that CLI case without reproducing it. PR CI
+[#791](https://github.com/appunni-m/uvicorn-rs/actions/runs/42976830658) found
+an obsolete HTTP/3 trace-marker expectation and a stock-Windows-Uvicorn oracle
+reset (`WinError 10054`) in an early-response upload case. The marker fix and
+case-local Windows trace are in progress; neither failure is waived yet. Main
+benchmark [#388](https://github.com/appunni-m/uvicorn-rs/actions/runs/42951138724)
+is incomplete on two Hypercorn HTTP/3 reference cells. Exact-source candidate
+qualification and release of 0.3.6 remain pending.
 
 The immutable `v0.3.1` through `v0.3.5` tags remain unpublished. No Cargo or
 PyPI artifact was published. See the [release guide](releases.md) for the current stage and the

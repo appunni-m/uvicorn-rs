@@ -18,15 +18,15 @@ the adapter enables the required features and keeps application loading, the
 caller-owned event loop, ASGI scope/messages, context, and app exceptions on
 the Python side. The Rust-native crate remains usable without Python.
 
-Exact-main CI [#783](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765868)
-passed on `f21bb19` with 100% raw coverage, parity, and package consumers.
-Benchmark [#387](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765874)
-completed on all three systems, and [docs #373](https://github.com/appunni-m/uvicorn-rs/actions/runs/42931481551)
-passed. Candidate [#6](https://github.com/appunni-m/uvicorn-rs/actions/runs/42933366398)
-passed its coverage, performance, and standalone archive-consumer checks, then
-failed final performance-artifact revalidation because the step lacked
-`PERFORMANCE_EVENT`. Version 0.3.6 fixes that workflow input; the new source
-needs fresh exact-source gates. Current blockers are listed in the
+Main CI [#785](https://github.com/appunni-m/uvicorn-rs/actions/runs/42951138788)
+has one unexplained CLI exit-code mismatch in repeat 1/3; focused run
+[#790](https://github.com/appunni-m/uvicorn-rs/actions/runs/42964190383) did not
+reproduce it across 100 attempts. PR CI [#791](https://github.com/appunni-m/uvicorn-rs/actions/runs/42976830658)
+found a stale HTTP/3 trace marker and a stock-Windows-Uvicorn oracle reset.
+Benchmark [#388](https://github.com/appunni-m/uvicorn-rs/actions/runs/42951138724)
+is incomplete on two Hypercorn HTTP/3 reference cells. Version 0.3.6 still
+needs exact-source CI, coverage, a complete benchmark, docs deployment, and
+candidate consumers. Current blockers are listed in the
 [release status](releases.md).
 The run-specific implementation records below are historical evidence for
 their stated revisions unless linked from the current

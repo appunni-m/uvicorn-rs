@@ -12,17 +12,15 @@ The Python-free uvicorn-rs Cargo library is the Rust server. uvicorn-rs-py is th
 The PyPI distribution is `uvicorn-rs`, following the project's
 `pillow-rs` naming convention. The root Cargo integration package and optional
 extra console script remain named `uvicorn-rs-py`; the installed compatibility
-command and import namespace are `uvicorn`. Main CI #783 passed installed-wheel
-parity, package consumers, and exact-source coverage on
-`f21bb1967837b2c981208ac865e52ba68d887d35`; benchmark #387 completed on all
-three systems. Candidate #6 passed package, coverage, performance, and the
-standalone archive consumer, then failed final performance-artifact
-revalidation because its step lacked `PERFORMANCE_EVENT`. Version 0.3.6 fixes
-the workflow input and needs fresh exact-source CI, coverage, benchmark, and
-docs evidence. A separate
-Coverage-MCP receipt is optional; exact-source raw coverage is mandatory. The
-immutable `v0.3.1` through `v0.3.5` candidates did not qualify and no package
-was published. See
+command and import namespace are `uvicorn`. Current main CI #785 has one
+unexplained CLI exit-code mismatch in repeat 1/3; focused run #790 did not
+reproduce it in 100 attempts. PR CI #791 found an obsolete HTTP/3 trace marker
+and a stock-Windows-Uvicorn oracle reset in an HTTP/1 early-response upload
+case. Benchmark #388 is incomplete on two Hypercorn HTTP/3 reference cells.
+Version 0.3.6 still needs exact-source parity, 100% raw coverage, a complete
+three-system benchmark, docs deployment, and candidate consumers. A separate
+Coverage-MCP receipt is optional; exact-source raw coverage is mandatory. No
+0.3.6 package was published. See
 [Uvicorn replacement status](../uvicorn-compatibility.md).
 
 This matrix records live-tested ASGI and protocol behavior. A passing ASGI case does not by itself establish Uvicorn CLI, Python API, worker, or reload compatibility. The Rust server remains independent of Starlette-RS and FastAPI-RS; they do not need it as a runtime dependency.

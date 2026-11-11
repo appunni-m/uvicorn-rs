@@ -21,21 +21,20 @@ optional `http3`, and `asgi-lifespan-protocol-rs`. `release.yml` publishes;
 
 ## Current verification status (2026-11-11)
 
-Main commit `f21bb19` passed CI [#783](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765868)
-and 100% raw coverage: 15,120/15,120 regions and 11,120/11,120 lines.
-Benchmark [#387](https://github.com/appunni-m/uvicorn-rs/actions/runs/42917765874)
-completed its Linux x86-64, Linux ARM64, and macOS ARM64 matrix and aggregate
-validation; docs [#373](https://github.com/appunni-m/uvicorn-rs/actions/runs/42931481551)
-passed. Candidate [#6](https://github.com/appunni-m/uvicorn-rs/actions/runs/42933366398)
-passed coverage, performance, and the standalone HTTP/3 archive consumer, then
-failed final performance-artifact revalidation because `PERFORMANCE_EVENT` was
-missing from the step environment. Version 0.3.6 fixes that candidate input.
-Fresh exact-source CI, coverage, benchmark, docs, and candidate checks are
-required. Immutable tags `v0.3.1` through
-`v0.3.5` did not publish packages.
-The independent Coverage-MCP receipt is optional; raw 100% coverage remains
-mandatory. The maintainer will run their real FastAPI application after
-repository release qualification.
+Main CI [#785](https://github.com/appunni-m/uvicorn-rs/actions/runs/42951138788)
+did not complete cleanly: one of three full parity/coverage repeats reported an
+`exit_code` mismatch in `cli.explicit-loop-over-invalid-environment`. Focused
+run [#790](https://github.com/appunni-m/uvicorn-rs/actions/runs/42964190383)
+passed 100 attempts without reproducing it. PR CI
+[#791](https://github.com/appunni-m/uvicorn-rs/actions/runs/42976830658)
+stopped on a stale HTTP/3 trace marker and a stock Windows Uvicorn oracle reset
+in `http1.request-body-batch-early-response-drain`; the candidate result and
+new isolated trace are being checked. Benchmark
+[#388](https://github.com/appunni-m/uvicorn-rs/actions/runs/42951138724) is
+incomplete on two Hypercorn HTTP/3 reference cells. These runs do not qualify
+0.3.6. The separate Coverage-MCP receipt is optional; exact-source raw 100%
+coverage remains mandatory. The maintainer will run their real FastAPI
+application after repository release qualification.
 
 ### Historical status (2026-11-05)
 

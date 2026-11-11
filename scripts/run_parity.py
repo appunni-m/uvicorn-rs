@@ -10350,8 +10350,8 @@ def http3_connection_error_with_held_response(
     control_path = server.get("coverage_fault_control_path")
     if control_path is None:
         raise ParityError("HTTP/3 held-response cleanup requires the coverage-only fault control")
-    legacy_dispatch = "uvicorn-rs: coverage HTTP/3 dispatch selected legacy path"
-    native_dispatch = "uvicorn-rs: coverage HTTP/3 dispatch selected native path"
+    legacy_dispatch = "uvicorn-rs h3-trace dispatch-selected path=legacy"
+    native_dispatch = "uvicorn-rs h3-trace dispatch-selected path=native"
     deadline = time.monotonic() + 5
     while True:
         startup_log = read_server_log(server)
