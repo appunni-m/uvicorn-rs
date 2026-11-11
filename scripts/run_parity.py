@@ -8397,6 +8397,12 @@ def http1_streaming_request(
     client.settimeout(10)
     reader = client.makefile("rb")
     concurrent_upload_sender = None
+    adapter_stage = "build request headers"
+    upload_errors: list[dict[str, Any]] = []
+    response_status_line: bytes | None = None
+    response_status: int | None = None
+    response_headers: list[tuple[str, str]] = []
+    response_chunks: list[bytes] = []
     try:
         headers = [
             f"{specification['method']} {specification['path']} HTTP/1.1\r\n",
@@ -8406,6 +8412,7 @@ def http1_streaming_request(
         if not specification.get("keep_alive", False):
             headers.append("Connection: close\r\n")
         headers.extend(f"{name}: {value}\r\n" for name, value in specification["headers"])
+        adapter_stage = "send request headers"
         client.sendall(("".join(headers) + "\r\n").encode("ascii"))
         wait_event = specification.get("wait_event")
         first_request_chunk = chunks[0]
@@ -8427,6 +8434,7 @@ def http1_streaming_request(
         terminal_chunk_sent = False
         upload_send_error = None
         if send_first_chunk_before_wait_event:
+            adapter_stage = "send first request-body chunk"
             client.sendall(
                 f"{len(first_request_chunk):x}\r\n".encode()
                 + first_request_chunk
@@ -8441,6 +8449,7 @@ def http1_streaming_request(
                 raise ParityError(f"ASGI app did not reach request-stream checkpoint {wait_event!r}")
         connection_closed = False
         if not send_first_chunk_before_wait_event:
+            adapter_stage = "send first request-body chunk"
             client.sendall(
                 f"{len(first_request_chunk):x}\r\n".encode()
                 + first_request_chunk
@@ -8449,22 +8458,30 @@ def http1_streaming_request(
             body_chunks_sent += 1
 
         if specification.get("send_body_concurrently_with_response_read", False):
-            upload_errors: list[OSError] = []
-
             def send_remaining_body() -> None:
+                upload_stage = "send request-body chunk 2"
                 try:
-                    for chunk in chunks[1:]:
+                    for chunk_index, chunk in enumerate(chunks[1:], start=2):
+                        upload_stage = f"send request-body chunk {chunk_index}"
                         client.sendall(f"{len(chunk):x}\r\n".encode() + chunk + b"\r\n")
                     if specification.get("malformed_final_chunk", False):
+                        upload_stage = "send malformed terminal chunk"
                         client.sendall(b"not-a-size\r\n")
                     else:
+                        upload_stage = "send terminal chunk and trailers"
                         trailer_lines = "".join(
                             f"{name}: {value}\r\n"
                             for name, value in specification.get("trailers", [])
                         )
                         client.sendall(("0\r\n" + trailer_lines + "\r\n").encode("ascii"))
                 except OSError as error:
-                    upload_errors.append(error)
+                    upload_errors.append({
+                        "stage": upload_stage,
+                        "class": type(error).__name__,
+                        "errno": error.errno,
+                        "winerror": getattr(error, "winerror", None),
+                        "message": str(error),
+                    })
 
             concurrent_upload_sender = threading.Thread(
                 target=send_remaining_body,
@@ -8516,7 +8533,9 @@ def http1_streaming_request(
                 stream_release_path.touch()
 
         try:
+            adapter_stage = "read response status line"
             status_line = reader.readline()
+            response_status_line = status_line
         except (ConnectionResetError, ConnectionAbortedError):
             status_line = b""
         if synchronized_unread_upload and (connection_closed or not status_line):
@@ -8545,8 +8564,9 @@ def http1_streaming_request(
             result.update({"early_body_base64": "", "connection_closed": True})
             return result
         status = int(status_line.split()[1])
-        response_headers = []
+        response_status = status
         while True:
+            adapter_stage = "read response headers"
             line = reader.readline()
             if line == b"\r\n":
                 break
@@ -8581,6 +8601,7 @@ def http1_streaming_request(
             result["connection_closed"] = True
             return result
 
+        adapter_stage = "read initial response body chunk"
         early_body = read_http1_chunk(reader)
         if early_body is None:
             raise ParityError("response finished before the request upload was complete")
@@ -8616,7 +8637,8 @@ def http1_streaming_request(
                     ConnectionAbortedError,
                 ):
                     connection_closed = True
-        response_chunks = [early_body]
+        response_chunks.append(early_body)
+        adapter_stage = "read remaining response body chunks"
         try:
             while (chunk := read_http1_chunk(reader)) is not None:
                 response_chunks.append(chunk)
@@ -8628,6 +8650,7 @@ def http1_streaming_request(
         ):
             connection_closed = True
         if concurrent_upload_sender is not None:
+            adapter_stage = "join concurrent request-body sender"
             concurrent_upload_sender.join(timeout=10)
             if concurrent_upload_sender.is_alive():
                 raise ParityError("concurrent HTTP/1.1 request-body sender did not stop")
@@ -8672,6 +8695,38 @@ def http1_streaming_request(
         if fault_point is not None:
             result["fault_consumed"] = fault_consumed is True
         return result
+    except OSError as error:
+        # Preserve the operation that raised a raw socket error. On Windows,
+        # Proactor sockets may surface a peer reset as a base OSError instead
+        # of ConnectionResetError, which otherwise loses the useful response
+        # and concurrent-upload context in the bounded parity report.
+        if concurrent_upload_sender is not None:
+            concurrent_upload_sender.join(timeout=0.5)
+        diagnostic = {
+            "stage": adapter_stage,
+            "class": type(error).__name__,
+            "errno": error.errno,
+            "winerror": getattr(error, "winerror", None),
+            "message": str(error),
+            "concurrent_upload_errors": upload_errors,
+            "response_status_line": (
+                response_status_line.decode("latin-1", errors="replace")
+                if response_status_line is not None
+                else None
+            ),
+            "response_status": response_status,
+            "response_header_names": [name for name, _ in response_headers],
+            "response_body_bytes_read": sum(len(chunk) for chunk in response_chunks),
+            "concurrent_upload_sender_alive": (
+                concurrent_upload_sender.is_alive()
+                if concurrent_upload_sender is not None
+                else False
+            ),
+        }
+        raise ParityError(
+            "HTTP/1.1 streaming client socket failure: "
+            + json.dumps(diagnostic, sort_keys=True)
+        ) from error
     finally:
         if concurrent_upload_sender is not None and concurrent_upload_sender.is_alive():
             try:
@@ -16701,6 +16756,7 @@ def execute_profile(
                 or case.get("websocket", {}).get("shutdown", False)
                 or case.get("websocket", {}).get("shutdown_during_upgrade", False)
                 or case.get("websocket", {}).get("drop_during_upgrade", False)
+                or case["case_id"] == "http1.request-body-batch-early-response-drain"
                 # Keep the TLS scope-close probe independent from the next
                 # WSS workflow. Both servers close this WebSocket normally,
                 # but their TLS transports can still be draining when the
@@ -16714,7 +16770,10 @@ def execute_profile(
             )
 
         def needs_fresh_server(case: dict[str, Any]) -> bool:
-            return case["case_id"] == "websocket-tls.scope-headers-path-query-and-subprotocols"
+            return case["case_id"] in {
+                "websocket-tls.scope-headers-path-query-and-subprotocols",
+                "http1.request-body-batch-early-response-drain",
+            }
 
         execution_cases = sorted(cases, key=stops_server)
         try:
@@ -16747,6 +16806,7 @@ def execute_profile(
                             server["attempted_cases"] = []
                             server_history.append(server)
                 try:
+                    target_events_before = len(read_events(target["events"]))
                     try:
                         target["attempted_cases"].append(case)
                         fault_control_path = target.get("coverage_fault_control_path")
@@ -17045,20 +17105,23 @@ def execute_profile(
                     else:
                         if oracle is None:
                             raise ParityError("oracle-parity workflow has no live reference server")
+                        oracle_events_before = len(read_events(oracle["events"]))
                         try:
                             oracle["attempted_cases"].append(case)
                             oracle_raw = execute_case(case, oracle, profile, trust_anchor, h3_client)
                         except Exception as error:
+                            oracle_events = read_events(oracle["events"])
+                            target_events = read_events(target["events"])
                             diagnostic = {
                                 "case_id": case["case_id"],
                                 "profile": profile["id"],
-                                "oracle_events": read_events(oracle["events"]),
-                                "target_events": read_events(target["events"]),
-                                "server_log": read_server_log(oracle)[-2000:],
+                                "oracle_events": oracle_events[oracle_events_before:],
+                                "target_events": target_events[target_events_before:],
+                                "server_log": read_server_log(oracle)[-1200:],
                                 "oracle_process": server_process_diagnostic(oracle),
                                 "target_process": server_process_diagnostic(target),
                                 "target_observation": target_result,
-                                "target_server_log": read_server_log(target)[-2000:],
+                                "target_server_log": read_server_log(target)[-1200:],
                             }
                             raise ParityError(
                                 f"oracle {oracle['id']} adapter failed: {error}; "
