@@ -15,6 +15,7 @@ from benchmark_reference_exceptions import (
     HYPERCORN_H3_SLOW_READER_LINUX_AARCH64,
     HYPERCORN_H3_SLOW_READER_LINUX_X86_64,
     HYPERCORN_H3_SLOW_READER_LINUX_X86_64_UVLOOP,
+    HYPERCORN_H3_VALIDATED_ROUTE_LINUX_AARCH64,
     active_reference_exclusions,
     exclusions_by_workload,
     reference_exclusion_metadata_errors,
@@ -76,6 +77,19 @@ def matching_linux_aarch64_large_response_exclusion(**overrides):
     context = {
         "category": "http3",
         "workloads": ["large-response"],
+        "servers": SERVERS,
+        "platform_system": "Linux",
+        "machine": "aarch64",
+        "hypercorn_version": "0.18.0",
+    }
+    context.update(overrides)
+    return active_reference_exclusions(**context)
+
+
+def matching_linux_aarch64_validated_route_exclusion(**overrides):
+    context = {
+        "category": "http3",
+        "workloads": ["fastapi-validated-route"],
         "servers": SERVERS,
         "platform_system": "Linux",
         "machine": "aarch64",
@@ -273,6 +287,59 @@ class HypercornH3ReferenceExceptionTests(unittest.TestCase):
                     HYPERCORN_H3_LARGE_RESPONSE_LINUX_AARCH64,
                     matching_linux_aarch64_large_response_exclusion(**overrides),
                 )
+
+    def test_only_exact_linux_aarch64_validated_route_pair_is_excluded(self):
+        self.assertEqual(
+            matching_linux_aarch64_validated_route_exclusion(),
+            [HYPERCORN_H3_VALIDATED_ROUTE_LINUX_AARCH64],
+        )
+
+        cases = (
+            {"category": "http2"},
+            {"workloads": ["fixed"]},
+            {"platform_system": "Darwin"},
+            {"machine": "x86_64"},
+            {"hypercorn_version": "0.18.1"},
+            {"servers": ["hypercorn-asyncio"]},
+            {"servers": ["uvicorn-rs-asyncio"]},
+            {"enabled": False},
+        )
+        for overrides in cases:
+            with self.subTest(overrides=overrides):
+                self.assertNotIn(
+                    HYPERCORN_H3_VALIDATED_ROUTE_LINUX_AARCH64,
+                    matching_linux_aarch64_validated_route_exclusion(**overrides),
+                )
+
+    def test_linux_aarch64_validated_route_plan_keeps_all_candidate_repetitions(self):
+        workload = "fastapi-validated-route"
+        planned = expected_rows(
+            H3_RUNNER,
+            "http3",
+            SERVERS,
+            5,
+            selected_workloads=[workload],
+        )
+        exclusions = matching_linux_aarch64_validated_route_exclusion()
+        admitted = expected_rows(
+            H3_RUNNER,
+            "http3",
+            SERVERS,
+            5,
+            selected_workloads=[workload],
+            excluded_servers_by_workload=exclusions_by_workload(exclusions),
+        )
+
+        self.assertEqual(len(planned), 20)
+        self.assertEqual(len(admitted), 15)
+        self.assertEqual(
+            planned - admitted,
+            {(workload, "hypercorn-asyncio", number) for number in range(1, 6)},
+        )
+        self.assertEqual(
+            {row for row in admitted if row[1] == "uvicorn-rs-asyncio"},
+            {(workload, "uvicorn-rs-asyncio", number) for number in range(1, 6)},
+        )
 
     def test_only_exact_linux_x86_64_fixed_pair_is_excluded(self):
         self.assertEqual(

@@ -21,20 +21,21 @@ optional `http3`, and `asgi-lifespan-protocol-rs`. `release.yml` publishes;
 
 ## Current verification status (2026-11-11)
 
-Main CI [#785](https://github.com/appunni-m/uvicorn-rs/actions/runs/42951138788)
-did not complete cleanly: one of three full parity/coverage repeats reported an
-`exit_code` mismatch in `cli.explicit-loop-over-invalid-environment`. Focused
-run [#790](https://github.com/appunni-m/uvicorn-rs/actions/runs/42964190383)
-passed 100 attempts without reproducing it. PR CI
-[#791](https://github.com/appunni-m/uvicorn-rs/actions/runs/42976830658)
-stopped on a stale HTTP/3 trace marker and a stock Windows Uvicorn oracle reset
-in `http1.request-body-batch-early-response-drain`; the candidate result and
-new isolated trace are being checked. Benchmark
-[#388](https://github.com/appunni-m/uvicorn-rs/actions/runs/42951138724) is
-incomplete on two Hypercorn HTTP/3 reference cells. These runs do not qualify
-0.3.6. The separate Coverage-MCP receipt is optional; exact-source raw 100%
-coverage remains mandatory. The maintainer will run their real FastAPI
-application after repository release qualification.
+Main CI [#794](https://github.com/appunni-m/uvicorn-rs/actions/runs/43007285333)
+is running on exact commit `70217a7c3a9a964128086141387a2b7015ccc931`, which
+matches `origin/main`. Platform, package, and consumer jobs passed; the full
+three-repeat parity and native coverage job remains in progress, so exact-source
+coverage is not yet verified. Benchmark
+[#389](https://github.com/appunni-m/uvicorn-rs/actions/runs/43007285362) is
+incomplete on Linux ARM64: Hypercorn 0.18.0 asyncio timed out waiting for
+response headers in HTTP/3 `fastapi-validated-route` repetition 3 after 3,020
+requests. The server output is empty; the cause and event ordering are unknown.
+The develop change scopes the exception to that exact reference cell. A fresh
+run still has to pass all five `uvicorn-rs` repetitions and the remaining
+three-system matrix. Documentation deployment
+[#379](https://github.com/appunni-m/uvicorn-rs/actions/runs/43007285311) passed
+for the main source. These runs do not qualify 0.3.6 yet. The maintainer will
+run their real FastAPI application after repository release qualification.
 
 ### Historical status (2026-11-05)
 
